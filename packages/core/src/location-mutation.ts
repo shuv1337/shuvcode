@@ -7,7 +7,6 @@ import { FSUtil } from "@opencode-ai/util/fs-util"
 import { Global } from "@opencode-ai/util/global"
 import { Location } from "./location.js"
 import { Project } from "./project.js"
-import { ProjectMarkers } from "./project/markers.js"
 import { AbsolutePath } from "./schema.js"
 
 export const Kind = Schema.Literals(["file", "directory"])
@@ -81,7 +80,6 @@ const layer = Layer.effect(
   Effect.gen(function* () {
     const fs = yield* FSUtil.Service
     const location = yield* Location.Service
-    const markers = yield* ProjectMarkers.Service
 
     const resolve = Effect.fnUntraced(function* (input: ResolveInput) {
       const absolute = resolvePath(location.directory, input.path)
@@ -114,7 +112,7 @@ const layer = Layer.effect(
           resource: externalResource,
           save: slash(
             path.join(
-              (yield* Project.root(fs, AbsolutePath.make(externalDirectory), markers.targets())) ?? externalDirectory,
+              (yield* Project.root(fs, AbsolutePath.make(externalDirectory))) ?? externalDirectory,
               "*",
             ),
           ),
@@ -129,5 +127,5 @@ const layer = Layer.effect(
 export const node = makeLocationNode({
   service: Service,
   layer,
-  deps: [FSUtil.node, Location.node, ProjectMarkers.node],
+  deps: [FSUtil.node, Location.node],
 })

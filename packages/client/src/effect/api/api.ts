@@ -89,8 +89,33 @@ export type PluginListInput = {
 export type PluginListOutput = { readonly location: Location.Info; readonly data: ReadonlyArray<Plugin.Info> }
 export type PluginListOperation<E = never> = (input?: PluginListInput) => Effect.Effect<PluginListOutput, E>
 
+export type PluginAwaitActivationInput = {
+  readonly location?: { readonly directory?: string | undefined; readonly workspace?: string | undefined } | undefined
+}
+export type PluginAwaitActivationOutput = void
+export type PluginAwaitActivationOperation<E = never> = (
+  input?: PluginAwaitActivationInput,
+) => Effect.Effect<PluginAwaitActivationOutput, E>
+
+export type PluginCheckInput = {
+  readonly location?: { readonly directory?: string | undefined; readonly workspace?: string | undefined } | undefined
+  readonly target?: string | undefined
+}
+export type PluginCheckOutput = { readonly location: Location.Info; readonly data: ReadonlyArray<Plugin.Info> }
+export type PluginCheckOperation<E = never> = (input?: PluginCheckInput) => Effect.Effect<PluginCheckOutput, E>
+
+export type PluginUpdateInput = {
+  readonly location?: { readonly directory?: string | undefined; readonly workspace?: string | undefined } | undefined
+  readonly targets: ReadonlyArray<string>
+}
+export type PluginUpdateOutput = void
+export type PluginUpdateOperation<E = never> = (input: PluginUpdateInput) => Effect.Effect<PluginUpdateOutput, E>
+
 export interface PluginApi<E = never> {
   readonly list: PluginListOperation<E>
+  readonly awaitActivation: PluginAwaitActivationOperation<E>
+  readonly check: PluginCheckOperation<E>
+  readonly update: PluginUpdateOperation<E>
 }
 
 export type SessionListInput = {
@@ -1009,6 +1034,8 @@ export type SessionLogOutput =
           readonly data: {
             readonly sessionID: Session.ID
             readonly reason: "auto" | "manual"
+            readonly model?: Model.Ref | undefined
+            readonly providerState?: SessionMessage.ProviderState | undefined
             readonly text: string
             readonly recent: string
           }
@@ -1637,7 +1664,7 @@ export interface PermissionApi<E = never> {
 
 export type FileListInput = {
   readonly location?: { readonly directory?: string | undefined; readonly workspace?: string | undefined } | undefined
-  readonly path?: RelativePath | undefined
+  readonly path?: string | undefined
 }
 export type FileListOutput = { readonly location: Location.Info; readonly data: ReadonlyArray<FileSystem.Entry> }
 export type FileListOperation<E = never> = (input?: FileListInput) => Effect.Effect<FileListOutput, E>
@@ -1674,6 +1701,19 @@ export type SkillListOperation<E = never> = (input?: SkillListInput) => Effect.E
 
 export interface SkillApi<E = never> {
   readonly list: SkillListOperation<E>
+}
+
+export type RpcCallInput = {
+  readonly rpcID: string
+  readonly method: string
+  readonly location?: { readonly directory?: string | undefined; readonly workspace?: string | undefined } | undefined
+  readonly input?: unknown | undefined
+}
+export type RpcCallOutput = { readonly output?: unknown }
+export type RpcCallOperation<E = never> = (input: RpcCallInput) => Effect.Effect<RpcCallOutput, E>
+
+export interface RpcApi<E = never> {
+  readonly call: RpcCallOperation<E>
 }
 
 export type EventSubscribeOutput = OpenCodeEvent
@@ -1994,33 +2034,37 @@ export interface ReferenceApi<E = never> {
   readonly list: ReferenceListOperation<E>
 }
 
-export type WorktreeListInput = { readonly projectID: Project.ID }
+export type WorktreeListInput = {
+  readonly location?: { readonly directory?: string | undefined; readonly workspace?: string | undefined } | undefined
+}
 export type WorktreeListOutput = Worktree.List
-export type WorktreeListOperation<E = never> = (input: WorktreeListInput) => Effect.Effect<WorktreeListOutput, E>
+export type WorktreeListOperation<E = never> = (input?: WorktreeListInput) => Effect.Effect<WorktreeListOutput, E>
 
 export type WorktreeCreateInput = {
-  readonly projectID: Project.ID
-  readonly strategy: Worktree.StrategyID
+  readonly location?: { readonly directory?: string | undefined; readonly workspace?: string | undefined } | undefined
+  readonly strategy?: Worktree.StrategyID | undefined
   readonly from?: AbsolutePath | undefined
   readonly branch?: string | undefined
-  readonly directory: AbsolutePath
+  readonly directory?: AbsolutePath | undefined
   readonly name?: string | undefined
 }
 export type WorktreeCreateOutput = Worktree.Info
-export type WorktreeCreateOperation<E = never> = (input: WorktreeCreateInput) => Effect.Effect<WorktreeCreateOutput, E>
+export type WorktreeCreateOperation<E = never> = (input?: WorktreeCreateInput) => Effect.Effect<WorktreeCreateOutput, E>
 
 export type WorktreeRemoveInput = {
-  readonly projectID: Project.ID
+  readonly location?: { readonly directory?: string | undefined; readonly workspace?: string | undefined } | undefined
   readonly directory: AbsolutePath
   readonly force: boolean
 }
 export type WorktreeRemoveOutput = void
 export type WorktreeRemoveOperation<E = never> = (input: WorktreeRemoveInput) => Effect.Effect<WorktreeRemoveOutput, E>
 
-export type WorktreeRefreshInput = { readonly projectID: Project.ID }
+export type WorktreeRefreshInput = {
+  readonly location?: { readonly directory?: string | undefined; readonly workspace?: string | undefined } | undefined
+}
 export type WorktreeRefreshOutput = void
 export type WorktreeRefreshOperation<E = never> = (
-  input: WorktreeRefreshInput,
+  input?: WorktreeRefreshInput,
 ) => Effect.Effect<WorktreeRefreshOutput, E>
 
 export interface WorktreeApi<E = never> {
@@ -2177,6 +2221,7 @@ export interface AppApi<E = never> {
   readonly file: FileApi<E>
   readonly command: CommandApi<E>
   readonly skill: SkillApi<E>
+  readonly rpc: RpcApi<E>
   readonly event: EventApi<E>
   readonly pty: PtyApi<E>
   readonly experimental: ExperimentalApi<E>

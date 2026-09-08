@@ -16,7 +16,6 @@ import { Location } from "@opencode-ai/core/location"
 import { LocationServiceMap } from "@opencode-ai/core/location-services"
 import { Plugin } from "@opencode-ai/core/plugin"
 import { SdkPlugins } from "@opencode-ai/core/plugin/sdk"
-import { PluginSupervisor } from "@opencode-ai/core/plugin/supervisor"
 import { Model } from "@opencode-ai/core/model"
 import { Provider } from "@opencode-ai/core/provider"
 import { AbsolutePath } from "@opencode-ai/core/schema"
@@ -24,17 +23,20 @@ import { Effect, Fiber, Layer, Logger, Schedule, Stream } from "effect"
 import { Database } from "../../src/database/database"
 import { tmpdir } from "../fixture/tmpdir"
 import { tempGlobalLayer } from "../fixture/global"
+import { offlineModels } from "../fixture/models"
 import { testEffect } from "../lib/effect"
 
 const it = testEffect(
   AppNodeBuilder.build(LayerNode.group([Database.node, Bus.node, SdkPlugins.node, LocationServiceMap.node]), [
-    [Global.node, tempGlobalLayer],
+    Global.node.replace(tempGlobalLayer),
+    offlineModels,
   ]),
 )
 const staticIt = testEffect(
   AppNodeBuilder.build(LayerNode.group([Database.node, Bus.node, SdkPlugins.node, LocationServiceMap.node]), [
-    [ConfigPluginSource.node, ConfigPluginSource.empty],
-    [Global.node, tempGlobalLayer],
+    ConfigPluginSource.node.replace(ConfigPluginSource.empty),
+    Global.node.replace(tempGlobalLayer),
+    offlineModels,
   ]),
 )
 const refreshNpm = makeGlobalNode({
@@ -44,18 +46,18 @@ const refreshNpm = makeGlobalNode({
     Effect.gen(function* () {
       const global = yield* Global.Service
       const directory = path.join(global.tmp, "background-refresh-plugin")
-      const installed = { directory, entrypoint: pathToFileURL(path.join(directory, "index.js")).href }
+      const installed = { directory, name: "background-refresh-plugin", version: "1.0.0" }
       return Npm.Service.of({
-        add: (_pkg, options) =>
-          options?.refresh
-            ? Effect.gen(function* () {
-                yield* Effect.promise(() => Bun.write(path.join(directory, "refresh-requested"), ""))
-                yield* waitForFile(path.join(directory, "refresh-release")).pipe(Effect.orDie)
-                yield* Effect.promise(() => Bun.write(path.join(directory, "refresh-finished"), ""))
-                return installed
-              })
-            : Effect.succeed(installed),
+        add: () => Effect.succeed(installed),
         resolve: () => Effect.succeed(installed),
+        check: () =>
+          Effect.gen(function* () {
+            yield* Effect.promise(() => Bun.write(path.join(directory, "refresh-requested"), ""))
+            yield* waitForFile(path.join(directory, "refresh-release")).pipe(Effect.orDie)
+            yield* Effect.promise(() => Bun.write(path.join(directory, "refresh-finished"), ""))
+            return true
+          }),
+        update: () => Effect.die("Update checks must not install a new generation"),
         which: () => Effect.succeed(undefined),
       })
     }),
@@ -65,10 +67,7 @@ const refreshNpm = makeGlobalNode({
 const refreshIt = testEffect(
   AppNodeBuilder.build(
     LayerNode.group([Database.node, Bus.node, SdkPlugins.node, LocationServiceMap.node, Global.node]),
-    [
-      [Global.node, tempGlobalLayer],
-      [Npm.node, refreshNpm],
-    ],
+    [Global.node.replace(tempGlobalLayer), Npm.node.replace(refreshNpm), offlineModels],
   ),
 )
 
@@ -104,7 +103,7 @@ describe("PluginSupervisor config", () => {
         plugins: [
           "-*",
           {
-            package: path.join(import.meta.dir, "../plugin/fixtures/config-promise-plugin.ts"),
+            package: "./fixtures/config-promise-plugin",
             options: { description: "Loaded from config" },
           },
         ],
@@ -117,21 +116,22 @@ describe("PluginSupervisor config", () => {
           description: "Loaded from config",
           mode: "subagent",
         })
+        const location = yield* Location.Service
         expect((yield* plugins.list()).find((plugin) => plugin.id === "config-promise-plugin")).toEqual({
           id: Plugin.ID.make("config-promise-plugin"),
           source: {
             type: "local",
-            path: path.join(import.meta.dir, "../plugin/fixtures/config-promise-plugin.ts"),
+            path: path.join(location.directory, "fixtures/config-promise-plugin/server.ts"),
           },
-          status: "active",
-          tui: true,
+          state: { status: "active" },
+          features: { server: true, tui: true },
         })
       }),
     ),
   )
 
   it.live("disables configured plugins by exported ID", () => {
-    const plugin = path.join(import.meta.dir, "../plugin/fixtures/config-promise-plugin.ts")
+    const plugin = "./fixtures/config-promise-plugin"
     return withLocation(
       { plugins: [plugin, "-config-promise-plugin"] },
       Effect.gen(function* () {
@@ -145,7 +145,7 @@ describe("PluginSupervisor config", () => {
   })
 
   it.live("does not disable configured plugins by package target", () => {
-    const plugin = path.join(import.meta.dir, "../plugin/fixtures/config-promise-plugin.ts")
+    const plugin = "./fixtures/config-promise-plugin"
     return withLocation(
       { plugins: [plugin, `-${plugin}`] },
       Effect.gen(function* () {
@@ -162,7 +162,7 @@ describe("PluginSupervisor config", () => {
         plugins: [
           "-*",
           {
-            package: path.join(import.meta.dir, "../plugin/fixtures/config-effect-plugin.ts"),
+            package: "./fixtures/config-effect-plugin",
             options: { description: "Effect plugin from config" },
           },
         ],
@@ -190,10 +190,10 @@ describe("PluginSupervisor config", () => {
       {
         plugins: [
           "-*",
-          path.join(import.meta.dir, "../plugin/fixtures/missing-plugin.ts"),
-          path.join(import.meta.dir, "../plugin/fixtures/invalid-plugin.ts"),
+          "./fixtures/missing-plugin",
+          "./fixtures/invalid-plugin",
           {
-            package: path.join(import.meta.dir, "../plugin/fixtures/config-promise-plugin.ts"),
+            package: "./fixtures/config-promise-plugin",
             options: { description: "Loaded after invalid plugins" },
           },
         ],
@@ -205,15 +205,16 @@ describe("PluginSupervisor config", () => {
         expect(yield* agents.get(Agent.ID.make("configured"))).toMatchObject({
           description: "Loaded after invalid plugins",
         })
+        const location = yield* Location.Service
         expect(output).toEqual([
-          path.join(import.meta.dir, "../plugin/fixtures/missing-plugin.ts"),
-          path.join(import.meta.dir, "../plugin/fixtures/invalid-plugin.ts"),
+          path.join(location.directory, "fixtures/missing-plugin"),
+          path.join(location.directory, "fixtures/invalid-plugin"),
         ])
         expect(
-          (yield* plugins.list()).filter((plugin) => plugin.status === "failed").map((plugin) => plugin.source),
+          (yield* plugins.list()).filter((plugin) => plugin.state.status === "failed").map((plugin) => plugin.source),
         ).toEqual([
-          { type: "local", path: path.join(import.meta.dir, "../plugin/fixtures/missing-plugin.ts") },
-          { type: "local", path: path.join(import.meta.dir, "../plugin/fixtures/invalid-plugin.ts") },
+          { type: "local", path: path.join(location.directory, "fixtures/missing-plugin") },
+          { type: "local", path: path.join(location.directory, "fixtures/invalid-plugin") },
         ])
       }),
     ).pipe(Effect.provide(Logger.layer([logger])))
@@ -233,35 +234,22 @@ describe("PluginSupervisor config", () => {
     ),
   )
 
-  it.live("loads auto-discovered plugin package entrypoints in order", () =>
+  it.live("prefers server entrypoints and falls back to index for discovered directories", () =>
     withLocation(
       undefined,
       Effect.gen(function* () {
         yield* ready()
         const plugins = yield* Plugin.Service
         const ids = (yield* plugins.list()).map((plugin) => String(plugin.id))
-        expect(ids).toContain("package-exports")
-        expect(ids).toContain("package-module")
-        expect(ids).toContain("package-main")
+        expect(ids).toContain("package-server")
         expect(ids).toContain("package-index")
+        expect(ids).not.toContain("shadowed-index")
       }),
       false,
       async (directory) => {
         await Promise.all([
-          writeDiscoveredPackage(directory, "exports", { exports: "./entry.ts" }, { "entry.ts": "package-exports" }),
-          writeDiscoveredPackage(
-            directory,
-            "module",
-            { exports: "./missing.js", module: "./entry.js" },
-            { "entry.js": "package-module" },
-          ),
-          writeDiscoveredPackage(
-            directory,
-            "main",
-            { exports: { import: "./missing.js" }, module: "./missing.js", main: "./entry.js" },
-            { "entry.js": "package-main" },
-          ),
-          writeDiscoveredPackage(directory, "index", undefined, { "index.js": "package-index" }),
+          writeDiscoveredPackage(directory, "server", { "server.ts": "package-server", "index.js": "shadowed-index" }),
+          writeDiscoveredPackage(directory, "index", { "index.js": "package-index" }),
         ])
       },
     ),
@@ -274,29 +262,19 @@ describe("PluginSupervisor config", () => {
         yield* ready()
         const plugins = yield* Plugin.Service
         const ids = (yield* plugins.list()).map((plugin) => String(plugin.id))
-        expect(ids).toContain("contained-fallback")
-        expect(ids).toContain("symlink-fallback")
+        expect(ids).toContain("contained-plugin")
         expect(ids).not.toContain("escaped-entrypoint")
+        expect(ids).not.toContain("symlink-fallback")
       }),
       false,
       async (directory) => {
         await fs.mkdir(path.join(directory, ".opencode"), { recursive: true })
         await fs.writeFile(path.join(directory, ".opencode", "escape.js"), discoveredPlugin("escaped-entrypoint"))
-        await writeDiscoveredPackage(
-          directory,
-          "contained",
-          { exports: "../../escape.js" },
-          { "index.js": "contained-fallback" },
-        )
-        await writeDiscoveredPackage(
-          directory,
-          "symlink",
-          { exports: "./entry.js" },
-          { "index.js": "symlink-fallback" },
-        )
+        await writeDiscoveredPackage(directory, "contained", { "server.js": "contained-plugin" })
+        await writeDiscoveredPackage(directory, "symlink", { "index.js": "symlink-fallback" })
         await fs.symlink(
           path.join(directory, ".opencode", "escape.js"),
-          path.join(directory, ".opencode", "plugins", "symlink", "entry.js"),
+          path.join(directory, ".opencode", "plugins", "symlink", "server.js"),
         )
       },
     ),
@@ -307,7 +285,7 @@ describe("PluginSupervisor config", () => {
       const sdk = yield* SdkPlugins.Service
       yield* sdk.register(define({ id: "static-sdk", effect: () => Effect.void }))
       yield* withLocation(
-        { plugins: ["-*", path.join(import.meta.dir, "../plugin/fixtures/config-promise-plugin.ts")] },
+        { plugins: ["-*", "./fixtures/config-promise-plugin"] },
         Effect.gen(function* () {
           yield* ready()
           const plugins = yield* Plugin.Service
@@ -367,13 +345,13 @@ describe("PluginSupervisor config", () => {
 
   it.live("reloads a configured plugin when its source file changes", () =>
     withLocation(
-      { plugins: ["-*", "./external/mutable.ts"] },
+      { plugins: ["-*", "./external/mutable"] },
       Effect.gen(function* () {
         yield* ready()
         const agents = yield* Agent.Service
         const bus = yield* Bus.Service
         const location = yield* Location.Service
-        const file = path.join(location.directory, "external", "mutable.ts")
+        const file = path.join(location.directory, "external/mutable/server.ts")
 
         expect((yield* agents.get(Agent.ID.make("mutable")))?.description).toBe("first")
 
@@ -393,9 +371,9 @@ describe("PluginSupervisor config", () => {
       async (directory) => {
         // Outside any {plugin,plugins} config-source directory, so only the
         // configured-entrypoint watch can observe the edit.
-        const external = path.join(directory, "external")
+        const external = path.join(directory, "external/mutable")
         await fs.mkdir(external, { recursive: true })
-        await fs.writeFile(path.join(external, "mutable.ts"), mutablePlugin("first"))
+        await fs.writeFile(path.join(external, "server.ts"), mutablePlugin("first"))
       },
     ),
   )
@@ -414,7 +392,7 @@ describe("PluginSupervisor config", () => {
 
   it.live("lets an explicit plugin source replace an auto-discovered plugin with the same ID", () =>
     withLocation(
-      { plugins: ["./explicit.ts"] },
+      { plugins: ["./explicit"] },
       Effect.gen(function* () {
         yield* ready()
         const agents = yield* Agent.Service
@@ -430,8 +408,9 @@ describe("PluginSupervisor config", () => {
           path.join(discovered, "duplicate.ts"),
           mutablePluginWithID("duplicate-source", "duplicate-source", "discovered"),
         )
+        await fs.mkdir(path.join(directory, "explicit"))
         await fs.writeFile(
-          path.join(directory, "explicit.ts"),
+          path.join(directory, "explicit/server.ts"),
           mutablePluginWithID("duplicate-source", "duplicate-source", "explicit"),
         )
       },
@@ -444,10 +423,7 @@ describe("PluginSupervisor config", () => {
       yield* sdk.register(define({ id: "sdk-order", effect: () => Effect.void }))
       yield* withLocation(
         {
-          plugins: [
-            path.join(import.meta.dir, "../plugin/fixtures/config-promise-plugin.ts"),
-            path.join(import.meta.dir, "../plugin/fixtures/variant-source-plugin.ts"),
-          ],
+          plugins: ["./fixtures/config-promise-plugin", "./fixtures/variant-source-plugin"],
         },
         Effect.gen(function* () {
           yield* ready()
@@ -474,7 +450,7 @@ describe("PluginSupervisor config", () => {
   it.live("allows variant generation to be disabled", () =>
     withLocation(
       {
-        plugins: [path.join(import.meta.dir, "../plugin/fixtures/variant-source-plugin.ts"), "-opencode.variant"],
+        plugins: ["./fixtures/variant-source-plugin", "-opencode.variant"],
       },
       Effect.gen(function* () {
         yield* ready()
@@ -489,21 +465,30 @@ describe("PluginSupervisor config", () => {
     ),
   )
 
-  it.live("unblocks flush when plugin activation fails", () =>
+  it.live("settles activation when plugin setup fails and keeps healthy plugins", () =>
     Effect.gen(function* () {
       const sdk = yield* SdkPlugins.Service
-      yield* sdk.register(define({ id: "duplicate-id", effect: () => Effect.void }))
-      yield* sdk.register(define({ id: "duplicate-id", effect: () => Effect.void }))
+      yield* sdk.register(define({ id: "failed-setup", effect: () => Effect.die("setup failed") }))
+      yield* sdk.register(define({ id: "healthy-setup", effect: () => Effect.void }))
       yield* withLocation(
         undefined,
         Effect.gen(function* () {
           yield* ready().pipe(Effect.timeout("2 seconds"))
+          const plugins = yield* Plugin.Service
+          expect(
+            (yield* plugins.list())
+              .filter((plugin) => plugin.id === "failed-setup" || plugin.id === "healthy-setup")
+              .map((plugin) => ({ id: plugin.id, status: plugin.state.status })),
+          ).toEqual([
+            { id: Plugin.ID.make("failed-setup"), status: "failed" },
+            { id: Plugin.ID.make("healthy-setup"), status: "active" },
+          ])
         }),
       )
     }),
   )
 
-  refreshIt.live("refreshes active package plugins after setup without blocking flush", () =>
+  refreshIt.live("checks active package plugins after setup without blocking activation or installing updates", () =>
     Effect.gen(function* () {
       const global = yield* Global.Service
       const directory = path.join(global.tmp, "background-refresh-plugin")
@@ -514,6 +499,10 @@ describe("PluginSupervisor config", () => {
       const refreshFinished = path.join(directory, "refresh-finished")
       yield* Effect.promise(async () => {
         await fs.mkdir(directory, { recursive: true })
+        await fs.writeFile(
+          path.join(directory, "package.json"),
+          JSON.stringify({ name: "background-refresh-plugin", exports: { "./server": "./index.js" } }),
+        )
         await fs.writeFile(
           path.join(directory, "index.js"),
           `export default {
@@ -535,10 +524,20 @@ describe("PluginSupervisor config", () => {
           yield* Effect.promise(() => Bun.write(release, ""))
           yield* waitForFile(refreshed)
           yield* ready().pipe(Effect.timeout("2 seconds"))
+          const plugins = yield* Plugin.Service
+          expect((yield* plugins.list()).find((plugin) => plugin.id === "background-refresh-plugin")).toMatchObject({
+            state: { status: "active" },
+            source: { type: "package", target: "background-refresh-plugin", version: "1.0.0" },
+          })
+          expect(yield* Effect.promise(() => Bun.file(refreshFinished).exists())).toBeFalse()
           yield* Effect.promise(() => Bun.write(refreshRelease, ""))
           yield* waitForFile(refreshFinished)
-          const plugins = yield* Plugin.Service
-          expect((yield* plugins.list()).map((plugin) => String(plugin.id))).toContain("background-refresh-plugin")
+          const outdated = yield* plugins.list().pipe(
+            Effect.map((inventory) => inventory.find((plugin) => plugin.id === "background-refresh-plugin")),
+            Effect.filterOrFail((plugin) => plugin?.source.type === "package" && plugin.source.outdated === true),
+            Effect.retry({ times: 200, schedule: Schedule.spaced("10 millis") }),
+          )
+          expect(outdated?.state.status).toBe("active")
         }),
       )
     }),
@@ -546,8 +545,8 @@ describe("PluginSupervisor config", () => {
 })
 
 const ready = Effect.fnUntraced(function* () {
-  const supervisor = yield* PluginSupervisor.Service
-  yield* supervisor.flush
+  const plugins = yield* Plugin.Service
+  yield* plugins.awaitActivation
 })
 
 const waitForFile = (file: string) =>
@@ -566,18 +565,18 @@ function withLocation<A, E, R>(
   return Effect.acquireDisposable(Effect.promise(() => tmpdir())).pipe(
     Effect.tap((tmp) =>
       Effect.promise(async () => {
+        await prepareFixtures(tmp.path)
         await prepare?.(tmp.path)
         if (fixtures) {
-          const directory = path.join(tmp.path, ".opencode")
+          const directory = path.join(tmp.path, ".opencode/plugin")
           await fs.mkdir(directory, { recursive: true })
-          await Promise.all(
-            ["plugin", "plugins"].map((name) =>
-              fs.symlink(path.join(import.meta.dir, "fixtures", name), path.join(directory, name), "dir"),
-            ),
+          await fs.writeFile(
+            path.join(directory, "directory.ts"),
+            mutablePluginWithID("directory-plugin", "directory", "Loaded from plugin directory"),
           )
         }
         if (config !== undefined) {
-          const directory = fixtures ? path.join(tmp.path, ".opencode") : tmp.path
+          const directory = tmp.path
           await fs.mkdir(directory, { recursive: true })
           await fs.writeFile(path.join(directory, "opencode.json"), JSON.stringify(config))
         }
@@ -590,6 +589,62 @@ function withLocation<A, E, R>(
       ),
     ),
   )
+}
+
+async function prepareFixtures(directory: string) {
+  // Configured plugins are directories; keep their sources local to each test.
+  const promise = `export default {
+    id: "config-promise-plugin",
+    async setup(ctx) {
+      await ctx.agent.transform((agents) => {
+        agents.update("configured", (agent) => {
+          agent.description = ctx.options.description
+          agent.mode = "subagent"
+        })
+      })
+    },
+  }`
+  const effect = `
+    import { Effect } from ${JSON.stringify(import.meta.resolve("effect"))}
+    export default {
+      id: "config-effect-plugin",
+      effect: (ctx) => ctx.agent.transform((agents) => {
+        agents.update("effect-configured", (agent) => {
+          agent.description = ctx.options.description
+          agent.mode = "subagent"
+        })
+      }).pipe(Effect.asVoid),
+    }`
+  const variants = `
+    import { Provider } from ${JSON.stringify(import.meta.resolve("@opencode-ai/core/provider"))}
+    export default {
+      id: "variant-source",
+      async setup(ctx) {
+        await ctx.catalog.transform((catalog) => {
+          catalog.provider.update("configured", (provider) => {
+            provider.package = Provider.aisdk("@ai-sdk/openai-compatible")
+          })
+          catalog.model.update("configured", "glm-5.2", (model) => {
+            model.modelID = "glm-5.2"
+            model.package = Provider.aisdk("@ai-sdk/openai-compatible")
+            model.variants = [{ id: "high", settings: {}, headers: { custom: "true" }, body: {} }]
+          })
+        })
+      },
+    }`
+  await Promise.all(
+    Object.entries({
+      "config-promise-plugin": promise,
+      "config-effect-plugin": effect,
+      "variant-source-plugin": variants,
+      "invalid-plugin": "export default {}",
+    }).map(async ([name, source]) => {
+      const target = path.join(directory, "fixtures", name)
+      await fs.mkdir(target, { recursive: true })
+      await fs.writeFile(path.join(target, "server.ts"), source)
+    }),
+  )
+  await fs.writeFile(path.join(directory, "fixtures/config-promise-plugin/tui.ts"), "export default {}")
 }
 
 function mutablePlugin(description: string) {
@@ -619,16 +674,10 @@ function discoveredPlugin(id: string) {
   return `export default { id: ${JSON.stringify(id)}, setup() {} }`
 }
 
-async function writeDiscoveredPackage(
-  directory: string,
-  name: string,
-  manifest: Record<string, unknown> | undefined,
-  files: Record<string, string>,
-) {
+async function writeDiscoveredPackage(directory: string, name: string, files: Record<string, string>) {
   const plugin = path.join(directory, ".opencode", "plugins", name)
   await fs.mkdir(plugin, { recursive: true })
-  await Promise.all([
-    ...(manifest ? [fs.writeFile(path.join(plugin, "package.json"), JSON.stringify(manifest))] : []),
-    ...Object.entries(files).map(([file, id]) => fs.writeFile(path.join(plugin, file), discoveredPlugin(id))),
-  ])
+  await Promise.all(
+    Object.entries(files).map(([file, id]) => fs.writeFile(path.join(plugin, file), discoveredPlugin(id))),
+  )
 }

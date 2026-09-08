@@ -3,9 +3,10 @@ import { Tooltip } from "@opencode-ai/ui/tooltip"
 import { Icon } from "@opencode-ai/ui/icon"
 import { Wordmark } from "@opencode-ai/ui/wordmark"
 import { Show, createMemo, createSignal } from "solid-js"
-import { createStore } from "solid-js/store"
+import { Schema } from "effect"
 import createPresence from "solid-presence"
 import { Composer } from "@/composer/composer"
+import { ComposerDropzone } from "@/composer/dropzone"
 import type { ComposerModel } from "@/composer/model"
 import { PromptGitStatus, PromptWorkspaceSelector } from "@/new-session/workspace/selector"
 import {
@@ -20,9 +21,18 @@ import { useWorkspaceLocation } from "@/workspaces/location"
 import { useProviders } from "@/providers/catalog/providers"
 import { NEW_SESSION_CONTENT_WIDTH } from "@/new-session/layout"
 import { Persist, persisted } from "@/runtime/persistence/storage"
+import { Persistence } from "@/runtime/persistence/schema"
 import type { NewSessionWorkspaceController } from "./workspace/controller"
 
 const providerTipDismissalDuration = 30 * 24 * 60 * 60 * 1000
+
+export const WorkspaceOnboardingSchema = Persistence.struct({
+  used: Schema.Boolean,
+})
+
+export const ProviderTipSchema = Persistence.struct({
+  dismissedAt: Schema.Finite,
+})
 
 export function NewSessionView(props: {
   composer: ComposerModel
@@ -31,7 +41,8 @@ export function NewSessionView(props: {
 }) {
   const [onboarding, setOnboarding, , onboardingReady] = persisted(
     Persist.global("workspace-onboarding"),
-    createStore({ used: false }),
+    WorkspaceOnboardingSchema,
+    { used: false },
   )
   const select = (value: string) => {
     props.workspace.selection.set(value)
@@ -42,8 +53,12 @@ export function NewSessionView(props: {
     <div class="@container relative flex flex-col min-h-0 h-full flex-1">
       <div
         data-component="new-session"
-        class="relative flex-1 min-h-0 overflow-hidden rounded-[10px] bg-v2-background-bg-deep"
+        class="relative flex-1 min-h-0 overflow-hidden rounded-[10px] bg-v2-background-bg-base shadow-[var(--v2-elevation-raised)]"
       >
+        <ComposerDropzone
+          active={props.composer.state.drag === "active"}
+          input={props.composer.model.selection.current()?.capabilities.input}
+        />
         <div class="absolute inset-x-0 top-[25.375%] flex justify-center px-6">
           <div class={NEW_SESSION_CONTENT_WIDTH}>
             <Wordmark class="h-auto w-full text-v2-background-bg-inverse" />
@@ -110,7 +125,8 @@ function ProviderTip() {
   const providers = useProviders(() => sdk().directory)
   const [persistedState, setPersistedState, , persistedReady] = persisted(
     Persist.global("new-session.provider-tip"),
-    createStore({ dismissedAt: 0 }),
+    ProviderTipSchema,
+    { dismissedAt: 0 },
   )
   const visible = createMemo(
     () =>

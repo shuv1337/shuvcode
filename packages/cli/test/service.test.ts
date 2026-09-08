@@ -1,5 +1,7 @@
 import { NodeFileSystem } from "@effect/platform-node"
 import { Service, type Info } from "@opencode-ai/client/effect/service"
+import { OpenCode } from "@opencode-ai/client/promise"
+import { Session } from "@opencode-ai/schema/session"
 import { Global } from "@opencode-ai/util/global"
 import { OPENCODE_VERSION } from "../src/version"
 import { expect, test } from "bun:test"
@@ -107,7 +109,7 @@ test("systemd lifecycle delegates stop and status to the configured user unit", 
   }
 })
 
-test("systemd ensure replaces a portable incumbent with a supervised owner", async () => {
+test("systemd adoption and restart preserve persistent terminals until explicit stop", async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "opencode-service-systemd-converge-"))
   const executable = path.join(root, "systemctl")
   const pidfile = path.join(root, "systemd.pid")
@@ -127,7 +129,7 @@ set -eu
 pidfile=${quote(pidfile)}
 start_service() {
   if [ -f "$pidfile" ] && kill -0 "$(cat "$pidfile")" 2>/dev/null; then return; fi
-  env HOME=${quote(root)} OPENCODE_DB=${quote(path.join(root, "opencode.db"))} OPENCODE_TEST_HOME=${quote(root)} XDG_CACHE_HOME=${quote(path.join(root, "cache"))} XDG_CONFIG_HOME=${quote(path.join(root, "config"))} XDG_DATA_HOME=${quote(path.join(root, "data"))} XDG_STATE_HOME=${quote(path.join(root, "state"))} ${quote(process.execPath)} ${quote(path.join(import.meta.dir, "../src/index.ts"))} serve --service >/dev/null 2>&1 &
+  env -u OPENCODE_PTY_HANDOFF -u OPENCODE_CONFIG_DIR HOME=${quote(root)} OPENCODE_DB=${quote(path.join(root, "opencode.db"))} OPENCODE_TEST_HOME=${quote(root)} XDG_CACHE_HOME=${quote(path.join(root, "cache"))} XDG_CONFIG_HOME=${quote(path.join(root, "config"))} XDG_DATA_HOME=${quote(path.join(root, "data"))} XDG_STATE_HOME=${quote(path.join(root, "state"))} ${quote(process.execPath)} ${quote(path.join(import.meta.dir, "../src/index.ts"))} serve --service >/dev/null 2>&1 &
   echo $! > "$pidfile"
 }
 stop_service() {
@@ -157,12 +159,46 @@ esac
   try {
     const before = await waitForInfo(registration)
     expect(before.pid).toBe(incumbent.pid)
+    const ready = await Effect.runPromise(
+      Service.ensure({ file: registration, command: [] }).pipe(Effect.provide(layer)),
+    )
+    const client = OpenCode.make({ baseUrl: ready.url, headers: Service.headers(ready) })
+    const terminal = await client.experimental.persistentPty.create({
+      sessionID: Session.ID.create(),
+      command: "/bin/sh",
+      args: ["-c", "printf 'handoff-alive\\n'; exec sleep 120"],
+      cwd: root,
+      title: "Restart fixture",
+      env: {},
+    })
 
     const endpoint = await Effect.runPromise(ServiceLifecycle.ensure().pipe(Effect.provide(layer)))
     const after = await waitForInfo(registration, (info) => info.pid !== before.pid)
     expect(endpoint.url).toBe(after.url)
     expect(after.pid).toBe(Number((await Bun.file(pidfile).text()).trim()))
     expect(await waitForExit(incumbent)).toBe(true)
+    const adopted = OpenCode.make({ baseUrl: endpoint.url, headers: Service.headers(endpoint) })
+    expect(await adopted.experimental.persistentPty.get({ ptyID: terminal.id })).toMatchObject({
+      id: terminal.id,
+      pid: terminal.pid,
+    })
+
+    const restarted = await Effect.runPromise(ServiceLifecycle.restart().pipe(Effect.provide(layer)))
+    const replacement = await waitForInfo(registration)
+    expect(replacement.pid).not.toBe(after.pid)
+    expect(replacement.pid).toBe(Number((await Bun.file(pidfile).text()).trim()))
+    const next = OpenCode.make({ baseUrl: restarted.url, headers: Service.headers(restarted) })
+    expect(await next.experimental.persistentPty.get({ ptyID: terminal.id })).toMatchObject({
+      id: terminal.id,
+      pid: terminal.pid,
+    })
+    expect((await next.experimental.persistentPty.snapshot({ ptyID: terminal.id })).text).toContain("handoff-alive")
+    expect(await Bun.file(registration + ".pty-handoff").exists()).toBe(false)
+
+    await Effect.runPromise(ServiceLifecycle.stop().pipe(Effect.provide(layer)))
+    expect(await Bun.file(registration).exists()).toBe(false)
+    expect(await Bun.file(registration + ".pty-handoff").exists()).toBe(false)
+    expect(() => process.kill(terminal.pid, 0)).toThrow()
   } finally {
     await Effect.runPromise(ServiceLifecycle.stop().pipe(Effect.provide(layer))).catch(() => undefined)
     incumbent.kill("SIGTERM")
@@ -170,6 +206,48 @@ esac
     if (previous === undefined) delete process.env.OPENCODE_SYSTEMCTL
     else process.env.OPENCODE_SYSTEMCTL = previous
     await fs.rm(root, { recursive: true, force: true })
+  }
+}, 30_000)
+
+test("portable service restart preserves a terminal and explicit stop closes it", async () => {
+  const service = await startManagedService("opencode-service-pty-restart-")
+  const env = serviceEnv(service.root)
+  const command = [process.execPath, path.join(import.meta.dir, "../src/index.ts"), "service"]
+  try {
+    const ready = await Effect.runPromise(
+      Service.ensure({ file: service.registration, command: [] }).pipe(Effect.provide(NodeFileSystem.layer)),
+    )
+    const client = OpenCode.make({ baseUrl: ready.url, headers: Service.headers(ready) })
+    const terminal = await client.experimental.persistentPty.create({
+      sessionID: Session.ID.create(),
+      command: "/bin/sh",
+      args: ["-c", "printf 'portable-alive\\n'; exec sleep 120"],
+      cwd: service.root,
+      title: "Portable restart fixture",
+      env: {},
+    })
+    const restart = Bun.spawn([...command, "restart"], { env, stdout: "ignore", stderr: "pipe" })
+    expect(await restart.exited).toBe(0)
+    const replacement = await waitForInfo(service.registration)
+    expect(replacement.pid).not.toBe(service.info.pid)
+    const next = OpenCode.make({
+      baseUrl: replacement.url,
+      headers: { authorization: "Basic " + btoa(`opencode:${replacement.password}`) },
+    })
+    expect(await next.experimental.persistentPty.get({ ptyID: terminal.id })).toMatchObject({
+      id: terminal.id,
+      pid: terminal.pid,
+    })
+    expect((await next.experimental.persistentPty.snapshot({ ptyID: terminal.id })).text).toContain("portable-alive")
+    expect(await Bun.file(service.registration + ".pty-handoff").exists()).toBe(false)
+    const stop = Bun.spawn([...command, "stop"], { env, stdout: "ignore", stderr: "pipe" })
+    expect(await stop.exited).toBe(0)
+    expect(await Bun.file(service.registration).exists()).toBe(false)
+    expect(() => process.kill(terminal.pid, 0)).toThrow()
+  } finally {
+    const stop = Bun.spawn([...command, "stop"], { env, stdout: "ignore", stderr: "pipe" })
+    await stop.exited
+    await stopManagedService(service)
   }
 }, 30_000)
 

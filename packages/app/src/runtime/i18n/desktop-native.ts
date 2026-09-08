@@ -235,13 +235,13 @@ export const DESKTOP_NATIVE_ENGLISH = {
   "desktop.menu.go": "Go",
   "desktop.menu.window": "Window",
   "desktop.menu.help": "Help",
-  "desktop.menu.installCli": "Install CLI...",
+  "desktop.menu.installCli": "Install CLI…",
   "desktop.menu.settings": "Settings",
   "desktop.menu.reloadWebview": "Reload Webview",
   "desktop.menu.restart": "Restart",
-  "desktop.menu.exportLogs": "Export Logs...",
+  "desktop.menu.exportLogs": "Export Logs…",
   "desktop.menu.newSession": "New Session",
-  "desktop.menu.openProject": "Open Project...",
+  "desktop.menu.openProject": "Open Project…",
   "desktop.menu.newWindow": "New Window",
   "desktop.menu.closeWindow": "Close Window",
   "desktop.menu.undo": "Undo",
@@ -276,7 +276,7 @@ export const DESKTOP_NATIVE_ENGLISH = {
 
 
   "desktop.cli.installed.title": "CLI Installed",
-  "desktop.cli.installed.message": "CLI installed to {{path}}\n\nRestart your terminal to use the 'shuvcode' command.",
+  "desktop.cli.installed.message": "CLI installed to {{path}}\n\nRestart your terminal to use the 'opencode2' command.",
   "desktop.cli.failed.title": "Installation Failed",
   "desktop.cli.failed.message": "Failed to install CLI: {{error}}",
 

@@ -9,7 +9,7 @@ import { SessionMessage } from "@opencode-ai/core/session/message"
 import { Tool } from "@opencode-ai/core/tool"
 import type { Info } from "@opencode-ai/schema/tool"
 import { LayerNode } from "@opencode-ai/util/effect/layer-node"
-import { executeTool, toolDefinitions } from "./lib/tool"
+import { codeModeListings, executeTool, toolDefinitions } from "./lib/tool"
 import { Cause, Deferred, Effect, Exit, Fiber, Layer, Schema, SchemaGetter, SchemaIssue, Scope } from "effect"
 import { testEffect } from "./lib/effect"
 import { Config } from "@opencode-ai/core/config"
@@ -38,8 +38,8 @@ const imageStore = Layer.mock(Image.Service, {
   },
 })
 const registryLayer = AppNodeBuilder.build(LayerNode.group([Tool.node, PluginHooks.node]), [
-  [Image.node, imageStore],
-  [Config.node, emptyConfigLayer],
+  Image.node.replace(imageStore),
+  Config.node.replace(emptyConfigLayer),
 ])
 const it = testEffect(registryLayer)
 const identity = {
@@ -212,7 +212,7 @@ describe("Tool", () => {
 
       const snapshot = yield* service.snapshot()
       expect(snapshot.definitions.map((tool) => tool.name)).toEqual(["execute"])
-      expect(snapshot.codeModeCatalog?.[0]?.signature).toContain("tools.echo")
+      expect(codeModeListings(snapshot.codeModeCatalog!)[0]?.line).toContain("tools.echo")
     }),
   )
 
@@ -222,7 +222,7 @@ describe("Tool", () => {
 
       const available = yield* service.snapshot()
       expect(available.definitions.map((tool) => tool.name)).toEqual(["execute"])
-      expect(available.codeModeCatalog).toEqual([])
+      expect(available.codeModeCatalog?.tools).toEqual([])
 
       const denied = yield* service.snapshot([{ action: "execute", resource: "*", effect: "deny" }])
       expect(denied.definitions).toEqual([])
@@ -320,7 +320,7 @@ describe("Tool", () => {
       })
 
       const snapshot = yield* service.snapshot([], { tools: { allow: ["read"] } })
-      expect(snapshot.codeModeCatalog?.map((entry) => entry.path)).toEqual(["read"])
+      expect(codeModeListings(snapshot.codeModeCatalog!).map((entry) => entry.path)).toEqual(["read"])
       expect(snapshot.definitions.map((tool) => tool.name)).toEqual(["execute"])
       yield* snapshot.execute({
         ...call("execute"),
@@ -713,7 +713,7 @@ describe("Tool", () => {
       }).pipe(Scope.provide(scope))
       const toolSet = yield* service.snapshot()
       const execute = toolSet.definitions.find((tool) => tool.name === "execute")
-      expect(toolSet.codeModeCatalog?.[0]?.signature).toContain("tools.echo")
+      expect(codeModeListings(toolSet.codeModeCatalog!)[0]?.line).toContain("tools.echo")
       expect(execute?.description).toContain("confined Code Mode runtime")
       expect(execute?.description).not.toContain("Echo text")
       yield* Scope.close(scope, Exit.void)

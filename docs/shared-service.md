@@ -96,6 +96,26 @@ instead of expecting to replay its deletion event. This option does not turn
 the volatile `/api/event` feed into a replayable global log or resume model work
 after process death.
 
+## Restarting with persistent terminals
+
+Use `shuvcode service restart` to preserve persistent terminals. The client prepares
+an upstream PTY handoff ticket before stopping the server and writes it to a private
+`service-<channel>.json.pty-handoff` sidecar beside the registration file (the default
+channel uses `service.json.pty-handoff`). The replacement reads that ticket even
+when systemd launches it without the client's environment. Successful discovery
+clears the sidecar after the replacement is ready. Expired or superseded tickets
+are not adopted.
+
+The installed unit must use `KillMode=process`: killing the whole control group
+would also kill the detached PTY daemon being handed off. Install the updated unit
+and run `systemctl --user daemon-reload` before using this restart path. PTY owner
+leases remain responsible for cleanup when there is no handoff.
+
+`shuvcode service stop` deliberately shuts persistent terminals down and clears
+any pending ticket. A raw `systemctl --user restart shuvcode.service` does not
+prepare a ticket and therefore does **not** preserve terminals. Older servers
+without the handoff endpoint fall back to shutting terminals down before replacement.
+
 ## Migrating an isolated service
 
 Stop dependent callers and back up both configuration roots. Reconcile desired

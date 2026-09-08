@@ -6,7 +6,7 @@ import { Deferred, Duration, Effect, Fiber, Layer, Option, Schedule, Stream } fr
 import { Config } from "@opencode-ai/core/config"
 import { ConfigLocationWatcherPlugin } from "@opencode-ai/core/config/plugin/location-watcher"
 import { AppNodeBuilder } from "@opencode-ai/core/effect/app-node-builder"
-import { makeLocationNode, type LocationNode } from "@opencode-ai/util/effect/app-node"
+import { makeLocationNode } from "@opencode-ai/util/effect/app-node"
 import { LayerNode } from "@opencode-ai/util/effect/layer-node"
 import { Bus } from "@opencode-ai/core/bus"
 import { FSUtil } from "@opencode-ai/util/fs-util"
@@ -16,6 +16,7 @@ import { Watcher } from "@opencode-ai/core/filesystem/watcher"
 import { FileSystem } from "@opencode-ai/schema/filesystem"
 import { Document, Event, Info, type Entry } from "@opencode-ai/schema/config"
 import { Location } from "@opencode-ai/core/location"
+import { Plugin } from "@opencode-ai/core/plugin"
 import { PluginSupervisor } from "@opencode-ai/core/plugin/supervisor"
 import { AbsolutePath } from "@opencode-ai/core/schema"
 import { location } from "../fixture/location"
@@ -29,11 +30,6 @@ const describeNative = process.env.CI ? describe.skip : describe
 const it = testEffect(AppNodeBuilder.build(LayerNode.group([FSUtil.node, Bus.node])))
 
 const configLayer = Config.testLayer()
-const pluginNode = makeLocationNode({
-  service: PluginSupervisor.Service,
-  layer: Layer.succeed(PluginSupervisor.Service, PluginSupervisor.Service.of({ flush: Effect.void })),
-  deps: [],
-})
 
 function withNative(native: Watcher.NativeInterface) {
   return Effect.provide(Watcher.layer().pipe(Layer.provide(Layer.succeed(Watcher.Native, native))))
@@ -57,18 +53,121 @@ function countingNative() {
 }
 
 describe("Watcher lifecycle", () => {
+  it.effect("signals readiness after acquisition and buffers updates published by the ready callback", () =>
+    Effect.gen(function* () {
+      const publish = yield* Deferred.make<(update: Watcher.Update) => void>()
+      const acquired = yield* Deferred.make<void>()
+      const counts = { ready: 0, closed: 0 }
+      yield* Effect.gen(function* () {
+        const watcher = yield* Watcher.Service
+        const consumer = yield* watcher
+          .subscribe(
+            { path: "/shared", type: "entries", names: ["opencode.json"] },
+            Effect.gen(function* () {
+              counts.ready++
+              const notify = yield* Deferred.await(publish)
+              notify({ path: "/shared/opencode.json", type: "create" })
+            }),
+          )
+          .pipe(Effect.flatMap(Stream.runHead), Effect.forkScoped({ startImmediately: true }))
+        yield* Deferred.await(publish)
+        expect(counts.ready).toBe(0)
+        yield* Deferred.succeed(acquired, undefined)
+        expect(Option.getOrUndefined(yield* Fiber.join(consumer))).toEqual({
+          path: "/shared/opencode.json",
+          type: "create",
+        })
+        expect(counts).toEqual({ ready: 1, closed: 1 })
+      }).pipe(
+        withNative({
+          subscribe: (input) =>
+            Deferred.succeed(publish, input.publish).pipe(
+              Effect.andThen(Deferred.await(acquired)),
+              Effect.as({
+                unsubscribe: async () => {
+                  counts.closed++
+                },
+              }),
+            ),
+        }),
+      )
+    }),
+  )
+
+  it.effect("does not signal readiness for an unavailable native watch", () => {
+    const counts = { ready: 0 }
+    return Effect.gen(function* () {
+      const watcher = yield* Watcher.Service
+      const stream = yield* watcher.subscribe(
+        { path: "/unavailable", type: "directory" },
+        Effect.sync(() => {
+          counts.ready++
+        }),
+      )
+      yield* Stream.runDrain(stream)
+      expect(counts.ready).toBe(0)
+    }).pipe(withNative({ subscribe: () => Effect.undefined }))
+  })
+
+  it.live("watches only named immediate entries, including missing directories", () =>
+    Effect.acquireDisposable(Effect.promise(() => tmpdir())).pipe(
+      Effect.flatMap((tmp) =>
+        Effect.gen(function* () {
+          const native = yield* Watcher.Native
+          const events: Watcher.Update[] = []
+          yield* Effect.acquireRelease(
+            native.subscribe({
+              type: "entries",
+              target: tmp.path,
+              names: ["opencode.json", ".opencode"],
+              ignore: [],
+              publish: (update) => events.push(update),
+            }),
+            (subscription) => Effect.promise(() => subscription?.unsubscribe() ?? Promise.resolve()),
+          )
+          yield* Effect.promise(async () => {
+            await fs.mkdir(path.join(tmp.path, "nested"))
+            await fs.writeFile(path.join(tmp.path, "nested", "opencode.json"), "ignored")
+            await fs.writeFile(path.join(tmp.path, "opencode.jsonc"), "ignored")
+            await fs.writeFile(path.join(tmp.path, "opencode.json"), "first")
+          })
+          yield* Effect.sync(() => events.length).pipe(
+            Effect.filterOrFail((count) => count > 0),
+            Effect.retry(Schedule.spaced("10 millis")),
+            Effect.timeout("1 second"),
+          )
+          expect(events.every((update) => update.path === path.join(tmp.path, "opencode.json"))).toBe(true)
+          yield* Effect.sleep("10 millis")
+          yield* Effect.promise(() => fs.mkdir(path.join(tmp.path, ".opencode")))
+          yield* Effect.sync(() => events.some((update) => update.path === path.join(tmp.path, ".opencode"))).pipe(
+            Effect.filterOrFail(Boolean),
+            Effect.retry(Schedule.spaced("10 millis")),
+            Effect.timeout("1 second"),
+          )
+        }).pipe(Effect.provide(Watcher.nativeLayer)),
+      ),
+    ),
+  )
+
   it.effect("interrupting a consumer interrupts a pending acquisition", () =>
     Effect.gen(function* () {
       const started = yield* Deferred.make<void>()
       const interrupted = yield* Deferred.make<void>()
+      const counts = { ready: 0 }
       yield* Effect.gen(function* () {
         const watcher = yield* Watcher.Service
         const consumer = yield* watcher
-          .subscribe({ path: "/pending", type: "directory" })
+          .subscribe(
+            { path: "/pending", type: "directory" },
+            Effect.sync(() => {
+              counts.ready++
+            }),
+          )
           .pipe(Effect.flatMap(Stream.runDrain), Effect.forkScoped({ startImmediately: true }))
         yield* Deferred.await(started)
         yield* Fiber.interrupt(consumer)
         expect(yield* Deferred.isDone(interrupted)).toBe(true)
+        expect(counts.ready).toBe(0)
       }).pipe(
         withNative({
           subscribe: () =>
@@ -81,16 +180,16 @@ describe("Watcher lifecycle", () => {
     }),
   )
 
-  it.effect("shares one subscription and releases exactly once after the final consumer", () => {
+  it.effect("shares equivalent entry sets and releases exactly once after the final consumer", () => {
     const { native, counts } = countingNative()
     return Effect.gen(function* () {
       const watcher = yield* Watcher.Service
-      const consume = () =>
+      const consume = (names: string[]) =>
         watcher
-          .subscribe({ path: "/shared", type: "directory" })
+          .subscribe({ path: "/shared", type: "entries", names })
           .pipe(Effect.flatMap(Stream.runDrain), Effect.forkScoped({ startImmediately: true }))
-      const first = yield* consume()
-      const second = yield* consume()
+      const first = yield* consume(["opencode.json", ".opencode", "opencode.json"])
+      const second = yield* consume([".opencode", "opencode.json"])
       yield* Effect.yieldNow
       expect(counts.subscribes).toBe(1)
 
@@ -129,19 +228,21 @@ function provide(
   vcs?: Location.Interface["vcs"],
   watcher?: Layer.Layer<Watcher.Service>,
   config: Layer.Layer<Config.Service> = configLayer,
-  plugins: LocationNode<PluginSupervisor.Service> = pluginNode,
+  plugins?: LayerNode.Replacement,
+  replacements: LayerNode.Replacements = [],
 ) {
   const locationLayer = Layer.succeed(
     Location.Service,
     Location.Service.of(location({ directory: AbsolutePath.make(directory) }, { vcs })),
   )
   const built = AppNodeBuilder.build(
-    LayerNode.group([LocationWatcher.node, LocationWatcherPolicy.node, Bus.node, Config.node]),
+    LayerNode.group([PluginSupervisor.node, LocationWatcher.node, LocationWatcherPolicy.node, Bus.node, Config.node]),
     [
-      [Config.node, config],
-      [Location.node, locationLayer],
-      [PluginSupervisor.node, plugins],
-      ...(watcher ? ([[Watcher.node, watcher]] as const) : []),
+      Config.node.replace(config),
+      Location.node.replace(locationLayer),
+      plugins ?? PluginSupervisor.node.replace(Layer.empty),
+      ...(watcher ? ([Watcher.node.replace(watcher)] as const) : []),
+      ...replacements,
     ],
   )
   return Effect.provide(built)
@@ -154,7 +255,8 @@ function withTmp<A, E, R>(
     init?: (directory: string) => Promise<void>
     watcher?: Layer.Layer<Watcher.Service>
     config?: Layer.Layer<Config.Service>
-    plugins?: LocationNode<PluginSupervisor.Service>
+    plugins?: LayerNode.Replacement
+    replacements?: LayerNode.Replacements
   },
 ) {
   return Effect.acquireRelease(
@@ -183,7 +285,16 @@ function withTmp<A, E, R>(
     ({ tmp }) => Effect.promise(() => tmp[Symbol.asyncDispose]()),
   ).pipe(
     Effect.flatMap(({ tmp, vcs }) =>
-      f(tmp.path, vcs).pipe(provide(tmp.path, vcs, options?.watcher, options?.config ?? configLayer, options?.plugins)),
+      f(tmp.path, vcs).pipe(
+        provide(
+          tmp.path,
+          vcs,
+          options?.watcher,
+          options?.config ?? configLayer,
+          options?.plugins,
+          options?.replacements,
+        ),
+      ),
     ),
   )
 }
@@ -304,6 +415,64 @@ describe("LocationWatcher subscriptions", () => {
     })
   })
 
+  it.live("uses the policy changed while target discovery was suspended", () =>
+    Effect.gen(function* () {
+      const fs = yield* FSUtil.Service
+      const discovering = yield* Deferred.make<void>()
+      const release = yield* Deferred.make<void>()
+      const subscribed = yield* Deferred.make<void>()
+      const subscriptions: Watcher.WatchInput[] = []
+      let released = 0
+      yield* withTmp(
+        (directory) =>
+          Effect.gen(function* () {
+            const policy = yield* LocationWatcherPolicy.Service
+            yield* Deferred.await(discovering)
+            const update = yield* policy
+              .transform((editor) => editor.add([".hg"]))
+              .pipe(Effect.forkScoped({ startImmediately: true }))
+            expect(policy.current()).toEqual([".hg"])
+            yield* Deferred.succeed(release, undefined)
+            const registration = yield* Fiber.join(update)
+            expect(subscriptions).toEqual([])
+
+            yield* registration.dispose
+            yield* Deferred.await(subscribed)
+            yield* policy.reload()
+            expect(subscriptions).toEqual([{ path: path.join(directory, ".hg", "branch"), type: "file" }])
+            expect(released).toBe(0)
+          }),
+        {
+          vcs: "hg",
+          replacements: [
+            Plugin.node.replace(Layer.mock(Plugin.Service, { awaitActivation: Effect.void })),
+            FSUtil.node.replace(
+              Layer.succeed(FSUtil.Service, {
+                ...fs,
+                realPath: (target) =>
+                  Deferred.succeed(discovering, undefined).pipe(
+                    Effect.andThen(Deferred.await(release)),
+                    Effect.andThen(fs.realPath(target)),
+                  ),
+              }),
+            ),
+          ],
+          watcher: Layer.succeed(
+            Watcher.Service,
+            Watcher.Service.of({
+              subscribe: (input) =>
+                Effect.sync(() => subscriptions.push(input)).pipe(
+                  Effect.andThen(Deferred.succeed(subscribed, undefined)),
+                  Effect.as(Stream.never.pipe(Stream.ensuring(Effect.sync(() => released++)))),
+                ),
+            }),
+          ),
+        },
+      )
+      expect(released).toBe(1)
+    }),
+  )
+
   it.live("does not start before configured policy is ready", () => {
     const subscriptions: Watcher.WatchInput[] = []
     const watcher = Layer.succeed(
@@ -313,13 +482,11 @@ describe("LocationWatcher subscriptions", () => {
       }),
     )
     const plugins = makeLocationNode({
-      service: PluginSupervisor.Service,
-      layer: Layer.effect(
-        PluginSupervisor.Service,
+      name: "test/watcher-plugins",
+      layer: Layer.effectDiscard(
         Effect.gen(function* () {
           const policy = yield* LocationWatcherPolicy.Service
-          yield* policy.transform((draft) => draft.add([".git"]))
-          return PluginSupervisor.Service.of({ flush: Effect.void })
+          yield* policy.transform((editor) => editor.add([".git"]))
         }),
       ),
       deps: [LocationWatcherPolicy.node],
@@ -331,7 +498,7 @@ describe("LocationWatcher subscriptions", () => {
           yield* Effect.sleep("50 millis")
           expect(subscriptions).toEqual([])
         }),
-      { vcs: "git", watcher, plugins },
+      { vcs: "git", watcher, plugins: PluginSupervisor.node.replace(plugins) },
     )
   })
 })
@@ -372,33 +539,19 @@ function nextUpdate<E>(check: (event: WatcherEvent) => boolean, trigger: Effect.
   })
 }
 
-function eventuallyUpdate<E>(
-  check: (event: WatcherEvent) => boolean,
-  trigger: () => Effect.Effect<void, E>,
-  timeout: Duration.Input = "5 seconds",
-) {
-  return Effect.gen(function* () {
-    while (true) {
-      const result = yield* maybeNextUpdate(check, trigger(), "250 millis")
-      if (Option.isSome(result)) return result.value
-    }
-  }).pipe(
-    Effect.timeoutOrElse({
-      duration: timeout,
-      orElse: () => Effect.fail(new Error("timed out waiting for file watcher readiness")),
+function readyWatcher(started: Deferred.Deferred<string>) {
+  // Use the actual acquisition barrier, not a probe write whose event
+  // callback can race the next write in Bun's filesystem watcher.
+  return Layer.effect(
+    Watcher.Service,
+    Effect.gen(function* () {
+      const service = yield* Watcher.Service
+      return Watcher.Service.of({
+        subscribe: (input, onReady) =>
+          service.subscribe(input, Deferred.succeed(started, input.path).pipe(Effect.andThen(onReady ?? Effect.void))),
+      })
     }),
-  )
-}
-
-function ready(file: string, eventFile = file) {
-  return Effect.gen(function* () {
-    const fs = yield* FSUtil.Service
-    const content = (yield* fs.readFileStringSafe(file)) ?? `ready-${Math.random()}`
-    yield* eventuallyUpdate(
-      (event) => event.file === eventFile,
-      () => fs.writeFileString(file, content),
-    ).pipe(Effect.asVoid)
-  })
+  ).pipe(Layer.provide(AppNodeBuilder.build(Watcher.node)))
 }
 
 describeNative("LocationWatcher", () => {
@@ -450,75 +603,79 @@ describeNative("LocationWatcher", () => {
   )
 
   it.live("publishes .git/HEAD events", () =>
-    withTmp(
-      (directory) =>
-        Effect.gen(function* () {
-          const fs = yield* FSUtil.Service
-          const head = path.join(directory, ".git", "HEAD")
-          const branch = `watch-${Math.random().toString(36).slice(2)}`
-          yield* ready(head)
-          yield* Effect.promise(() => $`git branch ${branch}`.cwd(directory).quiet())
-          expect(
-            yield* nextUpdate((event) => event.file === head, fs.writeFileString(head, `ref: refs/heads/${branch}\n`)),
-          ).toEqual({ file: head, event: "change" })
-        }),
-      { vcs: "git" },
-    ),
+    Effect.gen(function* () {
+      const started = yield* Deferred.make<string>()
+      return yield* withTmp(
+        (directory) =>
+          Effect.gen(function* () {
+            const fs = yield* FSUtil.Service
+            const head = path.join(directory, ".git", "HEAD")
+            const branch = `watch-${Math.random().toString(36).slice(2)}`
+            expect(yield* Deferred.await(started)).toBe(head)
+            yield* Effect.promise(() => $`git branch ${branch}`.cwd(directory).quiet())
+            expect(
+              yield* nextUpdate(
+                (event) => event.file === head,
+                fs.writeFileString(head, `ref: refs/heads/${branch}\n`),
+              ),
+            ).toEqual({ file: head, event: "change" })
+          }),
+        { vcs: "git", watcher: readyWatcher(started) },
+      )
+    }),
   )
 
   const describeSymlink = process.platform !== "win32" ? describe : describe.skip
   describeSymlink("symlinked .git", () => {
     it.live("publishes .git/HEAD events through a symlinked .git directory", () =>
-      withTmp(
-        (directory) =>
-          Effect.gen(function* () {
-            const afs = yield* FSUtil.Service
-            const actual = path.join(directory, "..", `actual_${path.basename(directory)}`)
-            yield* Effect.addFinalizer(() => Effect.promise(() => fs.rm(actual, { recursive: true, force: true })))
-            const head = path.join(directory, ".git", "HEAD")
-            yield* ready(head, path.join(actual, "HEAD"))
-            const branch = `watch-${Math.random().toString(36).slice(2)}`
-            yield* Effect.promise(() => $`git branch ${branch}`.cwd(directory).quiet())
-            expect(
-              yield* nextUpdate(
-                (event) => event.file === path.join(actual, "HEAD"),
-                afs.writeFileString(head, `ref: refs/heads/${branch}\n`),
-              ),
-            ).toEqual({ file: path.join(actual, "HEAD"), event: "change" })
-          }),
-        {
-          vcs: "git",
-          init: async (directory) => {
-            const actual = path.join(directory, "..", `actual_${path.basename(directory)}`)
-            await fs.rename(path.join(directory, ".git"), actual)
-            await fs.symlink(actual, path.join(directory, ".git"))
+      Effect.gen(function* () {
+        const started = yield* Deferred.make<string>()
+        return yield* withTmp(
+          (directory) =>
+            Effect.gen(function* () {
+              const afs = yield* FSUtil.Service
+              const actual = path.join(directory, "..", `actual_${path.basename(directory)}`)
+              yield* Effect.addFinalizer(() => Effect.promise(() => fs.rm(actual, { recursive: true, force: true })))
+              const head = path.join(directory, ".git", "HEAD")
+              expect(yield* Deferred.await(started)).toBe(path.join(actual, "HEAD"))
+              const branch = `watch-${Math.random().toString(36).slice(2)}`
+              yield* Effect.promise(() => $`git branch ${branch}`.cwd(directory).quiet())
+              expect(
+                yield* nextUpdate(
+                  (event) => event.file === path.join(actual, "HEAD"),
+                  afs.writeFileString(head, `ref: refs/heads/${branch}\n`),
+                ),
+              ).toEqual({ file: path.join(actual, "HEAD"), event: "change" })
+            }),
+          {
+            vcs: "git",
+            watcher: readyWatcher(started),
+            init: async (directory) => {
+              const actual = path.join(directory, "..", `actual_${path.basename(directory)}`)
+              await fs.rename(path.join(directory, ".git"), actual)
+              await fs.symlink(actual, path.join(directory, ".git"))
+            },
           },
-        },
-      ),
+        )
+      }),
     )
   })
 
-  it.live(
-    "publishes .hg/branch events",
-    () =>
-      withTmp(
+  it.live("publishes .hg/branch events", () =>
+    Effect.gen(function* () {
+      const started = yield* Deferred.make<string>()
+      return yield* withTmp(
         (directory) =>
           Effect.gen(function* () {
             const fs = yield* FSUtil.Service
-            const branch = path.resolve(directory, ".hg", "branch")
-            // LocationWatcher starts watches on a forked fiber; keep rewriting with
-            // unique content until the bus sees the path (identical rewrites are
-            // silent under inotify on some tmpfs setups).
+            const branch = path.join(directory, ".hg", "branch")
+            expect(yield* Deferred.await(started)).toBe(branch)
             expect(
-              yield* eventuallyUpdate(
-                (event) => path.resolve(event.file) === branch,
-                () => fs.writeFileString(branch, `feature-${Math.random()}\n`),
-                "12 seconds",
-              ),
+              yield* nextUpdate((event) => event.file === branch, fs.writeFileString(branch, "feature\n")),
             ).toMatchObject({ file: branch })
           }),
-        { vcs: "hg" },
-      ),
-    { timeout: 15_000 },
+        { vcs: "hg", watcher: readyWatcher(started) },
+      )
+    }),
   )
 })

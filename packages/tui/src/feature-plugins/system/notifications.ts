@@ -65,20 +65,25 @@ export default Plugin.define({
       context.data.on("session.execution.interrupted", (event) => ended(event.data.sessionID)),
       context.data.on("session.execution.failed", (event) => {
         const sessionID = event.data.sessionID
-        // A failure that never reached a step settles onto no assistant message, so the
-        // transcript shows the prompt simply stopping. Say why in the foreground too.
-        if (!settledOnTranscript(context, sessionID, event.data.error))
-          context.ui.toast.show({
-            variant: "error",
-            title: "Session failed",
-            message: event.data.error.message || event.data.error.type,
-          })
+        if (terminal.has(sessionID)) return
         if (errored.has(sessionID)) {
           ended(sessionID)
           return
         }
         errored.add(sessionID)
         notify(context, sessionID, event.data.error.message, "error")
+        const route = context.ui.router.current()
+        // A failure before a step has no assistant message to show its cause.
+        if (
+          route.type === "session" &&
+          route.sessionID === sessionID &&
+          !settledOnTranscript(context, sessionID, event.data.error)
+        )
+          context.ui.toast.show({
+            title: "Session failed",
+            message: event.data.error.message || event.data.error.type,
+            variant: "error",
+          })
         ended(sessionID)
       }),
     ]

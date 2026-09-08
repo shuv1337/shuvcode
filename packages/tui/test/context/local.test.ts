@@ -1,12 +1,5 @@
 import { expect, test } from "bun:test"
-import { configuredAgentModelWarning, parseModel, recentModels } from "../../src/context/local"
-
-test("parses model IDs containing slashes", () => {
-  expect(parseModel("provider/family/model")).toEqual({
-    providerID: "provider",
-    modelID: "family/model",
-  })
-})
+import { configuredAgentModelWarning, recentModels } from "../../src/context/local"
 
 test("moves a model to the front, deduplicates, and limits recents", () => {
   const recent = Array.from({ length: 12 }, (_, index) => ({
@@ -35,7 +28,6 @@ test("does not reject an agent model before the model catalog loads", () => {
     ),
   ).toBeUndefined()
 })
-
 test("rejects an agent model missing from a loaded model catalog", () => {
   expect(
     configuredAgentModelWarning(

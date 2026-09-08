@@ -16,6 +16,7 @@ import { it } from "./lib/effect"
 
 interface ModelOptions {
   readonly providerID?: Provider.ID
+  readonly canonical?: Provider.ID
   readonly modelID?: string
   readonly compatibility?: Compatibility
   readonly settings?: Info["settings"]
@@ -30,6 +31,7 @@ const model = (packageName: string | undefined, options: ModelOptions = {}) =>
     id: ID.make("test-model"),
     modelID: ID.make(options.modelID ?? "api-test-model"),
     providerID: options.providerID ?? Provider.ID.make("test-provider"),
+    canonical: options.canonical,
     name: "Test model",
     compatibility: options.compatibility,
     package: packageName,
@@ -280,12 +282,26 @@ describe("ModelResolver", () => {
     ),
   )
 
-  it.effect("uses no native API-key auth for an explicitly enabled provider without credentials", () => {
+  it.effect("uses no native API-key auth for explicitly enabled providers without credentials", () => {
     const selected = model(Provider.aisdk("@ai-sdk/google"), {
       providerID: Provider.ID.make("gateway"),
+      canonical: Provider.ID.google,
       settings: { baseURL: "https://gateway.example.com/v1" },
       headers: { "cf-access-token": "access-token" },
     })
+    const selections = [
+      selected,
+      model(Provider.aisdk("@ai-sdk/mistral"), {
+        providerID: Provider.ID.make("gateway"),
+        settings: { baseURL: "https://mistral.example.com/v1" },
+        headers: { "cf-access-token": "access-token" },
+      }),
+      model("@opencode-ai/ai/providers/mistral", {
+        providerID: Provider.ID.make("gateway"),
+        settings: { baseURL: "https://native-mistral.example.com/v1" },
+        headers: { "cf-access-token": "access-token" },
+      }),
+    ]
     const provider = Provider.Info.make({
       ...Provider.Info.empty(selected.providerID),
       activation: "enabled",
@@ -310,7 +326,10 @@ describe("ModelResolver", () => {
     const integrations = Layer.mock(Integration.Service, {
       auth: { status: () => Effect.die("unused") },
       connection: {
-        active: () => Effect.undefined,
+        active: (id) => {
+          expect(id).toBe(Integration.ID.make("gateway"))
+          return Effect.undefined
+        },
         resolve: () => Effect.die("unused"),
         key: () => Effect.die("unused"),
         activate: () => Effect.die("unused"),
@@ -345,20 +364,25 @@ describe("ModelResolver", () => {
     return withConfigEnv({}, () =>
       Effect.gen(function* () {
         const resolver = yield* ModelResolver.Service
-        const resolved = yield* resolver.resolveModel(selected)
+        yield* Effect.forEach(selections, (selection) =>
+          Effect.gen(function* () {
+            const resolved = yield* resolver.resolveModel(selection)
+            const headers = yield* resolved.model.route.auth.apply({
+              request: LLM.request({ model: resolved.model, prompt: "Hello" }),
+              method: "POST",
+              url: resolved.model.route.endpoint.baseURL ?? "",
+              body: "{}",
+              headers: Headers.fromInput(resolved.model.route.defaults.headers),
+            })
 
-        expect(resolved.limit).toEqual(selected.limit)
-        const headers = yield* resolved.model.route.auth.apply({
-          request: LLM.request({ model: resolved.model, prompt: "Hello" }),
-          method: "POST",
-          url: "https://gateway.example.com/v1",
-          body: "{}",
-          headers: Headers.fromInput(resolved.model.route.defaults.headers),
-        })
-
-        expect(headers["cf-access-token"]).toBe("access-token")
-        expect(headers.authorization).toBeUndefined()
-        expect(headers["x-goog-api-key"]).toBeUndefined()
+            expect(resolved.limit).toEqual(selection.limit)
+            expect(resolved.ref.providerID).toBe(selection.providerID)
+            expect(String(resolved.model.provider)).toBe(selection.canonical ?? selection.providerID)
+            expect(headers["cf-access-token"]).toBe("access-token")
+            expect(headers.authorization).toBeUndefined()
+            expect(headers["x-goog-api-key"]).toBeUndefined()
+          }),
+        )
       }).pipe(Effect.provide(layer)),
     )
   })
@@ -390,6 +414,7 @@ describe("ModelResolver", () => {
     Effect.gen(function* () {
       const resolved = yield* ModelResolver.fromCatalogModel(
         model(Provider.aisdk("@ai-sdk/openai-compatible"), {
+          canonical: Provider.ID.make("deepseek"),
           compatibility: {
             reasoningField: "vendor_reasoning",
             requireReasoning: true,
@@ -418,6 +443,8 @@ describe("ModelResolver", () => {
 
       expect(headers.authorization).toBe("Bearer settings-secret")
       expect(resolved.route.id).toBe("openai-compatible-chat")
+      expect(String(resolved.provider)).toBe("deepseek")
+      expect(resolved.route.providerMetadataKey).toBe("deepseek")
       expect(resolved.compatibility?.reasoningField).toBe("vendor_reasoning")
       expect(resolved.compatibility?.requireReasoning).toBe(true)
       expect(resolved.compatibility?.maxTokensField).toBe("max_completion_tokens")
@@ -923,6 +950,24 @@ describe("ModelResolver", () => {
           { reasoningEffort: "high", parallelToolCalls: false },
         ],
         [
+          "@ai-sdk/mistral",
+          "@opencode-ai/ai/providers/mistral",
+          {
+            safePrompt: true,
+            documentImageLimit: 4,
+            promptCacheKey: "session-123",
+            promptMode: "reasoning",
+            reasoningEffort: "high",
+          },
+          {
+            safePrompt: true,
+            documentImageLimit: 4,
+            promptCacheKey: "session-123",
+            promptMode: "reasoning",
+            reasoningEffort: "high",
+          },
+        ],
+        [
           "@ai-sdk/togetherai",
           "@opencode-ai/ai/providers/togetherai",
           { reasoningEffort: "high" },
@@ -981,6 +1026,7 @@ describe("ModelResolver", () => {
         ["@ai-sdk/google-vertex", "@opencode-ai/ai/providers/google-vertex", "api-model"],
         ["@ai-sdk/google-vertex/anthropic", "@opencode-ai/ai/providers/google-vertex/messages", "claude-sonnet-4-6"],
         ["@ai-sdk/groq", "@opencode-ai/ai/providers/groq", "api-model"],
+        ["@ai-sdk/mistral", "@opencode-ai/ai/providers/mistral", "api-model"],
         ["@ai-sdk/openai", "@opencode-ai/ai/providers/openai", "api-model"],
         ["@ai-sdk/openai-compatible", "@opencode-ai/ai/providers/openai-compatible", "api-model"],
         ["@openrouter/ai-sdk-provider", "@opencode-ai/ai/providers/openrouter", "api-model"],
@@ -1089,6 +1135,36 @@ describe("ModelResolver", () => {
     ),
   )
 
+  it.effect("merges mapped Mistral headers and body with catalog overlays", () =>
+    ModelResolver.fromCatalogModel(
+      model(Provider.aisdk("@ai-sdk/mistral"), {
+        settings: {
+          headers: { "x-factory": "factory", "x-shared": "factory" },
+          extraBody: { factory: true, custom: { source: true } },
+        },
+        headers: { "x-shared": "catalog" },
+        body: { custom: { catalog: true } },
+      }),
+      undefined,
+      {
+        loadPackage: () =>
+          Effect.succeed({
+            model: (modelID, settings) => {
+              expect(settings.headers).toEqual({
+                "x-factory": "factory",
+                "x-shared": "catalog",
+              })
+              expect(settings.body).toEqual({
+                factory: true,
+                custom: { source: true, catalog: true },
+              })
+              return LanguageModel.make({ id: modelID, provider: "mistral", route: OpenAIChat.route })
+            },
+          }),
+      },
+    ),
+  )
+
   it.effect("loads supported AISDK catalog packages as native routes", () =>
     Effect.gen(function* () {
       const google = yield* ModelResolver.fromCatalogModel(
@@ -1113,6 +1189,11 @@ describe("ModelResolver", () => {
       const groq = yield* ModelResolver.fromCatalogModel(
         model(Provider.aisdk("@ai-sdk/groq"), {
           settings: { reasoningEffort: "high", parallelToolCalls: false },
+        }),
+      )
+      const mistral = yield* ModelResolver.fromCatalogModel(
+        model(Provider.aisdk("@ai-sdk/mistral"), {
+          settings: { safePrompt: true, promptCacheKey: "session-123", reasoningEffort: "high" },
         }),
       )
       const xai = yield* ModelResolver.fromCatalogModel(
@@ -1149,6 +1230,13 @@ describe("ModelResolver", () => {
       expect(groq.route.protocol).toBe("groq-chat")
       expect(groq.route.defaults.providerOptions).toEqual({ reasoningEffort: "high", parallelToolCalls: false })
       expect(String(groq.provider)).toBe("test-provider")
+      expect(mistral.route.id).toBe("mistral-chat")
+      expect(mistral.route.defaults.providerOptions).toEqual({
+        safePrompt: true,
+        promptCacheKey: "session-123",
+        reasoningEffort: "high",
+      })
+      expect(String(mistral.provider)).toBe("test-provider")
       expect(xai.route.id).toBe("openai-responses")
       expect(xai.route.defaults.providerOptions).toEqual({
         reasoningEffort: "high",
@@ -1171,8 +1259,8 @@ describe("ModelResolver", () => {
         }),
       )
       const resolved = yield* ModelResolver.fromCatalogModel(
-        model(Provider.aisdk("@ai-sdk/mistral"), {
-          modelID: "mistral-api-model",
+        model(Provider.aisdk("@ai-sdk/cohere"), {
+          modelID: "cohere-api-model",
           settings: { project: "test" },
           headers: { "x-aisdk": "header" },
           body: { custom: true },
@@ -1187,9 +1275,9 @@ describe("ModelResolver", () => {
             Effect.sync(() => {
               expect(runtime).toMatchObject({
                 id: "test-model",
-                modelID: "mistral-api-model",
+                modelID: "cohere-api-model",
                 providerID: "test-provider",
-                package: Provider.aisdk("@ai-sdk/mistral"),
+                package: Provider.aisdk("@ai-sdk/cohere"),
                 settings: { project: "test", apiKey: "fallback-secret", accountId: "account" },
                 headers: { "x-aisdk": "header" },
                 body: { custom: true },
@@ -1203,7 +1291,7 @@ describe("ModelResolver", () => {
         },
       )
 
-      expect(resolved).toMatchObject({ id: "mistral-api-model", provider: "test-provider" })
+      expect(resolved).toMatchObject({ id: "cohere-api-model", provider: "test-provider" })
     }),
   )
 
@@ -1211,7 +1299,7 @@ describe("ModelResolver", () => {
     withEnv({ REQUIRED_HOST: undefined }, () =>
       Effect.gen(function* () {
         const failure = yield* ModelResolver.fromCatalogModel(
-          model(Provider.aisdk("@ai-sdk/mistral"), {
+          model(Provider.aisdk("@ai-sdk/cohere"), {
             settings: { baseURL: "https://${REQUIRED_HOST}/v1" },
           }),
           undefined,
@@ -1230,7 +1318,7 @@ describe("ModelResolver", () => {
     withEnv({ PROVIDER_HOST: "${MISSING_HOST}", MISSING_HOST: undefined }, () =>
       Effect.gen(function* () {
         const failure = yield* ModelResolver.fromCatalogModel(
-          model(Provider.aisdk("@ai-sdk/mistral"), {
+          model(Provider.aisdk("@ai-sdk/cohere"), {
             settings: { baseURL: "https://${PROVIDER_HOST}/v1" },
           }),
           undefined,
@@ -1267,8 +1355,8 @@ describe("ModelResolver", () => {
   it.effect("rejects AISDK packages without an available loader", () =>
     Effect.gen(function* () {
       const failure = yield* ModelResolver.fromCatalogModel(
-        model(Provider.aisdk("@ai-sdk/mistral"), {
-          settings: { baseURL: "https://mistral.example/v1" },
+        model(Provider.aisdk("@ai-sdk/cohere"), {
+          settings: { baseURL: "https://cohere.example/v1" },
         }),
       ).pipe(Effect.flip)
 
@@ -1276,9 +1364,9 @@ describe("ModelResolver", () => {
         _tag: "SessionRunnerModel.UnsupportedPackageError",
         providerID: "test-provider",
         modelID: "test-model",
-        package: "aisdk:@ai-sdk/mistral",
+        package: "aisdk:@ai-sdk/cohere",
       })
-      expect(failure.message).toBe("Unsupported package for test-provider/test-model: aisdk:@ai-sdk/mistral")
+      expect(failure.message).toBe("Unsupported package for test-provider/test-model: aisdk:@ai-sdk/cohere")
     }),
   )
 
@@ -1290,8 +1378,8 @@ describe("ModelResolver", () => {
         }),
       )
       yield* ModelResolver.fromCatalogModel(
-        model(Provider.aisdk("@ai-sdk/mistral"), {
-          settings: { apiKey: "", baseURL: "https://mistral.example/v1" },
+        model(Provider.aisdk("@ai-sdk/cohere"), {
+          settings: { apiKey: "", baseURL: "https://cohere.example/v1" },
         }),
         undefined,
         {

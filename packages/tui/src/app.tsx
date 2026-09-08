@@ -86,8 +86,9 @@ import open from "open"
 import { PromptRefProvider, usePromptRef } from "./context/prompt"
 import { Config, ConfigProvider, useConfig } from "./config"
 import { newSessionLocation } from "./config/new-session-location"
-import { PluginProvider, usePlugin, type PackageResolver } from "./plugin/context"
-import { tuiPluginDirectories } from "./plugin/discovery"
+import { UpdateNotificationProvider, useUpdateNotification, type UpdateSource } from "./context/update-notification"
+import { PluginProvider, usePlugin, type PackageSource } from "./plugin/context"
+import { localPluginDirectories } from "./plugin/discovery"
 import { PluginRoute, Slot } from "./plugin/render"
 import { CommandPaletteDialog } from "./component/command-palette"
 import { COMMAND_PALETTE_COMMAND, Keymap, type KeymapCommand } from "./context/keymap"
@@ -98,6 +99,7 @@ import { cliErrorMessage, errorFormat } from "./util/error"
 import { AttentionProvider } from "./context/attention"
 import { StorageProvider, useStorage } from "./context/storage"
 import { SessionTerminalsProvider } from "./context/session-terminals"
+import { PanelProvider, usePanel } from "./context/panel"
 import { SessionFrame } from "./component/session-frame"
 import { createTuiClipboard } from "./clipboard"
 
@@ -152,6 +154,7 @@ const appBindingCommands = [
   "provider.connect",
   "opencode.settings",
   "opencode.status",
+  "opencode.update",
   "service.restart",
   "opencode.debug",
   "theme.switch",
@@ -182,7 +185,8 @@ export type TuiInput = {
   }
   args: Args
   config: Config.Interface
-  packages: PackageResolver
+  updater?: UpdateSource
+  packages: PackageSource
   environment?: Readonly<Record<string, string>>
   terminalHandoff?: () => Promise<
     | {
@@ -208,7 +212,7 @@ export const run = Effect.fn("Tui.run")(function* (input: TuiInput) {
     Effect.catch(() => Effect.tryPromise(() => api.location.get())),
   )
   const directory = location.directory
-  const pluginDirectories = yield* Effect.promise(() => tuiPluginDirectories(process.cwd(), global.config))
+  const pluginDirectories = yield* Effect.promise(() => localPluginDirectories(process.cwd(), global.config))
   const handoff = input.terminalHandoff ? yield* Effect.promise(input.terminalHandoff) : undefined
   const managed = input.server.service
   const service = managed
@@ -381,12 +385,18 @@ export const run = Effect.fn("Tui.run")(function* (input: TuiInput) {
                                                                     <PromptRefProvider>
                                                                       <EditorContextProvider>
                                                                         <AttentionProvider>
-                                                                          <PluginProvider
-                                                                            packages={input.packages}
-                                                                            directories={pluginDirectories}
+                                                                          <UpdateNotificationProvider
+                                                                            updater={input.updater}
                                                                           >
-                                                                            <App />
-                                                                          </PluginProvider>
+                                                                            <PanelProvider>
+                                                                              <PluginProvider
+                                                                                packages={input.packages}
+                                                                                directories={pluginDirectories}
+                                                                              >
+                                                                                <App />
+                                                                              </PluginProvider>
+                                                                            </PanelProvider>
+                                                                          </UpdateNotificationProvider>
                                                                         </AttentionProvider>
                                                                       </EditorContextProvider>
                                                                     </PromptRefProvider>
@@ -448,10 +458,12 @@ function App() {
   const dialog = useDialog()
   const local = useLocal()
   const sessionTabs = useSessionTabs()
+  const panels = usePanel()
   const keymap = Keymap.use()
   const event = useEvent()
   const client = useClient()
   const toast = useToast()
+  const updater = useUpdateNotification()
   const theme = useTheme()
   const { mode, supports, setMode, locked, lock, unlock } = useThemes()
   const data = useData()
@@ -548,8 +560,21 @@ function App() {
   const pasteSummaryEnabled = () => config.data.prompt?.paste !== "full"
   const tabsVertical = () =>
     config.data.tabs.layout === "vertical" && sessionTabsFitVertically(dimensions().width, tabsResize.preferredSize())
-  const tabsVisible = () => sessionTabs.enabled() && sessionTabs.tabs().length > 0 && route.data.type !== "plugin"
+  const tabsAvailable = () => sessionTabs.enabled() && sessionTabs.tabs().length > 0 && route.data.type !== "plugin"
+  const fullscreenPanel = () =>
+    route.data.type === "session" &&
+    panels.current()?.sessionID === route.data.sessionID &&
+    panels.presentation() === "fullscreen"
+  const tabsVisible = () => tabsAvailable() && !fullscreenPanel()
   const verticalTabsVisible = () => tabsVisible() && tabsVertical()
+
+  // Measure the prospective split layout, even while full-screen hides the tabs.
+  createEffect(() => panels.setWidth(dimensions().width - (tabsAvailable() && tabsVertical() ? tabsResize.size() : 0)))
+  createEffect(() => {
+    const current = panels.current()
+    if (!current || (route.data.type === "session" && route.data.sessionID === current.sessionID)) return
+    panels.close()
+  })
 
   createEffect(() => {
     renderer.useMouse = config.data.mouse
@@ -677,6 +702,7 @@ function App() {
         slash: { name: "new", aliases: ["clear"] },
         run: () => {
           const model = local.model.current()
+          const agent = local.agent.current()
           const current =
             route.data.type === "session"
               ? (data.session.get(route.data.sessionID)?.location ?? location.ref)
@@ -690,6 +716,7 @@ function App() {
               location.error?.location,
             ),
           })
+          if (agent) local.agent.set(agent.id)
           if (model) local.model.set(model)
           dialog.clear()
         },
@@ -910,6 +937,17 @@ function App() {
         },
         category: "System",
       },
+      ...(updater.open
+        ? [
+            {
+              name: "opencode.update",
+              title: "Update Shuvcode",
+              slash: { name: "update" },
+              run: () => updater.open?.("manual"),
+              category: "System",
+            },
+          ]
+        : []),
       ...(client.restart
         ? [
             {
@@ -1292,7 +1330,7 @@ function App() {
           <PaneResizeHandle resize={tabsResize} left={tabsResize.size() - 1} />
         </Show>
       </box>
-      <Show when={devtools()}>
+      <Show when={devtools() && !(route.data.type === "plugin" && route.data.id === "opencode.stats")}>
         <DevToolsBar />
       </Show>
       <Show when={!startup.skipInitialLoading}>
