@@ -51,6 +51,7 @@ import {
   executeToolFailed,
 } from "../message/current-tool-state"
 import { AssistantReasoningContent, writeClipboard } from "../message/message-content"
+import { followShellOutput } from "./shell-output"
 
 function ShellSubmessage(props: { text: string; animate?: boolean }) {
   let widthRef: HTMLSpanElement | undefined
@@ -1629,33 +1630,9 @@ ToolRegistry.register({
     createEffect(() => {
       if (saved() !== undefined) return
       const id = props.metadata.shellID
-      const shellOutput = data.shellOutput
-      if (typeof id !== "string" || !shellOutput) return
-      const directory = data.directory
-      const running = pending()
-      let cursor = 0
-      let loading = false
-      let disposed = false
-      const load = async () => {
-        if (loading) return
-        loading = true
-        do {
-          const response = await shellOutput({ id, location: { directory }, cursor }).catch(() => undefined)
-          if (disposed || !response) break
-          setStreamed((output) => (cursor === 0 ? response.data.output : output + response.data.output))
-          if (response.data.cursor <= cursor) break
-          cursor = response.data.cursor
-          if (running || cursor >= response.data.size) break
-        } while (!disposed)
-        loading = false
-      }
-      void load()
-      // Refresh the final snapshot on exit, but poll only while the shell is live.
-      const interval = running ? setInterval(() => void load(), 1_000) : undefined
-      onCleanup(() => {
-        disposed = true
-        clearInterval(interval)
-      })
+      const load = data.shellOutput
+      if (typeof id !== "string" || !load) return
+      onCleanup(followShellOutput({ id, directory: data.directory, running: pending(), load, onOutput: setStreamed }))
     })
     const command = () => {
       if (typeof props.input.command === "string") return props.input.command
