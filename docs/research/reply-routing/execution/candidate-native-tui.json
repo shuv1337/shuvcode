@@ -1,0 +1,277 @@
+{
+  "observedAt": "2026-09-08T04:07:40.911Z",
+  "runtime": "candidate",
+  "sourceHead": "6829c0e589f73ed105a60b002b2535aed04847d3",
+  "binarySha256": "b9c0ae94ca84b9e130b4f6ada94a35f544ea622016f189efccb5aeb8a3f64ba9",
+  "providerPackage": "aisdk:@ai-sdk/openai-compatible",
+  "contextLimit": 200000,
+  "isolation": {
+    "freshHome": true,
+    "freshDatabase": true,
+    "nestedDisposableGitRoot": true,
+    "inheritedCredentials": false,
+    "nonLoopbackNetworkDenied": true
+  },
+  "checks": [
+    {
+      "name": "create_session",
+      "observed": 200,
+      "expected": 200
+    },
+    {
+      "name": "native_tui_prompt_admitted",
+      "observed": "First synthetic input",
+      "expected": "First synthetic input"
+    },
+    {
+      "name": "wake_reaches_model",
+      "observed": 1,
+      "expected": 1
+    },
+    {
+      "name": "busy_while_model_held",
+      "observed": true,
+      "expected": true
+    },
+    {
+      "name": "second_admitted_while_busy",
+      "observed": 200,
+      "expected": 200
+    },
+    {
+      "name": "second_remains_queued",
+      "observed": ["msg_execution_second"],
+      "expected": ["msg_execution_second"]
+    },
+    {
+      "name": "no_parallel_model_call",
+      "observed": 1,
+      "expected": 1
+    },
+    {
+      "name": "pending_replay_same_receipt",
+      "observed": {
+        "status": 200,
+        "data": {
+          "data": {
+            "id": "msg_execution_second",
+            "sessionID": "ses_execution_regression",
+            "timeCreated": 1788840463419,
+            "type": "user",
+            "payload": {
+              "text": "Second synthetic input"
+            },
+            "delivery": "queue"
+          }
+        }
+      },
+      "expected": {
+        "status": 200,
+        "data": {
+          "data": {
+            "id": "msg_execution_second",
+            "sessionID": "ses_execution_regression",
+            "timeCreated": 1788840463419,
+            "type": "user",
+            "payload": {
+              "text": "Second synthetic input"
+            },
+            "delivery": "queue"
+          }
+        }
+      }
+    },
+    {
+      "name": "wait_until_idle",
+      "observed": 204,
+      "expected": 204
+    },
+    {
+      "name": "two_model_calls",
+      "observed": 2,
+      "expected": 2
+    },
+    {
+      "name": "inbox_drained",
+      "observed": 0,
+      "expected": 0
+    },
+    {
+      "name": "idle_after_completion",
+      "observed": false,
+      "expected": false
+    },
+    {
+      "name": "serial_native_transcript",
+      "observed": ["user", "assistant", "user", "assistant"],
+      "expected": ["user", "assistant", "user", "assistant"]
+    },
+    {
+      "name": "input_ids_once",
+      "observed": ["msg_07f334b1a001CtJ5NIyuW7b67O", "msg_execution_second"],
+      "expected": ["msg_07f334b1a001CtJ5NIyuW7b67O", "msg_execution_second"]
+    },
+    {
+      "name": "assistant_completion",
+      "observed": [
+        {
+          "finish": "stop",
+          "completed": true,
+          "text": "Synthetic reply 1."
+        },
+        {
+          "finish": "stop",
+          "completed": true,
+          "text": "Synthetic reply 2."
+        }
+      ],
+      "expected": [
+        {
+          "finish": "stop",
+          "completed": true,
+          "text": "Synthetic reply 1."
+        },
+        {
+          "finish": "stop",
+          "completed": true,
+          "text": "Synthetic reply 2."
+        }
+      ]
+    },
+    {
+      "name": "native_tui_stays_attached",
+      "observed": null,
+      "expected": null
+    },
+    {
+      "name": "native_tui_renders_http_followup",
+      "observed": true,
+      "expected": true
+    },
+    {
+      "name": "create_native_question",
+      "observed": 200,
+      "expected": 200
+    },
+    {
+      "name": "native_question_receipt",
+      "observed": {
+        "status": "answered",
+        "answer": {
+          "continue": true
+        }
+      },
+      "expected": {
+        "status": "answered",
+        "answer": {
+          "continue": true
+        }
+      }
+    },
+    {
+      "name": "late_http_question_reply_rejected",
+      "observed": 409,
+      "expected": 409
+    },
+    {
+      "name": "create_native_permission",
+      "observed": "ask",
+      "expected": "ask"
+    },
+    {
+      "name": "native_permission_receipt",
+      "observed": {
+        "status": "answered",
+        "reply": "once"
+      },
+      "expected": {
+        "status": "answered",
+        "reply": "once"
+      }
+    },
+    {
+      "name": "late_http_permission_reply_rejected",
+      "observed": 404,
+      "expected": 404
+    },
+    {
+      "name": "promoted_replay_receipt",
+      "observed": {
+        "status": 200,
+        "id": "msg_07f334b1a001CtJ5NIyuW7b67O",
+        "text": "First synthetic input"
+      },
+      "expected": {
+        "status": 200,
+        "id": "msg_07f334b1a001CtJ5NIyuW7b67O",
+        "text": "First synthetic input"
+      }
+    },
+    {
+      "name": "promoted_replay_advisory_wake",
+      "observed": 200,
+      "expected": 200
+    },
+    {
+      "name": "promoted_replay_does_not_execute",
+      "observed": 2,
+      "expected": 2
+    },
+    {
+      "name": "restart_does_not_execute",
+      "observed": 2,
+      "expected": 2
+    },
+    {
+      "name": "promoted_replay_after_restart",
+      "observed": {
+        "status": 200,
+        "id": "msg_07f334b1a001CtJ5NIyuW7b67O",
+        "text": "First synthetic input"
+      },
+      "expected": {
+        "status": 200,
+        "id": "msg_07f334b1a001CtJ5NIyuW7b67O",
+        "text": "First synthetic input"
+      }
+    },
+    {
+      "name": "restart_replay_does_not_execute",
+      "observed": 2,
+      "expected": 2
+    },
+    {
+      "name": "restart_transcript_unchanged",
+      "observed": [
+        "msg_07f334b16001kpLGY2Ugi2V1W3",
+        "msg_07f334b1a001CtJ5NIyuW7b67O",
+        "msg_07f334b3a0017G9xSX3cJjfEHX",
+        "msg_execution_second",
+        "msg_07f334c9c001ZvePMH0MSUtR3w"
+      ],
+      "expected": [
+        "msg_07f334b16001kpLGY2Ugi2V1W3",
+        "msg_07f334b1a001CtJ5NIyuW7b67O",
+        "msg_07f334b3a0017G9xSX3cJjfEHX",
+        "msg_execution_second",
+        "msg_07f334c9c001ZvePMH0MSUtR3w"
+      ]
+    }
+  ],
+  "version": "shuvcode v0.0.0-reply-routing-recovery-202609080357",
+  "result": "passed",
+  "terminalOutputBytes": 53373,
+  "modelRequests": [
+    {
+      "ordinal": 1,
+      "path": "/v1/chat/completions",
+      "userMessageCount": 1
+    },
+    {
+      "ordinal": 2,
+      "path": "/v1/chat/completions",
+      "userMessageCount": 2
+    }
+  ],
+  "stderrBytes": 22887
+}
