@@ -77,7 +77,8 @@ export default {
       return new Response("Not found", { status: 404 })
     }
 
-    const resolved = resolveChannel(path[0])
+    if (path[0] === "next") return json({ error: "Channel not found" }, 404)
+    const resolved = path[0]
     const agent = request.headers.get("User-Agent")?.match(/^opencode\/(?:([^/]+)\/([^/]+)\/cli|(.*))$/)
     const current = url.searchParams.get("current") ?? agent?.[2] ?? agent?.[3]
     const source = agent?.[1] ?? current?.match(/^v?0\.0\.0-(.+)-\d+(?:\.\d+)?(?:\+.*)?$/)?.[1]
@@ -200,6 +201,7 @@ async function configureRollout(request: Request, env: Env, prefix: string) {
   const duration = typeof input === "string" && input.trim() ? Number(input) : NaN
   if (
     !validIdentifier(channel) ||
+    channel === "next" ||
     !Number.isFinite(duration) ||
     duration < 0 ||
     !Number.isFinite(duration * 3_600_000)
@@ -209,7 +211,7 @@ async function configureRollout(request: Request, env: Env, prefix: string) {
   await env.DB.prepare(
     "INSERT INTO channel_rollout (channel, duration_hours) VALUES (?, ?) ON CONFLICT (channel) DO UPDATE SET duration_hours = excluded.duration_hours",
   )
-    .bind(resolveChannel(channel), duration)
+    .bind(channel, duration)
     .run()
   return Response.redirect(new URL(`${prefix}/admin`, request.url), 303)
 }
@@ -230,7 +232,8 @@ async function admin(request: Request, env: Env, prefix: string) {
   const rollouts = await env.DB.prepare(
     `SELECT channels.channel, COALESCE(channel_rollout.duration_hours, 0) AS duration_hours
      FROM (SELECT channel FROM artifact UNION SELECT channel FROM channel_rollout) AS channels
-     LEFT JOIN channel_rollout ON channel_rollout.channel = channels.channel ORDER BY channels.channel`,
+     LEFT JOIN channel_rollout ON channel_rollout.channel = channels.channel
+     WHERE channels.channel != 'next' ORDER BY channels.channel`,
   ).all<{ channel: string; duration_hours: number }>()
   const requestedPage = Number.parseInt(url.searchParams.get("page") ?? "1", 10)
   const page = Number.isSafeInteger(requestedPage) && requestedPage > 0 ? requestedPage : 1
@@ -453,6 +456,7 @@ function parseArtifact(input: Record<string, unknown>): ArtifactInput | Response
 function parseKey(input: Record<string, unknown>): Omit<ArtifactInput, "metadata"> | Response {
   if (
     !validIdentifier(input.channel) ||
+    input.channel === "next" ||
     !validIdentifier(input.name) ||
     !validIdentifier(input.distribution) ||
     !validVersion(input.version)
