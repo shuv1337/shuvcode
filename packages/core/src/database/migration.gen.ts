@@ -51,6 +51,7 @@ import m48 from "./migration/20260815073846_fork_session_policy.js"
 import m49 from "./migration/20260819222447_session_viewed_state.js"
 import m50 from "./migration/20260823191254_nullable_workspace_binding.js"
 import m51 from "./migration/20260824080928_session_dynamic_tools.js"
+import m52 from "./migration/20260908005645_input_request_receipts.js"
 
 export const migrations = [
   m00,
@@ -105,4 +106,5 @@ export const migrations = [
   m49,
   m50,
   m51,
+  m52,
 ] satisfies DatabaseMigration.Migration[]

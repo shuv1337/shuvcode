@@ -50,6 +50,7 @@ const permissionLayer = Layer.succeed(
     assert: () => Effect.void,
     reply: () => Effect.void,
     get: () => Effect.succeed(undefined),
+    receipt: () => Effect.succeed(undefined),
     forSession: () => Effect.succeed([]),
     list: () => Effect.succeed([]),
   }),

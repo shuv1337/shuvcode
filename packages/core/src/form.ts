@@ -1,11 +1,16 @@
 export * as Form from "./form.js"
 
 import { Form } from "@opencode-ai/schema/form"
-import { Cache, Context, Deferred, Duration, Effect, Exit, Layer, Option, Schema } from "effect"
+import { Context, Deferred, Effect, Layer, Schema } from "effect"
+import { and, eq, isNull, lt, ne } from "drizzle-orm"
+import { isDeepStrictEqual } from "node:util"
 import { makeLocationNode } from "@opencode-ai/util/effect/app-node"
 import { Bus } from "./bus.js"
+import { Database } from "./database/database.js"
+import { Location } from "./location.js"
+import { FormRequestTable } from "./form/sql.js"
 
-const RETENTION = Duration.minutes(10)
+const RETENTION = 7 * 24 * 60 * 60 * 1000
 
 export const ID = Form.ID
 export type ID = typeof ID.Type
@@ -72,6 +77,7 @@ export type CreateInput = Omit<Form.Info, "id"> & { readonly id?: ID }
 export interface ReplyInput {
   readonly id: ID
   readonly answer: Answer
+  readonly responseID?: string
 }
 
 export interface ListInput {
@@ -84,43 +90,51 @@ export interface Interface {
   readonly get: (id: ID) => Effect.Effect<Info, NotFoundError>
   readonly list: (input?: ListInput) => Effect.Effect<ReadonlyArray<Info>>
   readonly state: (id: ID) => Effect.Effect<State, NotFoundError>
+  readonly receipt: (id: ID) => Effect.Effect<Form.Receipt, NotFoundError>
   readonly reply: (input: ReplyInput) => Effect.Effect<void, AlreadySettledError | InvalidAnswerError | NotFoundError>
   readonly cancel: (id: ID) => Effect.Effect<void, AlreadySettledError | NotFoundError>
 }
 
 export class Service extends Context.Service<Service, Interface>()("@opencode/Form") {}
 
-interface Entry {
-  readonly form: Info
-  readonly state: State
-  readonly deferred: Deferred.Deferred<TerminalState>
-}
-
 export const layer = Layer.effect(
   Service,
   Effect.gen(function* () {
     const bus = yield* Bus.Service
-    const forms = yield* Cache.makeWith<ID, Entry>(
-      () => Effect.die(new Error("Form cache must be used via set/getSuccess, never get")),
-      {
-        capacity: Number.MAX_SAFE_INTEGER,
-        timeToLive: (exit) =>
-          Exit.isSuccess(exit) && exit.value.state.status === "pending" ? Duration.infinity : RETENTION,
-      },
+    const database = yield* Database.Service
+    const location = yield* Location.Service
+    const generation = crypto.randomUUID()
+    const pending = new Map<ID, Deferred.Deferred<TerminalState>>()
+    const scope = and(
+      eq(FormRequestTable.directory, location.directory),
+      location.workspaceID === undefined
+        ? isNull(FormRequestTable.workspace_id)
+        : eq(FormRequestTable.workspace_id, location.workspaceID),
     )
-
-    const requireEntry = Effect.fn("Form.requireEntry")((id: ID) =>
-      Cache.getSuccess(forms, id).pipe(
-        Effect.flatMap((entry) => Effect.fromOption(entry, () => new NotFoundError({ id }))),
-      ),
-    )
+    const prune = () =>
+      database.db
+        .delete(FormRequestTable)
+        .where(and(ne(FormRequestTable.status, "pending"), lt(FormRequestTable.time_updated, Date.now() - RETENTION)))
+        .pipe(Effect.orDie)
+    const requireRow = Effect.fn("Form.requireRow")(function* (id: ID) {
+      yield* prune()
+      const row = yield* database.db
+        .select()
+        .from(FormRequestTable)
+        .where(and(eq(FormRequestTable.id, id), scope))
+        .get()
+        .pipe(Effect.orDie)
+      if (!row) return yield* new NotFoundError({ id })
+      return row
+    })
+    // A notification failure cannot undo an admitted request or an accepted answer.
+    const notify = <A>(effect: Effect.Effect<A>) =>
+      effect.pipe(Effect.catchCause(() => Effect.logWarning("Form notification failed after durable commit")))
 
     const create = Effect.fn("Form.create")((input: CreateInput) =>
       Effect.uninterruptible(
         Effect.gen(function* () {
           const id = input.id ?? ID.create()
-          const existing = yield* Cache.getSuccess(forms, id)
-          if (Option.isSome(existing)) return yield* new AlreadyExistsError({ id })
           const invalid = validateFields(input.fields)
           if (invalid) return yield* new InvalidFormError({ message: invalid })
           const form: Info = {
@@ -130,13 +144,27 @@ export const layer = Layer.effect(
             ...(input.metadata === undefined ? {} : { metadata: input.metadata }),
             fields: input.fields,
           }
-          const entry: Entry = {
-            form,
-            state: { status: "pending" },
-            deferred: yield* Deferred.make<TerminalState>(),
-          }
-          yield* Cache.set(forms, id, entry)
-          yield* bus.publish(Form.Event.Created, { form }).pipe(Effect.onError(() => Cache.invalidate(forms, id)))
+          const deferred = yield* Deferred.make<TerminalState>()
+          yield* prune()
+          const stored = yield* database.db
+            .insert(FormRequestTable)
+            .values({
+              id,
+              session_id: form.sessionID,
+              directory: location.directory,
+              workspace_id: location.workspaceID ?? null,
+              owner_generation: generation,
+              request: form,
+              status: "pending",
+              state: { status: "pending" },
+            })
+            .onConflictDoNothing()
+            .returning({ id: FormRequestTable.id })
+            .get()
+            .pipe(Effect.orDie)
+          if (!stored) return yield* new AlreadyExistsError({ id })
+          pending.set(id, deferred)
+          yield* notify(bus.publish(Form.Event.Created, { form }))
           return form
         }),
       ),
@@ -146,45 +174,107 @@ export const layer = Layer.effect(
       Effect.uninterruptibleMask((restore) =>
         Effect.gen(function* () {
           const form = yield* create(input)
-          const entry = yield* requireEntry(form.id).pipe(Effect.orDie)
-          return yield* restore(Deferred.await(entry.deferred)).pipe(
-            Effect.onInterrupt(() => Effect.ignore(cancel(form.id))),
-          )
+          // A Created listener can answer immediately, before create returns.
+          const row = yield* requireRow(form.id).pipe(Effect.orDie)
+          if (row.state.status !== "pending") return row.state
+          const deferred = pending.get(form.id)
+          if (!deferred) return yield* Effect.die(new NotFoundError({ id: form.id }))
+          return yield* restore(Deferred.await(deferred)).pipe(Effect.onInterrupt(() => Effect.ignore(cancel(form.id))))
         }),
       ),
     )
 
     const get = Effect.fn("Form.get")(function* (id: ID) {
-      return (yield* requireEntry(id)).form
+      return (yield* requireRow(id)).request
     })
 
     const list = Effect.fn("Form.list")(function* (input?: ListInput) {
-      const entries = yield* Cache.values(forms)
-      return Array.from(entries)
-        .filter((entry) => entry.state.status === "pending")
-        .filter((entry) => input?.sessionID === undefined || entry.form.sessionID === input.sessionID)
-        .map((entry) => entry.form)
+      const rows = yield* database.db
+        .select()
+        .from(FormRequestTable)
+        .where(
+          and(
+            scope,
+            eq(FormRequestTable.status, "pending"),
+            eq(FormRequestTable.owner_generation, generation),
+            input?.sessionID === undefined ? undefined : eq(FormRequestTable.session_id, input.sessionID),
+          ),
+        )
+        .pipe(Effect.orDie)
+      return rows.filter((row) => pending.has(row.id)).map((row) => row.request)
     })
 
     const state = Effect.fn("Form.state")(function* (id: ID) {
-      return (yield* requireEntry(id)).state
+      return (yield* requireRow(id)).state
+    })
+
+    const receipt = Effect.fn("Form.receipt")(function* (id: ID): Effect.fn.Return<Form.Receipt, NotFoundError> {
+      const row = yield* requireRow(id)
+      return {
+        request: row.request,
+        state: row.state,
+        available: row.status === "pending" && row.owner_generation === generation && pending.has(id),
+        ...(row.response_id === null ? {} : { responseID: row.response_id }),
+        time: { created: row.time_created, updated: row.time_updated },
+      }
     })
 
     const reply = Effect.fn("Form.reply")((input: ReplyInput) =>
       Effect.uninterruptible(
         Effect.gen(function* () {
-          const entry = yield* requireEntry(input.id)
-          if (entry.state.status !== "pending") return yield* new AlreadySettledError({ id: input.id })
-          const invalid = validateAnswer(entry.form.fields, input.answer)
+          if (input.responseID !== undefined && !Schema.is(Form.ResponseID)(input.responseID)) {
+            return yield* new InvalidAnswerError({ id: input.id, message: "Invalid response ID" })
+          }
+          const row = yield* requireRow(input.id)
+          if (row.state.status !== "pending") {
+            if (
+              input.responseID !== undefined &&
+              row.response_id === input.responseID &&
+              row.state.status === "answered" &&
+              isDeepStrictEqual(row.state.answer, input.answer)
+            )
+              return
+            return yield* new AlreadySettledError({ id: input.id })
+          }
+          const deferred = pending.get(input.id)
+          if (row.owner_generation !== generation || !deferred) return yield* new NotFoundError({ id: input.id })
+          const invalid = validateAnswer(row.request.fields, input.answer)
           if (invalid) return yield* new InvalidAnswerError({ id: input.id, message: invalid })
           const next: TerminalState = { status: "answered", answer: input.answer }
-          yield* bus.publish(Form.Event.Replied, {
-            id: input.id,
-            sessionID: entry.form.sessionID,
-            answer: input.answer,
-          })
-          yield* Cache.set(forms, input.id, { ...entry, state: next })
-          yield* Deferred.succeed(entry.deferred, next)
+          const settled = yield* database.db
+            .update(FormRequestTable)
+            .set({
+              state: next,
+              status: next.status,
+              response_id: input.responseID ?? null,
+            })
+            .where(
+              and(
+                scope,
+                eq(FormRequestTable.id, input.id),
+                eq(FormRequestTable.status, "pending"),
+                eq(FormRequestTable.owner_generation, generation),
+              ),
+            )
+            .returning({ id: FormRequestTable.id })
+            .get()
+            .pipe(Effect.orDie)
+          if (!settled) {
+            const current = yield* requireRow(input.id)
+            if (
+              input.responseID !== undefined &&
+              current.response_id === input.responseID &&
+              current.state.status === "answered" &&
+              isDeepStrictEqual(current.state.answer, input.answer)
+            )
+              return
+            return yield* new AlreadySettledError({ id: input.id })
+          }
+          pending.delete(input.id)
+          yield* Deferred.succeed(deferred, next)
+          yield* notify(
+            bus.publish(Form.Event.Replied, { id: input.id, sessionID: row.session_id, answer: input.answer }),
+          )
         }),
       ),
     )
@@ -192,33 +282,42 @@ export const layer = Layer.effect(
     const cancel = Effect.fn("Form.cancel")((id: ID) =>
       Effect.uninterruptible(
         Effect.gen(function* () {
-          const entry = yield* requireEntry(id)
-          if (entry.state.status !== "pending") return yield* new AlreadySettledError({ id })
+          const row = yield* requireRow(id)
+          if (row.state.status !== "pending") return yield* new AlreadySettledError({ id })
+          const deferred = pending.get(id)
+          if (row.owner_generation !== generation || !deferred) return yield* new NotFoundError({ id })
           const next: TerminalState = { status: "cancelled" }
-          yield* bus.publish(Form.Event.Cancelled, { id, sessionID: entry.form.sessionID })
-          yield* Cache.set(forms, id, { ...entry, state: next })
-          yield* Deferred.succeed(entry.deferred, next)
+          const settled = yield* database.db
+            .update(FormRequestTable)
+            .set({ state: next, status: next.status })
+            .where(
+              and(
+                scope,
+                eq(FormRequestTable.id, id),
+                eq(FormRequestTable.status, "pending"),
+                eq(FormRequestTable.owner_generation, generation),
+              ),
+            )
+            .returning({ id: FormRequestTable.id })
+            .get()
+            .pipe(Effect.orDie)
+          if (!settled) return yield* new AlreadySettledError({ id })
+          pending.delete(id)
+          yield* Deferred.succeed(deferred, next)
+          yield* notify(bus.publish(Form.Event.Cancelled, { id, sessionID: row.session_id }))
         }),
       ),
     )
 
     yield* Effect.addFinalizer(() =>
-      Cache.values(forms).pipe(
-        Effect.flatMap((entries) =>
-          Effect.forEach(
-            Array.from(entries).filter((entry) => entry.state.status === "pending"),
-            (entry) => cancel(entry.form.id).pipe(Effect.ignore),
-            { discard: true },
-          ),
-        ),
-      ),
+      Effect.forEach(Array.from(pending.keys()), (id) => cancel(id).pipe(Effect.ignore), { discard: true }),
     )
 
-    return Service.of({ create, ask, get, list, state, reply, cancel })
+    return Service.of({ create, ask, get, list, state, receipt, reply, cancel })
   }),
 )
 
-export const node = makeLocationNode({ service: Service, layer, deps: [Bus.node] })
+export const node = makeLocationNode({ service: Service, layer, deps: [Bus.node, Database.node, Location.node] })
 
 export function validateAnswer(form: ReadonlyArray<Form.Field>, answer: Answer) {
   const fields = new Map(form.map((field) => [field.key, field] as const))

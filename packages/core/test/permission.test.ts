@@ -338,6 +338,79 @@ describe("Permission", () => {
     }),
   )
 
+  it.effect("accepts only the first reply while its event listener is paused", () =>
+    Effect.gen(function* () {
+      yield* setup()
+      const service = yield* Permission.Service
+      const bus = yield* Bus.Service
+      const request = yield* service.ask(assertion())
+      const firstPublishing = yield* Deferred.make<void>()
+      const releaseFirst = yield* Deferred.make<void>()
+      const replies: Permission.Reply[] = []
+      const unsubscribe = yield* bus.listen((event) => {
+        if (event.type !== Permission.Event.Replied.type) return Effect.void
+        const data = event.data as { readonly requestID: Permission.ID; readonly reply: Permission.Reply }
+        if (data.requestID !== request.id) return Effect.void
+        replies.push(data.reply)
+        if (data.reply !== "once") return Effect.void
+        return Deferred.succeed(firstPublishing, undefined).pipe(Effect.andThen(Deferred.await(releaseFirst)))
+      })
+      yield* Effect.addFinalizer(() => unsubscribe)
+      const first = yield* service.reply({ requestID: request.id, reply: "once" }).pipe(Effect.exit, Effect.forkScoped)
+
+      yield* Deferred.await(firstPublishing)
+      const second = yield* service
+        .reply({ requestID: request.id, reply: "reject" })
+        .pipe(Effect.exit, Effect.ensuring(Deferred.succeed(releaseFirst, undefined)))
+      const settled = yield* Fiber.join(first)
+
+      expect({ first: Exit.isSuccess(settled), second: Exit.isSuccess(second), replies }).toEqual({
+        first: true,
+        second: false,
+        replies: ["once"],
+      })
+    }),
+  )
+
+  it.effect("keeps an intervening reply when an always-policy reviewer resumes", () =>
+    Effect.gen(function* () {
+      yield* setup()
+      yield* setup([], Session.ID.make("ses_other"))
+      const service = yield* Permission.Service
+      const bus = yield* Bus.Service
+      const hooks = yield* PluginHooks.Service
+      const selected = yield* service.ask(assertion({ save: ["src/*"] }))
+      const other = yield* service.ask(
+        assertion({ id: Permission.ID.create("per_other"), sessionID: Session.ID.make("ses_other") }),
+      )
+      const reviewing = yield* Deferred.make<void>()
+      const release = yield* Deferred.make<void>()
+      const replies: Permission.Reply[] = []
+      yield* hooks.register("permission", "evaluate", (event) =>
+        event.sessionID === Session.ID.make("ses_other") && event.effect === "allow"
+          ? Deferred.succeed(reviewing, undefined).pipe(Effect.andThen(Deferred.await(release)))
+          : Effect.void,
+      )
+      const unsubscribe = yield* bus.listen((event) => {
+        if (event.type !== Permission.Event.Replied.type) return Effect.void
+        const data = event.data as { readonly requestID: Permission.ID; readonly reply: Permission.Reply }
+        if (data.requestID === other.id) replies.push(data.reply)
+        return Effect.void
+      })
+      yield* Effect.addFinalizer(() => unsubscribe)
+      const approving = yield* service
+        .reply({ requestID: selected.id, reply: "always" })
+        .pipe(Effect.exit, Effect.forkScoped)
+
+      yield* Deferred.await(reviewing)
+      yield* service
+        .reply({ requestID: other.id, reply: "reject" })
+        .pipe(Effect.ensuring(Deferred.succeed(release, undefined)))
+      expect(Exit.isSuccess(yield* Fiber.join(approving))).toBe(true)
+      expect(replies).toEqual(["reject"])
+    }),
+  )
+
   it.effect("defects when an asked permission is declined", () =>
     Effect.gen(function* () {
       yield* setup()
@@ -353,6 +426,54 @@ describe("Permission", () => {
           ),
         ).toBe(true)
       expect(yield* service.list()).toEqual([])
+    }),
+  )
+
+  it.effect("rolls back the receipt when storing an always grant fails", () =>
+    Effect.gen(function* () {
+      yield* setup()
+      const service = yield* Permission.Service
+      const database = yield* Database.Service
+      const saved = yield* PermissionSaved.Service
+      const request = yield* service.ask(assertion({ save: ["src/*"] }))
+      yield* database.db
+        .run(
+          "CREATE TRIGGER synthetic_fail_permission BEFORE INSERT ON permission BEGIN SELECT RAISE(ABORT, 'synthetic grant failure'); END",
+        )
+        .pipe(Effect.orDie)
+      const failed = yield* service
+        .reply({ requestID: request.id, reply: "always", responseID: "synthetic-grant" })
+        .pipe(Effect.exit)
+      expect(Exit.isFailure(failed)).toBe(true)
+      expect((yield* service.receipt(request.id))?.state).toEqual({ status: "pending" })
+      expect(yield* saved.list()).toEqual([])
+      yield* database.db.run("DROP TRIGGER synthetic_fail_permission").pipe(Effect.orDie)
+      yield* service.reply({ requestID: request.id, reply: "always", responseID: "synthetic-grant" })
+      expect((yield* service.receipt(request.id))?.state).toEqual({ status: "answered", reply: "always" })
+      expect(yield* saved.list()).toHaveLength(1)
+      yield* service.reply({ requestID: request.id, reply: "always", responseID: "synthetic-grant" })
+      expect(yield* saved.list()).toHaveLength(1)
+    }),
+  )
+
+  it.effect("retains permission admission and resolves its waiter despite failed observers", () =>
+    Effect.gen(function* () {
+      yield* setup()
+      const service = yield* Permission.Service
+      const bus = yield* Bus.Service
+      yield* bus.listen((event) => {
+        if (event.type === Permission.Event.Replied.type) return Effect.die("synthetic observer failure")
+        if (event.type !== Permission.Event.Asked.type) return Effect.void
+        const request = event.data as Permission.Request
+        return service
+          .reply({ requestID: request.id, reply: "once", responseID: "synthetic-observer" })
+          .pipe(Effect.orDie)
+      })
+      yield* service.assert(assertion())
+      expect((yield* service.receipt(Permission.ID.create("per_test")))?.state).toEqual({
+        status: "answered",
+        reply: "once",
+      })
     }),
   )
 
@@ -669,6 +790,7 @@ describe("shell scanner permission impact", () => {
             expect(parsed.directories).toEqual([])
             const result = yield* service.ask(
               assertion({
+                id: Permission.ID.create(),
                 action: "shell",
                 resources: parsed.commands.map((command) => command.resource),
                 save: parsed.commands.map((command) => command.save),
@@ -779,6 +901,7 @@ describe("shell scanner permission impact", () => {
           const parsed = yield* ShellParse.scan(fixture.command, fixture.shell, "/project", { portable })
           const first = yield* service.ask(
             assertion({
+              id: Permission.ID.create(),
               action: "shell",
               resources: parsed.commands.map((command) => command.resource),
               save: parsed.commands.map((command) => command.save),
@@ -797,6 +920,7 @@ describe("shell scanner permission impact", () => {
               const parsed = yield* ShellParse.scan(command, fixture.shell, "/project", { portable: target })
               const result = yield* service.ask(
                 assertion({
+                  id: Permission.ID.create(),
                   action: "shell",
                   resources: parsed.commands.map((command) => command.resource),
                   save: parsed.commands.map((command) => command.save),

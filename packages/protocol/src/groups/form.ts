@@ -110,6 +110,21 @@ export const makeFormGroup = <
         ),
     )
     .add(
+      HttpApiEndpoint.get("session.form.receipt", "/api/session/:sessionID/form/:formID/receipt", {
+        params: { sessionID: Schema.String, formID: Form.ID },
+        success: Schema.Struct({ data: Form.Receipt }),
+        error: [SessionNotFoundError, FormNotFoundError],
+      })
+        .middleware(formLocationMiddleware)
+        .annotateMerge(
+          OpenApi.annotations({
+            identifier: "v2.session.form.receipt",
+            summary: "Get form receipt",
+            description: "Read a retained form outcome and whether its pending callback is available in this runtime.",
+          }),
+        ),
+    )
+    .add(
       HttpApiEndpoint.post("session.form.reply", "/api/session/:sessionID/form/:formID/reply", {
         params: { sessionID: Schema.String, formID: Form.ID },
         payload: Form.Reply,
@@ -121,7 +136,8 @@ export const makeFormGroup = <
           OpenApi.annotations({
             identifier: "v2.session.form.reply",
             summary: "Reply to form",
-            description: "Submit an answer to a pending form.",
+            description:
+              "Submit an answer to a pending form. An exact retry with the same responseID acknowledges the retained answer without applying it again.",
           }),
         ),
     )

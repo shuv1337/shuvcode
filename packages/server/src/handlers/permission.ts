@@ -26,6 +26,15 @@ export const PermissionHandler = HttpApiBuilder.group(Api, "server.permission", 
       if (!request || request.sessionID !== sessionID) return yield* missingRequest(requestID)
       return { permission, request }
     })
+    const requireOwnedReceipt = Effect.fnUntraced(function* (
+      sessionID: Permission.Request["sessionID"],
+      requestID: Permission.ID,
+    ) {
+      const permission = yield* Permission.Service
+      const receipt = yield* permission.receipt(requestID)
+      if (!receipt || receipt.request.sessionID !== sessionID) return yield* missingRequest(requestID)
+      return { permission, receipt }
+    })
 
     return handlers
       .handle(
@@ -84,11 +93,23 @@ export const PermissionHandler = HttpApiBuilder.group(Api, "server.permission", 
         }),
       )
       .handle(
+        "session.permission.receipt",
+        Effect.fn(function* (ctx) {
+          const owned = yield* requireOwnedReceipt(ctx.params.sessionID, ctx.params.requestID)
+          return { data: owned.receipt }
+        }),
+      )
+      .handle(
         "session.permission.reply",
         Effect.fn(function* (ctx) {
-          const owned = yield* requireOwnedRequest(ctx.params.sessionID, ctx.params.requestID)
+          const owned = yield* requireOwnedReceipt(ctx.params.sessionID, ctx.params.requestID)
           yield* owned.permission
-            .reply({ requestID: ctx.params.requestID, reply: ctx.payload.reply, message: ctx.payload.message })
+            .reply({
+              requestID: ctx.params.requestID,
+              reply: ctx.payload.reply,
+              message: ctx.payload.message,
+              responseID: ctx.payload.responseID,
+            })
             .pipe(Effect.catchTag("Permission.NotFoundError", () => missingRequest(ctx.params.requestID)))
           return HttpApiSchema.NoContent.make()
         }),

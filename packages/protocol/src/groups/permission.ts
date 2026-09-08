@@ -114,11 +114,28 @@ export const makePermissionGroup = <
         ),
     )
     .add(
+      HttpApiEndpoint.get("session.permission.receipt", "/api/session/:sessionID/permission/:requestID/receipt", {
+        params: { sessionID: Session.ID, requestID: Permission.ID },
+        success: Schema.Struct({ data: Permission.Receipt }),
+        error: [SessionNotFoundError, PermissionNotFoundError],
+      })
+        .middleware(sessionLocationMiddleware)
+        .annotateMerge(
+          OpenApi.annotations({
+            identifier: "v2.session.permission.receipt",
+            summary: "Get permission receipt",
+            description:
+              "Retrieve the persisted state and response receipt for a permission request owned by a session.",
+          }),
+        ),
+    )
+    .add(
       HttpApiEndpoint.post("session.permission.reply", "/api/session/:sessionID/permission/:requestID/reply", {
         params: { sessionID: Session.ID, requestID: Permission.ID },
         payload: Schema.Struct({
           reply: Permission.Reply,
           message: Schema.String.pipe(Schema.optional),
+          responseID: Permission.ResponseID.pipe(Schema.optional),
         }),
         success: HttpApiSchema.NoContent,
         error: [SessionNotFoundError, PermissionNotFoundError],
@@ -128,7 +145,8 @@ export const makePermissionGroup = <
           OpenApi.annotations({
             identifier: "v2.session.permission.reply",
             summary: "Reply to pending permission request",
-            description: "Respond to a pending permission request owned by a session.",
+            description:
+              "Respond to a pending permission request owned by a session, or acknowledge an exact response ID replay.",
           }),
         ),
     )

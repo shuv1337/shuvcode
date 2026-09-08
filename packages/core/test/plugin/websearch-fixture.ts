@@ -6,9 +6,11 @@ import { Credential } from "@opencode-ai/core/credential"
 import { Config } from "@opencode-ai/core/config"
 import { Bus } from "@opencode-ai/core/bus"
 import { Form } from "@opencode-ai/core/form"
+import { Location } from "@opencode-ai/core/location"
 import { Integration } from "@opencode-ai/core/integration"
 import { WebSearch } from "@opencode-ai/core/websearch"
 import { testEffect } from "../lib/effect"
+import { tempLocationLayer } from "../fixture/location"
 
 interface WebSearchRequest {
   readonly url: string
@@ -43,6 +45,7 @@ export const webSearchIntegrationTest = testEffect(
   Layer.merge(
     AppNodeBuilder.build(LayerNode.group([Integration.node, Credential.node, Bus.node, Form.node, WebSearch.node]), [
       [Config.node, Config.testLayer()],
+      [Location.node, tempLocationLayer],
     ]),
     http,
   ),
