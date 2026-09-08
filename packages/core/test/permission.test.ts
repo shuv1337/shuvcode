@@ -1,5 +1,5 @@
 import { describe, expect } from "bun:test"
-import { Cause, Deferred, Effect, Fiber, Layer } from "effect"
+import { Cause, Deferred, Effect, Exit, Fiber, Layer } from "effect"
 import { Agent } from "@opencode-ai/core/agent"
 import { Database } from "@opencode-ai/core/database/database"
 import { AppNodeBuilder } from "@opencode-ai/core/effect/app-node-builder"
@@ -9,6 +9,7 @@ import { Location } from "@opencode-ai/core/location"
 import { Permission } from "@opencode-ai/core/permission"
 import { PermissionTable } from "@opencode-ai/core/permission/sql"
 import { PermissionSaved } from "@opencode-ai/core/permission/saved"
+import { PluginHooks } from "@opencode-ai/core/plugin/hooks"
 import { Project } from "@opencode-ai/core/project"
 import { ProjectTable } from "@opencode-ai/core/project/sql"
 import { AbsolutePath } from "@opencode-ai/core/schema"
@@ -26,7 +27,15 @@ const current = Layer.succeed(
 )
 const it = testEffect(
   AppNodeBuilder.build(
-    LayerNode.group([Database.node, Bus.node, SessionStore.node, PermissionSaved.node, Agent.node, Permission.node]),
+    LayerNode.group([
+      Database.node,
+      Bus.node,
+      SessionStore.node,
+      PermissionSaved.node,
+      Agent.node,
+      Permission.node,
+      PluginHooks.node,
+    ]),
     [Location.node.replace(current)],
   ),
 )
@@ -98,6 +107,35 @@ function waitForRequest(input: Partial<Permission.AssertInput> = {}) {
 }
 
 describe("Permission", () => {
+  for (const method of ["ask", "assert"] as const) {
+    for (const state of ["pending", "settled"] as const) {
+      it.effect(`returns a typed conflict for ${method} with a ${state} duplicate ID`, () =>
+        Effect.gen(function* () {
+          yield* setup()
+          const service = yield* Permission.Service
+          const original = yield* waitForRequest()
+          if (state === "settled") {
+            yield* service.reply({ requestID: original.request.id, reply: "once" })
+            yield* Fiber.join(original.fiber)
+          }
+          const receipt = yield* service.receipt(original.request.id)
+          const error = yield* service[method](assertion({ resources: ["different.ts"] })).pipe(Effect.flip)
+          expect(error).toMatchObject({
+            _tag: "Permission.AlreadyExistsError",
+            requestID: original.request.id,
+          })
+          expect(yield* service.receipt(original.request.id)).toEqual(receipt)
+          expect(yield* service.list()).toEqual(state === "pending" ? [original.request] : [])
+          if (state === "pending") {
+            expect(original.fiber.pollUnsafe()).toBeUndefined()
+            yield* service.reply({ requestID: original.request.id, reply: "once" })
+            yield* Fiber.join(original.fiber)
+          }
+        }),
+      )
+    }
+  }
+
   it.effect("returns the evaluated effect and only queues prompts", () =>
     Effect.gen(function* () {
       yield* setup([{ action: "read", resource: "*", effect: "allow" }])

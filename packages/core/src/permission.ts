@@ -96,7 +96,15 @@ export class NotFoundError extends Schema.TaggedError<NotFoundError>()("Permissi
   requestID: ID,
 }) {}
 
-export type Error = BlockedError | CorrectedError
+export class AlreadyExistsError extends Schema.TaggedError<AlreadyExistsError>()("Permission.AlreadyExistsError", {
+  requestID: ID,
+}) {
+  override get message() {
+    return `Duplicate permission ID: ${this.requestID}`
+  }
+}
+
+export type Error = BlockedError | CorrectedError | AlreadyExistsError
 
 export function evaluate(action: string, resource: string, ...rulesets: Permission.Ruleset[]): Permission.Rule {
   return (
@@ -115,7 +123,7 @@ export function merge(...rulesets: Permission.Ruleset[]): Permission.Ruleset {
 }
 
 export interface Interface {
-  readonly ask: (input: AssertInput) => Effect.Effect<AskResult, SessionErrors.NotFoundError>
+  readonly ask: (input: AssertInput) => Effect.Effect<AskResult, AlreadyExistsError | SessionErrors.NotFoundError>
   readonly assert: (input: AssertInput) => Effect.Effect<void, Error | SessionErrors.NotFoundError>
   readonly reply: (input: ReplyInput) => Effect.Effect<void, NotFoundError>
   readonly get: (id: ID) => Effect.Effect<Request | undefined>
@@ -337,7 +345,7 @@ const layer = Layer.effect(
             .returning({ id: PermissionRequestTable.id })
             .get()
             .pipe(Effect.orDie)
-          if (!created) return yield* Effect.die(new Error(`Duplicate permission ID: ${request.id}`))
+          if (!created) return yield* new AlreadyExistsError({ requestID: request.id })
           pending.set(request.id, item)
           yield* notify(request)
           return item

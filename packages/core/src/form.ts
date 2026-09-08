@@ -225,15 +225,14 @@ export const layer = Layer.effect(
           if (input.responseID !== undefined && !Schema.is(Form.ResponseID)(input.responseID)) {
             return yield* new InvalidAnswerError({ id: input.id, message: "Invalid response ID" })
           }
+          const matches = (row: typeof FormRequestTable.$inferSelect) =>
+            input.responseID !== undefined &&
+            row.response_id === input.responseID &&
+            row.state.status === "answered" &&
+            isDeepStrictEqual(row.state.answer, input.answer)
           const row = yield* requireRow(input.id)
           if (row.state.status !== "pending") {
-            if (
-              input.responseID !== undefined &&
-              row.response_id === input.responseID &&
-              row.state.status === "answered" &&
-              isDeepStrictEqual(row.state.answer, input.answer)
-            )
-              return
+            if (matches(row)) return
             return yield* new AlreadySettledError({ id: input.id })
           }
           const deferred = pending.get(input.id)
@@ -260,14 +259,7 @@ export const layer = Layer.effect(
             .get()
             .pipe(Effect.orDie)
           if (!settled) {
-            const current = yield* requireRow(input.id)
-            if (
-              input.responseID !== undefined &&
-              current.response_id === input.responseID &&
-              current.state.status === "answered" &&
-              isDeepStrictEqual(current.state.answer, input.answer)
-            )
-              return
+            if (matches(yield* requireRow(input.id))) return
             return yield* new AlreadySettledError({ id: input.id })
           }
           pending.delete(input.id)

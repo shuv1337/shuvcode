@@ -35,9 +35,19 @@ retain the previous 404 behavior. Existing callers may omit the response ID.
 
 Existing pending list/get behavior for permissions and pending list behavior
 for forms remain unchanged. Listing session requests still does not load an
-unloaded Location. Form get/state additionally recover stored terminal records.
-The client and website OpenAPI generators were run after the additive protocol
-changes.
+unloaded Location. Form get/state additionally recover stored records, including
+unavailable pending records. These reads are not proof of a live callback:
+clients must use receipt `available` or the live pending list before offering
+reply controls. The client, protocol OpenAPI, and website artifacts are generated
+from the additive protocol changes.
+
+Request IDs are globally unique within each request kind, not scoped to a
+Location or session. Clients supplying IDs must generate a fresh ID for each
+new request. A retained ID cannot be reused, including from another Location;
+both form and permission creation return HTTP 409 when admission collides.
+Location-scoped reads still return 404 for another Location's receipt and do not
+expose its contents. Retry an accepted answer through the reply endpoint with
+its original response ID, rather than recreating the request.
 
 ## Restart and retention contract
 
@@ -54,7 +64,12 @@ this change does not automatically replay provider work.
 
 Terminal receipts are retained for seven days, with lazy cleanup on request
 operations. Pending requests do not expire merely because another runtime reads
-them. After a terminal receipt expires, absence is unknown and is not permission
+them, even after seven days. This includes abandoned crash-pending rows: they
+remain reserved and consume storage indefinitely unless a separate administrative
+cleanup is provided. There is no automatic orphan cleanup or ownership takeover
+in this change. Adding either requires a way to distinguish a dead owner from a
+live foreign runtime; age or generation mismatch alone is insufficient.
+After a terminal receipt expires, absence is unknown and is not permission
 to resend an old action. Receipts include request/answer content and live in the
 same protected local database as session history. The tests establish process
 crash recovery using the existing SQLite settings, not power-loss durability.

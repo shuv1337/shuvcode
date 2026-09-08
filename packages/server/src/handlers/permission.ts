@@ -6,7 +6,7 @@ import { Session } from "@opencode-ai/core/session"
 import { Effect } from "effect"
 import { HttpApiBuilder, HttpApiSchema } from "effect/unstable/httpapi"
 import { Api } from "../api"
-import { PermissionNotFoundError } from "@opencode-ai/protocol/errors"
+import { ConflictError, PermissionNotFoundError } from "@opencode-ai/protocol/errors"
 import { response, sessionInfo } from "../location"
 import { missingSession } from "./session-error"
 
@@ -61,7 +61,13 @@ export const PermissionHandler = HttpApiBuilder.group(Api, "server.permission", 
                 source: ctx.payload.source,
                 agent: ctx.payload.agent,
               })
-              .pipe(Effect.catchTag("Session.NotFoundError", missingSession)),
+              .pipe(
+                Effect.catchTag("Session.NotFoundError", missingSession),
+                Effect.catchTag(
+                  "Permission.AlreadyExistsError",
+                  (error) => new ConflictError({ resource: error.requestID, message: error.message }),
+                ),
+              ),
           }
         }),
       )

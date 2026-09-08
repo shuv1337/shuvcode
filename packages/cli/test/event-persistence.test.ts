@@ -86,6 +86,7 @@ test.each([
   "CLI event persistence: $name",
   async ({ mode, value, configured, expected }) => {
     const root = await fs.mkdtemp(path.join(os.tmpdir(), "shuvcode-event-options-"))
+    await using _cleanup = { [Symbol.asyncDispose]: () => fs.rm(root, { recursive: true, force: true }) }
     await fs.mkdir(path.join(root, "config"), { recursive: true })
     await Bun.write(
       path.join(root, "config", ServiceConfig.filename(process.env.SHUV_EVENT_CHANNEL)),
@@ -103,7 +104,6 @@ test.each([
     } finally {
       server.child.kill("SIGKILL")
       await server.child.exited
-      await fs.rm(root, { recursive: true, force: true })
     }
   },
   30_000,

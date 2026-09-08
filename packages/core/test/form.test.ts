@@ -11,10 +11,9 @@ import { SessionSchema } from "@opencode-ai/core/session/schema"
 import { testEffect } from "./lib/effect"
 
 const forms = AppNodeBuilder.build(LayerNode.group([Bus.node, Form.node]), [
-  [
-    Location.node,
+  Location.node.replace(
     Layer.succeed(Location.Service, Location.Service.of(location({ directory: AbsolutePath.make(import.meta.dir) }))),
-  ],
+  ),
 ])
 const it = testEffect(forms)
 

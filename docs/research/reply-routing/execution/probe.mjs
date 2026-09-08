@@ -4,7 +4,7 @@ import { createHash, randomBytes } from "node:crypto"
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises"
 import { createServer } from "node:http"
 import path from "node:path"
-import { setTimeout as delay } from "node:timers/promises"
+import timers from "node:timers/promises"
 import { fileURLToPath } from "node:url"
 
 // Agreed seams: V2 HTTP prompt/inbox/active/wait/context and the external model transport.
@@ -202,7 +202,7 @@ async function request(method, route, body) {
 async function until(predicate, label) {
   for (let attempt = 0; attempt < 200; attempt++) {
     if (await predicate()) return
-    await delay(50)
+    await timers.setTimeout(50)
   }
   throw new Error(`Timed out: ${label}`)
 }
@@ -421,11 +421,11 @@ try {
   )
   check("promoted_replay_advisory_wake", (await request("POST", `${endpoint}/prompt`, first)).status, 200)
   await request("POST", `${endpoint}/wait`)
-  await delay(100)
+  await timers.setTimeout(100)
   check("promoted_replay_does_not_execute", modelRequests.length, 2)
   await stop("SIGKILL")
   await start()
-  await delay(100)
+  await timers.setTimeout(100)
   check("restart_does_not_execute", modelRequests.length, 2)
   const afterRestart = await request("POST", `${endpoint}/prompt`, first)
   check(
@@ -434,7 +434,7 @@ try {
     { status: 200, id: first.id, text: first.text },
   )
   await request("POST", `${endpoint}/wait`)
-  await delay(100)
+  await timers.setTimeout(100)
   check("restart_replay_does_not_execute", modelRequests.length, 2)
   check(
     "restart_transcript_unchanged",
