@@ -1,7 +1,7 @@
 import { $ } from "bun"
 import semver from "semver"
 import path from "path"
-import { nextForkVersion } from "./version.js"
+import { nextForkVersion, resolveChannel } from "./version.js"
 
 const rootPkgPath = path.resolve(import.meta.dir, "../../../package.json")
 const rootPkg = await Bun.file(rootPkgPath).json()
@@ -24,12 +24,12 @@ const env = {
   OPENCODE_VERSION: process.env["OPENCODE_VERSION"],
   OPENCODE_RELEASE: process.env["OPENCODE_RELEASE"],
 }
-const CHANNEL = await (async () => {
-  if (env.OPENCODE_CHANNEL) return env.OPENCODE_CHANNEL
-  if (env.OPENCODE_BUMP) return "latest"
-  if (env.OPENCODE_VERSION && !env.OPENCODE_VERSION.startsWith("0.0.0-")) return "latest"
-  return await $`git branch --show-current`.text().then((x) => x.trim())
-})()
+const CHANNEL = await resolveChannel({
+  channel: env.OPENCODE_CHANNEL,
+  bump: env.OPENCODE_BUMP,
+  version: env.OPENCODE_VERSION,
+  branch: () => $`git branch --show-current`.text(),
+})
 const IS_PREVIEW = CHANNEL !== "latest"
 
 const VERSION = await (async () => {
