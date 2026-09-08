@@ -92,6 +92,9 @@ const processEffect = Effect.fnUntraced(function* (options: Options) {
           cors: options.cors ?? config.cors,
           password,
           pty: { handoff },
+          events: {
+            persist: (yield* Env.persistEvents) ?? truthy(config.env?.OPENCODE_PERSIST_EVENTS),
+          },
           simulation: truthy(process.env.OPENCODE_SIMULATE),
           database: {
             path:
