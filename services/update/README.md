@@ -34,7 +34,8 @@ available to roughly half of IPs after three hours and all IPs after six hours.
 Eligibility uses the original publication time (`time_created`) and a SHA-256 hash
 of the channel and Cloudflare's `CF-Connecting-IP`. Each IP keeps the same rollout
 position across releases in that channel. Requests without this header wait for
-the full duration. The retired `next` channel is not available or configurable.
+the full duration. The retired `next` channel is not configurable; `/api/next`
+remains a compatibility alias for `/api/beta`, including its rollout settings.
 
 Until the active release is eligible, callers receive the newest eligible artifact
 published before it, for the same name and distribution. This also handles overlapping
@@ -71,7 +72,7 @@ no-store` because responses can depend on the User-Agent.
 
 Version comparison uses semver, normalizing preview run numbers to numeric prerelease
 identifiers and historical `next` versions to `beta`. The retired `/api/next`
-channel returns 404; use `/api/beta` instead.
+channel transparently resolves to `beta` for older clients.
 
 Choose a minimum that older clients can install and that can itself consume the active
 release. For the CLI package migration, retain a package-aware release published as

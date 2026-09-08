@@ -77,8 +77,7 @@ export default {
       return new Response("Not found", { status: 404 })
     }
 
-    if (path[0] === "next") return json({ error: "Channel not found" }, 404)
-    const resolved = path[0]
+    const resolved = resolveChannel(path[0])
     const agent = request.headers.get("User-Agent")?.match(/^opencode\/(?:([^/]+)\/([^/]+)\/cli|(.*))$/)
     const current = url.searchParams.get("current") ?? agent?.[2] ?? agent?.[3]
     const source = agent?.[1] ?? current?.match(/^v?0\.0\.0-(.+)-\d+(?:\.\d+)?(?:\+.*)?$/)?.[1]
