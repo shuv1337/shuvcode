@@ -48,7 +48,7 @@ jobs:
 
       - name: Deploy update service
         if: github.ref_name == 'v2'
-        working-directory: services/updates
+        working-directory: services/update
         run: bun run deploy
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}

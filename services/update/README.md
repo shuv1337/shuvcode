@@ -1,6 +1,6 @@
-# OpenCode Updates
+# OpenCode Update
 
-The updates Worker serves all selected artifacts for a channel.
+The update Worker serves all selected artifacts for a channel.
 
 ```sh
 curl 'https://opencode.ai/update/api/latest'

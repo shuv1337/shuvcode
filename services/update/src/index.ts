@@ -64,7 +64,7 @@ export default {
       ]).catch(() => console.error("Failed to send update request event to the data lake")),
     )
 
-    if (pathname === "/") return json({ service: "opencode-updates" })
+    if (pathname === "/") return json({ service: "opencode-update" })
     if (pathname === "/admin" && request.method === "GET") return admin(request, env, prefix)
     if (pathname === "/admin/activate" && request.method === "POST") return markArtifact(request, env, "active", prefix)
     if (pathname === "/admin/minimum" && request.method === "POST") return markArtifact(request, env, "minimum", prefix)
@@ -285,7 +285,7 @@ async function admin(request: Request, env: Env, prefix: string) {
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>OpenCode Updates</title>
+  <title>OpenCode Update</title>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/basecoat-css@1.0.2/dist/basecoat.cdn.min.css">
   <style>
     body { min-height: 100vh; background: var(--background); }

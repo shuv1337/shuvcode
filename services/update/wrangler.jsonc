@@ -1,6 +1,6 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "opencode-updates",
+  "name": "opencode-update",
   "main": "src/index.ts",
   "compatibility_date": "2026-07-21",
   "workers_dev": false,
@@ -29,6 +29,7 @@
   "d1_databases": [
     {
       "binding": "DB",
+      // Existing database retains its provisioned name across the service rename.
       "database_name": "opencode-updates",
       "database_id": "058debd8-1572-4c4a-8781-2c5a0e33cb46",
       "migrations_dir": "migrations",
