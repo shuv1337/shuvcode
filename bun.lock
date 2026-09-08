@@ -29,7 +29,7 @@
     },
     "packages/ai": {
       "name": "@opencode-ai/ai",
-      "version": "1.17.20",
+      "version": "2.0.0-alpha-20",
       "dependencies": {
         "@opencode-ai/schema": "workspace:*",
         "@smithy/eventstream-codec": "4.2.14",
@@ -50,7 +50,7 @@
     },
     "packages/antigravity-plugin": {
       "name": "@shuvcode/antigravity-plugin",
-      "version": "0.1.0",
+      "version": "2.0.0-alpha-20",
       "dependencies": {
         "@opencode-ai/plugin": "workspace:*",
         "effect": "catalog:",
@@ -65,7 +65,7 @@
     },
     "packages/app": {
       "name": "@opencode-ai/app",
-      "version": "1.18.15",
+      "version": "2.0.0-alpha-20",
       "dependencies": {
         "@corvu/drawer": "catalog:",
         "@dnd-kit/abstract": "0.5.0",
@@ -121,7 +121,7 @@
     },
     "packages/cli": {
       "name": "shuvcode",
-      "version": "1.18.4",
+      "version": "2.0.0-alpha-20",
       "bin": {
         "shuvcode": "./bin/shuvcode.cjs",
       },
@@ -184,7 +184,7 @@
     },
     "packages/client": {
       "name": "@opencode-ai/client",
-      "version": "1.17.13",
+      "version": "2.0.0-alpha-20",
       "dependencies": {
         "@opencode-ai/protocol": "workspace:*",
         "@opencode-ai/schema": "workspace:*",
@@ -210,7 +210,7 @@
     },
     "packages/codemode": {
       "name": "@opencode-ai/codemode",
-      "version": "1.18.4",
+      "version": "2.0.0-alpha-20",
       "dependencies": {
         "acorn": "8.15.0",
         "effect": "catalog:",
@@ -224,7 +224,7 @@
     },
     "packages/core": {
       "name": "@opencode-ai/core",
-      "version": "1.18.4",
+      "version": "2.0.0-alpha-20",
       "dependencies": {
         "@ai-sdk/alibaba": "1.0.17",
         "@ai-sdk/amazon-bedrock": "4.0.112",
@@ -299,7 +299,7 @@
     },
     "packages/desktop": {
       "name": "@opencode-ai/desktop",
-      "version": "1.18.15",
+      "version": "2.0.0-alpha-20",
       "dependencies": {
         "@zip.js/zip.js": "2.7.62",
         "electron-context-menu": "4.1.2",
@@ -344,7 +344,7 @@
     },
     "packages/goal-plugin": {
       "name": "@shuvcode/goal-plugin",
-      "version": "0.1.0",
+      "version": "2.0.0-alpha-20",
       "dependencies": {
         "@opencode-ai/plugin": "workspace:*",
       },
@@ -357,7 +357,7 @@
     },
     "packages/http-recorder": {
       "name": "@opencode-ai/http-recorder",
-      "version": "1.18.15",
+      "version": "2.0.0-alpha-20",
       "dependencies": {
         "@effect/platform-node-shared": "4.0.0-rc.112",
       },
@@ -376,7 +376,7 @@
     },
     "packages/httpapi-codegen": {
       "name": "@opencode-ai/httpapi-codegen",
-      "version": "0.0.0",
+      "version": "2.0.0-alpha-20",
       "dependencies": {
         "effect": "catalog:",
         "prettier": "3.6.2",
@@ -389,7 +389,7 @@
     },
     "packages/latex": {
       "name": "@opencode-ai/latex",
-      "version": "0.0.0",
+      "version": "2.0.0-alpha-20",
       "dependencies": {
         "@opencode-ai/plugin": "workspace:*",
         "@opentui/core": "catalog:",
@@ -403,7 +403,7 @@
     },
     "packages/merman": {
       "name": "@opencode-ai/merman",
-      "version": "0.0.0",
+      "version": "2.0.0-alpha-20",
       "dependencies": {
         "@opencode-ai/plugin": "workspace:*",
         "@opentui/core": "catalog:",
@@ -418,7 +418,7 @@
     },
     "packages/plugin": {
       "name": "@opencode-ai/plugin",
-      "version": "1.18.15",
+      "version": "2.0.0-alpha-20",
       "dependencies": {
         "@ai-sdk/provider": "3.0.8",
         "@opencode-ai/ai": "workspace:*",
@@ -457,7 +457,7 @@
     },
     "packages/protocol": {
       "name": "@opencode-ai/protocol",
-      "version": "1.17.11",
+      "version": "2.0.0-alpha-20",
       "dependencies": {
         "@opencode-ai/schema": "workspace:*",
         "effect": "catalog:",
@@ -472,7 +472,7 @@
     },
     "packages/schema": {
       "name": "@opencode-ai/schema",
-      "version": "1.17.11",
+      "version": "2.0.0-alpha-20",
       "dependencies": {
         "@standard-schema/spec": "catalog:",
         "effect": "catalog:",
@@ -496,7 +496,7 @@
     },
     "packages/sdk": {
       "name": "@opencode-ai/sdk",
-      "version": "1.18.4",
+      "version": "2.0.0-alpha-20",
       "dependencies": {
         "@opencode-ai/client": "workspace:*",
         "@opencode-ai/core": "workspace:*",
@@ -517,7 +517,7 @@
     },
     "packages/server": {
       "name": "@opencode-ai/server",
-      "version": "1.18.4",
+      "version": "2.0.0-alpha-20",
       "dependencies": {
         "@effect/platform-node": "catalog:",
         "@effect/platform-node-shared": "catalog:",
@@ -539,7 +539,7 @@
     },
     "packages/session-ui": {
       "name": "@opencode-ai/session-ui",
-      "version": "1.18.15",
+      "version": "2.0.0-alpha-20",
       "dependencies": {
         "@kobalte/core": "catalog:",
         "@opencode-ai/client": "workspace:*",
@@ -574,7 +574,7 @@
     },
     "packages/simulation": {
       "name": "@opencode-ai/simulation",
-      "version": "1.17.13",
+      "version": "2.0.0-alpha-20",
       "dependencies": {
         "@opencode-ai/ai": "workspace:*",
         "@opencode-ai/core": "workspace:*",
@@ -622,7 +622,7 @@
     },
     "packages/theme": {
       "name": "@opencode-ai/theme",
-      "version": "0.0.0",
+      "version": "2.0.0-alpha-20",
       "dependencies": {
         "@opentui/core": "catalog:",
         "effect": "catalog:",
@@ -636,7 +636,7 @@
     },
     "packages/tui": {
       "name": "@opencode-ai/tui",
-      "version": "1.18.4",
+      "version": "2.0.0-alpha-20",
       "dependencies": {
         "@opencode-ai/client": "workspace:*",
         "@opencode-ai/core": "workspace:*",
@@ -671,7 +671,7 @@
     },
     "packages/ui": {
       "name": "@opencode-ai/ui",
-      "version": "1.18.15",
+      "version": "2.0.0-alpha-20",
       "dependencies": {
         "@kobalte/core": "catalog:",
         "@pierre/diffs": "catalog:",
@@ -706,7 +706,7 @@
     },
     "packages/util": {
       "name": "@opencode-ai/util",
-      "version": "1.18.3",
+      "version": "2.0.0-alpha-20",
       "dependencies": {
         "@effect/opentelemetry": "catalog:",
         "@effect/platform-node": "catalog:",
