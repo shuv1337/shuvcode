@@ -38,7 +38,7 @@ const redirectURI = "https://platform.claude.com/oauth/code/callback"
 const scopes = "user:profile user:inference user:sessions:claude_code user:mcp_servers user:file_upload"
 
 /** Claude Code's own UA and beta flags; the subscription path expects both. */
-export const userAgent = "claude-cli/2.1.81 (external, cli)"
+export const userAgent = "claude-cli/2.1.260 (external, cli)"
 export const betaFlags =
   "claude-code-20250219,oauth-2025-04-20,interleaved-thinking-2025-05-14,prompt-caching-scope-2026-01-05"
 

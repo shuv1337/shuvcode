@@ -169,7 +169,7 @@ describe("AnthropicClaudeCode.restoreToolNames", () => {
 describe("AnthropicClaudeCode.headers", () => {
   test("sends the Claude Code identity headers", () => {
     const result = AnthropicClaudeCode.headers()
-    expect(result["user-agent"]).toBe(AnthropicClaudeCode.userAgent)
+    expect(result["user-agent"]).toBe("claude-cli/2.1.260 (external, cli)")
     expect(result["x-app"]).toBe("cli")
     expect(result["anthropic-beta"]).toContain("oauth-2025-04-20")
   })
