@@ -12,6 +12,9 @@ export const password = Config.redacted("OPENCODE_PASSWORD").pipe(
   Config.withDefault(undefined),
 )
 
+// Unset falls back to the managed service setting; explicit false must override it.
+export const persistEvents = Config.boolean("OPENCODE_PERSIST_EVENTS").pipe(Config.withDefault(undefined))
+
 export function session() {
   return Object.fromEntries(
     Object.entries(process.env).filter(

@@ -169,6 +169,8 @@ import type {
   FormGetOutput,
   FormStateInput,
   FormStateOutput,
+  FormReceiptInput,
+  FormReceiptOutput,
   FormReplyInput,
   FormReplyOutput,
   FormCancelInput,
@@ -185,6 +187,8 @@ import type {
   PermissionListOutput,
   PermissionGetInput,
   PermissionGetOutput,
+  PermissionReceiptInput,
+  PermissionReceiptOutput,
   PermissionReplyInput,
   PermissionReplyOutput,
   FileReadInput,
@@ -1528,12 +1532,23 @@ export function make(options: ClientOptions) {
           },
           requestOptions,
         ).then((value) => value.data),
+      receipt: (input: FormReceiptInput, requestOptions?: RequestOptions) =>
+        request<{ readonly data: FormReceiptOutput }>(
+          {
+            method: "GET",
+            path: `/api/session/${encodeURIComponent(input.sessionID)}/form/${encodeURIComponent(input.formID)}/receipt`,
+            successStatus: 200,
+            declaredStatuses: [400, 401, 404],
+            empty: false,
+          },
+          requestOptions,
+        ).then((value) => value.data),
       reply: (input: FormReplyInput, requestOptions?: RequestOptions) =>
         request<FormReplyOutput>(
           {
             method: "POST",
             path: `/api/session/${encodeURIComponent(input.sessionID)}/form/${encodeURIComponent(input.formID)}/reply`,
-            body: { answer: input["answer"] },
+            body: { answer: input["answer"], responseID: input["responseID"] },
             successStatus: 204,
             declaredStatuses: [400, 401, 404, 409],
             empty: true,
@@ -1607,7 +1622,7 @@ export function make(options: ClientOptions) {
               agent: input["agent"],
             },
             successStatus: 200,
-            declaredStatuses: [400, 401, 404],
+            declaredStatuses: [400, 401, 404, 409],
             empty: false,
           },
           requestOptions,
@@ -1634,12 +1649,23 @@ export function make(options: ClientOptions) {
           },
           requestOptions,
         ).then((value) => value.data),
+      receipt: (input: PermissionReceiptInput, requestOptions?: RequestOptions) =>
+        request<{ readonly data: PermissionReceiptOutput }>(
+          {
+            method: "GET",
+            path: `/api/session/${encodeURIComponent(input.sessionID)}/permission/${encodeURIComponent(input.requestID)}/receipt`,
+            successStatus: 200,
+            declaredStatuses: [400, 401, 404],
+            empty: false,
+          },
+          requestOptions,
+        ).then((value) => value.data),
       reply: (input: PermissionReplyInput, requestOptions?: RequestOptions) =>
         request<PermissionReplyOutput>(
           {
             method: "POST",
             path: `/api/session/${encodeURIComponent(input.sessionID)}/permission/${encodeURIComponent(input.requestID)}/reply`,
-            body: { reply: input["reply"], message: input["message"] },
+            body: { reply: input["reply"], message: input["message"], responseID: input["responseID"] },
             successStatus: 204,
             declaredStatuses: [400, 401, 404],
             empty: true,

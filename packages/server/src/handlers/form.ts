@@ -90,18 +90,30 @@ export const FormHandler = HttpApiBuilder.group(Api, "server.form", (handlers) =
         }),
       )
       .handle(
+        "session.form.receipt",
+        Effect.fn(function* (ctx) {
+          const owned = yield* requireOwnedForm(ctx.params.sessionID, ctx.params.formID)
+          const data = yield* owned.form
+            .receipt(ctx.params.formID)
+            .pipe(Effect.catchTag("Form.NotFoundError", () => missingForm(ctx.params.formID)))
+          return { data }
+        }),
+      )
+      .handle(
         "session.form.reply",
         Effect.fn(function* (ctx) {
           const owned = yield* requireOwnedForm(ctx.params.sessionID, ctx.params.formID)
-          yield* owned.form.reply({ id: ctx.params.formID, answer: ctx.payload.answer }).pipe(
-            Effect.catchTags({
-              "Form.AlreadySettledError": (error) =>
-                new FormAlreadySettledError({ id: error.id, message: error.message }),
-              "Form.InvalidAnswerError": (error) =>
-                new FormInvalidAnswerError({ id: error.id, message: error.message }),
-              "Form.NotFoundError": () => missingForm(ctx.params.formID),
-            }),
-          )
+          yield* owned.form
+            .reply({ id: ctx.params.formID, answer: ctx.payload.answer, responseID: ctx.payload.responseID })
+            .pipe(
+              Effect.catchTags({
+                "Form.AlreadySettledError": (error) =>
+                  new FormAlreadySettledError({ id: error.id, message: error.message }),
+                "Form.InvalidAnswerError": (error) =>
+                  new FormInvalidAnswerError({ id: error.id, message: error.message }),
+                "Form.NotFoundError": () => missingForm(ctx.params.formID),
+              }),
+            )
           return HttpApiSchema.NoContent.make()
         }),
       )

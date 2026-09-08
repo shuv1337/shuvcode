@@ -1,13 +1,20 @@
 import { describe, expect } from "bun:test"
-import { Deferred, Effect, Exit, Fiber } from "effect"
+import { Deferred, Effect, Exit, Fiber, Layer } from "effect"
 import { AppNodeBuilder } from "@opencode-ai/core/effect/app-node-builder"
 import { LayerNode } from "@opencode-ai/util/effect/layer-node"
 import { Bus } from "@opencode-ai/core/bus"
 import { Form } from "@opencode-ai/core/form"
+import { Location } from "@opencode-ai/core/location"
+import { AbsolutePath } from "@opencode-ai/schema/schema"
+import { location } from "./fixture/location"
 import { SessionSchema } from "@opencode-ai/core/session/schema"
 import { testEffect } from "./lib/effect"
 
-const forms = AppNodeBuilder.build(LayerNode.group([Bus.node, Form.node]))
+const forms = AppNodeBuilder.build(LayerNode.group([Bus.node, Form.node]), [
+  Location.node.replace(
+    Layer.succeed(Location.Service, Location.Service.of(location({ directory: AbsolutePath.make(import.meta.dir) }))),
+  ),
+])
 const it = testEffect(forms)
 
 const formID = Form.ID.create("frm_test")
@@ -48,6 +55,48 @@ describe("Form", () => {
 
       expect(yield* Fiber.join(fiber)).toEqual({ status: "cancelled" })
       expect(yield* service.state(form.id)).toEqual({ status: "cancelled" })
+    }),
+  )
+
+  it.effect("keeps the first reply when its event listener yields to a competing reply", () =>
+    Effect.gen(function* () {
+      const service = yield* Form.Service
+      const bus = yield* Bus.Service
+      const firstPublishing = yield* Deferred.make<void>()
+      const releaseFirst = yield* Deferred.make<void>()
+      const replies: Form.Answer[] = []
+      const unsubscribe = yield* bus.listen((event) => {
+        if (event.type !== Form.Event.Replied.type) return Effect.void
+        const answer = (event.data as { readonly answer: Form.Answer }).answer
+        replies.push(answer)
+        if (answer.name !== "first") return Effect.void
+        return Deferred.succeed(firstPublishing, undefined).pipe(Effect.andThen(Deferred.await(releaseFirst)))
+      })
+      yield* Effect.addFinalizer(() => unsubscribe)
+      const created = yield* service.create(input)
+      const first = yield* service
+        .reply({ id: created.id, answer: { name: "first" } })
+        .pipe(Effect.exit, Effect.forkScoped)
+
+      yield* Deferred.await(firstPublishing)
+      const second = yield* service.reply({ id: created.id, answer: { name: "second" } }).pipe(
+        Effect.exit,
+        // Release the first publisher before assertions or scope teardown, including on failure.
+        Effect.ensuring(Deferred.succeed(releaseFirst, undefined)),
+      )
+      const settled = yield* Fiber.join(first)
+
+      expect({
+        first: Exit.isSuccess(settled),
+        second: Exit.isSuccess(second),
+        replies,
+        state: yield* service.state(created.id),
+      }).toEqual({
+        first: true,
+        second: false,
+        replies: [{ name: "first" }],
+        state: { status: "answered", answer: { name: "first" } },
+      })
     }),
   )
 
@@ -319,7 +368,7 @@ describe("Form", () => {
     }),
   )
 
-  it.effect("cleans up created forms when event publication fails", () =>
+  it.effect("retains admitted forms when event publication fails", () =>
     Effect.gen(function* () {
       const service = yield* Form.Service
       const bus = yield* Bus.Service
@@ -328,15 +377,15 @@ describe("Form", () => {
       )
       yield* Effect.addFinalizer(() => unsubscribe)
 
-      expect(Exit.isFailure(yield* Effect.exit(service.create(input)))).toBe(true)
-      expect(yield* service.get(formID).pipe(Effect.flip)).toEqual(new Form.NotFoundError({ id: formID }))
+      expect(Exit.isSuccess(yield* Effect.exit(service.create(input)))).toBe(true)
+      expect(yield* service.get(formID)).toMatchObject({ id: formID })
 
       yield* unsubscribe
-      expect(yield* service.create(input)).toMatchObject({ id: formID })
+      expect(yield* service.create(input).pipe(Effect.flip)).toEqual(new Form.AlreadyExistsError({ id: formID }))
     }),
   )
 
-  it.effect("keeps forms pending when reply event publication fails", () =>
+  it.effect("keeps an accepted answer when reply event publication fails", () =>
     Effect.gen(function* () {
       const service = yield* Form.Service
       const bus = yield* Bus.Service
@@ -346,11 +395,15 @@ describe("Form", () => {
       )
       yield* Effect.addFinalizer(() => unsubscribe)
 
-      expect(Exit.isFailure(yield* Effect.exit(service.reply({ id: formID, answer: { name: "Ava" } })))).toBe(true)
-      expect(yield* service.state(formID)).toEqual({ status: "pending" })
+      expect(
+        Exit.isSuccess(
+          yield* Effect.exit(service.reply({ id: formID, answer: { name: "Ava" }, responseID: "synthetic-reply" })),
+        ),
+      ).toBe(true)
+      expect(yield* service.state(formID)).toEqual({ status: "answered", answer: { name: "Ava" } })
 
       yield* unsubscribe
-      yield* service.reply({ id: formID, answer: { name: "Ava" } })
+      yield* service.reply({ id: formID, answer: { name: "Ava" }, responseID: "synthetic-reply" })
       expect(yield* service.state(formID)).toEqual({ status: "answered", answer: { name: "Ava" } })
     }),
   )

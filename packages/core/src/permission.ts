@@ -1,7 +1,9 @@
 export * as Permission from "./permission.js"
 
 import { makeLocationNode } from "@opencode-ai/util/effect/app-node"
-import { Context, Deferred, Effect, Layer, Schema } from "effect"
+import { Clock, Context, Deferred, Effect, Layer, Schema } from "effect"
+import { and, eq, isNull, lt, ne } from "drizzle-orm"
+import { randomUUID } from "node:crypto"
 import { Permission } from "@opencode-ai/schema/permission"
 import { Bus } from "./bus.js"
 import { Location } from "./location.js"
@@ -12,6 +14,10 @@ import { SessionStore } from "./session/store.js"
 import { Wildcard } from "./util/wildcard.js"
 import { PermissionSaved } from "./permission/saved.js"
 import { PluginHooks } from "./plugin/hooks.js"
+import { Database } from "./database/database.js"
+import { PermissionRequestTable } from "./permission/sql.js"
+
+const RETENTION = 7 * 24 * 60 * 60 * 1000
 
 const PermissionEffect = Permission.Effect
 export { PermissionEffect as Effect }
@@ -39,6 +45,13 @@ export type Request = typeof Request.Type
 export const Reply = Permission.Reply
 export type Reply = typeof Reply.Type
 
+export const State = Permission.State
+export type State = typeof State.Type
+type TerminalState = Exclude<State, { readonly status: "pending" }>
+
+export const Receipt = Permission.Receipt
+export type Receipt = typeof Receipt.Type
+
 export const AssertInput = Schema.Struct({
   id: ID.pipe(Schema.optional),
   ...RequestFields,
@@ -50,6 +63,7 @@ export const ReplyInput = Schema.Struct({
   requestID: ID,
   reply: Reply,
   message: Schema.String.pipe(Schema.optional),
+  responseID: Permission.ResponseID.pipe(Schema.optional),
 }).annotate({ identifier: "Permission.ReplyInput" })
 export type ReplyInput = typeof ReplyInput.Type
 
@@ -82,7 +96,15 @@ export class NotFoundError extends Schema.TaggedError<NotFoundError>()("Permissi
   requestID: ID,
 }) {}
 
-export type Error = BlockedError | CorrectedError
+export class AlreadyExistsError extends Schema.TaggedError<AlreadyExistsError>()("Permission.AlreadyExistsError", {
+  requestID: ID,
+}) {
+  override get message() {
+    return `Duplicate permission ID: ${this.requestID}`
+  }
+}
+
+export type Error = BlockedError | CorrectedError | AlreadyExistsError
 
 export function evaluate(action: string, resource: string, ...rulesets: Permission.Ruleset[]): Permission.Rule {
   return (
@@ -101,10 +123,11 @@ export function merge(...rulesets: Permission.Ruleset[]): Permission.Ruleset {
 }
 
 export interface Interface {
-  readonly ask: (input: AssertInput) => Effect.Effect<AskResult, SessionErrors.NotFoundError>
+  readonly ask: (input: AssertInput) => Effect.Effect<AskResult, AlreadyExistsError | SessionErrors.NotFoundError>
   readonly assert: (input: AssertInput) => Effect.Effect<void, Error | SessionErrors.NotFoundError>
   readonly reply: (input: ReplyInput) => Effect.Effect<void, NotFoundError>
   readonly get: (id: ID) => Effect.Effect<Request | undefined>
+  readonly receipt: (id: ID) => Effect.Effect<Receipt | undefined>
   readonly forSession: (sessionID: SessionSchema.ID) => Effect.Effect<ReadonlyArray<Request>>
   readonly list: () => Effect.Effect<ReadonlyArray<Request>>
 }
@@ -126,19 +149,121 @@ const layer = Layer.effect(
     const sessions = yield* SessionStore.Service
     const saved = yield* PermissionSaved.Service
     const hooks = yield* PluginHooks.Service
+    const database = yield* Database.Service
+    const db = database.db
+    const generation = randomUUID()
     const pending = new Map<ID, Pending>()
+    const scope = and(
+      eq(PermissionRequestTable.directory, location.directory),
+      location.workspaceID === undefined
+        ? isNull(PermissionRequestTable.workspace_id)
+        : eq(PermissionRequestTable.workspace_id, location.workspaceID),
+    )
 
-    yield* Effect.addFinalizer(() =>
-      Effect.forEach(pending.values(), (item) => Deferred.fail(item.deferred, new DeclinedError()), {
-        discard: true,
-      }).pipe(
-        Effect.ensuring(
-          Effect.sync(() => {
-            pending.clear()
-          }),
-        ),
+    const expire = Effect.fnUntraced(function* () {
+      const cutoff = (yield* Clock.currentTimeMillis) - RETENTION
+      yield* db
+        .delete(PermissionRequestTable)
+        .where(
+          and(scope, ne(PermissionRequestTable.status, "pending"), lt(PermissionRequestTable.time_updated, cutoff)),
+        )
+        .run()
+        .pipe(Effect.orDie)
+    })
+
+    const stored = Effect.fnUntraced(function* (id: ID) {
+      yield* expire()
+      return yield* db
+        .select()
+        .from(PermissionRequestTable)
+        .where(and(scope, eq(PermissionRequestTable.id, id)))
+        .get()
+        .pipe(Effect.orDie)
+    })
+
+    const notify = Effect.fn("Permission.notify")(function* (request: Request, reply?: Reply) {
+      const publication =
+        reply === undefined
+          ? bus.publish(Permission.Event.Asked, request).pipe(Effect.asVoid)
+          : bus
+              .publish(Permission.Event.Replied, {
+                sessionID: request.sessionID,
+                requestID: request.id,
+                reply,
+              })
+              .pipe(Effect.asVoid)
+      yield* publication.pipe(
+        Effect.catchCause(() => Effect.logWarning("Permission notification failed after durable commit")),
+      )
+    })
+
+    // The conditional write decides the winner before callbacks or observers run.
+    // A saved grant and its acceptance receipt must survive or roll back together.
+    const settle = Effect.fn("Permission.settle")(
+      (item: Pending, state: TerminalState, responseID?: string, remember: boolean = false) =>
+        db
+          .transaction(
+            () =>
+              Effect.gen(function* () {
+                const changed = yield* db
+                  .update(PermissionRequestTable)
+                  .set({
+                    status: state.status,
+                    state,
+                    response_id: responseID ?? null,
+                    time_updated: yield* Clock.currentTimeMillis,
+                  })
+                  .where(
+                    and(
+                      scope,
+                      eq(PermissionRequestTable.id, item.request.id),
+                      eq(PermissionRequestTable.generation, generation),
+                      eq(PermissionRequestTable.status, "pending"),
+                    ),
+                  )
+                  .returning({ id: PermissionRequestTable.id })
+                  .get()
+                if (!changed) return false
+                if (remember && item.request.save?.length) {
+                  yield* saved.add({
+                    projectID: location.project.id,
+                    action: item.request.action,
+                    resources: item.request.save,
+                  })
+                }
+                return true
+              }),
+            { behavior: "immediate" },
+          )
+          .pipe(Effect.orDie),
+    )
+
+    const complete = Effect.fnUntraced(function* (item: Pending, state: TerminalState) {
+      pending.delete(item.request.id)
+      if (state.status === "cancelled" || state.reply === "reject") {
+        yield* Deferred.fail(
+          item.deferred,
+          state.status === "answered" && state.message
+            ? new CorrectedError({ feedback: state.message })
+            : new DeclinedError(),
+        )
+      } else {
+        yield* Deferred.succeed(item.deferred, undefined)
+      }
+      if (state.status === "answered") yield* notify(item.request, state.reply)
+    })
+
+    const cancel = Effect.fn("Permission.cancel")((item: Pending) =>
+      Effect.uninterruptible(
+        Effect.gen(function* () {
+          if (pending.get(item.request.id) !== item) return
+          const state = { status: "cancelled" } as const
+          if (yield* settle(item, state)) yield* complete(item, state)
+        }),
       ),
     )
+
+    yield* Effect.addFinalizer(() => Effect.forEach(Array.from(pending.values()), cancel, { discard: true }))
 
     const savedRules = Effect.fnUntraced(function* () {
       return (yield* saved.list({ projectID: location.project.id })).map(
@@ -201,12 +326,28 @@ const layer = Layer.effect(
         Effect.gen(function* () {
           const deferred = yield* Deferred.make<void, DeclinedError | CorrectedError>()
           const item = { request, agent, deferred }
-          if (pending.has(request.id))
-            return yield* Effect.die(new Error(`Duplicate pending permission ID: ${request.id}`))
+          yield* expire()
+          const created = yield* db
+            .insert(PermissionRequestTable)
+            .values({
+              id: request.id,
+              directory: location.directory,
+              workspace_id: location.workspaceID ?? null,
+              generation,
+              request,
+              agent: agent ?? null,
+              status: "pending",
+              state: { status: "pending" },
+              time_created: yield* Clock.currentTimeMillis,
+              time_updated: yield* Clock.currentTimeMillis,
+            })
+            .onConflictDoNothing()
+            .returning({ id: PermissionRequestTable.id })
+            .get()
+            .pipe(Effect.orDie)
+          if (!created) return yield* new AlreadyExistsError({ requestID: request.id })
           pending.set(request.id, item)
-          yield* bus
-            .publish(Permission.Event.Asked, request)
-            .pipe(Effect.onError(() => Effect.sync(() => pending.delete(request.id))))
+          yield* notify(request)
           return item
         }),
       )
@@ -240,70 +381,70 @@ const layer = Layer.effect(
               // WITH feedback (CorrectedError) intentionally stays typed so the leaf can turn
               // it into ToolFailure and the model continues.
               Effect.catchTag("Permission.DeclinedError", (error) => Effect.die(error)),
-              Effect.ensuring(
-                Effect.sync(() => {
-                  pending.delete(item.request.id)
-                }),
-              ),
+              Effect.onInterrupt(() => cancel(item)),
             )
           }),
         )
       }),
     )
 
+    const receipt = Effect.fn("Permission.receipt")(function* (id: ID): Effect.fn.Return<Receipt | undefined> {
+      const row = yield* stored(id)
+      if (!row) return
+      return {
+        request: row.request,
+        state: row.state,
+        available: row.status === "pending" && row.generation === generation && pending.has(id),
+        ...(row.response_id === null ? {} : { responseID: row.response_id }),
+        time: { created: row.time_created, updated: row.time_updated },
+      }
+    })
+
     const reply = Effect.fn("Permission.reply")((input: ReplyInput) =>
       Effect.uninterruptible(
         Effect.gen(function* () {
+          const matches = (row: typeof PermissionRequestTable.$inferSelect | undefined) =>
+            input.responseID !== undefined &&
+            row?.response_id === input.responseID &&
+            row.state.status === "answered" &&
+            row.state.reply === input.reply &&
+            row.state.message === input.message
+          if (input.responseID !== undefined && !Schema.is(Permission.ResponseID)(input.responseID)) {
+            return yield* new NotFoundError({ requestID: input.requestID })
+          }
+          const row = yield* stored(input.requestID)
+          if (matches(row)) return
           const existing = pending.get(input.requestID)
-          if (!existing) return yield* new NotFoundError({ requestID: input.requestID })
-          yield* bus.publish(Permission.Event.Replied, {
-            sessionID: existing.request.sessionID,
-            requestID: existing.request.id,
+          if (!existing || row?.status !== "pending" || row.generation !== generation) {
+            return yield* new NotFoundError({ requestID: input.requestID })
+          }
+          const state: TerminalState = {
+            status: "answered",
             reply: input.reply,
-          })
-
+            ...(input.message === undefined ? {} : { message: input.message }),
+          }
+          if (!(yield* settle(existing, state, input.responseID, input.reply === "always"))) {
+            if (matches(yield* stored(input.requestID))) return
+            return yield* new NotFoundError({ requestID: input.requestID })
+          }
+          yield* complete(existing, state)
           if (input.reply === "reject") {
-            yield* Deferred.fail(
-              existing.deferred,
-              input.message ? new CorrectedError({ feedback: input.message }) : new DeclinedError(),
-            )
-            pending.delete(input.requestID)
-            for (const [id, item] of pending) {
+            for (const item of Array.from(pending.values())) {
               if (item.request.sessionID !== existing.request.sessionID) continue
-              yield* bus.publish(Permission.Event.Replied, {
-                sessionID: item.request.sessionID,
-                requestID: item.request.id,
-                reply: "reject",
-              })
-              yield* Deferred.fail(item.deferred, new DeclinedError())
-              pending.delete(id)
+              const rejected = { status: "answered", reply: "reject" } as const
+              if (yield* settle(item, rejected)) yield* complete(item, rejected)
             }
             return
           }
-
-          if (input.reply === "always" && existing.request.save?.length) {
-            yield* saved.add({
-              projectID: location.project.id,
-              action: existing.request.action,
-              resources: existing.request.save,
-            })
-          }
-          yield* Deferred.succeed(existing.deferred, undefined)
-          pending.delete(input.requestID)
           if (input.reply !== "always" || !existing.request.save?.length) return
-
-          for (const [id, item] of pending) {
+          for (const item of Array.from(pending.values())) {
             const result = yield* evaluateInput({ ...item.request, agent: item.agent }).pipe(
               Effect.catchTag("Session.NotFoundError", () => Effect.undefined),
             )
             if (result?.effect !== "allow") continue
-            yield* bus.publish(Permission.Event.Replied, {
-              sessionID: item.request.sessionID,
-              requestID: item.request.id,
-              reply: "always",
-            })
-            yield* Deferred.succeed(item.deferred, undefined)
-            pending.delete(id)
+            const allowed = { status: "answered", reply: "always" } as const
+            // Policy hooks may yield while another reply settles this request.
+            if (yield* settle(item, allowed)) yield* complete(item, allowed)
           }
         }),
       ),
@@ -321,12 +462,12 @@ const layer = Layer.effect(
       return Array.from(pending.values(), (item) => item.request).filter((request) => request.sessionID === sessionID)
     })
 
-    return Service.of({ ask, assert, reply, get, forSession, list })
+    return Service.of({ ask, assert, reply, get, receipt, forSession, list })
   }),
 )
 
 export const node = makeLocationNode({
   service: Service,
   layer,
-  deps: [Bus.node, Location.node, Agent.node, SessionStore.node, PermissionSaved.node, PluginHooks.node],
+  deps: [Bus.node, Location.node, Agent.node, SessionStore.node, PermissionSaved.node, PluginHooks.node, Database.node],
 })

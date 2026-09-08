@@ -24,6 +24,8 @@ import { LayerNode } from "@opencode-ai/util/effect/layer-node"
 import { Bus } from "@opencode-ai/core/bus"
 import { ID, type Payload } from "@opencode-ai/schema/event"
 import { Form } from "@opencode-ai/core/form"
+import { Database } from "@opencode-ai/core/database/database"
+import { Global } from "@opencode-ai/util/global"
 import { Integration } from "@opencode-ai/core/integration"
 import { Environment } from "@opencode-ai/core/environment/index"
 import { EnvironmentUnavailable } from "@opencode-ai/core/environment/unavailable"
@@ -234,6 +236,11 @@ function resourceMcpLayer(
   ).pipe(
     Layer.provideMerge(Mcp.layer(options)),
     Layer.provideMerge(Form.layer),
+    Layer.provide(
+      Database.layer().pipe(
+        Layer.provide(Layer.succeed(Global.Service, Global.make({ data: "/tmp/shuvcode-mcp-test-no-import" }))),
+      ),
+    ),
     Layer.provide(
       Layer.mergeAll(
         overrides?.entries

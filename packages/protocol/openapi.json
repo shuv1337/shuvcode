@@ -8445,6 +8445,93 @@
         "summary": "Get form state"
       }
     },
+    "/api/session/{sessionID}/form/{formID}/receipt": {
+      "get": {
+        "tags": ["form"],
+        "operationId": "v2.session.form.receipt",
+        "parameters": [
+          {
+            "name": "sessionID",
+            "in": "path",
+            "schema": {
+              "type": "string"
+            },
+            "required": true
+          },
+          {
+            "name": "formID",
+            "in": "path",
+            "schema": {
+              "type": "string",
+              "pattern": "^frm_"
+            },
+            "required": true
+          }
+        ],
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/Form.Receipt"
+                    }
+                  },
+                  "required": ["data"],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "InvalidRequestError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvalidRequestErrorEncoded"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UnauthorizedError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "SessionNotFoundError | FormNotFoundError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/FormNotFoundErrorEncoded"
+                    },
+                    {
+                      "$ref": "#/components/schemas/SessionNotFoundErrorEncoded"
+                    },
+                    {
+                      "$ref": "#/components/schemas/SessionNotFoundErrorEncoded"
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "description": "Read a retained form outcome and whether its pending callback is available in this runtime.",
+        "summary": "Get form receipt"
+      }
+    },
     "/api/session/{sessionID}/form/{formID}/reply": {
       "post": {
         "tags": ["form"],
@@ -8531,7 +8618,7 @@
             }
           }
         },
-        "description": "Submit an answer to a pending form.",
+        "description": "Submit an answer to a pending form. An exact retry with the same responseID acknowledges the retained answer without applying it again.",
         "summary": "Reply to form",
         "requestBody": {
           "content": {
@@ -8917,6 +9004,16 @@
                 }
               }
             }
+          },
+          "409": {
+            "description": "ConflictError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConflictErrorEncoded"
+                }
+              }
+            }
           }
         },
         "description": "Evaluate and, when approval is required, create a permission request for a session.",
@@ -9137,6 +9234,94 @@
         "summary": "Get permission request"
       }
     },
+    "/api/session/{sessionID}/permission/{requestID}/receipt": {
+      "get": {
+        "tags": ["permission"],
+        "operationId": "v2.session.permission.receipt",
+        "parameters": [
+          {
+            "name": "sessionID",
+            "in": "path",
+            "schema": {
+              "type": "string",
+              "pattern": "^ses"
+            },
+            "required": true
+          },
+          {
+            "name": "requestID",
+            "in": "path",
+            "schema": {
+              "type": "string",
+              "pattern": "^per"
+            },
+            "required": true
+          }
+        ],
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/Permission.Receipt"
+                    }
+                  },
+                  "required": ["data"],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "InvalidRequestError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvalidRequestErrorEncoded"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UnauthorizedError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "SessionNotFoundError | PermissionNotFoundError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/PermissionNotFoundErrorEncoded"
+                    },
+                    {
+                      "$ref": "#/components/schemas/SessionNotFoundErrorEncoded"
+                    },
+                    {
+                      "$ref": "#/components/schemas/SessionNotFoundErrorEncoded"
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "description": "Retrieve the persisted state and response receipt for a permission request owned by a session.",
+        "summary": "Get permission receipt"
+      }
+    },
     "/api/session/{sessionID}/permission/{requestID}/reply": {
       "post": {
         "tags": ["permission"],
@@ -9207,7 +9392,7 @@
             }
           }
         },
-        "description": "Respond to a pending permission request owned by a session.",
+        "description": "Respond to a pending permission request owned by a session, or acknowledge an exact response ID replay.",
         "summary": "Reply to pending permission request",
         "requestBody": {
           "content": {
@@ -9222,6 +9407,16 @@
                     "anyOf": [
                       {
                         "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "responseID": {
+                    "anyOf": [
+                      {
+                        "$ref": "#/components/schemas/Permission.ResponseID"
                       },
                       {
                         "type": "null"
@@ -15664,15 +15859,57 @@
         "required": ["value", "label"],
         "additionalProperties": false
       },
+      "Form.Receipt": {
+        "type": "object",
+        "properties": {
+          "request": {
+            "$ref": "#/components/schemas/Form.Info"
+          },
+          "state": {
+            "$ref": "#/components/schemas/Form.State"
+          },
+          "available": {
+            "type": "boolean"
+          },
+          "responseID": {
+            "$ref": "#/components/schemas/Form.ResponseID"
+          },
+          "time": {
+            "type": "object",
+            "properties": {
+              "created": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "updated": {
+                "type": "integer",
+                "minimum": 0
+              }
+            },
+            "required": ["created", "updated"],
+            "additionalProperties": false
+          }
+        },
+        "required": ["request", "state", "available", "time"],
+        "additionalProperties": false
+      },
       "Form.Reply": {
         "type": "object",
         "properties": {
           "answer": {
             "$ref": "#/components/schemas/Form.Answer"
+          },
+          "responseID": {
+            "$ref": "#/components/schemas/Form.ResponseID"
           }
         },
         "required": ["answer"],
         "additionalProperties": false
+      },
+      "Form.ResponseID": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 200
       },
       "Form.State": {
         "anyOf": [
@@ -17149,6 +17386,40 @@
         "type": "string",
         "enum": ["allow", "deny", "ask"]
       },
+      "Permission.Receipt": {
+        "type": "object",
+        "properties": {
+          "request": {
+            "$ref": "#/components/schemas/Permission.Request"
+          },
+          "state": {
+            "$ref": "#/components/schemas/Permission.State"
+          },
+          "available": {
+            "type": "boolean"
+          },
+          "responseID": {
+            "$ref": "#/components/schemas/Permission.ResponseID"
+          },
+          "time": {
+            "type": "object",
+            "properties": {
+              "created": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "updated": {
+                "type": "integer",
+                "minimum": 0
+              }
+            },
+            "required": ["created", "updated"],
+            "additionalProperties": false
+          }
+        },
+        "required": ["request", "state", "available", "time"],
+        "additionalProperties": false
+      },
       "Permission.Reply": {
         "type": "string",
         "enum": ["once", "always", "reject"]
@@ -17192,6 +17463,11 @@
         "required": ["id", "sessionID", "action", "resources"],
         "additionalProperties": false
       },
+      "Permission.ResponseID": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 200
+      },
       "Permission.Rule": {
         "type": "object",
         "properties": {
@@ -17231,6 +17507,49 @@
               }
             },
             "required": ["type", "messageID", "id"],
+            "additionalProperties": false
+          }
+        ]
+      },
+      "Permission.State": {
+        "anyOf": [
+          {
+            "type": "object",
+            "properties": {
+              "status": {
+                "type": "string",
+                "enum": ["pending"]
+              }
+            },
+            "required": ["status"],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "status": {
+                "type": "string",
+                "enum": ["answered"]
+              },
+              "reply": {
+                "$ref": "#/components/schemas/Permission.Reply"
+              },
+              "message": {
+                "type": "string"
+              }
+            },
+            "required": ["status", "reply"],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "status": {
+                "type": "string",
+                "enum": ["cancelled"]
+              }
+            },
+            "required": ["status"],
             "additionalProperties": false
           }
         ]

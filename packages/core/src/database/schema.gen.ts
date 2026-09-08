@@ -69,9 +69,39 @@ const schema: Omit<DatabaseMigration.Migration, "id"> = {
         );
       `)
       yield* tx.run(`
+        CREATE TABLE \`form_request\` (
+          \`id\` text PRIMARY KEY,
+          \`session_id\` text NOT NULL,
+          \`directory\` text NOT NULL,
+          \`workspace_id\` text,
+          \`owner_generation\` text NOT NULL,
+          \`request\` text NOT NULL,
+          \`status\` text NOT NULL,
+          \`state\` text NOT NULL,
+          \`response_id\` text,
+          \`time_created\` integer NOT NULL,
+          \`time_updated\` integer NOT NULL
+        );
+      `)
+      yield* tx.run(`
         CREATE TABLE \`kv\` (
           \`key\` text PRIMARY KEY,
           \`value\` text NOT NULL,
+          \`time_created\` integer NOT NULL,
+          \`time_updated\` integer NOT NULL
+        );
+      `)
+      yield* tx.run(`
+        CREATE TABLE \`permission_request\` (
+          \`id\` text PRIMARY KEY,
+          \`directory\` text NOT NULL,
+          \`workspace_id\` text,
+          \`generation\` text NOT NULL,
+          \`request\` text NOT NULL,
+          \`agent\` text,
+          \`status\` text NOT NULL,
+          \`state\` text NOT NULL,
+          \`response_id\` text,
           \`time_created\` integer NOT NULL,
           \`time_updated\` integer NOT NULL
         );
@@ -253,6 +283,13 @@ const schema: Omit<DatabaseMigration.Migration, "id"> = {
       `)
       yield* tx.run(`CREATE UNIQUE INDEX \`event_aggregate_seq_idx\` ON \`event\` (\`aggregate_id\`,\`seq\`);`)
       yield* tx.run(`CREATE INDEX \`event_aggregate_type_seq_idx\` ON \`event\` (\`aggregate_id\`,\`type\`,\`seq\`);`)
+      yield* tx.run(`CREATE INDEX \`form_request_retention_idx\` ON \`form_request\` (\`status\`,\`time_updated\`);`)
+      yield* tx.run(
+        `CREATE INDEX \`permission_request_location_idx\` ON \`permission_request\` (\`directory\`,\`workspace_id\`);`,
+      )
+      yield* tx.run(
+        `CREATE INDEX \`permission_request_retention_idx\` ON \`permission_request\` (\`status\`,\`time_updated\`);`,
+      )
       yield* tx.run(
         `CREATE UNIQUE INDEX \`permission_project_action_resource_idx\` ON \`permission\` (\`project_id\`,\`action\`,\`resource\`);`,
       )

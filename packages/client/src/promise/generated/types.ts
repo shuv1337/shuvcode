@@ -334,9 +334,17 @@ export type FormMetadata = { [x: string]: JsonValue }
 
 export type FormValue = string | number | boolean | Array<string>
 
+export type FormValue1 = string | number | "Infinity" | "-Infinity" | "NaN" | boolean | Array<string>
+
+export type FormResponseID = string
+
 export type PermissionSource = { type: "tool"; messageID: string; id: string }
 
 export type PermissionSavedInfo = { id: string; projectID: string; action: string; resource: string }
+
+export type PermissionReply = "once" | "always" | "reject"
+
+export type PermissionResponseID = string
 
 export type FileSystemEntry = { path: string; type: "file" | "directory" }
 
@@ -355,8 +363,6 @@ export type SkillInfo = {
 export type RpcOutput = { output?: any }
 
 export type SessionDynamicToolDefinition1 = { name: string; description: string; parameters?: { [x: string]: any } }
-
-export type PermissionReply = "once" | "always" | "reject"
 
 export type Pty = {
   id: string
@@ -1535,6 +1541,8 @@ export type ProjectUpdated = {
 
 export type FormAnswer = { [x: string]: FormValue }
 
+export type FormAnswer1 = { [x: string]: FormValue1 }
+
 export type PermissionRequest = {
   id: string
   sessionID: string
@@ -1564,14 +1572,10 @@ export type PermissionAsked = {
   }
 }
 
-export type SessionToolsUpdated = {
-  id: string
-  created: number
-  metadata?: { [x: string]: any }
-  type: "session.tools.updated"
-  location?: LocationRef
-  data: { sessionID: string; tools: Array<SessionDynamicToolDefinition1> }
-}
+export type PermissionState =
+  | { status: "pending" }
+  | { status: "answered"; reply: PermissionReply; message?: string }
+  | { status: "cancelled" }
 
 export type PermissionReplied = {
   id: string
@@ -1580,6 +1584,15 @@ export type PermissionReplied = {
   type: "permission.replied"
   location?: LocationRef
   data: { sessionID: string; requestID: string; reply: PermissionReply }
+}
+
+export type SessionToolsUpdated = {
+  id: string
+  created: number
+  metadata?: { [x: string]: any }
+  type: "session.tools.updated"
+  location?: LocationRef
+  data: { sessionID: string; tools: Array<SessionDynamicToolDefinition1> }
 }
 
 export type PtyCreated = {
@@ -1871,6 +1884,16 @@ export type FormReplied = {
   type: "form.replied"
   location?: LocationRef
   data: { id: string; sessionID: string; answer: FormAnswer }
+}
+
+export type FormState1 = { status: "pending" } | { status: "answered"; answer: FormAnswer1 } | { status: "cancelled" }
+
+export type PermissionReceipt = {
+  request: PermissionRequest
+  state: PermissionState
+  available: boolean
+  responseID?: PermissionResponseID
+  time: { created: number; updated: number }
 }
 
 export type FormField1 =
@@ -2252,6 +2275,14 @@ export type IntegrationMethod =
   | IntegrationCommandMethod
   | IntegrationKeyMethod
   | IntegrationEnvMethod
+
+export type FormReceipt = {
+  request: FormInfo
+  state: FormState1
+  available: boolean
+  responseID?: FormResponseID
+  time: { created: number; updated: number }
+}
 
 export type FormCreated = {
   id: string
@@ -5753,12 +5784,28 @@ export type FormStateInput = {
 
 export type FormStateOutput = { data: FormState }["data"]
 
+export type FormReceiptInput = {
+  readonly sessionID: { readonly sessionID: string; readonly formID: string }["sessionID"]
+  readonly formID: { readonly sessionID: string; readonly formID: string }["formID"]
+}
+
+export type FormReceiptOutput = { data: FormReceipt }["data"]
+
 export type FormReplyInput = {
   readonly sessionID: { readonly sessionID: string; readonly formID: string }["sessionID"]
   readonly formID: { readonly sessionID: string; readonly formID: string }["formID"]
   readonly answer: {
-    readonly answer: { readonly [x: string]: string | number | boolean | ReadonlyArray<string> }
+    readonly answer: {
+      readonly [x: string]: string | number | "Infinity" | "-Infinity" | "NaN" | boolean | ReadonlyArray<string>
+    }
+    readonly responseID?: string
   }["answer"]
+  readonly responseID?: {
+    readonly answer: {
+      readonly [x: string]: string | number | "Infinity" | "-Infinity" | "NaN" | boolean | ReadonlyArray<string>
+    }
+    readonly responseID?: string
+  }["responseID"]
 }
 
 export type FormReplyOutput = void
@@ -5869,11 +5916,31 @@ export type PermissionGetInput = {
 
 export type PermissionGetOutput = { data: PermissionRequest }["data"]
 
+export type PermissionReceiptInput = {
+  readonly sessionID: { readonly sessionID: string; readonly requestID: string }["sessionID"]
+  readonly requestID: { readonly sessionID: string; readonly requestID: string }["requestID"]
+}
+
+export type PermissionReceiptOutput = { data: PermissionReceipt }["data"]
+
 export type PermissionReplyInput = {
   readonly sessionID: { readonly sessionID: string; readonly requestID: string }["sessionID"]
   readonly requestID: { readonly sessionID: string; readonly requestID: string }["requestID"]
-  readonly reply: { readonly reply: "once" | "always" | "reject"; readonly message?: string | undefined }["reply"]
-  readonly message?: { readonly reply: "once" | "always" | "reject"; readonly message?: string | undefined }["message"]
+  readonly reply: {
+    readonly reply: "once" | "always" | "reject"
+    readonly message?: string | undefined
+    readonly responseID?: string | undefined
+  }["reply"]
+  readonly message?: {
+    readonly reply: "once" | "always" | "reject"
+    readonly message?: string | undefined
+    readonly responseID?: string | undefined
+  }["message"]
+  readonly responseID?: {
+    readonly reply: "once" | "always" | "reject"
+    readonly message?: string | undefined
+    readonly responseID?: string | undefined
+  }["responseID"]
 }
 
 export type PermissionReplyOutput = void

@@ -1,0 +1,35 @@
+{
+  "observedAt": "2026-09-08T00:51:39.877Z",
+  "runtime": "installed",
+  "sourceHead": "6829c0e589f73ed105a60b002b2535aed04847d3",
+  "binarySha256": "b10d4f0ae990f9e01eef60d555793d1e39863a5e8794421c88e235e64972ab9c",
+  "providerPackage": "@ai-sdk/openai-compatible",
+  "contextLimit": 200000,
+  "isolation": {
+    "freshHome": true,
+    "freshDatabase": true,
+    "nestedDisposableGitRoot": true,
+    "inheritedCredentials": false,
+    "nonLoopbackNetworkDenied": true
+  },
+  "checks": [
+    {
+      "name": "create_session",
+      "observed": 200,
+      "expected": 200
+    },
+    {
+      "name": "first_admitted",
+      "observed": 200,
+      "expected": 200
+    }
+  ],
+  "version": "shuvcode v2.0.0-alpha-19",
+  "result": "failed",
+  "failure": {
+    "name": "Error",
+    "message": "Timed out: first loopback model request"
+  },
+  "modelRequests": [],
+  "stderrBytes": 6859
+}

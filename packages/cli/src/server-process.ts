@@ -95,6 +95,9 @@ const processEffect = Effect.fnUntraced(function* (options: Options) {
           pty: {
             handoff: handoff ?? (serviceOptions === undefined ? undefined : yield* Service.handoff(serviceOptions)),
           },
+          events: {
+            persist: (yield* Env.persistEvents) ?? truthy(config.env?.OPENCODE_PERSIST_EVENTS),
+          },
           simulation: truthy(process.env.OPENCODE_SIMULATE),
           database: {
             path:

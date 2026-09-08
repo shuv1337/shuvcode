@@ -57,6 +57,45 @@ separate advertised URL through the tailnet reverse proxy as shown above.
 The bind and advertised URL are deliberately different. Do not widen the bind
 to make a reverse-proxy URL reachable.
 
+## Retaining session events
+
+The CLI keeps projected sessions and the prompt inbox durable by default, but
+retaining the ordered event log is a separate opt-in. Clients that need to catch
+up after disconnection must enable it before collecting events:
+
+```sh
+shuvcode service set env OPENCODE_PERSIST_EVENTS true
+shuvcode service start
+```
+
+Setting service configuration stops the service; start it again to apply the
+change. Direct `serve --service` starts, including the systemd unit, read this
+saved setting. An explicit `OPENCODE_PERSIST_EVENTS` in the server process
+environment takes precedence, including `false`. For foreground and standalone
+servers use `OPENCODE_PERSIST_EVENTS=true shuvcode serve` (or `serve --stdio`).
+Without either setting, event retention stays disabled.
+
+With retention enabled, the authenticated experimental endpoint
+`GET /api/experimental/session/:sessionID/log?after=N&follow=false` replays
+committed events after the exclusive per-session sequence `N`. Omit `after` for
+all retained events; `follow=true` continues with new events. Store each event
+and its sequence before advancing the consumer cursor. The `log.synced` marker
+contains the captured watermark, not a delivery or execution acknowledgement.
+
+Enabling retention does not backfill earlier events. A session that already
+existed can have gaps in its retained history, and a `log.synced` marker alone
+does not prove retention was enabled for the whole session. Bootstrap such
+sessions from current snapshots and establish an explicit collection boundary.
+Turning retention off also leaves previously retained rows intact.
+
+Retained events include session content and accumulate in the existing database
+without an automatic age limit. Protect and back up that database like the
+session transcript. Deleting a session deletes its retained event history;
+clients disconnected during deletion must reconcile the session's absence
+instead of expecting to replay its deletion event. This option does not turn
+the volatile `/api/event` feed into a replayable global log or resume model work
+after process death.
+
 ## Restarting with persistent terminals
 
 Use `shuvcode service restart` to preserve persistent terminals. The client prepares

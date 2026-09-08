@@ -1560,7 +1560,16 @@ export type FormStateInput = { readonly sessionID: string; readonly formID: Form
 export type FormStateOutput = Form.State
 export type FormStateOperation<E = never> = (input: FormStateInput) => Effect.Effect<FormStateOutput, E>
 
-export type FormReplyInput = { readonly sessionID: string; readonly formID: Form.ID; readonly answer: Form.Answer }
+export type FormReceiptInput = { readonly sessionID: string; readonly formID: Form.ID }
+export type FormReceiptOutput = Form.Receipt
+export type FormReceiptOperation<E = never> = (input: FormReceiptInput) => Effect.Effect<FormReceiptOutput, E>
+
+export type FormReplyInput = {
+  readonly sessionID: string
+  readonly formID: Form.ID
+  readonly answer: Form.Answer
+  readonly responseID?: Form.ResponseID | undefined
+}
 export type FormReplyOutput = void
 export type FormReplyOperation<E = never> = (input: FormReplyInput) => Effect.Effect<FormReplyOutput, E>
 
@@ -1574,6 +1583,7 @@ export interface FormApi<E = never> {
   readonly create: FormCreateOperation<E>
   readonly get: FormGetOperation<E>
   readonly state: FormStateOperation<E>
+  readonly receipt: FormReceiptOperation<E>
   readonly reply: FormReplyOperation<E>
   readonly cancel: FormCancelOperation<E>
 }
@@ -1624,11 +1634,18 @@ export type PermissionGetInput = { readonly sessionID: Session.ID; readonly requ
 export type PermissionGetOutput = Permission.Request
 export type PermissionGetOperation<E = never> = (input: PermissionGetInput) => Effect.Effect<PermissionGetOutput, E>
 
+export type PermissionReceiptInput = { readonly sessionID: Session.ID; readonly requestID: Permission.ID }
+export type PermissionReceiptOutput = Permission.Receipt
+export type PermissionReceiptOperation<E = never> = (
+  input: PermissionReceiptInput,
+) => Effect.Effect<PermissionReceiptOutput, E>
+
 export type PermissionReplyInput = {
   readonly sessionID: Session.ID
   readonly requestID: Permission.ID
   readonly reply: Permission.Reply
   readonly message?: string | undefined
+  readonly responseID?: Permission.ResponseID | undefined
 }
 export type PermissionReplyOutput = void
 export type PermissionReplyOperation<E = never> = (
@@ -1641,6 +1658,7 @@ export interface PermissionApi<E = never> {
   readonly create: PermissionCreateOperation<E>
   readonly list: PermissionListOperation<E>
   readonly get: PermissionGetOperation<E>
+  readonly receipt: PermissionReceiptOperation<E>
   readonly reply: PermissionReplyOperation<E>
 }
 

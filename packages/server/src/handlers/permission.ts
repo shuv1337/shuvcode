@@ -6,7 +6,7 @@ import { Session } from "@opencode-ai/core/session"
 import { Effect } from "effect"
 import { HttpApiBuilder, HttpApiSchema } from "effect/unstable/httpapi"
 import { Api } from "../api"
-import { PermissionNotFoundError } from "@opencode-ai/protocol/errors"
+import { ConflictError, PermissionNotFoundError } from "@opencode-ai/protocol/errors"
 import { response, sessionInfo } from "../location"
 import { missingSession } from "./session-error"
 
@@ -26,6 +26,15 @@ export const PermissionHandler = HttpApiBuilder.group(Api, "server.permission", 
       const request = yield* permission.get(requestID)
       if (!request || request.sessionID !== sessionID) return yield* missingRequest(requestID)
       return { permission, request }
+    })
+    const requireOwnedReceipt = Effect.fnUntraced(function* (
+      sessionID: Permission.Request["sessionID"],
+      requestID: Permission.ID,
+    ) {
+      const permission = yield* Permission.Service
+      const receipt = yield* permission.receipt(requestID)
+      if (!receipt || receipt.request.sessionID !== sessionID) return yield* missingRequest(requestID)
+      return { permission, receipt }
     })
 
     return handlers
@@ -52,7 +61,13 @@ export const PermissionHandler = HttpApiBuilder.group(Api, "server.permission", 
                 source: ctx.payload.source,
                 agent: ctx.payload.agent,
               })
-              .pipe(Effect.catchTag("Session.NotFoundError", missingSession)),
+              .pipe(
+                Effect.catchTag("Session.NotFoundError", missingSession),
+                Effect.catchTag(
+                  "Permission.AlreadyExistsError",
+                  (error) => new ConflictError({ resource: error.requestID, message: error.message }),
+                ),
+              ),
           }
         }),
       )
@@ -74,11 +89,23 @@ export const PermissionHandler = HttpApiBuilder.group(Api, "server.permission", 
         }),
       )
       .handle(
+        "session.permission.receipt",
+        Effect.fn(function* (ctx) {
+          const owned = yield* requireOwnedReceipt(ctx.params.sessionID, ctx.params.requestID)
+          return { data: owned.receipt }
+        }),
+      )
+      .handle(
         "session.permission.reply",
         Effect.fn(function* (ctx) {
-          const owned = yield* requireOwnedRequest(ctx.params.sessionID, ctx.params.requestID)
+          const owned = yield* requireOwnedReceipt(ctx.params.sessionID, ctx.params.requestID)
           yield* owned.permission
-            .reply({ requestID: ctx.params.requestID, reply: ctx.payload.reply, message: ctx.payload.message })
+            .reply({
+              requestID: ctx.params.requestID,
+              reply: ctx.payload.reply,
+              message: ctx.payload.message,
+              responseID: ctx.payload.responseID,
+            })
             .pipe(Effect.catchTag("Permission.NotFoundError", () => missingRequest(ctx.params.requestID)))
           return HttpApiSchema.NoContent.make()
         }),

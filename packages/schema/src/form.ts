@@ -152,8 +152,23 @@ export const State = Schema.Union([
   .annotate({ identifier: "Form.State" })
 export type State = typeof State.Type
 
+export const ResponseID = Schema.String.check(Schema.isMinLength(1), Schema.isMaxLength(200)).annotate({
+  identifier: "Form.ResponseID",
+})
+export type ResponseID = typeof ResponseID.Type
+
+export const Receipt = Schema.Struct({
+  request: Info,
+  state: State,
+  available: Schema.Boolean,
+  responseID: ResponseID.pipe(optional),
+  time: Schema.Struct({ created: NonNegativeInt, updated: NonNegativeInt }),
+}).annotate({ identifier: "Form.Receipt" })
+export interface Receipt extends Schema.Schema.Type<typeof Receipt> {}
+
 export const Reply = Schema.Struct({
   answer: Answer,
+  responseID: ResponseID.pipe(optional),
 }).annotate({ identifier: "Form.Reply" })
 export interface Reply extends Schema.Schema.Type<typeof Reply> {}
 

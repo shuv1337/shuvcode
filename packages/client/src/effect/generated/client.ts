@@ -175,6 +175,8 @@ import type {
   FormGetOutput,
   FormStateInput,
   FormStateOutput,
+  FormReceiptInput,
+  FormReceiptOutput,
   FormReplyInput,
   FormReplyOutput,
   FormCancelInput,
@@ -191,6 +193,8 @@ import type {
   PermissionListOutput,
   PermissionGetInput,
   PermissionGetOutput,
+  PermissionReceiptInput,
+  PermissionReceiptOutput,
   PermissionReplyInput,
   PermissionReplyOutput,
   FileListInput,
@@ -1133,11 +1137,19 @@ const EndpointFormState = (raw: RawClient["server.form"]) => (input: FormStateIn
     ),
   )
 
+const EndpointFormReceipt = (raw: RawClient["server.form"]) => (input: FormReceiptInput) =>
+  preserveEffect<FormReceiptOutput>()(
+    raw["session.form.receipt"]({ params: { sessionID: input["sessionID"], formID: input["formID"] } }).pipe(
+      Effect.mapError(mapClientError),
+      Effect.map((value) => value.data),
+    ),
+  )
+
 const EndpointFormReply = (raw: RawClient["server.form"]) => (input: FormReplyInput) =>
   preserveEffect<FormReplyOutput>()(
     raw["session.form.reply"]({
       params: { sessionID: input["sessionID"], formID: input["formID"] },
-      payload: { answer: input["answer"] },
+      payload: { answer: input["answer"], responseID: input["responseID"] },
     }).pipe(Effect.mapError(mapClientError)),
   )
 
@@ -1154,6 +1166,7 @@ const adaptGroupForm = (raw: RawClient["server.form"]) => ({
   create: EndpointFormCreate(raw),
   get: EndpointFormGet(raw),
   state: EndpointFormState(raw),
+  receipt: EndpointFormReceipt(raw),
   reply: EndpointFormReply(raw),
   cancel: EndpointFormCancel(raw),
 })
@@ -1211,11 +1224,21 @@ const EndpointPermissionGet = (raw: RawClient["server.permission"]) => (input: P
     ),
   )
 
+const EndpointPermissionReceipt = (raw: RawClient["server.permission"]) => (input: PermissionReceiptInput) =>
+  preserveEffect<PermissionReceiptOutput>()(
+    raw["session.permission.receipt"]({
+      params: { sessionID: input["sessionID"], requestID: input["requestID"] },
+    }).pipe(
+      Effect.mapError(mapClientError),
+      Effect.map((value) => value.data),
+    ),
+  )
+
 const EndpointPermissionReply = (raw: RawClient["server.permission"]) => (input: PermissionReplyInput) =>
   preserveEffect<PermissionReplyOutput>()(
     raw["session.permission.reply"]({
       params: { sessionID: input["sessionID"], requestID: input["requestID"] },
-      payload: { reply: input["reply"], message: input["message"] },
+      payload: { reply: input["reply"], message: input["message"], responseID: input["responseID"] },
     }).pipe(Effect.mapError(mapClientError)),
   )
 
@@ -1225,6 +1248,7 @@ const adaptGroupPermission = (raw: RawClient["server.permission"]) => ({
   create: EndpointPermissionCreate(raw),
   list: EndpointPermissionList(raw),
   get: EndpointPermissionGet(raw),
+  receipt: EndpointPermissionReceipt(raw),
   reply: EndpointPermissionReply(raw),
 })
 
