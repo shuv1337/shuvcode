@@ -1199,15 +1199,14 @@ Keep prompt hooks retry-safe. They are not an exactly-once side-effect boundary:
 
 #### Model context
 
-Modify assembled system instructions, messages, tools, generation settings, or provider options immediately before model
-dispatch.
+Modify assembled system instructions, messages, tools, or request options immediately before model dispatch.
 
 ```ts
 await ctx.session.hook("context", (event) => {
   event.system.push({ text: "Keep the review focused on correctness." })
   delete event.tools.write
-  event.generation.temperature = 0.2
-  event.generation.maxTokens = 8_000
+  event.options.temperature = 0.2
+  event.options.maxTokens = 8_000
 })
 ```
 
@@ -1215,12 +1214,10 @@ Context changes affect only the outgoing model call, not persisted history or
 configuration. The hook runs again for subsequent calls such as tool-driven
 continuations, transient session generation, and compaction, but not for title requests.
 
-Compaction context hooks receive the selected session agent. Its model-request
-and HTTP hooks retain the `compaction` agent identity for provider-specific handling.
-
 Request overrides follow these rules:
 
-- `generation` and `providerOptions` start empty for each model call; they do not contain resolved model settings.
+- `options` starts empty for each model call; it does not contain resolved model settings.
+- Typed keys are generation settings; any other key is passed to the selected protocol as a provider option.
 - Hooks run in registration order and see overrides made by earlier hooks.
 - Request overrides take precedence over model defaults, which take precedence over route defaults.
 - Provider option objects merge recursively; arrays and scalar values replace earlier values.
@@ -1236,7 +1233,7 @@ settings to the matching provider. For example, OpenAI Responses uses `reasoning
 await ctx.session.hook(
   "context",
   (event) => {
-    event.providerOptions.reasoningEffort = "high"
+    event.options.reasoningEffort = "high"
   },
   { providerID: "openai" },
 )
@@ -1348,7 +1345,7 @@ interface SessionContextHook {
   system: SystemPart[]
   messages: Message[]
   tools: Record<string, { description: string; input: JsonSchema }>
-  generation: {
+  options: {
     maxTokens?: number
     temperature?: number
     topP?: number
@@ -1357,8 +1354,7 @@ interface SessionContextHook {
     presencePenalty?: number
     seed?: number
     stop?: string[]
-  }
-  providerOptions: Record<string, unknown>
+  } & Record<string, unknown>
 }
 
 interface SessionHookContext {

@@ -173,7 +173,9 @@ describe("OpenAIPlugin", () => {
       expect(required(yield* catalog.model.get(Provider.ID.openai, Model.ID.make("gpt-6-astra"))).enabled).toBe(true)
       expect(required(yield* catalog.model.get(Provider.ID.openai, Model.ID.make("gpt-5.10"))).enabled).toBe(true)
       expect(required(yield* catalog.model.get(Provider.ID.openai, Model.ID.make("gpt-5"))).enabled).toBe(false)
-      expect(required(yield* catalog.model.get(Provider.ID.openai, Model.ID.make("gpt-5.04-astra"))).enabled).toBe(false)
+      expect(required(yield* catalog.model.get(Provider.ID.openai, Model.ID.make("gpt-5.04-astra"))).enabled).toBe(
+        false,
+      )
       expect(required(yield* catalog.model.get(Provider.ID.openai, Model.ID.make("gpt-4.99"))).enabled).toBe(false)
     }),
   )
@@ -244,22 +246,20 @@ describe("OpenAIPlugin", () => {
             websocket,
           })
           const requests = yield* SessionModelRequest.Service
-          return yield* requests.prepare({
-            kind: "primary",
-            scope: {
-              session: Session.Info.make({
-                id: sessionID,
-                projectID: Project.ID.global,
-                cost: Money.USD.zero,
-                tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
-                time: { created: DateTime.makeUnsafe(0), updated: DateTime.makeUnsafe(0) },
-                location: Location.Ref.make({ directory: AbsolutePath.make("/project") }),
-              }),
-              agentID,
-              model,
-              tools: { definitions: [], execute: () => Effect.die("unused tool execution") },
-            },
-            transcript: { system: [], messages: [] },
+          return yield* requests.primary({
+            session: Session.Info.make({
+              id: sessionID,
+              projectID: Project.ID.global,
+              cost: Money.USD.zero,
+              tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
+              time: { created: DateTime.makeUnsafe(0), updated: DateTime.makeUnsafe(0) },
+              location: Location.Ref.make({ directory: AbsolutePath.make("/project") }),
+            }),
+            agent: agentID,
+            model,
+            tools: { definitions: [], execute: () => Effect.die("unused tool execution") },
+            system: [],
+            messages: [],
             webSocket: "session",
           })
         }).pipe(
