@@ -145,6 +145,11 @@ export const makeLayer = (connector: WebSocketConnector) =>
         if (owner.channel === channel) owner.channel = undefined
         if (channel.closing) return
         channel.closing = true
+        yield* Effect.logDebug("session websocket poisoned", {
+          sessionTransport: "websocket",
+          code: error.reason._tag === "Transport" ? error.reason.code : error.reason._tag,
+          active: channel.active !== undefined,
+        })
         if (channel.active) Queue.failCauseUnsafe(channel.active.queue, Cause.fail(error))
         yield* metric(
           error.reason._tag === "Transport" && error.reason.code === "queue-overflow"
@@ -316,6 +321,11 @@ export const makeLayer = (connector: WebSocketConnector) =>
           Effect.onInterrupt(() => closeChannel(owner, channel)),
         )
         if (create.mode === "full") channel.checkpoint = undefined
+        yield* Effect.logDebug("session websocket sending", {
+          sessionTransport: "websocket",
+          phase: "send",
+          mode: create.mode,
+        })
         const active: Active = {
           queue: yield* Queue.bounded<string, AIError>(INBOUND_CAPACITY),
           delivery: "send-attempted",
@@ -383,8 +393,10 @@ export const makeLayer = (connector: WebSocketConnector) =>
               if (terminal && pending === 0) {
                 yield* metric("terminal", { type: terminal.type })
                 if (terminal.type === "rejected") yield* metric("rejection", { recovery: terminal.recovery })
-                if (terminal.type === "rejected" && terminal.recovery === "rotate-and-retry-full")
-                  yield* closeChannel(owner, channel)
+                // The Codex backend stops serving a connection after any error frame: the next request is
+                // never answered and the socket dies with 1006. api.openai.com keeps it open, so reconnecting
+                // costs one handshake there. Drop the socket after every error so retries never race that.
+                if (terminal.type !== "completed" && terminal.type !== "incomplete") yield* closeChannel(owner, channel)
                 return
               }
               yield* metric("cancellation")
