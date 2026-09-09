@@ -31,6 +31,7 @@ const Token = Schema.Struct({
   access_token: Schema.String,
   refresh_token: Schema.String,
   expires_in: Schema.Number,
+  org_id: Schema.optional(Schema.NullOr(Schema.String)),
 })
 const TokenPending = Schema.Struct({ error: Schema.String })
 const DeviceToken = Schema.Union([Token, TokenPending])
@@ -48,7 +49,12 @@ function oauth(http: HttpClient.HttpClient) {
     authorize: (answer) =>
       Effect.gen(function* () {
         const server = yield* normalizeServer(answer.server ?? defaultServer)
-        const device = yield* post(http, `${server}/auth/device/code`, { client_id: clientID }, Device)
+        const device = yield* post(
+          http,
+          `${server}/auth/device/code`,
+          { client_id: clientID, supports_org_scope: true },
+          Device,
+        )
         const verification = yield* Effect.try({
           try: () => {
             const url = new URL(device.verification_uri_complete, `${server}/`)
@@ -73,11 +79,23 @@ function oauth(http: HttpClient.HttpClient) {
           { grant_type: "refresh_token", refresh_token: credential.refresh, client_id: clientID },
           Token,
         )
+        // Persist rotated tokens without depending on discovery requests.
         return {
           ...credential,
           access: token.access_token,
           refresh: token.refresh_token,
           expires: Date.now() + token.expires_in * 1000,
+          metadata:
+            token.org_id == null
+              ? credential.metadata
+              : {
+                  ...credential.metadata,
+                  orgID: token.org_id,
+                  orgName:
+                    credential.metadata?.orgID === token.org_id && typeof credential.metadata.orgName === "string"
+                      ? credential.metadata.orgName
+                      : token.org_id,
+                },
         }
       }),
     label: (credential) => (typeof credential.metadata?.orgName === "string" ? credential.metadata.orgName : undefined),
@@ -369,7 +387,13 @@ function credential(http: HttpClient.HttpClient, server: string, token: typeof T
       ],
       { concurrency: 2 },
     )
-    const org = orgs.toSorted((a, b) => a.name.localeCompare(b.name) || a.id.localeCompare(b.id))[0]
+    const org =
+      token.org_id == null
+        ? orgs.toSorted((a, b) => a.name.localeCompare(b.name) || a.id.localeCompare(b.id))[0]
+        : orgs.find((org) => org.id === token.org_id)
+    if (token.org_id != null && !org) {
+      return yield* Effect.fail(new Error(`OpenCode organization not found: ${token.org_id}`))
+    }
     return Credential.OAuth.make({
       type: "oauth" as const,
       methodID,
@@ -396,13 +420,13 @@ function get<S extends Schema.Top>(http: HttpClient.HttpClient, url: string, tok
 function post<S extends Schema.Top>(
   http: HttpClient.HttpClient,
   url: string,
-  body: Record<string, string>,
+  body: Record<string, string | boolean>,
   schema: S,
   statusOk = true,
 ) {
   return HttpClientRequest.post(url).pipe(
     HttpClientRequest.acceptJson,
-    HttpClientRequest.schemaBodyJson(Schema.Record(Schema.String, Schema.String))(body),
+    HttpClientRequest.schemaBodyJson(Schema.Record(Schema.String, Schema.Union([Schema.String, Schema.Boolean])))(body),
     Effect.flatMap((request) => http.execute(request)),
     Effect.flatMap((response) => (statusOk ? HttpClientResponse.filterStatusOk(response) : Effect.succeed(response))),
     Effect.flatMap(HttpClientResponse.schemaBodyJson(schema)),
