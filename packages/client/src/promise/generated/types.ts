@@ -523,6 +523,8 @@ export type SessionMessageCompactionFailed = {
   status: "failed"
   reason: "auto" | "manual"
   error: SessionStructuredError
+  cost?: MoneyUSD
+  tokens?: TokenUsageInfo
 }
 
 export type SessionProviderContext = { version: 1; provenance: SessionProviderContextProvenance; messages: JsonValue }
@@ -808,7 +810,14 @@ export type SessionCompactionFailed = {
   type: "session.compaction.failed"
   durable: { aggregateID: string; seq: number; version: 1 }
   location?: LocationRef
-  data: { sessionID: string; reason: "auto" | "manual"; error: SessionStructuredError; inputID?: string }
+  data: {
+    sessionID: string
+    reason: "auto" | "manual"
+    error: SessionStructuredError
+    inputID?: string
+    cost?: MoneyUSD
+    tokens?: TokenUsageInfo
+  }
 }
 
 export type SessionRevertCleared = {
@@ -1738,6 +1747,8 @@ export type SessionMessageCompactionCompleted = {
   summary: string
   recent: string
   providerContext?: SessionProviderContext
+  cost?: MoneyUSD
+  tokens?: TokenUsageInfo
 }
 
 export type SessionCompactionEnded = {
@@ -1755,6 +1766,8 @@ export type SessionCompactionEnded = {
     providerContext?: SessionProviderContext
     text: string
     recent: string
+    cost?: MoneyUSD
+    tokens?: TokenUsageInfo
   }
 }
 
@@ -3110,6 +3123,13 @@ export type SessionImportInput = {
                 }
                 readonly messages: JsonValue
               }
+              readonly cost?: number
+              readonly tokens?: {
+                readonly input: number
+                readonly output: number
+                readonly reasoning: number
+                readonly cache: { readonly read: number; readonly write: number }
+              }
             }
           | {
               readonly type: "compaction"
@@ -3119,6 +3139,13 @@ export type SessionImportInput = {
               readonly status: "failed"
               readonly reason: "auto" | "manual"
               readonly error: { readonly type: string; readonly message: string; readonly status?: number }
+              readonly cost?: number
+              readonly tokens?: {
+                readonly input: number
+                readonly output: number
+                readonly reasoning: number
+                readonly cache: { readonly read: number; readonly write: number }
+              }
             }
         )
     >
@@ -3401,6 +3428,13 @@ export type SessionImportInput = {
                 }
                 readonly messages: JsonValue
               }
+              readonly cost?: number
+              readonly tokens?: {
+                readonly input: number
+                readonly output: number
+                readonly reasoning: number
+                readonly cache: { readonly read: number; readonly write: number }
+              }
             }
           | {
               readonly type: "compaction"
@@ -3410,6 +3444,13 @@ export type SessionImportInput = {
               readonly status: "failed"
               readonly reason: "auto" | "manual"
               readonly error: { readonly type: string; readonly message: string; readonly status?: number }
+              readonly cost?: number
+              readonly tokens?: {
+                readonly input: number
+                readonly output: number
+                readonly reasoning: number
+                readonly cache: { readonly read: number; readonly write: number }
+              }
             }
         )
     >
@@ -3692,6 +3733,13 @@ export type SessionImportInput = {
                 }
                 readonly messages: JsonValue
               }
+              readonly cost?: number
+              readonly tokens?: {
+                readonly input: number
+                readonly output: number
+                readonly reasoning: number
+                readonly cache: { readonly read: number; readonly write: number }
+              }
             }
           | {
               readonly type: "compaction"
@@ -3701,6 +3749,13 @@ export type SessionImportInput = {
               readonly status: "failed"
               readonly reason: "auto" | "manual"
               readonly error: { readonly type: string; readonly message: string; readonly status?: number }
+              readonly cost?: number
+              readonly tokens?: {
+                readonly input: number
+                readonly output: number
+                readonly reasoning: number
+                readonly cache: { readonly read: number; readonly write: number }
+              }
             }
         )
     >
