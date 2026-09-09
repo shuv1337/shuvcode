@@ -276,6 +276,7 @@ export function SessionScreen(props: { session: SessionModel }) {
                   onSelectionInteraction={timeline.view.selectionInteraction}
                   pinned={timeline.view.pinned()}
                   centered={screen.centered()}
+                  reserveReviewToggle={!sideVisible()}
                   setContentRef={timeline.view.setContentRef}
                   diffs={review.details.diffs}
                   onReview={review.open}
