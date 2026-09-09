@@ -23,6 +23,7 @@ type Entry = {
   report?: (event: BrowserPaneEvent["event"]) => void
   cleanup?: () => void
   pages: Map<Browser.TabID, BrowserPage>
+  tabs: Map<Browser.TabID, Browser.Tab>
   focusedTabID: Browser.TabID | null
   partition: string
   lastState?: string
@@ -48,11 +49,24 @@ export function createBrowserPane() {
         registered: Promise.withResolvers(),
         requests: new Map(),
         pages: new Map(),
-        focusedTabID: null,
+        tabs: new Map(
+          target.restore?.tabs.map((tab) => [
+            tab.id,
+            {
+              ...tab,
+              loading: false,
+              canGoBack: false,
+              canGoForward: false,
+              generation: tab.generation + 1,
+            },
+          ]),
+        ),
+        focusedTabID: target.restore?.focusedTabID ?? null,
         partition: `opencode-browser-${crypto.randomUUID()}`,
       }
       // "unsupported" means the server has no browser plugin; the renderer stops retrying.
-      let reason: "browser.pane.unsupported" | "browser.pane.replaced" | undefined
+      let reason: "browser.pane.unsupported" | "browser.pane.replaced" | "browser.pane.suspended" | undefined
+      let attached = false
       const stop = () => close(entry, reason)
       const navigate = (event: Electron.Event<{ isMainFrame: boolean; isSameDocument: boolean }>) => {
         if (event.isMainFrame && !event.isSameDocument) stop()
@@ -143,7 +157,10 @@ export function createBrowserPane() {
                       }),
                     ),
                   )
-                  if (message.type === "attached") return entry.registered.resolve()
+                  if (message.type === "attached") {
+                    attached = true
+                    return entry.registered.resolve()
+                  }
                   if (message.type === "cancel") return entry.requests.get(message.requestID)?.abort.abort()
                   const abort = new AbortController()
                   entry.requests.set(message.requestID, { abort })
@@ -204,6 +221,10 @@ export function createBrowserPane() {
             Effect.tapError((error) =>
               Effect.sync(() => {
                 const type = error instanceof Object && "type" in error ? error.type : undefined
+                if (type === "rpc.unavailable" && attached) {
+                  reason = "browser.pane.suspended"
+                  return
+                }
                 if (type === "rpc.unavailable" || type === "rpc.method_not_found" || type === "rpc.invalid_input")
                   reason = "browser.pane.unsupported"
               }),
@@ -221,13 +242,13 @@ export function createBrowserPane() {
     layout(win: BrowserWindow, bindingID: string, value?: BrowserPaneLayout) {
       const entry = owned(win, bindingID)
       if (!value) return entry.pages.forEach((page) => page.setVisible(false))
-      const page = entry.pages.get(value.tabID)
-      if (!page) return
       const bounds = value.bounds
       if (!value.visible || !bounds || bounds.width <= 0 || bounds.height <= 0) {
-        page.setVisible(false)
+        entry.pages.get(value.tabID)?.setVisible(false)
         return
       }
+      const page = load(entry, value.tabID)
+      if (!page) return
       entry.pages.forEach((other) => {
         if (other !== page) other.setVisible(false)
       })
@@ -264,12 +285,15 @@ export function createBrowserPane() {
     entry.report = undefined
     entry.requests.forEach((request) => request.abort.abort())
     entry.requests.clear()
+    const suspended = reason === "browser.pane.suspended"
+    if (suspended) publishState(entry, reason)
     entry.pages.forEach((page) => {
       void page.dispose().catch(() => undefined)
     })
     entry.pages.clear()
+    entry.tabs.clear()
     entry.focusedTabID = null
-    publishState(entry, reason)
+    if (!suspended) publishState(entry, reason)
     entries.delete(entry.bindingID)
     entry.registered.reject(new Error("browser.pane.registration.closed"))
     entry.cleanup?.()
@@ -278,7 +302,7 @@ export function createBrowserPane() {
 
   async function closePage(entry: Entry, tabID: Browser.TabID, error?: string) {
     const page = entry.pages.get(tabID)
-    if (!page)
+    if (!entry.tabs.has(tabID))
       throw new Error(
         "This tab is no longer available. Call browser.tabs.list({}) and use an existing tabID from this session.",
       )
@@ -287,15 +311,16 @@ export function createBrowserPane() {
       if (request.tabID === tabID) request.abort.abort()
     })
     entry.pages.delete(tabID)
-    if (focused) entry.focusedTabID = entry.pages.keys().next().value ?? null
-    await page.dispose()
+    entry.tabs.delete(tabID)
+    if (focused) entry.focusedTabID = entry.tabs.keys().next().value ?? null
+    await page?.dispose()
     publishState(entry, error)
   }
 
   function publishState(entry: Entry, error?: string) {
     const event = {
       type: "state" as const,
-      state: { tabs: Array.from(entry.pages.values(), (page) => page.state()), focusedTabID: entry.focusedTabID },
+      state: inventory(entry),
       ...(error === undefined ? {} : { error }),
     }
     const next = JSON.stringify(event)
@@ -309,9 +334,28 @@ export function createBrowserPane() {
     publish(entry, event)
   }
 
-  function create(entry: Entry, initialize = true, popupOptions?: Electron.BrowserWindowConstructorOptions) {
+  function inventory(entry: Entry): Browser.State {
+    return {
+      tabs: Array.from(entry.tabs, ([id, tab]) => entry.pages.get(id)?.state() ?? tab),
+      focusedTabID: entry.focusedTabID,
+    }
+  }
+
+  function load(entry: Entry, tabID: Browser.TabID) {
+    const page = entry.pages.get(tabID)
+    if (page) return page
+    const tab = entry.tabs.get(tabID)
+    return tab ? create(entry, true, undefined, tab) : undefined
+  }
+
+  function create(
+    entry: Entry,
+    initialize = true,
+    popupOptions?: Electron.BrowserWindowConstructorOptions,
+    restore?: Browser.Tab,
+  ) {
     if (!entry.network) throw new Error("Browser network is not ready; no tab was opened.")
-    const id = Browser.TabID.make(`tab_${crypto.randomUUID()}`)
+    const id = restore?.id ?? Browser.TabID.make(`tab_${crypto.randomUUID()}`)
     const fail = () => {
       if (entry.pages.has(id)) void closePage(entry, id, "page_crashed").catch(() => undefined)
     }
@@ -320,6 +364,7 @@ export function createBrowserPane() {
       partition: entry.partition,
       network: entry.network,
       initialize,
+      restore,
       popupOptions,
       fail,
       publish: (error) => {
@@ -332,6 +377,7 @@ export function createBrowserPane() {
       },
     })
     entry.pages.set(id, page)
+    entry.tabs.set(id, restore ?? page.state())
     void page.ready
       .then(() => {
         if (entry.pages.get(id) === page) publishState(entry)
@@ -342,15 +388,11 @@ export function createBrowserPane() {
 
   async function execute(entry: Entry, command: Browser.Command, signal: AbortSignal) {
     const action = command.action
-    const state = () => ({
-      tabs: Array.from(entry.pages.values(), (page) => page.state()),
-      focusedTabID: entry.focusedTabID,
-    })
     if (signal.aborted)
       throw new Error(
         "Browser request was cancelled. Do not repeat a mutating action until you have inspected its outcome.",
       )
-    if (action.type === "tabs.list") return { value: state(), files: [] }
+    if (action.type === "tabs.list") return { value: inventory(entry), files: [] }
     if (action.type === "tabs.open") {
       const page = create(entry)
       if (action.focus !== false) focus(entry, page.state().id)
@@ -362,19 +404,20 @@ export function createBrowserPane() {
       publishState(entry)
       return { value: page.state(), files: [] }
     }
-    const page = entry.pages.get(action.tabID)
-    if (!page)
+    const tab = inventory(entry).tabs.find((tab) => tab.id === action.tabID)
+    if (!tab)
       throw new Error(
         "Browser tab is unavailable. Call browser.tabs.list({}) and use an existing tabID from this session; a closed tab is not replaced automatically.",
       )
     if (action.type === "tabs.focus") {
       focus(entry, action.tabID)
-      return { value: page.state(), files: [] }
+      return { value: tab, files: [] }
     }
     if (action.type === "tabs.close") {
       await closePage(entry, action.tabID)
-      return { value: state(), files: [] }
+      return { value: inventory(entry), files: [] }
     }
+    const page = entry.pages.get(action.tabID) ?? create(entry, true, undefined, tab)
     await page.ready
     const result = await page.execute(command, signal)
     publishState(entry)

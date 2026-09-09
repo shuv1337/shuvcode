@@ -895,6 +895,7 @@ export const dict = {
 
   "session.browser.address": "Browser address",
   "session.browser.replaced": "Browser control moved to another desktop window.",
+  "session.browser.suspended": "Browser suspended. Interact with this session to reconnect.",
   "session.browser.address.placeholder": "Enter a URL",
 
   "titlebar.update": "Update",

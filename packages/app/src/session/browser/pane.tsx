@@ -7,19 +7,15 @@ import { createResizeObserver } from "@solid-primitives/resize-observer"
 import { createEffect, For, on, onCleanup, Show } from "solid-js"
 import { createStore } from "solid-js/store"
 import { useLanguage } from "@/runtime/i18n/language"
-import type { BrowserPaneRegistration } from "@/runtime/platform/browser-pane"
 import { usePlatform } from "@/runtime/platform/platform"
 import type { createSessionBrowser } from "./model"
 
-export function SessionBrowserPane(props: {
-  registration: BrowserPaneRegistration
-  browser: ReturnType<typeof createSessionBrowser>
-  visible: boolean
-}) {
+export function SessionBrowserPane(props: { browser: ReturnType<typeof createSessionBrowser>; visible: boolean }) {
   const platform = usePlatform()
   const language = useLanguage()
   const dialog = useDialog()
   const state = props.browser.active
+  const registration = props.browser.registration
   const button = { variant: "ghost", size: "large" } as const
   const [store, setStore] = createStore({
     address: "",
@@ -45,7 +41,7 @@ export function SessionBrowserPane(props: {
     if (!surface) return
     const tab = state()
     if (!tab) {
-      props.registration.setLayout()
+      registration()?.setLayout()
       return
     }
     const rect = surface.getBoundingClientRect()
@@ -71,7 +67,7 @@ export function SessionBrowserPane(props: {
         paint.fillRect(0, 0, 1, 1)
       }
       const rgba = paint?.getImageData(0, 0, 1, 1).data
-      props.registration.setLayout({
+      registration()?.setLayout({
         tabID: tab.id,
         visible,
         bounds: { x: left, y: top, width: Math.max(0, right - left), height: Math.max(0, bottom - top) },
@@ -99,8 +95,12 @@ export function SessionBrowserPane(props: {
         () => store.visible,
         () => props.visible,
         () => state()?.id,
+        registration,
       ],
-      () => schedule(300),
+      () => {
+        layout = undefined
+        schedule(300)
+      },
     ),
   )
   // ResizeObserver runs after layout in the same frame; measuring here instead of on the next
@@ -119,7 +119,7 @@ export function SessionBrowserPane(props: {
   createEventListener(document, "visibilitychange", () => setStore("visible", document.visibilityState === "visible"))
   onCleanup(() => {
     if (frame !== undefined) cancelAnimationFrame(frame)
-    props.registration.setLayout()
+    registration()?.setLayout()
   })
 
   return (
@@ -179,7 +179,13 @@ export function SessionBrowserPane(props: {
           {props.browser.error()}
         </div>
       </Show>
-      <div ref={surface} class="min-h-0 flex-1 bg-v2-background-bg-base" />
+      <div ref={surface} class="min-h-0 flex-1 bg-v2-background-bg-base flex items-center justify-center">
+        <Show when={props.browser.suspended()}>
+          <p class="px-6 text-center text-13-regular text-v2-text-text-subtle" role="status">
+            {language.t("session.browser.suspended")}
+          </p>
+        </Show>
+      </div>
     </aside>
   )
 }
