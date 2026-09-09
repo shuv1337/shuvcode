@@ -76,14 +76,14 @@ List the files and directories, other than the current working directory, that a
 
 const SUMMARY_RULES = `Rules:
 - Keep each section concise. Use terse, single-line bullets, not prose paragraphs or nested lists.
-- Prefer short references over detailed restatement. It is fine to leave out information the next agent can recover from the code, the files listed above, or the recent messages that follow this summary.
+- Prefer short references over detailed restatement. It is fine to leave out information the next agent can recover from the code or the files listed above.
 - Preserve exact file paths, symbols, commands, error strings, URLs, and identifiers.
 - Carry forward only user questions or requests that remain unanswered or require further action. Do not repeat ones that newer history has answered or resolved. Preserve exact wording when carrying one forward.
 - Preserve consequential workflow state, including whether changes are uncommitted, committed, pushed, under review, or merged.
 - Do not mention the summary process or that context was compacted.`
 
 const SUMMARY_HEADINGS = SUMMARY_TEMPLATE.split("\n").filter((line) => line.startsWith("##"))
-const LEGACY_HEADINGS = ["## Additional Context", "## Important Details"]
+const LEGACY_HEADING = "## Additional Context"
 
 export type Settings = {
   auto: boolean
@@ -576,8 +576,8 @@ export const layer = Layer.effect(
         (message): message is SessionMessage.CompactionCompleted =>
           message.type === "compaction" && message.status === "completed",
       )
-      // Checkpoints from earlier templates ran far longer than this one asks for; their catch-all headings identify them.
-      const legacy = LEGACY_HEADINGS.some((heading) => previous?.summary.includes(heading))
+      // Checkpoints from the previous template ran far longer than this one asks for; its catch-all heading identifies them.
+      const legacy = previous?.summary.includes(LEGACY_HEADING) ?? false
       const prepared = yield* compactionRequest(input, history.messages, [
         Message.user(buildPrompt(previous !== undefined, legacy)),
       ])
