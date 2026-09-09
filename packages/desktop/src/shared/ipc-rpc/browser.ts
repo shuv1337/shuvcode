@@ -10,6 +10,7 @@ const endpoint = Schema.Struct({
   password: Schema.optionalKey(text(4_096)),
 })
 const target = Schema.Struct({
+  serverKey: text(16_384),
   sessionID: text(256).check(Schema.isStartsWith("ses")),
   endpoint,
   restore: Schema.optionalKey(Browser.State),

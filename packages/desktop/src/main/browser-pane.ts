@@ -13,6 +13,8 @@ import { createBrowserNetwork, type BrowserNetwork } from "./browser/network"
 import { destinationOrigin } from "./browser/policy"
 import { emitIpcEvent } from "./ipc-events"
 import { SidecarCredentials } from "./service/sidecar-credentials"
+import { createBrowserRestoreStore } from "./browser/restore"
+import type { StateStore } from "./storage/state"
 
 type Entry = {
   bindingID: string
@@ -28,10 +30,12 @@ type Entry = {
   partition: string
   lastState?: string
   network?: BrowserNetwork
+  storageKey: string
 }
 
-export function createBrowserPane() {
+export function createBrowserPane(storage: StateStore) {
   const entries = new Map<string, Entry>()
+  const restore = createBrowserRestoreStore(storage)
   // Keep long-lived RPC requests off Chromium's shared HTTP connection pool.
   const runtime = ManagedRuntime.make(NodeHttpClient.layerNodeHttp)
   let disposed = false
@@ -42,6 +46,16 @@ export function createBrowserPane() {
       if (entries.has(bindingID)) throw new Error("browser.pane.owner.invalid")
       if (win.isDestroyed() || win.webContents.isDestroyed()) throw new Error("browser.pane.owner.unavailable")
       const sessionID = SessionID.make(target.sessionID)
+      const storageKey = `${target.serverKey}\n${sessionID}`
+      const saved = restore.load(storageKey)
+      const previous = target.restore ?? {
+        tabs: saved.tabs.map((tab) => ({
+          ...tab,
+          title: "",
+          generation: 0,
+        })),
+        focusedTabID: saved.focusedTabID,
+      }
       const entry: Entry = {
         bindingID,
         win,
@@ -50,7 +64,7 @@ export function createBrowserPane() {
         requests: new Map(),
         pages: new Map(),
         tabs: new Map(
-          target.restore?.tabs.map((tab) => [
+          previous.tabs.map((tab) => [
             tab.id,
             {
               ...tab,
@@ -61,8 +75,9 @@ export function createBrowserPane() {
             },
           ]),
         ),
-        focusedTabID: target.restore?.focusedTabID ?? null,
+        focusedTabID: previous.focusedTabID,
         partition: `opencode-browser-${crypto.randomUUID()}`,
+        storageKey,
       }
       // "unsupported" means the server has no browser plugin; the renderer stops retrying.
       let reason: "browser.pane.unsupported" | "browser.pane.replaced" | "browser.pane.suspended" | undefined
@@ -260,7 +275,9 @@ export function createBrowserPane() {
       await execute(entry, { action: command, files: [] }, new AbortController().signal)
     },
     async close(win: BrowserWindow, bindingID: string) {
-      close(owned(win, bindingID))
+      const entry = owned(win, bindingID)
+      restore.remove(entry.storageKey)
+      close(entry)
     },
     async dispose() {
       disposed = true
@@ -323,6 +340,16 @@ export function createBrowserPane() {
       state: inventory(entry),
       ...(error === undefined ? {} : { error }),
     }
+    // Teardown publishes an empty inventory to the renderer, but the saved URLs survive app exit.
+    if (entry.report)
+      restore.save(entry.storageKey, {
+        tabs: event.state.tabs.map((tab) => ({
+          id: tab.id,
+          // A restored page can publish before Chromium assigns its URL.
+          url: tab.url || entry.tabs.get(tab.id)?.url || "about:blank",
+        })),
+        focusedTabID: entry.focusedTabID,
+      })
     const next = JSON.stringify(event)
     if (entry.lastState === next) return
     entry.lastState = next

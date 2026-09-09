@@ -95,7 +95,11 @@ export const { use: useBrowserAttachments, provider: BrowserAttachmentsProvider 
         const connection = createBrowserConnection({
           pane,
           // Resolve the current port at every wake, including after sidecar replacement.
-          target: () => ({ sessionID, endpoint: { ...server.conn.http, url: server.ctx.sdk.url } }),
+          target: () => ({
+            serverKey: server.key,
+            sessionID,
+            endpoint: { ...server.conn.http, url: server.ctx.sdk.url },
+          }),
           focus: (tabID) => focus.get(id)?.forEach((listener) => listener(tabID)),
           change: (state) => {
             if (state.error === "browser.pane.unsupported") {

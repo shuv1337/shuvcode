@@ -1,5 +1,6 @@
 import { For, Match, Show, Switch, createEffect, createMemo, onCleanup, type JSX } from "solid-js"
 import { createMediaQuery } from "@solid-primitives/media"
+import { createEventListener } from "@solid-primitives/event-listener"
 import { DragDropProvider, PointerSensor } from "@dnd-kit/solid"
 import { isSortable } from "@dnd-kit/solid/sortable"
 import { Accessibility, AutoScroller, Feedback, PointerActivationConstraints } from "@dnd-kit/dom"
@@ -191,6 +192,7 @@ export function SessionSidePanel(props: {
 
   let fileFilter: HTMLInputElement | undefined
   let tabList: HTMLDivElement | undefined
+  let selectionEvent: Event | undefined
   const temporaryTab = tabs().preview
   const previewTab = (value: string) => {
     const next = normalizeTab(value)
@@ -299,11 +301,24 @@ export function SessionSidePanel(props: {
                       tabs().move(source.id.toString(), source.index)
                     }}
                   >
-                    <Tabs value={activeTab()} onChange={activateTab}>
+                    <Tabs
+                      value={activeTab()}
+                      onChange={(value) => {
+                        // Kobalte selects the first tab while session triggers register.
+                        // Persist input events only; createSessionTabs owns fallback selection.
+                        if (selectionEvent && selectionEvent.eventPhase !== Event.NONE) activateTab(value)
+                      }}
+                    >
                       <div class="session-review-v2-tabs-bar sticky top-0 shrink-0 flex items-center">
                         <Tabs.List
                           ref={(el: HTMLDivElement) => {
                             tabList = el
+                            createEventListener(
+                              el,
+                              ["pointerdown", "click", "keydown"],
+                              (event) => (selectionEvent = event),
+                              { capture: true },
+                            )
                             const stop = createFileTabListSync({ el, contextOpen })
                             onCleanup(stop)
                           }}

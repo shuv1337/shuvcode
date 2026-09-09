@@ -12,6 +12,8 @@ import { bindIpcEvents, ipcEventStream } from "../../src/main/ipc-events"
 import { createBrowserConnection, type BrowserConnectionState } from "../../../app/src/session/browser/connection"
 import type { BrowserPaneEvent } from "../../../app/src/runtime/platform/browser-pane"
 import { Smoke } from "./contract"
+import { openDatabase } from "../../src/main/storage/database"
+import { createStateStore } from "../../src/main/storage/state"
 
 async function main() {
   app.setPath("userData", path.join(process.env.SMOKE_ROOT!, "electron-data"))
@@ -36,7 +38,9 @@ async function main() {
   const client = OpenCode.make({ baseUrl: endpoint.url, headers })
   const location = { directory: process.env.SMOKE_SERVER_FILES! }
   const session = await client.session.create({ title: "Idle browser", location })
-  const pane = createBrowserPane()
+  const database = openDatabase(":memory:")
+  const storage = createStateStore(database.db)
+  const pane = createBrowserPane(storage)
   const win = new BrowserWindow({ show: false, width: 1100, height: 800, webPreferences: { sandbox: true } })
   await win.loadURL("about:blank")
   win.showInactive()
@@ -53,7 +57,7 @@ async function main() {
   )
   const states: BrowserConnectionState[] = []
   const connection = createBrowserConnection({
-    target: () => ({ sessionID: session.id, endpoint }),
+    target: () => ({ serverKey: "browser-idle", sessionID: session.id, endpoint }),
     change: (state) => states.push(state),
     focus: () => {},
     pane: {
@@ -117,15 +121,13 @@ async function main() {
       )
     assert(!result.error, result.output)
     assert(result.output.includes("Browser connection restored"))
-    const background = await client
-      .rpc(Smoke)
-      .execute(
-        {
-          sessionID: session.id,
-          code: `return await tools.browser.snapshot({tabID: ${JSON.stringify(saved.tabs[1].id)}})`,
-        },
-        { location },
-      )
+    const background = await client.rpc(Smoke).execute(
+      {
+        sessionID: session.id,
+        code: `return await tools.browser.snapshot({tabID: ${JSON.stringify(saved.tabs[1].id)}})`,
+      },
+      { location },
+    )
     assert(!background.error, background.output)
     assert.equal(loads.get("/second"), 2, "an agent can load an inactive restored tab without user focus")
     if (process.env.SMOKE_EVIDENCE) {
@@ -139,6 +141,8 @@ async function main() {
   } finally {
     connection.dispose()
     await pane.dispose()
+    storage.close()
+    database.close()
     await Effect.runPromise(Fiber.interrupt(events))
     await Effect.runPromise(unbind)
     win.destroy()

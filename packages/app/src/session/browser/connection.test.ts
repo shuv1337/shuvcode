@@ -29,7 +29,7 @@ function fixture() {
   }[] = []
   const endpoint = { url: "http://localhost:4096" }
   const connection = createBrowserConnection({
-    target: () => ({ sessionID: "ses_browser", endpoint: { ...endpoint } }),
+    target: () => ({ serverKey: "browser-test", sessionID: "ses_browser", endpoint: { ...endpoint } }),
     change: (state) => states.push(state),
     focus: () => {},
     pane: {
@@ -66,7 +66,12 @@ test("suspension retains tabs and reconnects once on demand using the current en
     app.connection.wake()
     app.connection.wake()
     expect(app.calls).toHaveLength(2)
-    expect(app.calls[1].target).toEqual({ sessionID: "ses_browser", endpoint: app.endpoint, restore: browser })
+    expect(app.calls[1].target).toEqual({
+      serverKey: "browser-test",
+      sessionID: "ses_browser",
+      endpoint: app.endpoint,
+      restore: browser,
+    })
     expect(app.states.at(-1)?.suspended).toBe(false)
     app.calls[0].emit({ type: "state", state: null, error: "browser.pane.registration.closed" })
     expect(app.states.at(-1)?.registration).toBeDefined()
