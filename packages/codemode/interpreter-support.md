@@ -214,6 +214,7 @@ ultimate source of truth.
 - [x] `Object.keys` over arrays and tool references.
 - [x] Object identity is preserved by in-CodeMode Object helpers.
 - [x] Prototype traversal and mutation through `__proto__`, `constructor`, and `prototype` are blocked.
+- [x] Circular references are rejected when created (`o.self = o`, `array.push(array)`), not at serialization as in JS.
 - [ ] Legal own data fields named `__proto__`, `constructor`, or `prototype` are rejected at JSON/tool boundaries and
       cannot be created, read, or written in CodeMode; tool path segments with those names remain supported.
 - [x] `Object.is` for supported data values.
@@ -364,7 +365,8 @@ ultimate source of truth.
       or without `new`.
 - [x] `AggregateError` with the `(errors, message?)` signature and an own `errors` array, constructed directly or by
       an all-rejected `Promise.any`; direct construction accepts custom synchronous iterators and generators.
-- [x] Error `name`/`message`, error inheritance through `instanceof`, and plain-data serialization.
+- [x] Error `name`/`message`, error inheritance through `instanceof`, and plain-data serialization. Errors have no
+      `stack`; the diagnostic carries the source location instead.
 - [x] `instanceof` for Date, RegExp, Map, Set, URL, URLSearchParams, Array, Object, Promise, and Error types.
 - [x] Catchable user throws, runtime failures raised during interpreted evaluation, awaited tool failures, and awaited
       tool-call-limit failures; parse/compile failures, cooperative timeout, and output bounding remain outside program
