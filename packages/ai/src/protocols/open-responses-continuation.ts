@@ -181,7 +181,7 @@ export const driver = (input: DriverInput): WebSocketChannelDriver => {
               responseID,
               request,
               // Completion can re-encrypt reasoning. Callers replay the item already emitted by output_item.done.
-              output: event.response?.output
+              output: event.response?.output?.length
                 ? event.response.output.map((item) =>
                     item.type === "reasoning" && item.id !== undefined
                       ? (output.find((done) => done.type === item.type && done.id === item.id) ?? item)
