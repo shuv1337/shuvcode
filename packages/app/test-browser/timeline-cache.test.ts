@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test"
 import type { SessionMessageInfo } from "@opencode/client/promise"
-import { createMemo, createRoot, onCleanup } from "solid-js"
+import { batch, createMemo, createRoot, onCleanup } from "solid-js"
 import { createStore } from "solid-js/store"
 import { ServerScope, SessionRouteKey, SessionStateKey } from "../src/runtime/server/scope"
 import { createTimelineCache } from "../src/session/timeline/cache"
@@ -143,6 +143,35 @@ test("disposes views on workspace changes while the destination is not rendered"
   }
   expect(input.disposed).toEqual(["ses_a", "ses_a"])
 })
+
+for (const order of ["session-first", "workspace-first"] as const) {
+  test(`keeps views live across five workspaces when updates are ${order}`, () => {
+    const input = setup()
+    const render = createRoot((dispose) => ({ selected: createMemo(input.cache), dispose }))
+    const visited = ["ses_a"]
+    try {
+      ;["ses_b", "ses_c", "ses_d", "ses_e", "ses_a", "ses_c", "ses_b", "ses_e", "ses_d", "ses_a"].forEach(
+        (id, index) => {
+          batch(() => {
+            if (order === "workspace-first") input.setState("directory", `/repo/${id}`)
+            input.setState("id", id)
+            if (order === "session-first") input.setState("directory", `/repo/${id}`)
+          })
+          expect(input.disposed).toEqual(visited)
+          input.setState("messages", id, [
+            { id: `msg_live_${index}`, type: "user", text: "Live update", time: { created: index + 3 } },
+          ])
+          expect((render.selected() as HTMLDivElement).dataset.messages).toBe(`msg_live_${index}`)
+          expect(input.views.get(id)!.active()).toBe(true)
+          visited.push(id)
+        },
+      )
+    } finally {
+      render.dispose()
+      input.dispose()
+    }
+  })
+}
 
 test("evicts the least recently selected view and disposes all retained owners", () => {
   const input = setup()
