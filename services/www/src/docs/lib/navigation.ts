@@ -30,7 +30,6 @@ export const docsSections: DocsSection[] = [
       {
         title: "Configure",
         items: [
-          { title: "LSP", slug: "lsp" },
           { title: "Agents", slug: "agents" },
           { title: "Models", slug: "models" },
           { title: "Skills", slug: "skills" },
@@ -46,8 +45,8 @@ export const docsSections: DocsSection[] = [
           { title: "MCP servers", slug: "mcp-servers" },
           { title: "Permissions", slug: "permissions" },
           { title: "Instructions", slug: "instructions" },
-          { title: "Session sharing", slug: "sharing" },
-          { title: "Session warming", slug: "warming" },
+          { title: "Sharing", slug: "sharing" },
+          { title: "Warming", slug: "warming" },
         ],
       },
       {
@@ -67,11 +66,8 @@ export const docsSections: DocsSection[] = [
         items: [
           { title: "Intro", slug: "cli" },
           { title: "Config", slug: "cli/config" },
-        ],
-      },
-      {
-        title: "Configure",
-        items: [
+          { title: "Web", slug: "cli/web" },
+          { title: "Commands", slug: "cli/commands" },
           { title: "Theme", slug: "cli/theme" },
           { title: "Plugins", slug: "cli/plugins" },
           { title: "Keybinds", slug: "cli/keybinds" },
