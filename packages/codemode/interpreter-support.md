@@ -31,8 +31,8 @@ ultimate source of truth.
 - [x] `null`, `undefined`, booleans, finite and non-finite numbers, and strings.
 - [x] Array literals, including holes and spread from arrays, strings, Maps, Sets, URLSearchParams, custom synchronous
       iterators, and synchronous generators.
-- [x] Object literals with shorthand, computed string/number keys, and spread from plain data objects; `null` and
-      `undefined` are no-ops, while arrays are rejected.
+- [x] Object literals with shorthand, computed string/number keys, and spread following ToObject: data objects and
+      arrays copy own enumerable keys, strings copy index keys, and other values contribute nothing.
 - [x] Template literals with interpolation.
 - [x] Regular-expression literals.
 - [x] `NaN` and `Infinity` globals.
@@ -70,7 +70,7 @@ ultimate source of truth.
 - [x] `for`, `while`, and `do...while`.
 - [x] `for...of` over arrays, strings, Maps, Sets, URLSearchParams, custom synchronous iterators, and confined
       synchronous generators. Abrupt completion invokes the iterator's optional `return()`.
-- [x] `for...in` over own keys of plain objects, arrays, and tool references.
+- [x] `for...in` over own keys of plain objects, arrays, strings, and tool references; other values iterate nothing.
 - [x] Unlabeled `break` and `continue`.
 - [x] `try`, `catch`, optional catch bindings, and `finally`.
 - [x] `throw` with arbitrary values.
@@ -210,7 +210,9 @@ ultimate source of truth.
       primitive wrapper objects (`Object(1)`) are rejected explicitly.
 - [x] Computed property names and object spread.
 - [x] `Object.keys`, `Object.values`, `Object.entries`, `Object.hasOwn`, `Object.assign`, and `Object.fromEntries`, with
-      synchronous iterator support for `fromEntries`.
+      synchronous iterator support for `fromEntries`. Sources follow ToObject: strings enumerate by index, other
+      primitives and wrappers contribute nothing, and `null`/`undefined` throw. `Object.assign` accepts array
+      targets for index keys only; a primitive target is a `TypeError` rather than a boxed object.
 - [x] `Object.keys` over arrays and tool references.
 - [x] Object identity is preserved by in-CodeMode Object helpers.
 - [x] `__proto__`, `constructor`, and `prototype` are ordinary own data keys. `x.constructor` without an own key resolves
