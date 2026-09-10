@@ -722,6 +722,17 @@ describe("Set", () => {
 })
 
 describe("stdlib integration", () => {
+  test("constructor follows own keys, shadowing, writes, and new", async () => {
+    expect(
+      await value(`return [JSON.parse('{"constructor":"Foo"}').constructor, ({ constructor: 1 }).constructor]`),
+    ).toEqual(["Foo", 1])
+    expect(await value(`const Array = 5; return [].constructor.isArray([])`)).toBe(true)
+    expect(await value(`const o = {}; o.constructor = 7; return o.constructor`)).toBe(7)
+    expect(await value(`return new ([].constructor)(3).length`)).toBe(3)
+    expect(await value(`return typeof ({}).constructor`)).toBe("function")
+    expect(await value(`return ({}).constructor.constructor`)).toBeNull()
+  })
+
   test("new dispatches on the constructor value, not its name", async () => {
     expect(await value(`const D = Date; return new D(0) instanceof Date`)).toBe(true)
     expect(await value(`const make = (C) => new C([["a", 1]]); return make(Map).get("a")`)).toBe(1)
