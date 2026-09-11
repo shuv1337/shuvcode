@@ -1021,7 +1021,7 @@ describe("ModelResolver", () => {
                     baseURL: "https://provider.example/v1",
                     headers: { "x-provider": "header" },
                     body: { custom: true },
-                    providerOptions,
+                    ...providerOptions,
                   })
                   return LanguageModel.make({ id: modelID, provider: "native-provider", route: native.route })
                 },
@@ -1039,11 +1039,7 @@ describe("ModelResolver", () => {
       const packages = [
         ["@ai-sdk/anthropic", "@opencode/ai/providers/anthropic", "api-model"],
         ["@ai-sdk/amazon-bedrock", "@opencode/ai/providers/amazon-bedrock", "api-model"],
-        [
-          "@ai-sdk/amazon-bedrock/mantle",
-          "@opencode/ai/providers/amazon-bedrock/mantle/chat",
-          "openai.gpt-oss-120b",
-        ],
+        ["@ai-sdk/amazon-bedrock/mantle", "@opencode/ai/providers/amazon-bedrock/mantle/chat", "openai.gpt-oss-120b"],
         ["@ai-sdk/azure", "@opencode/ai/providers/azure/responses", "api-model"],
         ["@ai-sdk/cerebras", "@opencode/ai/providers/cerebras", "api-model"],
         ["@ai-sdk/deepinfra", "@opencode/ai/providers/deepinfra", "api-model"],
@@ -1112,10 +1108,8 @@ describe("ModelResolver", () => {
                   accessToken: "vertex-token",
                   location: "eu",
                   project: "vertex-project",
-                  providerOptions: {
-                    thinking: { type: "adaptive", display: "summarized" },
-                    effort: "high",
-                  },
+                  thinking: { type: "adaptive", display: "summarized" },
+                  effort: "high",
                 })
                 return LanguageModel.make({ id: modelID, provider: "native-provider", route: native.route })
               },

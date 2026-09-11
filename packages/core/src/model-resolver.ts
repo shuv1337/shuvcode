@@ -225,7 +225,7 @@ const resolveCatalogModel = Effect.fn("ModelResolver.resolveCatalogModel")(funct
   if (!native) return yield* unsupported(resolved)
 
   const specifier = native
-  const mapped = yield* prepareProviderSettings(resolved, mapping?.settings ?? configured)
+  const mapped = yield* prepareProviderSettings(resolved, Provider.nativeSettings(mapping?.settings ?? configured))
   const module = yield* (dependencies?.loadPackage ?? Provider.loadPackage)(specifier).pipe(
     Effect.mapError((error) => initialization(resolved, "load", error.cause)),
   )
