@@ -37,6 +37,7 @@ export const docsSections: DocsSection[] = [
           { title: "Commands", slug: "commands" },
           { title: "Plugins", slug: "plugins" },
           { title: "Providers", slug: "providers" },
+          { title: "Websearch", slug: "websearch" },
           { title: "Snapshots", slug: "snapshots" },
           { title: "Compaction", slug: "compaction" },
           { title: "Formatters", slug: "formatters" },
@@ -136,6 +137,7 @@ export const docsSections: DocsSection[] = [
         items: [
           { title: "Intro", slug: "console" },
           { title: "Models", slug: "console/models" },
+          { title: "Websearch", slug: "console/websearch" },
           { title: "Go", slug: "console/go" },
         ],
       },

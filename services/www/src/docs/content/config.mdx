@@ -271,8 +271,8 @@ Set the maximum number of lines and bytes retained from a tool result.
 
 ### Search
 
-Use `"random"` to randomly choose a search provider for each session and keep using it until it
-returns HTTP 429. OpenCode then retries the query with another available provider.
+Choose how OpenCode searches the web. Use `"random"` to select an available
+provider automatically.
 
 ```jsonc
 {
@@ -282,12 +282,8 @@ returns HTTP 429. OpenCode then retries the query with another available provide
 }
 ```
 
-- Rate-limited providers cool down for `Retry-After`, or 60 seconds if it is missing or invalid.
-- When every provider is cooling down, the search fails without waiting.
-- Each session remembers its preferred provider; cooldowns are shared within a Location.
-- State is kept in memory. Moving a session or restarting its Location services resets its preference.
-- API and plugin queries without session context share a Location-level preference.
-- Set `provider` to a provider ID to disable automatic switching, or set `websearch` to `false` to disable search.
+See the [websearch guide](/websearch) for providers, credentials, selection,
+rate limits, and disabling search.
 
 ### MCP
 
