@@ -1521,7 +1521,7 @@ manifest is:
     "./rpc": "./src/rpc.ts"
   },
   "dependencies": {
-    "@opencode/plugin": "beta"
+    "@opencode/plugin": "latest"
   }
 }
 ```
@@ -1531,9 +1531,8 @@ The `./rpc` export is optional; include it when publishing a shared
 without loading your implementation.
 
 Use versions compatible with the OpenCode release you target and test the
-installed package, not only a workspace-linked copy. Because the plugin API is
-beta, publish compatible plugin updates when V2 entrypoints or contracts
-change.
+installed package, not only a workspace-linked copy. Publish a compatible
+plugin update when you adopt a newer API contract.
 
 ## Support V1
 
