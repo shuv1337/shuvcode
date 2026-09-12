@@ -83,6 +83,7 @@ const WorkspaceDestinationSetting: Component = () => {
       description={language.t("settings.workspaces.default.description")}
     >
       <Select
+        data-action="settings-workspace-destination"
         options={options()}
         current={options().find((option) => option.value === settings.workspaces.defaultDestination())}
         value={(option) => option.value}
@@ -467,7 +468,13 @@ export const SettingsGeneral: Component = () => {
           title={language.t("settings.updates.row.check.title")}
           description={language.t("settings.updates.row.check.description")}
         >
-          <Button size="normal" variant="neutral" disabled={!updater.action().run} onClick={() => updater.run()}>
+          <Button
+            data-action="settings-check-updates"
+            size="normal"
+            variant="neutral"
+            disabled={!updater.action().run}
+            onClick={() => updater.run()}
+          >
             {language.t(updater.action().label)}
           </Button>
         </SettingsRow>

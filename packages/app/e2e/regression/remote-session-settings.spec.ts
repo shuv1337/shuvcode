@@ -35,7 +35,7 @@ test("session settings use the remote server context", async ({ page }) => {
   await expect(page.locator('[data-titlebar-tab][data-active="true"]')).toHaveCount(0)
   await expect(page.getByRole("button", { name: "Home", exact: true })).toHaveAttribute("aria-pressed", "false")
   await expect(page.getByRole("dialog")).toHaveCount(0)
-  await expect(settings.getByRole("tablist")).toHaveCSS("width", "328px")
+  await expect(settings.getByRole("complementary")).toHaveCSS("width", "328px")
   await expect(sessionHeading).toBeHidden()
   await expect(settings.getByText("Servers", { exact: true })).toBeVisible()
   await expect(settings.getByRole("tab", { name: "Models", exact: true })).toHaveCount(0)

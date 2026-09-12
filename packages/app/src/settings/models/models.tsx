@@ -4,7 +4,7 @@ import { Switch } from "@opencode/ui/switch"
 import { Icon } from "@opencode/ui/icon"
 import { IconButton } from "@opencode/ui/icon-button"
 import { TextInput } from "@opencode/ui/text-input"
-import { type Component, For, Show } from "solid-js"
+import { type Component, createEffect, For, on, onCleanup, Show } from "solid-js"
 import { Schema } from "effect"
 import { Persistence } from "@/runtime/persistence/schema"
 import { useLanguage } from "@/runtime/i18n/language"
@@ -24,10 +24,24 @@ export const ModelProvidersSchema = Schema.Struct({
   collapsed: Persistence.record(Persistence.fallback(Schema.Boolean, () => false)),
 })
 
-export const SettingsModels: Component = () => {
+export const SettingsModels: Component<{ active?: boolean; autofocus?: boolean }> = (props) => {
   const language = useLanguage()
   const models = useModels()
   const serverSdk = useServerSDK()
+  let search: HTMLInputElement | undefined
+  createEffect(
+    on(
+      () => props.active ?? true,
+      (active) => {
+        if (!active) return
+        const frame = requestAnimationFrame(() => {
+          if (props.active !== false && props.autofocus !== false && search?.isConnected)
+            search.focus({ preventScroll: true })
+        })
+        onCleanup(() => cancelAnimationFrame(frame))
+      },
+    ),
+  )
   const [store, setStore] = persisted(
     Persist.serverGlobal(serverSdk.scope, "settings-v2.models.providers"),
     ModelProvidersSchema,
@@ -67,6 +81,7 @@ export const SettingsModels: Component = () => {
         </div>
         <div class="settings-tab-search">
           <TextInput
+            ref={search}
             type="search"
             appearance="base"
             value={list.filter()}

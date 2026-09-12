@@ -22,7 +22,9 @@ test.beforeEach(async ({ page }) => {
   )
   await page.goto("/")
   await page.getByRole("button", { name: "Settings", exact: true }).click()
-  await expect(page.getByTestId("settings-screen")).toBeFocused()
+  await expect(
+    page.getByTestId("settings-screen").getByRole("combobox", { name: "Search settings", exact: true }),
+  ).toBeFocused()
 })
 
 for (const viewport of [
@@ -38,7 +40,7 @@ for (const viewport of [
     test("every settings page leaves room below its final content", async ({ page }) => {
       await page.setViewportSize(viewport)
       const settings = page.getByTestId("settings-screen")
-      const panel = settings.locator(":scope > .settings > .settings-panel:visible")
+      const panel = settings.locator(".settings-content > .settings-panel:visible")
       if (viewport.bottom) {
         const toggle = settings.locator('[data-action="settings-mobile-titlebar-bottom"]')
         await toggle.locator('[data-slot="switch-control"]').click()

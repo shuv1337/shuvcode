@@ -1,6 +1,6 @@
 import { Tabs } from "@opencode/ui/tabs"
 import { useDialog } from "@opencode/ui/context/dialog"
-import { createEffect, createMemo, onMount, Show, Switch, Match, type Accessor } from "solid-js"
+import { createEffect, createMemo, on, onCleanup, onMount, Show, Switch, Match, type Accessor } from "solid-js"
 import { createStore } from "solid-js/store"
 import { useLanguage } from "@/runtime/i18n/language"
 import { useLayout } from "@/shell/state/layout"
@@ -32,37 +32,39 @@ import { SettingsNavigation, type SettingsNavGroup } from "./navigation"
 import { SettingsProjectGeneral } from "./workspaces/project"
 import { ProjectSettingsExtensions } from "./workspaces/project-extensions"
 import { useSettingsSurface } from "./surface"
+import { pageIcons } from "./pages"
+import { revealSettingsSearch } from "./search-reveal"
 import "@/settings/settings.css"
 
 const rootClientTabs = [
-  { value: "general", icon: "sliders", label: "settings.tab.preferences" },
-  { value: "appearance", icon: "appearance", label: "settings.general.section.appearance" },
-  { value: "notifications", icon: "notifications", label: "settings.tab.notifications" },
-  { value: "shortcuts", icon: "keyboard", label: "settings.tab.shortcuts" },
+  { value: "general", icon: pageIcons.general, label: "settings.tab.preferences" },
+  { value: "appearance", icon: pageIcons.appearance, label: "settings.general.section.appearance" },
+  { value: "notifications", icon: pageIcons.notifications, label: "settings.tab.notifications" },
+  { value: "shortcuts", icon: pageIcons.shortcuts, label: "settings.tab.shortcuts" },
 ] as const
 
 const serverTabs = [
-  { value: "projects", icon: "folder", label: "settings.tab.projects" },
-  { value: "workspaces", icon: "outline-worktree", label: "settings.tab.workspaces" },
-  { value: "providers", icon: "providers", label: "settings.providers.title" },
-  { value: "models", icon: "models", label: "settings.models.title" },
-  { value: "extensions", icon: "extensions", label: "settings.tab.extensions" },
+  { value: "projects", icon: pageIcons.projects, label: "settings.tab.projects" },
+  { value: "workspaces", icon: pageIcons.workspaces, label: "settings.tab.workspaces" },
+  { value: "providers", icon: pageIcons.providers, label: "settings.providers.title" },
+  { value: "models", icon: pageIcons.models, label: "settings.models.title" },
+  { value: "extensions", icon: pageIcons.extensions, label: "settings.tab.extensions" },
 ] as const
 
 const trailingTabs = [
-  { value: "experimental", icon: "flask", label: "settings.tab.experimental" },
-  { value: "about", icon: "info", label: "settings.tab.about" },
+  [{ value: "experimental", icon: pageIcons.experimental, label: "settings.tab.experimental" }],
+  [{ value: "about", icon: pageIcons.about, label: "settings.tab.about" }],
 ] as const
 
 const nestedServerTabs = [
-  { value: "general", icon: "server", label: "settings.general.section.general" },
+  { value: "general", icon: pageIcons.servers, label: "settings.general.section.general" },
   ...serverTabs,
 ] as const
 
 const nestedProjectTabs = [
-  { value: "general", icon: "folder", label: "settings.general.section.general" },
-  { value: "workspaces", icon: "outline-worktree", label: "settings.tab.workspaces" },
-  { value: "extensions", icon: "extensions", label: "settings.tab.extensions" },
+  { value: "general", icon: pageIcons.projects, label: "settings.general.section.general" },
+  { value: "workspaces", icon: pageIcons.workspaces, label: "settings.tab.workspaces" },
+  { value: "extensions", icon: pageIcons.extensions, label: "settings.tab.extensions" },
 ] as const
 
 export function SettingsScreen() {
@@ -72,14 +74,41 @@ export function SettingsScreen() {
   const global = useGlobal()
   let root: HTMLDivElement | undefined
   let viewType = surface.view().type
+  let activation = 0
 
-  onMount(() => root?.focus({ preventScroll: true }))
+  onMount(() =>
+    (root?.querySelector<HTMLInputElement>(".settings-search input") ?? root)?.focus({ preventScroll: true }),
+  )
   createEffect(() => {
     const next = surface.view().type
     if (next === viewType) return
     viewType = next
-    queueMicrotask(() => root?.focus({ preventScroll: true }))
+    queueMicrotask(() => {
+      const target =
+        surface.search.state.query.trim() && surface.search.state.expanded
+          ? root?.querySelector<HTMLInputElement>(".settings-search input")
+          : root
+      target?.focus({ preventScroll: true })
+    })
   })
+
+  createEffect(
+    on(
+      () => [surface.view(), surface.search.state.selected] as const,
+      ([view, selected]) => {
+        if (
+          !root ||
+          !selected ||
+          !view.searchActivation ||
+          view.searchActivation !== surface.search.state.activation ||
+          view.searchActivation === activation
+        )
+          return
+        activation = view.searchActivation
+        onCleanup(revealSettingsSearch(root, view))
+      },
+    ),
+  )
 
   const connection = (key: string) => servers().find((item) => item.key === key)
   const project = (server: ServerConnection.Any, directory: string) => {
@@ -125,6 +154,11 @@ export function SettingsScreen() {
       onKeyDown={(event) => {
         if (event.key !== "Escape" || event.defaultPrevented || dialog.active) return
         event.preventDefault()
+        if (surface.view().type !== "root" && surface.search.back()) return
+        if (surface.search.state.query.trim()) {
+          surface.search.clear()
+          return
+        }
         surface.back()
       }}
     >
@@ -210,7 +244,7 @@ function RootSettings() {
             ],
           },
         ]),
-    { items: trailingTabs.map((item) => ({ ...item, label: language.t(item.label) })) },
+    ...trailingTabs.map((items) => ({ items: items.map((item) => ({ ...item, label: language.t(item.label) })) })),
   ])
 
   createEffect(() => {
@@ -248,7 +282,7 @@ function RootSettings() {
         <SettingsNotifications />
       </Tabs.Content>
       <Tabs.Content value="shortcuts" class="settings-panel">
-        <SettingsKeybinds />
+        <SettingsKeybinds active={surface.view().tab === "shortcuts"} autofocus={!surface.search.state.selected} />
       </Tabs.Content>
       <Tabs.Content value="experimental" class="settings-panel">
         <SettingsExperimental />
@@ -262,6 +296,8 @@ function RootSettings() {
             <Tabs.Content value="projects" class="settings-panel">
               <SettingsProjects
                 server={server}
+                active={surface.view().tab === "projects"}
+                autofocus={!surface.search.state.selected}
                 onOpenProject={(project) =>
                   surface.openProject({
                     server: ServerConnection.key(server),
@@ -280,10 +316,10 @@ function RootSettings() {
               <SettingsProviders directory={undefined} onBack={() => surface.select("providers")} />
             </Tabs.Content>
             <Tabs.Content value="models" class="settings-panel">
-              <SettingsModels />
+              <SettingsModels active={surface.view().tab === "models"} autofocus={!surface.search.state.selected} />
             </Tabs.Content>
             <Tabs.Content value="extensions" class="settings-panel">
-              <SettingsExtensions />
+              <SettingsExtensions subtab={surface.view().subtab} onSubtab={(value) => surface.subtab(value)} />
             </Tabs.Content>
           </SettingsServerDataScope>
         )}
@@ -344,6 +380,7 @@ function ServerSettings(props: { entry: SettingsServer }) {
             <Tabs.Content value="projects" class="settings-panel">
               <SettingsProjects
                 server={server}
+                active={surface.view().tab === "projects"}
                 onOpenProject={(project) =>
                   surface.openProject({
                     server: props.entry.key,
@@ -362,10 +399,10 @@ function ServerSettings(props: { entry: SettingsServer }) {
               <SettingsProviders directory={undefined} onBack={() => surface.select("providers")} />
             </Tabs.Content>
             <Tabs.Content value="models" class="settings-panel">
-              <SettingsModels />
+              <SettingsModels active={surface.view().tab === "models"} />
             </Tabs.Content>
             <Tabs.Content value="extensions" class="settings-panel">
-              <SettingsExtensions />
+              <SettingsExtensions subtab={surface.view().subtab} onSubtab={(value) => surface.subtab(value)} />
             </Tabs.Content>
           </SettingsServerDataScope>
         )}
@@ -414,7 +451,7 @@ function ProjectSettings(props: { server: ServerConnection.Any; project: LocalPr
             <SettingsWorkspaces projectID={props.project.id} activeDirectory={activeDirectory()} />
           </Tabs.Content>
           <Tabs.Content value="extensions" class="settings-panel">
-            <ProjectSettingsExtensions />
+            <ProjectSettingsExtensions subtab={surface.view().subtab} onSubtab={(value) => surface.subtab(value)} />
           </Tabs.Content>
         </SettingsNavigation>
       </LocationProvider>

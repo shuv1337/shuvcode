@@ -9,6 +9,7 @@ import { ServerConnection, serverName } from "@/runtime/server/registry"
 import { useServerCollectionController } from "@/servers/registry/controller"
 import { DialogServer } from "@/servers/connect/dialog"
 import { AddServerMenu, WslServerSettings } from "@/servers/wsl/settings"
+import { SshServerSettings } from "@/servers/ssh/settings"
 import { SettingsList } from "@/settings/list"
 import { SettingsRow } from "@/settings/row"
 import { ShellSetting } from "@/settings/general/general"
@@ -26,6 +27,7 @@ const WebSearchSetting: Component<{
       description={language.t("settings.server.preferences.websearch.description")}
     >
       <Select
+        data-action="settings-websearch"
         options={props.controller.options()}
         current={props.controller.current()}
         value={(option) => String(option.value)}
@@ -74,44 +76,43 @@ export const SettingsServerGeneral: Component<{
           <h3 class="settings-section-title">{language.t("settings.server.section.connection")}</h3>
           <SettingsList>
             <Show
-              when={props.entry.wsl}
+              when={props.entry.ssh}
               fallback={
-                <Show when={props.entry.connection}>
-                  {(server) => {
-                    const ssh = () => {
-                      const connection = server()
-                      if (connection.type === "ssh") return connection
-                    }
-                    return (
-                      <div class="settings-servers-row">
-                        <div class="settings-servers-lead">
-                          <ServerHealthIndicator
-                            health={health()}
-                            connecting={ssh()?.connecting}
-                            authenticationRequired={ssh()?.authenticationRequired}
-                          />
-                          <div class="settings-servers-copy">
-                            <bdi class="settings-servers-name" dir="auto">
-                              {serverName(server()) || props.entry.key}
-                            </bdi>
-                            <bdi class="settings-servers-meta" dir="ltr">
-                              {ssh()?.host ?? server().http.url}
-                            </bdi>
+                <Show
+                  when={props.entry.wsl}
+                  fallback={
+                    <Show when={props.entry.connection}>
+                      {(server) => (
+                        <div class="settings-servers-row">
+                          <div class="settings-servers-lead">
+                            <ServerHealthIndicator health={health()} />
+                            <div class="settings-servers-copy">
+                              <bdi class="settings-servers-name" dir="auto">
+                                {serverName(server()) || props.entry.key}
+                              </bdi>
+                              <bdi class="settings-servers-meta" dir="ltr">
+                                {server().http.url}
+                              </bdi>
+                            </div>
+                          </div>
+                          <div class="settings-servers-actions">
+                            <Show
+                              when={controller.defaults.available() && controller.defaults.key() === props.entry.key}
+                            >
+                              <Badge>{language.t("dialog.server.status.default")}</Badge>
+                            </Show>
+                            <ServerRowMenu server={server()} domain={controller} onEdit={edit} />
                           </div>
                         </div>
-                        <div class="settings-servers-actions">
-                          <Show when={controller.defaults.available() && controller.defaults.key() === props.entry.key}>
-                            <Badge>{language.t("dialog.server.status.default")}</Badge>
-                          </Show>
-                          <ServerRowMenu server={server()} domain={controller} onEdit={edit} />
-                        </div>
-                      </div>
-                    )
-                  }}
+                      )}
+                    </Show>
+                  }
+                >
+                  {(item) => <WslServerSettings domain={controller} servers={() => [item()]} />}
                 </Show>
               }
             >
-              {(item) => <WslServerSettings domain={controller} servers={() => [item()]} />}
+              {(item) => <SshServerSettings filter="" id={item().config.id} domain={controller} />}
             </Show>
           </SettingsList>
         </section>
