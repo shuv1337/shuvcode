@@ -1384,8 +1384,6 @@ export function Prompt(props: PromptProps) {
       if (pendingEditorSelection) editor.markSelectionSent()
     }
 
-    sessionTabs.promote(target)
-
     // Optimistic admission puts the message in the store synchronously, so
     // the session view renders it on arrival.
     if (!props.sessionID) {
