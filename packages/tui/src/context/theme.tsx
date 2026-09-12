@@ -159,7 +159,9 @@ const themeContext = createSimpleContext({
 
     createEffect(() => {
       const theme = config.theme?.name
-      if (theme) setStore("active", theme)
+      if (!theme) return
+      setStore("active", theme)
+      if (theme === "system") refreshPalette()
     })
 
     createEffect(() => {
@@ -204,6 +206,7 @@ const themeContext = createSimpleContext({
     let queued = false
     let disposed = false
     function refreshPalette() {
+      if (store.active !== "system") return
       queued = true
       if (!canProbe || probing || disposed) return
 
@@ -347,6 +350,7 @@ const themeContext = createSimpleContext({
       set(theme: string) {
         if (!hasTheme(theme)) return false
         setStore("active", theme)
+        if (theme === "system") refreshPalette()
         void configState
           .update((draft) => {
             draft.theme = { ...draft.theme, name: theme }
