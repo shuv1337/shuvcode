@@ -482,7 +482,7 @@ function App(props: { pair?: DialogPairCredentials }) {
   const toast = useToast()
   const updater = useUpdateNotification()
   const theme = useTheme()
-  const { mode, supports, setMode, locked, lock, unlock, prepareSystem } = useThemes()
+  const { mode, supports, setMode, locked, lock, unlock, afterPaint } = useThemes()
   const data = useData()
   const location = useLocation()
   const exit = useExit()
@@ -490,15 +490,15 @@ function App(props: { pair?: DialogPairCredentials }) {
   const plugins = usePlugin()
   const clipboard = useClipboard()
   const terminalEnvironment = useTuiTerminalEnvironment()
-  let systemThemeTimeout: ReturnType<typeof setTimeout> | undefined
-  const prepareSystemTheme = () => {
+  let paletteTimer: ReturnType<typeof setTimeout> | undefined
+  const afterFrame = () => {
     // The native writer can still be flushing the frame when FRAME fires. Keep OSC probes behind visible app output.
-    systemThemeTimeout = setTimeout(prepareSystem, 50)
+    paletteTimer = setTimeout(afterPaint, 50)
   }
-  onMount(() => renderer.once(CliRenderEvents.FRAME, prepareSystemTheme))
+  onMount(() => renderer.once(CliRenderEvents.FRAME, afterFrame))
   onCleanup(() => {
-    renderer.off(CliRenderEvents.FRAME, prepareSystemTheme)
-    if (systemThemeTimeout) clearTimeout(systemThemeTimeout)
+    renderer.off(CliRenderEvents.FRAME, afterFrame)
+    if (paletteTimer) clearTimeout(paletteTimer)
   })
   createEffect(() => {
     if (client.connection.status() !== "connected") return
