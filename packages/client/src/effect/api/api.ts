@@ -18,6 +18,7 @@ import type { PromptInput } from "@opencode/schema/prompt-input"
 import type { AgentAttachment } from "@opencode/schema/prompt"
 import type { Skill } from "@opencode/schema/skill"
 import type { Event } from "@opencode/schema/event"
+import type { FileDiff } from "@opencode/schema/file-diff"
 import type { InstructionEntry } from "@opencode/schema/instruction-entry"
 import type { Schema } from "effect"
 import type { EventLog } from "@opencode/schema/event-log"
@@ -36,7 +37,6 @@ import type { PtyTicket } from "@opencode/schema/pty-ticket"
 import type { Reference } from "@opencode/schema/reference"
 import type { Worktree } from "@opencode/schema/worktree"
 import type { Vcs } from "@opencode/schema/vcs"
-import type { FileDiff } from "@opencode/schema/file-diff"
 import type { WebSearch } from "@opencode/schema/websearch"
 import type { Config } from "@opencode/schema/config"
 
@@ -360,6 +360,15 @@ export type SessionRevertCommitOperation<E = never> = (
 export type SessionContextInput = { readonly sessionID: Session.ID }
 export type SessionContextOutput = ReadonlyArray<SessionMessage.Info>
 export type SessionContextOperation<E = never> = (input: SessionContextInput) => Effect.Effect<SessionContextOutput, E>
+
+export type SessionDiffInput = {
+  readonly sessionID: Session.ID
+  readonly from?: SessionMessage.ID | undefined
+  readonly to?: SessionMessage.ID | undefined
+  readonly context?: number | undefined
+}
+export type SessionDiffOutput = ReadonlyArray<FileDiff.Info>
+export type SessionDiffOperation<E = never> = (input: SessionDiffInput) => Effect.Effect<SessionDiffOutput, E>
 
 export type SessionInboxListInput = { readonly sessionID: Session.ID }
 export type SessionInboxListOutput = ReadonlyArray<SessionInbox.Info>
@@ -1150,6 +1159,7 @@ export interface SessionApi<E = never> {
     readonly commit: SessionRevertCommitOperation<E>
   }
   readonly context: SessionContextOperation<E>
+  readonly diff: SessionDiffOperation<E>
   readonly inbox: {
     readonly list: SessionInboxListOperation<E>
     readonly cancel: SessionInboxCancelOperation<E>

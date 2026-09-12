@@ -3242,6 +3242,152 @@
         "summary": "Get session context"
       }
     },
+    "/api/session/{sessionID}/diff": {
+      "get": {
+        "tags": ["session"],
+        "operationId": "v2.session.diff",
+        "parameters": [
+          {
+            "name": "sessionID",
+            "in": "path",
+            "schema": {
+              "type": "string",
+              "pattern": "^ses"
+            },
+            "required": true
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "pattern": "^msg_"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "User message whose turn to diff. Defaults to the turn of the newest user message."
+            },
+            "required": false
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "pattern": "^msg_"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Later user message whose turn ends the range. Defaults to the turn of `from` alone."
+            },
+            "required": false
+          },
+          {
+            "name": "context",
+            "in": "query",
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Unchanged lines around each hunk. Omit for full-file patches."
+            },
+            "required": false
+          }
+        ],
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/FileDiff.Info"
+                      }
+                    }
+                  },
+                  "required": ["data"],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "InvalidRequestError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/InvalidRequestErrorEncoded"
+                    },
+                    {
+                      "$ref": "#/components/schemas/InvalidRequestErrorEncoded"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UnauthorizedError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "MessageNotFoundError | SessionNotFoundError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/MessageNotFoundErrorEncoded"
+                    },
+                    {
+                      "$ref": "#/components/schemas/SessionNotFoundErrorEncoded"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "UnknownError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnknownErrorEncoded"
+                }
+              }
+            }
+          }
+        },
+        "description": "Structured per-file diffs of the files a turn changed. A turn runs from the first prompt after the session was last idle until its next idle marker, so prompts steered in while it was busy belong to the same turn; `to` extends the range through a later turn. Compares the range's first recorded snapshot with its last; a step still running in the active session compares against the working copy. Ranges that span a location change are rejected. In sessions without any idle marker, a prompt's turn spans until the next user message.",
+        "summary": "Diff session turns"
+      }
+    },
     "/api/session/{sessionID}/inbox": {
       "get": {
         "tags": ["session"],
@@ -18421,6 +18567,38 @@
         "required": ["type", "id", "time", "status", "reason", "summary", "recent"],
         "additionalProperties": false
       },
+      "Session.Message.Idle": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^msg_"
+          },
+          "metadata": {
+            "type": "object"
+          },
+          "time": {
+            "type": "object",
+            "properties": {
+              "created": {
+                "type": "number"
+              }
+            },
+            "required": ["created"],
+            "additionalProperties": false
+          },
+          "type": {
+            "type": "string",
+            "enum": ["idle"]
+          },
+          "outcome": {
+            "type": "string",
+            "enum": ["succeeded", "failed", "interrupted"]
+          }
+        },
+        "required": ["id", "time", "type", "outcome"],
+        "additionalProperties": false
+      },
       "Session.Message.Info": {
         "anyOf": [
           {
@@ -18452,6 +18630,9 @@
           },
           {
             "$ref": "#/components/schemas/Session.Message.Compaction"
+          },
+          {
+            "$ref": "#/components/schemas/Session.Message.Idle"
           }
         ]
       },

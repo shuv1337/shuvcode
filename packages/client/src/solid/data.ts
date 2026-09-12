@@ -1028,6 +1028,18 @@ export function createData(config: CreateDataInput) {
           if (currentAssistant) currentAssistant.retry = undefined
         })
         if (event.type === "session.execution.interrupted" && event.data.reason === "shutdown") return
+        // Mirror the projected idle marker so turn boundaries match before the next message read.
+        message.insert(event.data.sessionID, {
+          id: messageIDFromEvent(event.id),
+          type: "idle",
+          outcome:
+            event.type === "session.execution.succeeded"
+              ? "succeeded"
+              : event.type === "session.execution.failed"
+                ? "failed"
+                : "interrupted",
+          time: { created: event.created },
+        })
         // An event can overtake the first read; queue a revalidation when that read is still active.
         if (!store.session.info[event.data.sessionID] && !sync.has(`session:${event.data.sessionID}`)) return
         result.session.invalidate(event.data.sessionID)

@@ -147,6 +147,14 @@ export type SessionProviderContextProvenance = {
   endpoint: string
 }
 
+export type SessionMessageIdle = {
+  id: string
+  metadata?: { [x: string]: JsonValue }
+  time: { created: number }
+  type: "idle"
+  outcome: "succeeded" | "failed" | "interrupted"
+}
+
 export type SessionActive = { type: "running" }
 
 export type SessionInboxDelivery = "steer" | "queue"
@@ -2210,6 +2218,7 @@ export type SessionMessageInfo =
   | SessionMessageShell
   | SessionMessageAssistant
   | SessionMessageCompaction
+  | SessionMessageIdle
 
 export type SessionMessageContentUpdated = {
   id: string
@@ -3222,6 +3231,13 @@ export type SessionImportInput = {
               }
             }
         )
+      | {
+          readonly id: string
+          readonly metadata?: { readonly [x: string]: JsonValue }
+          readonly time: { readonly created: number }
+          readonly type: "idle"
+          readonly outcome: "succeeded" | "failed" | "interrupted"
+        }
     >
     readonly location?: { readonly directory: string; readonly workspaceID?: string } | null
   }["info"]
@@ -3532,6 +3548,13 @@ export type SessionImportInput = {
               }
             }
         )
+      | {
+          readonly id: string
+          readonly metadata?: { readonly [x: string]: JsonValue }
+          readonly time: { readonly created: number }
+          readonly type: "idle"
+          readonly outcome: "succeeded" | "failed" | "interrupted"
+        }
     >
     readonly location?: { readonly directory: string; readonly workspaceID?: string } | null
   }["messages"]
@@ -3842,6 +3865,13 @@ export type SessionImportInput = {
               }
             }
         )
+      | {
+          readonly id: string
+          readonly metadata?: { readonly [x: string]: JsonValue }
+          readonly time: { readonly created: number }
+          readonly type: "idle"
+          readonly outcome: "succeeded" | "failed" | "interrupted"
+        }
     >
     readonly location?: { readonly directory: string; readonly workspaceID?: string } | null
   }["location"]
@@ -4330,6 +4360,27 @@ export type SessionRevertCommitOutput = void
 export type SessionContextInput = { readonly sessionID: { readonly sessionID: string }["sessionID"] }
 
 export type SessionContextOutput = { data: Array<SessionMessageInfo> }["data"]
+
+export type SessionDiffInput = {
+  readonly sessionID: { readonly sessionID: string }["sessionID"]
+  readonly from?: {
+    readonly from?: string | undefined
+    readonly to?: string | undefined
+    readonly context?: number | undefined
+  }["from"]
+  readonly to?: {
+    readonly from?: string | undefined
+    readonly to?: string | undefined
+    readonly context?: number | undefined
+  }["to"]
+  readonly context?: {
+    readonly from?: string | undefined
+    readonly to?: string | undefined
+    readonly context?: number | undefined
+  }["context"]
+}
+
+export type SessionDiffOutput = { data: Array<FileDiffInfo> }["data"]
 
 export type SessionInboxListInput = { readonly sessionID: { readonly sessionID: string }["sessionID"] }
 
