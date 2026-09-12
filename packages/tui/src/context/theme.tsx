@@ -184,11 +184,9 @@ const themeContext = createSimpleContext({
     }
 
     onMount(() => {
-      const systemTheme = resolveSystemTheme(store.mode)
-      void Promise.allSettled([
-        store.active === "system" ? systemTheme : Promise.resolve(),
-        syncCustomThemes(),
-      ]).finally(() => {
+      // Terminal palette queries serialize with frame output. Use the mode fallback for the first paint;
+      // App asks for the system palette after that frame and updates the theme in place.
+      void syncCustomThemes().finally(() => {
         valuesV2()
         setStore("ready", true)
       })
