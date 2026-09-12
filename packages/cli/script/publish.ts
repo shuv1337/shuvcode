@@ -62,7 +62,7 @@ async function publishDistribution(input: {
   )
   if (input.legacyCommand)
     await Bun.file(`${input.root}/${input.name}/bin/${input.legacyCommand}.cjs`).write(
-      `#!/usr/bin/env node\n\nconsole.log(${JSON.stringify(`opencode2 is now just opencode. run ${input.command}`)})\nprocess.exit(1)\n`,
+      `#!/usr/bin/env node\n\nconsole.log(${JSON.stringify(`"opencode2" has been renamed to "${input.command}". Run "${input.command}" instead.\n\nIf you have OpenCode v1 installed, you may need to uninstall it so the "${input.command}" command launches the correct installation.`)})\nprocess.exit(1)\n`,
     )
   await Bun.file(`${input.root}/${input.name}/package.json`).write(
     JSON.stringify(

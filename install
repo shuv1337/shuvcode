@@ -366,14 +366,18 @@ install_legacy_shim() {
     if [[ "$shim_os" == "windows" ]]; then
         cat > "$INSTALL_DIR/opencode2.cmd" <<'EOF'
 @echo off
-echo opencode2 is now just opencode. run opencode
+echo "opencode2" has been renamed to "opencode". Run "opencode" instead.
+echo.
+echo If you have OpenCode v1 installed, you may need to uninstall it so the "opencode" command launches the correct installation.
 exit /b 1
 EOF
         return
     fi
     cat > "$INSTALL_DIR/opencode2" <<'EOF'
 #!/bin/sh
-echo 'opencode2 is now just opencode. run opencode'
+echo '"opencode2" has been renamed to "opencode". Run "opencode" instead.'
+echo
+echo 'If you have OpenCode v1 installed, you may need to uninstall it so the "opencode" command launches the correct installation.'
 exit 1
 EOF
     chmod 755 "$INSTALL_DIR/opencode2"

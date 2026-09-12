@@ -17,7 +17,12 @@ const outdir = path.join(root, `aur-${name}`)
 const dryRun = process.argv.includes("--dry-run")
 const pkgver = Script.version.replaceAll("-", ".")
 const license = Bun.file(path.join(dir, "..", "..", "LICENSE"))
-const shim = "#!/bin/sh\necho 'opencode2 is now just opencode. run opencode'\nexit 1\n"
+const shim = `#!/bin/sh
+echo '"opencode2" has been renamed to "opencode". Run "opencode" instead.'
+echo
+echo 'If you have OpenCode v1 installed, you may need to uninstall it so the "opencode" command launches the correct installation.'
+exit 1
+`
 
 await rm(outdir, { recursive: true, force: true })
 await mkdir(path.dirname(outdir), { recursive: true })
