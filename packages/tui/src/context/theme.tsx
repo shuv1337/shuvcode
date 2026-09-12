@@ -117,6 +117,7 @@ type Themes = {
   unlock(): void
   setMode(mode?: "dark" | "light", persist?: boolean): boolean
   set(theme: string): boolean
+  prepareSystem(): void
   onError(handler: ThemeErrorHandler): () => void
   readonly ready: boolean
 }
@@ -367,6 +368,7 @@ const themeContext = createSimpleContext({
           .catch(() => {})
         return true
       },
+      prepareSystem: refreshSystemTheme,
       onError: themeErrors.onError,
       get ready() {
         return store.ready
