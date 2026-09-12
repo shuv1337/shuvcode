@@ -28,6 +28,7 @@ import { createEffect, createMemo, onCleanup, onMount, type Accessor, type Paren
 import { createStore, produce } from "solid-js/store"
 import { createSimpleContext } from "./helper"
 import { useConfig } from "../config"
+import { useStorageOptional } from "./storage"
 import { DevTools } from "../devtools"
 import { configDirectories } from "../util/config-directories"
 
@@ -143,6 +144,7 @@ const themeContext = createSimpleContext({
     const configState = useConfig()
     const config = configState.data
     const themes = props.source
+    const systemPalette = useStorageOptional()?.store<{ colors?: TerminalColors }>("system-theme", { initial: {} })
     const pick = (value: unknown) => {
       if (value === "dark" || value === "light") return value
       return
@@ -192,9 +194,16 @@ const themeContext = createSimpleContext({
       })
     })
 
-    let systemThemeSignature: string | undefined
-    let systemThemeMode: "dark" | "light" | undefined
-    let hasResolvedSystemTheme = false
+    const cachedSystemPalette = systemPalette?.[0].colors
+    let systemThemeSignature = cachedSystemPalette ? JSON.stringify(cachedSystemPalette) : undefined
+    let systemThemeMode = cachedSystemPalette
+      ? (store.lock ?? terminalMode(cachedSystemPalette) ?? store.mode)
+      : undefined
+    let hasResolvedSystemTheme = cachedSystemPalette !== undefined
+    if (cachedSystemPalette && systemThemeMode) {
+      if (store.mode !== systemThemeMode) setStore("mode", systemThemeMode)
+      setSystemTheme(generateSystem(cachedSystemPalette, systemThemeMode))
+    }
     function resolveSystemTheme(mode: "dark" | "light" = store.mode) {
       return renderer
         .getPalette({ size: 16 })
@@ -213,6 +222,9 @@ const themeContext = createSimpleContext({
           systemThemeSignature = signature
           systemThemeMode = next
           setSystemTheme(generateSystem(colors, next))
+          void systemPalette?.[1]((draft) => {
+            draft.colors = colors
+          }).catch(() => {})
         })
         .catch(() => {
           if (hasResolvedSystemTheme) return
