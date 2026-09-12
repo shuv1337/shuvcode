@@ -12,7 +12,6 @@ import { useModels } from "@/providers/models/models"
 import { useServerSDK } from "@/runtime/server/client"
 import { popularProviders } from "@/providers/catalog/providers"
 import { Persist, persisted } from "@/runtime/persistence/storage"
-import { InlineServerSelect } from "@/settings/server-select"
 import { SettingsList } from "@/settings/list"
 import { SettingsRow } from "@/settings/row"
 import "@/settings/settings.css"
@@ -65,7 +64,6 @@ export const SettingsModels: Component = () => {
             <h2 class="settings-tab-title">{language.t("settings.models.title")}</h2>
             <span class="text-11-regular text-v2-text-text-muted">{language.t("settings.models.description")}</span>
           </div>
-          <InlineServerSelect />
         </div>
         <div class="settings-tab-search">
           <TextInput
@@ -160,12 +158,12 @@ export const SettingsModels: Component = () => {
                             height={PROVIDER_ICON_SIZE}
                             class="settings-models-provider-icon shrink-0"
                           />
-                          <span class="settings-section-title">{group.items[0].provider.name}</span>
+                          <span class="settings-models-group-title">{group.items[0].provider.name}</span>
                         </span>
                       </button>
                     </h3>
                     <Show when={expanded()}>
-                      <SettingsList>
+                      <SettingsList variant="catalog">
                         <For each={group.items}>
                           {(item) => {
                             const key = { providerID: item.provider.id, modelID: item.id }

@@ -26,7 +26,7 @@ const icons = {
   },
   folder: {
     viewBox: "0 0 16 16",
-    body: `<path d="M2.545 3.364V12.636H13.455V5H8.545L6.909 3.364H2.545Z" stroke="currentColor" stroke-miterlimit="10" stroke-linecap="square"/>`,
+    body: `<path d="M1.33337 2V13.3333H14.6667V4H8.66671L6.66671 2H1.33337Z" stroke="currentColor" stroke-miterlimit="10" stroke-linecap="square"/>`,
   },
   branch: {
     viewBox: "0 0 16 16",

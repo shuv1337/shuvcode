@@ -417,7 +417,7 @@ function SettingsKeybindsView(props: {
         </div>
       </div>
       <div class="settings-tab-body">
-        <div class="settings-shortcuts flex flex-col gap-8">
+        <div class="settings-shortcuts settings-section-stack">
           <For each={props.groups}>
             {(group) => (
               <Show when={(filtered().get(group) ?? []).length > 0}>

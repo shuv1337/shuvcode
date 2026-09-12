@@ -2146,8 +2146,30 @@ export type ConfigGetInput = {
 export type ConfigGetOutput = ReadonlyArray<Config.Entry>
 export type ConfigGetOperation<E = never> = (input?: ConfigGetInput) => Effect.Effect<ConfigGetOutput, E>
 
+export type ConfigPreferencesOutput = Config.Preferences
+export type ConfigPreferencesOperation<E = never> = () => Effect.Effect<ConfigPreferencesOutput, E>
+
+export type ConfigUpdatePreferencesInput = {
+  readonly shell?: string | null | undefined
+  readonly websearch?: false | { readonly provider: "random" | WebSearch.ID } | null | undefined
+}
+export type ConfigUpdatePreferencesOutput = Config.Preferences
+export type ConfigUpdatePreferencesOperation<E = never> = (
+  input?: ConfigUpdatePreferencesInput,
+) => Effect.Effect<ConfigUpdatePreferencesOutput, E>
+
+export type ConfigShellsOutput = ReadonlyArray<{
+  readonly path: string
+  readonly name: string
+  readonly acceptable: boolean
+}>
+export type ConfigShellsOperation<E = never> = () => Effect.Effect<ConfigShellsOutput, E>
+
 export interface ConfigApi<E = never> {
   readonly get: ConfigGetOperation<E>
+  readonly preferences: ConfigPreferencesOperation<E>
+  readonly updatePreferences: ConfigUpdatePreferencesOperation<E>
+  readonly shells: ConfigShellsOperation<E>
 }
 
 export interface AppApi<E = never> {

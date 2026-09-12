@@ -50,12 +50,12 @@ for (const viewport of [
         "Appearance",
         "Notifications",
         "Shortcuts",
-        "Servers",
         "Projects",
         "Worktrees",
         "Providers",
         "Models",
         "Extensions",
+        "Server",
         "Experimental",
         "About",
       ]) {
