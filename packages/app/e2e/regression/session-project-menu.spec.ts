@@ -55,6 +55,8 @@ for (const direction of ["ltr", "rtl"] as const) {
         "href",
         `#opencode-v2-icon-${workspace ? "outline-worktree" : "monitor"}`,
       )
+      // Initial layout scrolls this sticky header's ancestor and dismisses its tooltip.
+      await expect(page.locator("[data-timeline-virtual-content]")).toHaveCSS("visibility", "visible")
       const background = await trigger.evaluate((element) => getComputedStyle(element).backgroundColor)
       await trigger.hover()
       await expect(trigger).not.toHaveCSS("background-color", background)
