@@ -271,7 +271,7 @@ export namespace Timeline {
             detail,
             new Set(
               messages
-                .filter((message) => message.type === "compaction" && timelineNoticeRequired(message))
+                .filter((message) => message.type === "compaction" || message.type === "model-switched")
                 .map((message) => message.id),
             ),
           )
@@ -415,13 +415,13 @@ function shellFailed(message: SessionMessageShell) {
   )
 }
 
-function groupMessages(rows: TimelineRow.TimelineRow[], detail: TimelineDetail, required: ReadonlySet<string>) {
+function groupMessages(rows: TimelineRow.TimelineRow[], detail: TimelineDetail, separate: ReadonlySet<string>) {
   return rows.reduce<TimelineRow.TimelineRow[]>((result, row) => {
     const previous = result.at(-1)
     const current =
       ((row._tag === "Notice" && detail.notices.placement === "grouped") ||
         (row._tag === "Shell" && detail.shell.placement === "grouped")) &&
-      !required.has(row.messageID)
+      !separate.has(row.messageID)
         ? new TimelineRow.AssistantPart({
             userMessageID: row.userMessageID,
             previousAssistantPart: previous?._tag === "AssistantPart",
