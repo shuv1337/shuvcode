@@ -78,12 +78,6 @@ export type PluginListInput = { readonly location?: { readonly directory?: strin
 export type PluginListOutput = { readonly location: Location.PublicRef; readonly data: ReadonlyArray<Plugin.Info> }
 export type PluginListOperation<E = never> = (input?: PluginListInput) => Effect.Effect<PluginListOutput, E>
 
-export type PluginAwaitActivationInput = { readonly location?: { readonly directory?: string | undefined } | undefined }
-export type PluginAwaitActivationOutput = void
-export type PluginAwaitActivationOperation<E = never> = (
-  input?: PluginAwaitActivationInput,
-) => Effect.Effect<PluginAwaitActivationOutput, E>
-
 export type PluginCheckInput = {
   readonly location?: { readonly directory?: string | undefined } | undefined
   readonly target?: string | undefined
@@ -100,7 +94,6 @@ export type PluginUpdateOperation<E = never> = (input: PluginUpdateInput) => Eff
 
 export interface PluginApi<E = never> {
   readonly list: PluginListOperation<E>
-  readonly awaitActivation: PluginAwaitActivationOperation<E>
   readonly check: PluginCheckOperation<E>
   readonly update: PluginUpdateOperation<E>
 }

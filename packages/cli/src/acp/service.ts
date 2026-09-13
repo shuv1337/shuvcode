@@ -408,8 +408,7 @@ function turnStart(messageID: string, slash: PreparedPrompt["slash"], skill: Ski
 
 async function loadCatalog(client: OpenCodeClient, cwd: string): Promise<Catalog> {
   const location = { directory: cwd }
-  await client.plugin.awaitActivation({ location })
-  // Some providers discover models in the background after activation has settled.
+  // Some providers discover models in the background after plugin startup begins.
   const deadline = Date.now() + 5_000
   let missing = "No models are available"
   while (Date.now() < deadline) {

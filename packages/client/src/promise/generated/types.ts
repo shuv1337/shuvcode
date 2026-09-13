@@ -2625,12 +2625,6 @@ export type PluginListInput = {
 
 export type PluginListOutput = { location: LocationPublicRef; data: Array<PluginInfo> }
 
-export type PluginAwaitActivationInput = {
-  readonly location?: { readonly location?: { readonly directory?: string | undefined } | undefined }["location"]
-}
-
-export type PluginAwaitActivationOutput = void
-
 export type PluginCheckInput = {
   readonly location?: { readonly location?: { readonly directory?: string | undefined } | undefined }["location"]
   readonly target?: { readonly target?: string | undefined }["target"]

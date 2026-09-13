@@ -1,7 +1,7 @@
 # V2 HTTP API audit checklist
 
 **Source:** `packages/protocol/openapi.json`  
-**Current endpoint count:** 140
+**Current endpoint count:** 139
 **Last regenerated:** 2026-09-13
 
 ## How to use this checklist
@@ -29,7 +29,7 @@ Review endpoints in document order. For each endpoint, select one disposition an
 ## Progress
 
 - [x] Group 1: Foundation and placement (4)
-- [ ] Group 2: Configuration and capability catalogs (17)
+- [ ] Group 2: Configuration and capability catalogs (16)
 - [ ] Group 3: Credentials, integrations, MCP, and web search (22)
 - [ ] Group 4: Session lifecycle (12)
 - [ ] Group 5: Session execution and inputs (11)
@@ -40,6 +40,11 @@ Review endpoints in document order. For each endpoint, select one disposition an
 - [ ] Group 10: Events, RPC, and experimental operations (6)
 
 ## Resolved during audit
+
+### [x] `POST /api/plugin/await-activation`
+
+- **Decision:** Remove
+- **Notes:** Activation timing is an internal server concern. Catalog reads remain non-blocking.
 
 ### [x] Location response wrappers
 
@@ -76,14 +81,13 @@ Review endpoints in document order. For each endpoint, select one disposition an
 
 ## Group 2: Configuration and capability catalogs
 
-**Endpoints:** 17
+**Endpoints:** 16
 
 | Done | Method | Path | Operation ID | Decision | Notes |
 |---|---|---|---|---|---|
-| [ ] 008 | `GET` | `/api/agent` | `agent.list` |  |  |
-| [ ] 009 | `GET` | `/api/agent/{agentID}` | `agent.get` |  |  |
-| [ ] 010 | `GET` | `/api/plugin` | `plugin.list` |  |  |
-| [ ] 011 | `POST` | `/api/plugin/await-activation` | `plugin.awaitActivation` |  |  |
+| [x] 008 | `GET` | `/api/agent` | `agent.list` | Keep | Request and response accepted as-is. |
+| [x] 009 | `GET` | `/api/agent/{agentID}` | `agent.get` | Keep | Request, response, and not-found error accepted as-is. |
+| [x] 010 | `GET` | `/api/plugin` | `plugin.list` | Keep | Request and response accepted as-is. |
 | [ ] 012 | `POST` | `/api/plugin/check` | `plugin.check` |  |  |
 | [ ] 013 | `POST` | `/api/plugin/update` | `plugin.update` |  |  |
 | [ ] 014 | `GET` | `/api/model` | `model.list` |  |  |

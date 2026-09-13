@@ -215,9 +215,6 @@ it.live(
       const api = OpenCode.make({ baseUrl: server.base, headers: server.headers })
       yield* Effect.promise(async () => {
         await api.location.get({ location: { directory: source } })
-        const url = new URL("/api/plugin/await-activation", server.base)
-        url.searchParams.set("location[directory]", source)
-        expect((await fetch(url, { method: "POST", headers: server.headers })).status).toBe(204)
         expect(await api.worktree.list({ location: { directory: target } })).toContainEqual({
           directory: path.join(destination, "delegated"),
           strategy: "target-copy",
