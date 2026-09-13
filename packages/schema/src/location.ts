@@ -32,5 +32,5 @@ export const PublicInfo = Schema.Struct(Struct.omit(Info.fields, ["workspaceID"]
 export interface PublicInfo extends Schema.Schema.Type<typeof PublicInfo> {}
 
 export function response<S extends Schema.Top>(data: S) {
-  return Schema.Struct({ location: PublicInfo, data })
+  return Schema.Struct({ location: PublicRef, data })
 }

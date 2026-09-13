@@ -28,7 +28,7 @@ Review endpoints in document order. For each endpoint, select one disposition an
 
 ## Progress
 
-- [ ] Group 1: Foundation and placement (4)
+- [x] Group 1: Foundation and placement (4)
 - [ ] Group 2: Configuration and capability catalogs (17)
 - [ ] Group 3: Credentials, integrations, MCP, and web search (22)
 - [ ] Group 4: Session lifecycle (12)
@@ -40,6 +40,11 @@ Review endpoints in document order. For each endpoint, select one disposition an
 - [ ] Group 10: Events, RPC, and experimental operations (6)
 
 ## Resolved during audit
+
+### [x] Location response wrappers
+
+- **Decision:** Reduce generic endpoint response locations to `{ directory }`.
+- **Notes:** Full project metadata remains available from `GET /api/location`; no consumers used it from wrapped responses.
 
 ### [x] `GET /api/health` and `GET /api/server`
 
@@ -67,7 +72,7 @@ Review endpoints in document order. For each endpoint, select one disposition an
 | [x] 001–002 | `GET` | `/api/status` | `server.status` | Keep | Replaces the former health and server endpoints. |
 | [x] 003 | `GET` | `/api/location` | `location.get` | Keep | Workspace selectors and response fields removed until workspace support ships. |
 | [x] 004 | `GET` | `/api/project` | `project.list` | Keep | Removed unused `time.initialized`; the database column remains for migration data. |
-| [ ] 005 | `PATCH` | `/api/project/{projectID}` | `project.update` |  |  |
+| [x] 005 | `PATCH` | `/api/project/{projectID}` | `project.update` | Keep | Request and response accepted as-is. |
 
 ## Group 2: Configuration and capability catalogs
 

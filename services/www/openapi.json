@@ -167,7 +167,7 @@
                   "type": "object",
                   "properties": {
                     "location": {
-                      "$ref": "#/components/schemas/Location.PublicInfo"
+                      "$ref": "#/components/schemas/Location.PublicRef"
                     },
                     "data": {
                       "type": "array",
@@ -261,7 +261,7 @@
                   "type": "object",
                   "properties": {
                     "location": {
-                      "$ref": "#/components/schemas/Location.PublicInfo"
+                      "$ref": "#/components/schemas/Location.PublicRef"
                     },
                     "data": {
                       "$ref": "#/components/schemas/Agent.Info"
@@ -354,7 +354,7 @@
                   "type": "object",
                   "properties": {
                     "location": {
-                      "$ref": "#/components/schemas/Location.PublicInfo"
+                      "$ref": "#/components/schemas/Location.PublicRef"
                     },
                     "data": {
                       "type": "array",
@@ -506,7 +506,7 @@
                   "type": "object",
                   "properties": {
                     "location": {
-                      "$ref": "#/components/schemas/Location.PublicInfo"
+                      "$ref": "#/components/schemas/Location.PublicRef"
                     },
                     "data": {
                       "type": "array",
@@ -4644,7 +4644,7 @@
                   "type": "object",
                   "properties": {
                     "location": {
-                      "$ref": "#/components/schemas/Location.PublicInfo"
+                      "$ref": "#/components/schemas/Location.PublicRef"
                     },
                     "data": {
                       "type": "array",
@@ -4740,7 +4740,7 @@
                   "type": "object",
                   "properties": {
                     "location": {
-                      "$ref": "#/components/schemas/Location.PublicInfo"
+                      "$ref": "#/components/schemas/Location.PublicRef"
                     },
                     "data": {
                       "anyOf": [
@@ -4926,7 +4926,7 @@
                   "type": "object",
                   "properties": {
                     "location": {
-                      "$ref": "#/components/schemas/Location.PublicInfo"
+                      "$ref": "#/components/schemas/Location.PublicRef"
                     },
                     "data": {
                       "type": "array",
@@ -5030,7 +5030,7 @@
                   "type": "object",
                   "properties": {
                     "location": {
-                      "$ref": "#/components/schemas/Location.PublicInfo"
+                      "$ref": "#/components/schemas/Location.PublicRef"
                     },
                     "data": {
                       "$ref": "#/components/schemas/Provider.Info"
@@ -5133,7 +5133,7 @@
                   "type": "object",
                   "properties": {
                     "location": {
-                      "$ref": "#/components/schemas/Location.PublicInfo"
+                      "$ref": "#/components/schemas/Location.PublicRef"
                     },
                     "data": {
                       "type": "array",
@@ -5227,7 +5227,7 @@
                   "type": "object",
                   "properties": {
                     "location": {
-                      "$ref": "#/components/schemas/Location.PublicInfo"
+                      "$ref": "#/components/schemas/Location.PublicRef"
                     },
                     "data": {
                       "anyOf": [
@@ -5533,7 +5533,7 @@
                   "type": "object",
                   "properties": {
                     "location": {
-                      "$ref": "#/components/schemas/Location.PublicInfo"
+                      "$ref": "#/components/schemas/Location.PublicRef"
                     },
                     "data": {
                       "$ref": "#/components/schemas/Integration.AttemptEncoded"
@@ -5676,7 +5676,7 @@
                   "type": "object",
                   "properties": {
                     "location": {
-                      "$ref": "#/components/schemas/Location.PublicInfo"
+                      "$ref": "#/components/schemas/Location.PublicRef"
                     },
                     "data": {
                       "$ref": "#/components/schemas/Integration.AttemptStatus"
@@ -5959,7 +5959,7 @@
                   "type": "object",
                   "properties": {
                     "location": {
-                      "$ref": "#/components/schemas/Location.PublicInfo"
+                      "$ref": "#/components/schemas/Location.PublicRef"
                     },
                     "data": {
                       "$ref": "#/components/schemas/Integration.CommandAttempt"
@@ -6092,7 +6092,7 @@
                   "type": "object",
                   "properties": {
                     "location": {
-                      "$ref": "#/components/schemas/Location.PublicInfo"
+                      "$ref": "#/components/schemas/Location.PublicRef"
                     },
                     "data": {
                       "$ref": "#/components/schemas/Integration.CommandAttemptStatus"
@@ -6255,7 +6255,7 @@
                   "type": "object",
                   "properties": {
                     "location": {
-                      "$ref": "#/components/schemas/Location.PublicInfo"
+                      "$ref": "#/components/schemas/Location.PublicRef"
                     },
                     "data": {
                       "type": "array",
@@ -6689,7 +6689,7 @@
                   "type": "object",
                   "properties": {
                     "location": {
-                      "$ref": "#/components/schemas/Location.PublicInfo"
+                      "$ref": "#/components/schemas/Location.PublicRef"
                     },
                     "data": {
                       "$ref": "#/components/schemas/Mcp.ResourceCatalog"
@@ -7140,7 +7140,7 @@
                   "type": "object",
                   "properties": {
                     "location": {
-                      "$ref": "#/components/schemas/Location.PublicInfo"
+                      "$ref": "#/components/schemas/Location.PublicRef"
                     },
                     "data": {
                       "type": "array",
@@ -7754,7 +7754,7 @@
                   "type": "object",
                   "properties": {
                     "location": {
-                      "$ref": "#/components/schemas/Location.PublicInfo"
+                      "$ref": "#/components/schemas/Location.PublicRef"
                     },
                     "data": {
                       "type": "array",
@@ -8533,7 +8533,7 @@
                   "type": "object",
                   "properties": {
                     "location": {
-                      "$ref": "#/components/schemas/Location.PublicInfo"
+                      "$ref": "#/components/schemas/Location.PublicRef"
                     },
                     "data": {
                       "type": "array",
@@ -8651,7 +8651,7 @@
                   "type": "object",
                   "properties": {
                     "location": {
-                      "$ref": "#/components/schemas/Location.PublicInfo"
+                      "$ref": "#/components/schemas/Location.PublicRef"
                     },
                     "data": {
                       "type": "array",
@@ -8737,7 +8737,7 @@
                   "type": "object",
                   "properties": {
                     "location": {
-                      "$ref": "#/components/schemas/Location.PublicInfo"
+                      "$ref": "#/components/schemas/Location.PublicRef"
                     },
                     "data": {
                       "type": "array",
@@ -8823,7 +8823,7 @@
                   "type": "object",
                   "properties": {
                     "location": {
-                      "$ref": "#/components/schemas/Location.PublicInfo"
+                      "$ref": "#/components/schemas/Location.PublicRef"
                     },
                     "data": {
                       "type": "array",
@@ -9148,7 +9148,7 @@
                   "type": "object",
                   "properties": {
                     "location": {
-                      "$ref": "#/components/schemas/Location.PublicInfo"
+                      "$ref": "#/components/schemas/Location.PublicRef"
                     },
                     "data": {
                       "type": "array",
@@ -9232,7 +9232,7 @@
                   "type": "object",
                   "properties": {
                     "location": {
-                      "$ref": "#/components/schemas/Location.PublicInfo"
+                      "$ref": "#/components/schemas/Location.PublicRef"
                     },
                     "data": {
                       "$ref": "#/components/schemas/Pty"
@@ -9358,7 +9358,7 @@
                   "type": "object",
                   "properties": {
                     "location": {
-                      "$ref": "#/components/schemas/Location.PublicInfo"
+                      "$ref": "#/components/schemas/Location.PublicRef"
                     },
                     "data": {
                       "$ref": "#/components/schemas/Pty"
@@ -9458,7 +9458,7 @@
                   "type": "object",
                   "properties": {
                     "location": {
-                      "$ref": "#/components/schemas/Location.PublicInfo"
+                      "$ref": "#/components/schemas/Location.PublicRef"
                     },
                     "data": {
                       "$ref": "#/components/schemas/Pty"
@@ -9689,7 +9689,7 @@
                   "type": "object",
                   "properties": {
                     "location": {
-                      "$ref": "#/components/schemas/Location.PublicInfo"
+                      "$ref": "#/components/schemas/Location.PublicRef"
                     },
                     "data": {
                       "$ref": "#/components/schemas/PtyTicket.ConnectToken"
@@ -10770,7 +10770,7 @@
                   "type": "object",
                   "properties": {
                     "location": {
-                      "$ref": "#/components/schemas/Location.PublicInfo"
+                      "$ref": "#/components/schemas/Location.PublicRef"
                     },
                     "data": {
                       "type": "array",
@@ -10854,7 +10854,7 @@
                   "type": "object",
                   "properties": {
                     "location": {
-                      "$ref": "#/components/schemas/Location.PublicInfo"
+                      "$ref": "#/components/schemas/Location.PublicRef"
                     },
                     "data": {
                       "$ref": "#/components/schemas/Shell.Info"
@@ -10973,7 +10973,7 @@
                   "type": "object",
                   "properties": {
                     "location": {
-                      "$ref": "#/components/schemas/Location.PublicInfo"
+                      "$ref": "#/components/schemas/Location.PublicRef"
                     },
                     "data": {
                       "$ref": "#/components/schemas/Shell.Info"
@@ -11158,7 +11158,7 @@
                   "type": "object",
                   "properties": {
                     "location": {
-                      "$ref": "#/components/schemas/Location.PublicInfo"
+                      "$ref": "#/components/schemas/Location.PublicRef"
                     },
                     "data": {
                       "$ref": "#/components/schemas/Shell.Info"
@@ -11296,7 +11296,7 @@
                   "type": "object",
                   "properties": {
                     "location": {
-                      "$ref": "#/components/schemas/Location.PublicInfo"
+                      "$ref": "#/components/schemas/Location.PublicRef"
                     },
                     "data": {
                       "type": "object",
@@ -11407,7 +11407,7 @@
                   "type": "object",
                   "properties": {
                     "location": {
-                      "$ref": "#/components/schemas/Location.PublicInfo"
+                      "$ref": "#/components/schemas/Location.PublicRef"
                     },
                     "data": {
                       "type": "array",
@@ -11815,7 +11815,7 @@
                   "type": "object",
                   "properties": {
                     "location": {
-                      "$ref": "#/components/schemas/Location.PublicInfo"
+                      "$ref": "#/components/schemas/Location.PublicRef"
                     },
                     "data": {
                       "$ref": "#/components/schemas/Vcs.Info"
@@ -11898,7 +11898,7 @@
                   "type": "object",
                   "properties": {
                     "location": {
-                      "$ref": "#/components/schemas/Location.PublicInfo"
+                      "$ref": "#/components/schemas/Location.PublicRef"
                     },
                     "data": {
                       "anyOf": [
@@ -11998,7 +11998,7 @@
                   "type": "object",
                   "properties": {
                     "location": {
-                      "$ref": "#/components/schemas/Location.PublicInfo"
+                      "$ref": "#/components/schemas/Location.PublicRef"
                     },
                     "data": {
                       "type": "array",
@@ -12114,7 +12114,7 @@
                   "type": "object",
                   "properties": {
                     "location": {
-                      "$ref": "#/components/schemas/Location.PublicInfo"
+                      "$ref": "#/components/schemas/Location.PublicRef"
                     },
                     "data": {
                       "$ref": "#/components/schemas/Vcs.BranchList"
@@ -12228,7 +12228,7 @@
                   "type": "object",
                   "properties": {
                     "location": {
-                      "$ref": "#/components/schemas/Location.PublicInfo"
+                      "$ref": "#/components/schemas/Location.PublicRef"
                     },
                     "data": {
                       "type": "array",
@@ -12544,7 +12544,7 @@
                   "type": "object",
                   "properties": {
                     "location": {
-                      "$ref": "#/components/schemas/Location.PublicInfo"
+                      "$ref": "#/components/schemas/Location.PublicRef"
                     },
                     "data": {
                       "type": "array",
@@ -12640,7 +12640,7 @@
                   "type": "object",
                   "properties": {
                     "location": {
-                      "$ref": "#/components/schemas/Location.PublicInfo"
+                      "$ref": "#/components/schemas/Location.PublicRef"
                     },
                     "data": {
                       "$ref": "#/components/schemas/WebSearch.ResponseEncoded"

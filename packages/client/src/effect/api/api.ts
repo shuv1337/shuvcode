@@ -59,14 +59,14 @@ export interface LocationApi<E = never> {
 }
 
 export type AgentListInput = { readonly location?: { readonly directory?: string | undefined } | undefined }
-export type AgentListOutput = { readonly location: Location.PublicInfo; readonly data: ReadonlyArray<Agent.Info> }
+export type AgentListOutput = { readonly location: Location.PublicRef; readonly data: ReadonlyArray<Agent.Info> }
 export type AgentListOperation<E = never> = (input?: AgentListInput) => Effect.Effect<AgentListOutput, E>
 
 export type AgentGetInput = {
   readonly agentID: Agent.ID
   readonly location?: { readonly directory?: string | undefined } | undefined
 }
-export type AgentGetOutput = { readonly location: Location.PublicInfo; readonly data: Agent.Info }
+export type AgentGetOutput = { readonly location: Location.PublicRef; readonly data: Agent.Info }
 export type AgentGetOperation<E = never> = (input: AgentGetInput) => Effect.Effect<AgentGetOutput, E>
 
 export interface AgentApi<E = never> {
@@ -75,7 +75,7 @@ export interface AgentApi<E = never> {
 }
 
 export type PluginListInput = { readonly location?: { readonly directory?: string | undefined } | undefined }
-export type PluginListOutput = { readonly location: Location.PublicInfo; readonly data: ReadonlyArray<Plugin.Info> }
+export type PluginListOutput = { readonly location: Location.PublicRef; readonly data: ReadonlyArray<Plugin.Info> }
 export type PluginListOperation<E = never> = (input?: PluginListInput) => Effect.Effect<PluginListOutput, E>
 
 export type PluginAwaitActivationInput = { readonly location?: { readonly directory?: string | undefined } | undefined }
@@ -88,7 +88,7 @@ export type PluginCheckInput = {
   readonly location?: { readonly directory?: string | undefined } | undefined
   readonly target?: string | undefined
 }
-export type PluginCheckOutput = { readonly location: Location.PublicInfo; readonly data: ReadonlyArray<Plugin.Info> }
+export type PluginCheckOutput = { readonly location: Location.PublicRef; readonly data: ReadonlyArray<Plugin.Info> }
 export type PluginCheckOperation<E = never> = (input?: PluginCheckInput) => Effect.Effect<PluginCheckOutput, E>
 
 export type PluginUpdateInput = {
@@ -1423,11 +1423,11 @@ export interface MessageApi<E = never> {
 }
 
 export type ModelListInput = { readonly location?: { readonly directory?: string | undefined } | undefined }
-export type ModelListOutput = { readonly location: Location.PublicInfo; readonly data: ReadonlyArray<Model.Info> }
+export type ModelListOutput = { readonly location: Location.PublicRef; readonly data: ReadonlyArray<Model.Info> }
 export type ModelListOperation<E = never> = (input?: ModelListInput) => Effect.Effect<ModelListOutput, E>
 
 export type ModelDefaultInput = { readonly location?: { readonly directory?: string | undefined } | undefined }
-export type ModelDefaultOutput = { readonly location: Location.PublicInfo; readonly data: Model.Info | undefined }
+export type ModelDefaultOutput = { readonly location: Location.PublicRef; readonly data: Model.Info | undefined }
 export type ModelDefaultOperation<E = never> = (input?: ModelDefaultInput) => Effect.Effect<ModelDefaultOutput, E>
 
 export interface ModelApi<E = never> {
@@ -1444,14 +1444,14 @@ export interface GenerateApi<E = never> {
 }
 
 export type ProviderListInput = { readonly location?: { readonly directory?: string | undefined } | undefined }
-export type ProviderListOutput = { readonly location: Location.PublicInfo; readonly data: ReadonlyArray<Provider.Info> }
+export type ProviderListOutput = { readonly location: Location.PublicRef; readonly data: ReadonlyArray<Provider.Info> }
 export type ProviderListOperation<E = never> = (input?: ProviderListInput) => Effect.Effect<ProviderListOutput, E>
 
 export type ProviderGetInput = {
   readonly providerID: Provider.ID
   readonly location?: { readonly directory?: string | undefined } | undefined
 }
-export type ProviderGetOutput = { readonly location: Location.PublicInfo; readonly data: Provider.Info }
+export type ProviderGetOutput = { readonly location: Location.PublicRef; readonly data: Provider.Info }
 export type ProviderGetOperation<E = never> = (input: ProviderGetInput) => Effect.Effect<ProviderGetOutput, E>
 
 export interface ProviderApi<E = never> {
@@ -1461,7 +1461,7 @@ export interface ProviderApi<E = never> {
 
 export type IntegrationListInput = { readonly location?: { readonly directory?: string | undefined } | undefined }
 export type IntegrationListOutput = {
-  readonly location: Location.PublicInfo
+  readonly location: Location.PublicRef
   readonly data: ReadonlyArray<Integration.Info>
 }
 export type IntegrationListOperation<E = never> = (
@@ -1473,7 +1473,7 @@ export type IntegrationGetInput = {
   readonly location?: { readonly directory?: string | undefined } | undefined
 }
 export type IntegrationGetOutput = {
-  readonly location: Location.PublicInfo
+  readonly location: Location.PublicRef
   readonly data: Integration.Info | undefined
 }
 export type IntegrationGetOperation<E = never> = (input: IntegrationGetInput) => Effect.Effect<IntegrationGetOutput, E>
@@ -1507,7 +1507,7 @@ export type IntegrationOauthConnectInput = {
   readonly label?: string | undefined
 }
 export type IntegrationOauthConnectOutput = {
-  readonly location: Location.PublicInfo
+  readonly location: Location.PublicRef
   readonly data: Integration.Attempt
 }
 export type IntegrationOauthConnectOperation<E = never> = (
@@ -1520,7 +1520,7 @@ export type IntegrationOauthStatusInput = {
   readonly location?: { readonly directory?: string | undefined } | undefined
 }
 export type IntegrationOauthStatusOutput = {
-  readonly location: Location.PublicInfo
+  readonly location: Location.PublicRef
   readonly data: Integration.AttemptStatus
 }
 export type IntegrationOauthStatusOperation<E = never> = (
@@ -1555,7 +1555,7 @@ export type IntegrationCommandConnectInput = {
   readonly label?: string | undefined
 }
 export type IntegrationCommandConnectOutput = {
-  readonly location: Location.PublicInfo
+  readonly location: Location.PublicRef
   readonly data: Integration.CommandAttempt
 }
 export type IntegrationCommandConnectOperation<E = never> = (
@@ -1568,7 +1568,7 @@ export type IntegrationCommandStatusInput = {
   readonly location?: { readonly directory?: string | undefined } | undefined
 }
 export type IntegrationCommandStatusOutput = {
-  readonly location: Location.PublicInfo
+  readonly location: Location.PublicRef
   readonly data: Integration.CommandAttemptStatus
 }
 export type IntegrationCommandStatusOperation<E = never> = (
@@ -1604,7 +1604,7 @@ export interface IntegrationApi<E = never> {
 }
 
 export type McpListInput = { readonly location?: { readonly directory?: string | undefined } | undefined }
-export type McpListOutput = { readonly location: Location.PublicInfo; readonly data: ReadonlyArray<Mcp.Server> }
+export type McpListOutput = { readonly location: Location.PublicRef; readonly data: ReadonlyArray<Mcp.Server> }
 export type McpListOperation<E = never> = (input?: McpListInput) => Effect.Effect<McpListOutput, E>
 
 export type McpAddInput = {
@@ -1637,7 +1637,7 @@ export type McpDisconnectOutput = void
 export type McpDisconnectOperation<E = never> = (input: McpDisconnectInput) => Effect.Effect<McpDisconnectOutput, E>
 
 export type McpResourceCatalogInput = { readonly location?: { readonly directory?: string | undefined } | undefined }
-export type McpResourceCatalogOutput = { readonly location: Location.PublicInfo; readonly data: Mcp.ResourceCatalog }
+export type McpResourceCatalogOutput = { readonly location: Location.PublicRef; readonly data: Mcp.ResourceCatalog }
 export type McpResourceCatalogOperation<E = never> = (
   input?: McpResourceCatalogInput,
 ) => Effect.Effect<McpResourceCatalogOutput, E>
@@ -1704,7 +1704,7 @@ export interface ProjectApi<E = never> {
 }
 
 export type FormRequestListInput = { readonly location?: { readonly directory?: string | undefined } | undefined }
-export type FormRequestListOutput = { readonly location: Location.PublicInfo; readonly data: ReadonlyArray<Form.Info> }
+export type FormRequestListOutput = { readonly location: Location.PublicRef; readonly data: ReadonlyArray<Form.Info> }
 export type FormRequestListOperation<E = never> = (
   input?: FormRequestListInput,
 ) => Effect.Effect<FormRequestListOutput, E>
@@ -1751,7 +1751,7 @@ export interface FormApi<E = never> {
 
 export type PermissionRequestListInput = { readonly location?: { readonly directory?: string | undefined } | undefined }
 export type PermissionRequestListOutput = {
-  readonly location: Location.PublicInfo
+  readonly location: Location.PublicRef
   readonly data: ReadonlyArray<Permission.Request>
 }
 export type PermissionRequestListOperation<E = never> = (
@@ -1824,7 +1824,7 @@ export type FileListInput = {
   readonly location?: { readonly directory?: string | undefined } | undefined
   readonly path?: string | undefined
 }
-export type FileListOutput = { readonly location: Location.PublicInfo; readonly data: ReadonlyArray<FileSystem.Entry> }
+export type FileListOutput = { readonly location: Location.PublicRef; readonly data: ReadonlyArray<FileSystem.Entry> }
 export type FileListOperation<E = never> = (input?: FileListInput) => Effect.Effect<FileListOutput, E>
 
 export type FileFindInput = {
@@ -1833,7 +1833,7 @@ export type FileFindInput = {
   readonly type?: "file" | "directory" | undefined
   readonly limit?: number | undefined
 }
-export type FileFindOutput = { readonly location: Location.PublicInfo; readonly data: ReadonlyArray<FileSystem.Entry> }
+export type FileFindOutput = { readonly location: Location.PublicRef; readonly data: ReadonlyArray<FileSystem.Entry> }
 export type FileFindOperation<E = never> = (input: FileFindInput) => Effect.Effect<FileFindOutput, E>
 
 export interface FileApi<E = never> {
@@ -1842,7 +1842,7 @@ export interface FileApi<E = never> {
 }
 
 export type CommandListInput = { readonly location?: { readonly directory?: string | undefined } | undefined }
-export type CommandListOutput = { readonly location: Location.PublicInfo; readonly data: ReadonlyArray<Command.Info> }
+export type CommandListOutput = { readonly location: Location.PublicRef; readonly data: ReadonlyArray<Command.Info> }
 export type CommandListOperation<E = never> = (input?: CommandListInput) => Effect.Effect<CommandListOutput, E>
 
 export interface CommandApi<E = never> {
@@ -1850,7 +1850,7 @@ export interface CommandApi<E = never> {
 }
 
 export type SkillListInput = { readonly location?: { readonly directory?: string | undefined } | undefined }
-export type SkillListOutput = { readonly location: Location.PublicInfo; readonly data: ReadonlyArray<Skill.Info> }
+export type SkillListOutput = { readonly location: Location.PublicRef; readonly data: ReadonlyArray<Skill.Info> }
 export type SkillListOperation<E = never> = (input?: SkillListInput) => Effect.Effect<SkillListOutput, E>
 
 export interface SkillApi<E = never> {
@@ -1878,7 +1878,7 @@ export interface EventApi<E = never> {
 }
 
 export type PtyListInput = { readonly location?: { readonly directory?: string | undefined } | undefined }
-export type PtyListOutput = { readonly location: Location.PublicInfo; readonly data: ReadonlyArray<Pty.Info> }
+export type PtyListOutput = { readonly location: Location.PublicRef; readonly data: ReadonlyArray<Pty.Info> }
 export type PtyListOperation<E = never> = (input?: PtyListInput) => Effect.Effect<PtyListOutput, E>
 
 export type PtyCreateInput = {
@@ -1889,14 +1889,14 @@ export type PtyCreateInput = {
   readonly title?: string | undefined
   readonly env?: { readonly [x: string]: string } | undefined
 }
-export type PtyCreateOutput = { readonly location: Location.PublicInfo; readonly data: Pty.Info }
+export type PtyCreateOutput = { readonly location: Location.PublicRef; readonly data: Pty.Info }
 export type PtyCreateOperation<E = never> = (input?: PtyCreateInput) => Effect.Effect<PtyCreateOutput, E>
 
 export type PtyGetInput = {
   readonly ptyID: Pty.ID
   readonly location?: { readonly directory?: string | undefined } | undefined
 }
-export type PtyGetOutput = { readonly location: Location.PublicInfo; readonly data: Pty.Info }
+export type PtyGetOutput = { readonly location: Location.PublicRef; readonly data: Pty.Info }
 export type PtyGetOperation<E = never> = (input: PtyGetInput) => Effect.Effect<PtyGetOutput, E>
 
 export type PtyUpdateInput = {
@@ -1905,7 +1905,7 @@ export type PtyUpdateInput = {
   readonly title?: string | undefined
   readonly size?: { readonly rows: number; readonly cols: number } | undefined
 }
-export type PtyUpdateOutput = { readonly location: Location.PublicInfo; readonly data: Pty.Info }
+export type PtyUpdateOutput = { readonly location: Location.PublicRef; readonly data: Pty.Info }
 export type PtyUpdateOperation<E = never> = (input: PtyUpdateInput) => Effect.Effect<PtyUpdateOutput, E>
 
 export type PtyRemoveInput = {
@@ -1920,7 +1920,7 @@ export type PtyConnectTokenInput = {
   readonly location?: { readonly directory?: string | undefined } | undefined
   readonly "x-opencode-ticket"?: string | undefined
 }
-export type PtyConnectTokenOutput = { readonly location: Location.PublicInfo; readonly data: PtyTicket.ConnectToken }
+export type PtyConnectTokenOutput = { readonly location: Location.PublicRef; readonly data: PtyTicket.ConnectToken }
 export type PtyConnectTokenOperation<E = never> = (
   input: PtyConnectTokenInput,
 ) => Effect.Effect<PtyConnectTokenOutput, E>
@@ -2113,7 +2113,7 @@ export interface ExperimentalApi<E = never> {
 }
 
 export type ShellListInput = { readonly location?: { readonly directory?: string | undefined } | undefined }
-export type ShellListOutput = { readonly location: Location.PublicInfo; readonly data: ReadonlyArray<Shell.Info> }
+export type ShellListOutput = { readonly location: Location.PublicRef; readonly data: ReadonlyArray<Shell.Info> }
 export type ShellListOperation<E = never> = (input?: ShellListInput) => Effect.Effect<ShellListOutput, E>
 
 export type ShellCreateInput = {
@@ -2123,14 +2123,14 @@ export type ShellCreateInput = {
   readonly timeout: number
   readonly metadata?: { readonly [x: string]: unknown } | undefined
 }
-export type ShellCreateOutput = { readonly location: Location.PublicInfo; readonly data: Shell.Info }
+export type ShellCreateOutput = { readonly location: Location.PublicRef; readonly data: Shell.Info }
 export type ShellCreateOperation<E = never> = (input: ShellCreateInput) => Effect.Effect<ShellCreateOutput, E>
 
 export type ShellGetInput = {
   readonly id: Shell.ID
   readonly location?: { readonly directory?: string | undefined } | undefined
 }
-export type ShellGetOutput = { readonly location: Location.PublicInfo; readonly data: Shell.Info }
+export type ShellGetOutput = { readonly location: Location.PublicRef; readonly data: Shell.Info }
 export type ShellGetOperation<E = never> = (input: ShellGetInput) => Effect.Effect<ShellGetOutput, E>
 
 export type ShellTimeoutInput = {
@@ -2138,7 +2138,7 @@ export type ShellTimeoutInput = {
   readonly location?: { readonly directory?: string | undefined } | undefined
   readonly timeout: number
 }
-export type ShellTimeoutOutput = { readonly location: Location.PublicInfo; readonly data: Shell.Info }
+export type ShellTimeoutOutput = { readonly location: Location.PublicRef; readonly data: Shell.Info }
 export type ShellTimeoutOperation<E = never> = (input: ShellTimeoutInput) => Effect.Effect<ShellTimeoutOutput, E>
 
 export type ShellOutputInput = {
@@ -2148,7 +2148,7 @@ export type ShellOutputInput = {
   readonly limit?: number | undefined
 }
 export type ShellOutputOutput = {
-  readonly location: Location.PublicInfo
+  readonly location: Location.PublicRef
   readonly data: {
     readonly output: string
     readonly cursor: number
@@ -2176,7 +2176,7 @@ export interface ShellApi<E = never> {
 
 export type ReferenceListInput = { readonly location?: { readonly directory?: string | undefined } | undefined }
 export type ReferenceListOutput = {
-  readonly location: Location.PublicInfo
+  readonly location: Location.PublicRef
   readonly data: ReadonlyArray<Reference.Info>
 }
 export type ReferenceListOperation<E = never> = (input?: ReferenceListInput) => Effect.Effect<ReferenceListOutput, E>
@@ -2222,15 +2222,15 @@ export interface WorktreeApi<E = never> {
 }
 
 export type VcsGetInput = { readonly location?: { readonly directory?: string | undefined } | undefined }
-export type VcsGetOutput = { readonly location: Location.PublicInfo; readonly data: Vcs.Info }
+export type VcsGetOutput = { readonly location: Location.PublicRef; readonly data: Vcs.Info }
 export type VcsGetOperation<E = never> = (input?: VcsGetInput) => Effect.Effect<VcsGetOutput, E>
 
 export type VcsBaseInput = { readonly location?: { readonly directory?: string | undefined } | undefined }
-export type VcsBaseOutput = { readonly location: Location.PublicInfo; readonly data: Vcs.Base | null }
+export type VcsBaseOutput = { readonly location: Location.PublicRef; readonly data: Vcs.Base | null }
 export type VcsBaseOperation<E = never> = (input?: VcsBaseInput) => Effect.Effect<VcsBaseOutput, E>
 
 export type VcsStatusInput = { readonly location?: { readonly directory?: string | undefined } | undefined }
-export type VcsStatusOutput = { readonly location: Location.PublicInfo; readonly data: ReadonlyArray<Vcs.FileStatus> }
+export type VcsStatusOutput = { readonly location: Location.PublicRef; readonly data: ReadonlyArray<Vcs.FileStatus> }
 export type VcsStatusOperation<E = never> = (input?: VcsStatusInput) => Effect.Effect<VcsStatusOutput, E>
 
 export type VcsBranchesInput = {
@@ -2238,7 +2238,7 @@ export type VcsBranchesInput = {
   readonly search?: string | undefined
   readonly limit?: number | undefined
 }
-export type VcsBranchesOutput = { readonly location: Location.PublicInfo; readonly data: Vcs.BranchList }
+export type VcsBranchesOutput = { readonly location: Location.PublicRef; readonly data: Vcs.BranchList }
 export type VcsBranchesOperation<E = never> = (input?: VcsBranchesInput) => Effect.Effect<VcsBranchesOutput, E>
 
 export type VcsDiffInput = {
@@ -2247,7 +2247,7 @@ export type VcsDiffInput = {
   readonly base?: string | undefined
   readonly context?: number | undefined
 }
-export type VcsDiffOutput = { readonly location: Location.PublicInfo; readonly data: ReadonlyArray<FileDiff.Info> }
+export type VcsDiffOutput = { readonly location: Location.PublicRef; readonly data: ReadonlyArray<FileDiff.Info> }
 export type VcsDiffOperation<E = never> = (input: VcsDiffInput) => Effect.Effect<VcsDiffOutput, E>
 
 export interface VcsApi<E = never> {
@@ -2290,7 +2290,7 @@ export interface MigrationApi<E = never> {
 
 export type WebsearchProvidersInput = { readonly location?: { readonly directory?: string | undefined } | undefined }
 export type WebsearchProvidersOutput = {
-  readonly location: Location.PublicInfo
+  readonly location: Location.PublicRef
   readonly data: ReadonlyArray<WebSearch.Provider>
 }
 export type WebsearchProvidersOperation<E = never> = (
@@ -2302,7 +2302,7 @@ export type WebsearchQueryInput = {
   readonly query: string
   readonly providerID?: WebSearch.ID | undefined
 }
-export type WebsearchQueryOutput = { readonly location: Location.PublicInfo; readonly data: WebSearch.Response }
+export type WebsearchQueryOutput = { readonly location: Location.PublicRef; readonly data: WebSearch.Response }
 export type WebsearchQueryOperation<E = never> = (input: WebsearchQueryInput) => Effect.Effect<WebsearchQueryOutput, E>
 
 export interface WebsearchApi<E = never> {

@@ -4,6 +4,8 @@ export type ServerStatus = { version: string; pid: number; urls: Array<string> }
 
 export type LocationPublicInfo = { directory: string; project: { id: string; directory: string; canonical: string } }
 
+export type LocationPublicRef = { directory: string }
+
 export type ModelRef = { id: string; providerID: string; variant?: string }
 
 export type ProviderSettings = { [x: string]: any }
@@ -42,8 +44,6 @@ export type FileDiffInfo = {
   deletions: number
   status: "added" | "deleted" | "modified"
 }
-
-export type LocationPublicRef = { directory: string }
 
 export type SessionStatsToolTotals = { calls: number; succeeded: number; failed: number; unfinished: number }
 
@@ -435,18 +435,6 @@ export type ConfigPreferences = { shell?: string; websearch?: false | { provider
 
 export type ConfigShellOption = { path: string; name: string; acceptable: boolean }
 
-export type ProviderRequest = {
-  settings: ProviderSettings
-  headers: { [x: string]: string }
-  body: { [x: string]: any }
-}
-
-export type PermissionRule = { action: string; resource: string; effect: PermissionEffect }
-
-export type PluginInfo = { id?: string; source: PluginSource; features: PluginFeatures; state: PluginState }
-
-export type SessionRevert = { messageID: string; partID?: string; snapshot?: string; files?: Array<FileDiffInfo> }
-
 export type SessionMessageLocationSwitched = {
   id: string
   metadata?: { [x: string]: JsonValue }
@@ -476,6 +464,18 @@ export type V2EventServerConnected = {
   type: "server.connected"
   data: {}
 }
+
+export type ProviderRequest = {
+  settings: ProviderSettings
+  headers: { [x: string]: string }
+  body: { [x: string]: any }
+}
+
+export type PermissionRule = { action: string; resource: string; effect: PermissionEffect }
+
+export type PluginInfo = { id?: string; source: PluginSource; features: PluginFeatures; state: PluginState }
+
+export type SessionRevert = { messageID: string; partID?: string; snapshot?: string; files?: Array<FileDiffInfo> }
 
 export type SessionStatsTools =
   | { mode: "none" }
@@ -1624,6 +1624,15 @@ export type WorktreeList = Array<WorktreeDirectory>
 
 export type VcsInfo = { branch: VcsBranch }
 
+export type SessionInboxMove = {
+  id: string
+  sessionID: string
+  timeCreated: number
+  type: "move"
+  delivery: SessionInboxDelivery
+  payload: SessionInboxMovePayload
+}
+
 export type PermissionRuleset = Array<PermissionRule>
 
 export type SessionRevertStaged = {
@@ -1634,15 +1643,6 @@ export type SessionRevertStaged = {
   durable: { aggregateID: string; seq: number; version: 1 }
   location?: LocationRef
   data: { sessionID: string; revert: SessionRevert }
-}
-
-export type SessionInboxMove = {
-  id: string
-  sessionID: string
-  timeCreated: number
-  type: "move"
-  delivery: SessionInboxDelivery
-  payload: SessionInboxMovePayload
 }
 
 export type SessionStatsInfo = {
@@ -2610,20 +2610,20 @@ export type AgentListInput = {
   readonly location?: { readonly location?: { readonly directory?: string | undefined } | undefined }["location"]
 }
 
-export type AgentListOutput = { location: LocationPublicInfo; data: Array<AgentInfo> }
+export type AgentListOutput = { location: LocationPublicRef; data: Array<AgentInfo> }
 
 export type AgentGetInput = {
   readonly agentID: { readonly agentID: string }["agentID"]
   readonly location?: { readonly location?: { readonly directory?: string | undefined } | undefined }["location"]
 }
 
-export type AgentGetOutput = { location: LocationPublicInfo; data: AgentInfo }
+export type AgentGetOutput = { location: LocationPublicRef; data: AgentInfo }
 
 export type PluginListInput = {
   readonly location?: { readonly location?: { readonly directory?: string | undefined } | undefined }["location"]
 }
 
-export type PluginListOutput = { location: LocationPublicInfo; data: Array<PluginInfo> }
+export type PluginListOutput = { location: LocationPublicRef; data: Array<PluginInfo> }
 
 export type PluginAwaitActivationInput = {
   readonly location?: { readonly location?: { readonly directory?: string | undefined } | undefined }["location"]
@@ -2636,7 +2636,7 @@ export type PluginCheckInput = {
   readonly target?: { readonly target?: string | undefined }["target"]
 }
 
-export type PluginCheckOutput = { location: LocationPublicInfo; data: Array<PluginInfo> }
+export type PluginCheckOutput = { location: LocationPublicRef; data: Array<PluginInfo> }
 
 export type PluginUpdateInput = {
   readonly location?: { readonly location?: { readonly directory?: string | undefined } | undefined }["location"]
@@ -4481,13 +4481,13 @@ export type ModelListInput = {
   readonly location?: { readonly location?: { readonly directory?: string | undefined } | undefined }["location"]
 }
 
-export type ModelListOutput = { location: LocationPublicInfo; data: Array<ModelInfo> }
+export type ModelListOutput = { location: LocationPublicRef; data: Array<ModelInfo> }
 
 export type ModelDefaultInput = {
   readonly location?: { readonly location?: { readonly directory?: string | undefined } | undefined }["location"]
 }
 
-export type ModelDefaultOutput = { location: LocationPublicInfo; data: ModelInfo | null }
+export type ModelDefaultOutput = { location: LocationPublicRef; data: ModelInfo | null }
 
 export type GenerateTextInput = {
   readonly prompt: {
@@ -4506,27 +4506,27 @@ export type ProviderListInput = {
   readonly location?: { readonly location?: { readonly directory?: string | undefined } | undefined }["location"]
 }
 
-export type ProviderListOutput = { location: LocationPublicInfo; data: Array<ProviderInfo> }
+export type ProviderListOutput = { location: LocationPublicRef; data: Array<ProviderInfo> }
 
 export type ProviderGetInput = {
   readonly providerID: { readonly providerID: string }["providerID"]
   readonly location?: { readonly location?: { readonly directory?: string | undefined } | undefined }["location"]
 }
 
-export type ProviderGetOutput = { location: LocationPublicInfo; data: ProviderInfo }
+export type ProviderGetOutput = { location: LocationPublicRef; data: ProviderInfo }
 
 export type IntegrationListInput = {
   readonly location?: { readonly location?: { readonly directory?: string | undefined } | undefined }["location"]
 }
 
-export type IntegrationListOutput = { location: LocationPublicInfo; data: Array<IntegrationInfo> }
+export type IntegrationListOutput = { location: LocationPublicRef; data: Array<IntegrationInfo> }
 
 export type IntegrationGetInput = {
   readonly integrationID: { readonly integrationID: string }["integrationID"]
   readonly location?: { readonly location?: { readonly directory?: string | undefined } | undefined }["location"]
 }
 
-export type IntegrationGetOutput = { location: LocationPublicInfo; data: IntegrationInfo | null }
+export type IntegrationGetOutput = { location: LocationPublicRef; data: IntegrationInfo | null }
 
 export type IntegrationWellknownAddInput = {
   readonly location?: { readonly location?: { readonly directory?: string | undefined } | undefined }["location"]
@@ -4577,7 +4577,7 @@ export type IntegrationOauthConnectInput = {
   }["label"]
 }
 
-export type IntegrationOauthConnectOutput = { location: LocationPublicInfo; data: IntegrationAttempt }
+export type IntegrationOauthConnectOutput = { location: LocationPublicRef; data: IntegrationAttempt }
 
 export type IntegrationOauthStatusInput = {
   readonly integrationID: { readonly integrationID: string; readonly attemptID: string }["integrationID"]
@@ -4585,7 +4585,7 @@ export type IntegrationOauthStatusInput = {
   readonly location?: { readonly location?: { readonly directory?: string | undefined } | undefined }["location"]
 }
 
-export type IntegrationOauthStatusOutput = { location: LocationPublicInfo; data: IntegrationAttemptStatus }
+export type IntegrationOauthStatusOutput = { location: LocationPublicRef; data: IntegrationAttemptStatus }
 
 export type IntegrationOauthCompleteInput = {
   readonly integrationID: { readonly integrationID: string; readonly attemptID: string }["integrationID"]
@@ -4611,7 +4611,7 @@ export type IntegrationCommandConnectInput = {
   readonly label?: { readonly methodID: string; readonly label?: string | undefined }["label"]
 }
 
-export type IntegrationCommandConnectOutput = { location: LocationPublicInfo; data: IntegrationCommandAttempt }
+export type IntegrationCommandConnectOutput = { location: LocationPublicRef; data: IntegrationCommandAttempt }
 
 export type IntegrationCommandStatusInput = {
   readonly integrationID: { readonly integrationID: string; readonly attemptID: string }["integrationID"]
@@ -4619,7 +4619,7 @@ export type IntegrationCommandStatusInput = {
   readonly location?: { readonly location?: { readonly directory?: string | undefined } | undefined }["location"]
 }
 
-export type IntegrationCommandStatusOutput = { location: LocationPublicInfo; data: IntegrationCommandAttemptStatus }
+export type IntegrationCommandStatusOutput = { location: LocationPublicRef; data: IntegrationCommandAttemptStatus }
 
 export type IntegrationCommandCancelInput = {
   readonly integrationID: { readonly integrationID: string; readonly attemptID: string }["integrationID"]
@@ -4633,7 +4633,7 @@ export type McpListInput = {
   readonly location?: { readonly location?: { readonly directory?: string | undefined } | undefined }["location"]
 }
 
-export type McpListOutput = { location: LocationPublicInfo; data: Array<McpServer> }
+export type McpListOutput = { location: LocationPublicRef; data: Array<McpServer> }
 
 export type McpAddInput = {
   readonly server: { readonly server: string }["server"]
@@ -4696,7 +4696,7 @@ export type McpResourceCatalogInput = {
   readonly location?: { readonly location?: { readonly directory?: string | undefined } | undefined }["location"]
 }
 
-export type McpResourceCatalogOutput = { location: LocationPublicInfo; data: McpResourceCatalog }
+export type McpResourceCatalogOutput = { location: LocationPublicRef; data: McpResourceCatalog }
 
 export type CredentialUpdateInput = {
   readonly credentialID: { readonly credentialID: string }["credentialID"]
@@ -4756,7 +4756,7 @@ export type FormRequestListInput = {
   readonly location?: { readonly location?: { readonly directory?: string | undefined } | undefined }["location"]
 }
 
-export type FormRequestListOutput = { location: LocationPublicInfo; data: Array<FormInfo> }
+export type FormRequestListOutput = { location: LocationPublicRef; data: Array<FormInfo> }
 
 export type FormListInput = { readonly sessionID: { readonly sessionID: string }["sessionID"] }
 
@@ -5607,7 +5607,7 @@ export type PermissionRequestListInput = {
   readonly location?: { readonly location?: { readonly directory?: string | undefined } | undefined }["location"]
 }
 
-export type PermissionRequestListOutput = { location: LocationPublicInfo; data: Array<PermissionRequest> }
+export type PermissionRequestListOutput = { location: LocationPublicRef; data: Array<PermissionRequest> }
 
 export type PermissionSavedListInput = { readonly projectID?: { readonly projectID?: string | undefined }["projectID"] }
 
@@ -5737,7 +5737,7 @@ export type FileListInput = {
   }["path"]
 }
 
-export type FileListOutput = { location: LocationPublicInfo; data: Array<FileSystemEntry> }
+export type FileListOutput = { location: LocationPublicRef; data: Array<FileSystemEntry> }
 
 export type FileFindInput = {
   readonly location?: {
@@ -5766,19 +5766,19 @@ export type FileFindInput = {
   }["limit"]
 }
 
-export type FileFindOutput = { location: LocationPublicInfo; data: Array<FileSystemEntry> }
+export type FileFindOutput = { location: LocationPublicRef; data: Array<FileSystemEntry> }
 
 export type CommandListInput = {
   readonly location?: { readonly location?: { readonly directory?: string | undefined } | undefined }["location"]
 }
 
-export type CommandListOutput = { location: LocationPublicInfo; data: Array<CommandInfo> }
+export type CommandListOutput = { location: LocationPublicRef; data: Array<CommandInfo> }
 
 export type SkillListInput = {
   readonly location?: { readonly location?: { readonly directory?: string | undefined } | undefined }["location"]
 }
 
-export type SkillListOutput = { location: LocationPublicInfo; data: Array<SkillInfo> }
+export type SkillListOutput = { location: LocationPublicRef; data: Array<SkillInfo> }
 
 export type RpcCallInput = {
   readonly rpcID: { readonly rpcID: string; readonly method: string }["rpcID"]
@@ -5795,7 +5795,7 @@ export type PtyListInput = {
   readonly location?: { readonly location?: { readonly directory?: string | undefined } | undefined }["location"]
 }
 
-export type PtyListOutput = { location: LocationPublicInfo; data: Array<Pty> }
+export type PtyListOutput = { location: LocationPublicRef; data: Array<Pty> }
 
 export type PtyCreateInput = {
   readonly location?: { readonly location?: { readonly directory?: string | undefined } | undefined }["location"]
@@ -5836,14 +5836,14 @@ export type PtyCreateInput = {
   }["env"]
 }
 
-export type PtyCreateOutput = { location: LocationPublicInfo; data: Pty }
+export type PtyCreateOutput = { location: LocationPublicRef; data: Pty }
 
 export type PtyGetInput = {
   readonly ptyID: { readonly ptyID: string }["ptyID"]
   readonly location?: { readonly location?: { readonly directory?: string | undefined } | undefined }["location"]
 }
 
-export type PtyGetOutput = { location: LocationPublicInfo; data: Pty }
+export type PtyGetOutput = { location: LocationPublicRef; data: Pty }
 
 export type PtyUpdateInput = {
   readonly ptyID: { readonly ptyID: string }["ptyID"]
@@ -5855,7 +5855,7 @@ export type PtyUpdateInput = {
   readonly size?: { readonly title?: string; readonly size?: { readonly rows: number; readonly cols: number } }["size"]
 }
 
-export type PtyUpdateOutput = { location: LocationPublicInfo; data: Pty }
+export type PtyUpdateOutput = { location: LocationPublicRef; data: Pty }
 
 export type PtyRemoveInput = {
   readonly ptyID: { readonly ptyID: string }["ptyID"]
@@ -5870,7 +5870,7 @@ export type PtyConnectTokenInput = {
   readonly "x-opencode-ticket"?: { readonly "x-opencode-ticket"?: string | undefined }["x-opencode-ticket"]
 }
 
-export type PtyConnectTokenOutput = { location: LocationPublicInfo; data: PtyTicketConnectToken }
+export type PtyConnectTokenOutput = { location: LocationPublicRef; data: PtyTicketConnectToken }
 
 export type ExperimentalPersistentPtyReadInput = {
   readonly sessionID: { readonly sessionID: string }["sessionID"]
@@ -5978,7 +5978,7 @@ export type ShellListInput = {
   readonly location?: { readonly location?: { readonly directory?: string | undefined } | undefined }["location"]
 }
 
-export type ShellListOutput = { location: LocationPublicInfo; data: Array<ShellInfo1> }
+export type ShellListOutput = { location: LocationPublicRef; data: Array<ShellInfo1> }
 
 export type ShellCreateInput = {
   readonly location?: { readonly location?: { readonly directory?: string | undefined } | undefined }["location"]
@@ -6008,14 +6008,14 @@ export type ShellCreateInput = {
   }["metadata"]
 }
 
-export type ShellCreateOutput = { location: LocationPublicInfo; data: ShellInfo1 }
+export type ShellCreateOutput = { location: LocationPublicRef; data: ShellInfo1 }
 
 export type ShellGetInput = {
   readonly id: { readonly id: string }["id"]
   readonly location?: { readonly location?: { readonly directory?: string | undefined } | undefined }["location"]
 }
 
-export type ShellGetOutput = { location: LocationPublicInfo; data: ShellInfo1 }
+export type ShellGetOutput = { location: LocationPublicRef; data: ShellInfo1 }
 
 export type ShellTimeoutInput = {
   readonly id: { readonly id: string }["id"]
@@ -6023,7 +6023,7 @@ export type ShellTimeoutInput = {
   readonly timeout: { readonly timeout: number }["timeout"]
 }
 
-export type ShellTimeoutOutput = { location: LocationPublicInfo; data: ShellInfo1 }
+export type ShellTimeoutOutput = { location: LocationPublicRef; data: ShellInfo1 }
 
 export type ShellOutputInput = {
   readonly id: { readonly id: string }["id"]
@@ -6045,7 +6045,7 @@ export type ShellOutputInput = {
 }
 
 export type ShellOutputOutput = {
-  location: LocationPublicInfo
+  location: LocationPublicRef
   data: { output: string; cursor: number; size: number; truncated: boolean }
 }
 
@@ -6060,7 +6060,7 @@ export type ReferenceListInput = {
   readonly location?: { readonly location?: { readonly directory?: string | undefined } | undefined }["location"]
 }
 
-export type ReferenceListOutput = { location: LocationPublicInfo; data: Array<ReferenceInfo> }
+export type ReferenceListOutput = { location: LocationPublicRef; data: Array<ReferenceInfo> }
 
 export type WorktreeListInput = {
   readonly location?: { readonly location?: { readonly directory?: string | undefined } | undefined }["location"]
@@ -6127,19 +6127,19 @@ export type VcsGetInput = {
   readonly location?: { readonly location?: { readonly directory?: string | undefined } | undefined }["location"]
 }
 
-export type VcsGetOutput = { location: LocationPublicInfo; data: VcsInfo }
+export type VcsGetOutput = { location: LocationPublicRef; data: VcsInfo }
 
 export type VcsBaseInput = {
   readonly location?: { readonly location?: { readonly directory?: string | undefined } | undefined }["location"]
 }
 
-export type VcsBaseOutput = { location: LocationPublicInfo; data: VcsBase | null }
+export type VcsBaseOutput = { location: LocationPublicRef; data: VcsBase | null }
 
 export type VcsStatusInput = {
   readonly location?: { readonly location?: { readonly directory?: string | undefined } | undefined }["location"]
 }
 
-export type VcsStatusOutput = { location: LocationPublicInfo; data: Array<VcsFileStatus> }
+export type VcsStatusOutput = { location: LocationPublicRef; data: Array<VcsFileStatus> }
 
 export type VcsBranchesInput = {
   readonly location?: {
@@ -6159,7 +6159,7 @@ export type VcsBranchesInput = {
   }["limit"]
 }
 
-export type VcsBranchesOutput = { location: LocationPublicInfo; data: VcsBranchList }
+export type VcsBranchesOutput = { location: LocationPublicRef; data: VcsBranchList }
 
 export type VcsDiffInput = {
   readonly location?: {
@@ -6188,7 +6188,7 @@ export type VcsDiffInput = {
   }["context"]
 }
 
-export type VcsDiffOutput = { location: LocationPublicInfo; data: Array<FileDiffInfo> }
+export type VcsDiffOutput = { location: LocationPublicRef; data: Array<FileDiffInfo> }
 
 export type DebugLocationListOutput = Array<LocationPublicRef>
 
@@ -6207,7 +6207,7 @@ export type WebsearchProvidersInput = {
   readonly location?: { readonly location?: { readonly directory?: string | undefined } | undefined }["location"]
 }
 
-export type WebsearchProvidersOutput = { location: LocationPublicInfo; data: Array<WebSearchProvider> }
+export type WebsearchProvidersOutput = { location: LocationPublicRef; data: Array<WebSearchProvider> }
 
 export type WebsearchQueryInput = {
   readonly location?: { readonly location?: { readonly directory?: string | undefined } | undefined }["location"]
@@ -6216,7 +6216,7 @@ export type WebsearchQueryInput = {
 }
 
 export type WebsearchQueryOutput = {
-  location: LocationPublicInfo
+  location: LocationPublicRef
   data: { providerID: string; results: Array<WebSearchResult> }
 }
 

@@ -146,7 +146,7 @@ describe("run interactive runtime", () => {
     await refreshCatalog?.()
     expect(defaultModel).toHaveBeenCalledTimes(1)
     selected.resolve({
-      location: { directory: "/tmp", project: { id: "pro-1", directory: "/tmp", canonical: "/tmp" } },
+      location: { directory: "/tmp" },
       data: model,
     })
     await defaultModelReloaded.promise
