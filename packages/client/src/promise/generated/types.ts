@@ -424,8 +424,6 @@ export type WebSearchResult = { url: string; title?: string; content?: string; t
 
 export type ConfigWorktree = { directory: string }
 
-export type ConfigPreferences = { shell?: string; websearch?: false | { provider: "random" | (string & {}) } }
-
 export type ConfigShellOption = { path: string; name: string; acceptable: boolean }
 
 export type SessionMessageLocationSwitched = {
@@ -6210,20 +6208,5 @@ export type ConfigGetInput = {
 }
 
 export type ConfigGetOutput = Array<ConfigEntry>
-
-export type ConfigPreferencesOutput = ConfigPreferences
-
-export type ConfigUpdatePreferencesInput = {
-  readonly shell?: {
-    readonly shell?: string | null
-    readonly websearch?: false | { readonly provider: "random" | (string & {}) } | null
-  }["shell"]
-  readonly websearch?: {
-    readonly shell?: string | null
-    readonly websearch?: false | { readonly provider: "random" | (string & {}) } | null
-  }["websearch"]
-}
-
-export type ConfigUpdatePreferencesOutput = ConfigPreferences
 
 export type ConfigShellsOutput = Array<ConfigShellOption>

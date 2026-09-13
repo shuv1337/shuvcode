@@ -24,9 +24,6 @@ test.beforeEach(async ({ page }) => {
       sandboxes,
     },
     provider: { all: [], connected: [], default: {} },
-    preferences: { shell: "zsh", websearch: { provider: "exa" } },
-    shells: [{ path: "/bin/zsh", name: "zsh", acceptable: true }],
-    websearchProviders: [{ id: "exa", name: "Exa" }],
     sessions: sandboxes.map((directory, index) => ({
       id: `ses_settings_${index + 1}`,
       title: `Workspace ${index + 1} session`,
@@ -78,38 +75,12 @@ test("single-server settings expose scoped pages without a server picker", async
   await settings.getByRole("tab", { name: "Server", exact: true }).click()
   await expect(settings.getByRole("button", { name: "Add server", exact: true })).toBeVisible()
   await expect(settings.getByRole("heading", { name: "Connection", exact: true })).toBeVisible()
-  await expect(settings.getByRole("heading", { name: "Preferences", exact: true })).toBeVisible()
-  await expect(settings.getByText("Terminal shell", { exact: true })).toBeVisible()
-  await expect(settings.getByText("Third-party search", { exact: true })).toBeVisible()
-  await expect(settings.getByText("zsh", { exact: true })).toBeVisible()
-  await expect(settings.getByText("Exa", { exact: true })).toBeVisible()
-
-  await settings.getByText("Exa", { exact: true }).click()
-  const updated = page.waitForRequest(
-    (request) => request.method() === "PATCH" && new URL(request.url()).pathname === "/api/config/preferences",
-  )
-  await page.getByRole("option", { name: "Any", exact: true }).click()
-  expect((await updated).postDataJSON()).toEqual({ websearch: { provider: "random" } })
-})
-
-test("server details tolerate unavailable preference endpoints", async ({ page }) => {
-  await page.route(
-    (url) =>
-      url.pathname === "/api/config/preferences" ||
-      url.pathname === "/api/config/shell" ||
-      url.pathname === "/api/websearch/provider",
-    (route) => route.fulfill({ status: 404, json: {} }),
-  )
-  const settings = page.getByTestId("settings-screen")
-  await settings.getByRole("tab", { name: "Server", exact: true }).click()
-
   const connection = settings.locator('[data-component="settings-server-connection"]')
   await expect(connection.getByRole("heading", { name: "Connection", exact: true })).toBeVisible()
   await expect(connection.locator('[data-component="settings-list"]')).toHaveCSS("padding-left", "16px")
   await expect(connection.locator(".settings-servers-row")).toHaveCSS("padding-top", "20px")
   await expect(connection.locator(".settings-servers-lead")).toHaveCSS("column-gap", "4px")
   await expect(connection.locator(".settings-servers-copy")).toHaveCSS("row-gap", "6px")
-  await expect(page.getByText("Server request failed", { exact: true })).toHaveCount(0)
 })
 
 test("project settings open as a nested autosaving view", async ({ page }) => {

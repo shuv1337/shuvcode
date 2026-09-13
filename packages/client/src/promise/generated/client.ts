@@ -259,9 +259,6 @@ import type {
   WebsearchQueryOutput,
   ConfigGetInput,
   ConfigGetOutput,
-  ConfigPreferencesOutput,
-  ConfigUpdatePreferencesInput,
-  ConfigUpdatePreferencesOutput,
   ConfigShellsOutput,
 } from "./types.js"
 import { ClientError } from "./client-error.js"
@@ -2149,29 +2146,6 @@ export function make(options: ClientOptions) {
             method: "GET",
             path: `/api/config`,
             query: { location: input?.["location"] },
-            successStatus: 200,
-            declaredStatuses: [400, 401],
-            empty: false,
-          },
-          requestOptions,
-        ),
-      preferences: (requestOptions?: RequestOptions) =>
-        request<ConfigPreferencesOutput>(
-          {
-            method: "GET",
-            path: `/api/config/preferences`,
-            successStatus: 200,
-            declaredStatuses: [400, 401],
-            empty: false,
-          },
-          requestOptions,
-        ),
-      updatePreferences: (input?: ConfigUpdatePreferencesInput, requestOptions?: RequestOptions) =>
-        request<ConfigUpdatePreferencesOutput>(
-          {
-            method: "PATCH",
-            path: `/api/config/preferences`,
-            body: { shell: input?.["shell"], websearch: input?.["websearch"] },
             successStatus: 200,
             declaredStatuses: [400, 401],
             empty: false,

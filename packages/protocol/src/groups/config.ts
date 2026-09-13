@@ -21,29 +21,6 @@ export const ConfigGroup = HttpApiGroup.make("server.config")
       ),
   )
   .add(
-    HttpApiEndpoint.get("config.preferences", "/api/config/preferences", {
-      success: Config.Preferences,
-    }).annotateMerge(
-      OpenApi.annotations({
-        identifier: "config.preferences",
-        summary: "Get global preferences",
-        description: "Return preferences from the highest-precedence global configuration document.",
-      }),
-    ),
-  )
-  .add(
-    HttpApiEndpoint.patch("config.updatePreferences", "/api/config/preferences", {
-      payload: Config.PreferencesPatch,
-      success: Config.Preferences,
-    }).annotateMerge(
-      OpenApi.annotations({
-        identifier: "config.updatePreferences",
-        summary: "Update global preferences",
-        description: "Patch preferences in the highest-precedence global configuration document.",
-      }),
-    ),
-  )
-  .add(
     HttpApiEndpoint.get("config.shells", "/api/config/shell", {
       success: Schema.Array(ConfigShell.Option),
     }).annotateMerge(

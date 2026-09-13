@@ -10,7 +10,6 @@ export interface MockServerConfig {
   provider: unknown | (() => unknown)
   integrationMethods?: Record<string, unknown[]>
   onConnectKey?: (input: { integrationID: string; body: unknown }) => void
-  preferences?: Record<string, unknown>
   shells?: unknown[]
   websearchProviders?: unknown[]
   directory: string
@@ -198,7 +197,6 @@ const corsHeaders = {
 function mockHandlers(config: MockServerConfig, state: { cursors: Map<string, string>; nextCursor: number }) {
   const noContent = Effect.succeed(HttpApiSchema.NoContent.make())
   const delay = config.messageDelay === undefined ? Effect.void : Effect.sleep(Duration.millis(config.messageDelay))
-  const preferences = { current: config.preferences ?? {} }
   return HttpApiBuilder.group(MockApi, "mock", (handlers) =>
     handlers
       .handleRaw("event", () => {
@@ -285,12 +283,6 @@ function mockHandlers(config: MockServerConfig, state: { cursors: Map<string, st
             canonical: project.canonical ?? config.directory,
           })
         },
-        configPreferences: () => Effect.succeed(preferences.current),
-        configUpdatePreferences: (ctx) =>
-          Effect.sync(() => {
-            preferences.current = { ...preferences.current, ...ctx.payload }
-            return preferences.current
-          }),
         configShells: () => Effect.succeed(config.shells ?? []),
         websearchProviders: () => Effect.succeed({ location: location(config), data: config.websearchProviders ?? [] }),
         worktreeList: () =>
