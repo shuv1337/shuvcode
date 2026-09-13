@@ -6,71 +6,19 @@
     "description": "Experimental HttpApi surface for selected instance routes."
   },
   "paths": {
-    "/api/health": {
-      "get": {
-        "tags": ["health"],
-        "operationId": "health.get",
-        "parameters": [],
-        "security": [],
-        "responses": {
-          "200": {
-            "description": "ServiceHealth",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ServiceHealth"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "InvalidRequestError",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/InvalidRequestErrorEncoded"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "UnauthorizedError",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
-                }
-              }
-            }
-          }
-        },
-        "description": "Report the owning server process and its application status.",
-        "summary": "Check server health"
-      }
-    },
-    "/api/server": {
+    "/api/status": {
       "get": {
         "tags": ["server"],
-        "operationId": "server.get",
+        "operationId": "server.status",
         "parameters": [],
         "security": [],
         "responses": {
           "200": {
-            "description": "Success",
+            "description": "ServerStatus",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
-                  "properties": {
-                    "urls": {
-                      "type": "array",
-                      "items": {
-                        "type": "string"
-                      }
-                    }
-                  },
-                  "required": ["urls"],
-                  "additionalProperties": false
+                  "$ref": "#/components/schemas/ServerStatus"
                 }
               }
             }
@@ -96,8 +44,8 @@
             }
           }
         },
-        "description": "Return the URLs that can be used to connect to this server.",
-        "summary": "Get server information"
+        "description": "Return the server identity, connection URLs, and readiness status.",
+        "summary": "Get server status"
       }
     },
     "/api/location": {
@@ -17959,22 +17907,24 @@
         "required": ["_tag", "type", "message"],
         "additionalProperties": false
       },
-      "ServiceHealth": {
+      "ServerStatus": {
         "type": "object",
         "properties": {
-          "healthy": {
-            "type": "boolean",
-            "enum": [true]
-          },
           "version": {
             "type": "string"
           },
           "pid": {
             "type": "integer",
             "minimum": 0
+          },
+          "urls": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
           }
         },
-        "required": ["healthy", "version", "pid"],
+        "required": ["version", "pid", "urls"],
         "additionalProperties": false
       },
       "ServiceUnavailableErrorEncoded": {
@@ -20199,9 +20149,6 @@
   },
   "security": [],
   "tags": [
-    {
-      "name": "health"
-    },
     {
       "name": "server"
     },

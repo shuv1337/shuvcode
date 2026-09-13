@@ -5,8 +5,7 @@ import { HttpClientError } from "effect/unstable/http"
 import { HttpApiClient } from "effect/unstable/httpapi"
 import { ClientApi } from "../../contract"
 import type {
-  HealthGetOutput,
-  ServerGetOutput,
+  ServerStatusOutput,
   LocationGetInput,
   LocationGetOutput,
   AgentListInput,
@@ -293,15 +292,10 @@ const preserveStream =
   <E, R>(stream: Stream.Stream<A, E, R>) =>
     stream
 
-const EndpointHealthGet = (raw: RawClient["server.health"]) => () =>
-  preserveEffect<HealthGetOutput>()(raw["health.get"]({}).pipe(Effect.mapError(mapClientError)))
+const EndpointServerStatus = (raw: RawClient["server.server"]) => () =>
+  preserveEffect<ServerStatusOutput>()(raw["server.status"]({}).pipe(Effect.mapError(mapClientError)))
 
-const adaptGroupHealth = (raw: RawClient["server.health"]) => ({ get: EndpointHealthGet(raw) })
-
-const EndpointServerGet = (raw: RawClient["server.server"]) => () =>
-  preserveEffect<ServerGetOutput>()(raw["server.get"]({}).pipe(Effect.mapError(mapClientError)))
-
-const adaptGroupServer = (raw: RawClient["server.server"]) => ({ get: EndpointServerGet(raw) })
+const adaptGroupServer = (raw: RawClient["server.server"]) => ({ status: EndpointServerStatus(raw) })
 
 const EndpointLocationGet = (raw: RawClient["server.location"]) => (input?: LocationGetInput) =>
   preserveEffect<LocationGetOutput>()(
@@ -1614,7 +1608,6 @@ const adaptGroupConfig = (raw: RawClient["server.config"]) => ({
 })
 
 const adaptClient = (raw: RawClient) => ({
-  health: adaptGroupHealth(raw["server.health"]),
   server: adaptGroupServer(raw["server.server"]),
   location: adaptGroupLocation(raw["server.location"]),
   agent: adaptGroupAgent(raw["server.agent"]),

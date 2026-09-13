@@ -1,7 +1,7 @@
 # V2 HTTP API audit checklist
 
 **Source:** `packages/protocol/openapi.json`  
-**Current endpoint count:** 143  
+**Current endpoint count:** 142
 **Last regenerated:** 2026-09-13
 
 ## How to use this checklist
@@ -28,7 +28,7 @@ Review endpoints in document order. For each endpoint, select one disposition an
 
 ## Progress
 
-- [ ] Group 1: Foundation and placement (7)
+- [ ] Group 1: Foundation and placement (6)
 - [ ] Group 2: Configuration and capability catalogs (17)
 - [ ] Group 3: Credentials, integrations, MCP, and web search (22)
 - [ ] Group 4: Session lifecycle (12)
@@ -41,6 +41,12 @@ Review endpoints in document order. For each endpoint, select one disposition an
 
 ## Resolved during audit
 
+### [x] `GET /api/health` and `GET /api/server`
+
+- **Decision:** Merge and rename
+- **Replacement:** `GET /api/status` with operation ID `server.status`.
+- **Notes:** Returns `version`, `pid`, and connection `urls`; readiness is conveyed by HTTP status.
+
 ### [x] `GET /api/project/current`
 
 - **Decision:** Remove
@@ -49,12 +55,11 @@ Review endpoints in document order. For each endpoint, select one disposition an
 
 ## Group 1: Foundation and placement
 
-**Endpoints:** 7
+**Endpoints:** 6
 
 | Done | Method | Path | Operation ID | Decision | Notes |
 |---|---|---|---|---|---|
-| [x] 001 | `GET` | `/api/health` | `health.get` | Change | Keep path; rename operation to `health.get`; remove redundant `healthy` response field. |
-| [ ] 002 | `GET` | `/api/server` | `server.get` |  |  |
+| [x] 001–002 | `GET` | `/api/status` | `server.status` | Keep | Replaces the former health and server endpoints. |
 | [ ] 003 | `GET` | `/api/location` | `location.get` |  |  |
 | [ ] 004 | `GET` | `/api/project` | `project.list` |  |  |
 | [ ] 005 | `PATCH` | `/api/project/{projectID}` | `project.update` |  |  |

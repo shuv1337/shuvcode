@@ -13,7 +13,6 @@ import { RpcHandler } from "./handlers/rpc"
 import { EventHandler } from "./handlers/event"
 import { AgentHandler } from "./handlers/agent"
 import { PluginHandler } from "./handlers/plugin"
-import { HealthHandler } from "./handlers/health"
 import { ServerHandler } from "./handlers/server"
 import { DebugHandler } from "./handlers/debug"
 import { PtyHandler } from "./handlers/pty"
@@ -34,7 +33,6 @@ import { ConfigHandler } from "./handlers/config"
 import { WorkspaceHandler } from "./handlers/workspace"
 
 export const handlers = Layer.mergeAll(
-  HealthHandler,
   ServerHandler,
   DebugHandler,
   MigrationHandler,

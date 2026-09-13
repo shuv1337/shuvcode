@@ -235,7 +235,7 @@ describe("OpenAPI.fromSpec", () => {
       path: "/api/fs/read/*",
       reason: "binary responses are not supported",
     })
-    expect(toolAt(result.tools, "health.get")).not.toBeUndefined()
+    expect(toolAt(result.tools, "server.status")).not.toBeUndefined()
     expect(toolAt(result.tools, "session.get")).not.toBeUndefined()
     expect(toolAt(result.tools, "session.create")).not.toBeUndefined()
 
@@ -978,10 +978,10 @@ describe("OpenAPI.fromSpec", () => {
 
     expect(spec.security).toStrictEqual([])
     expect(isRecord(components.securitySchemes) ? Object.keys(components.securitySchemes) : []).toStrictEqual([])
-    const health = toolAt(result.tools, "health.get")
-    const healthInput = Tool.isTool(health) && isRecord(health.input) ? health.input : undefined
-    expect(healthInput).toMatchObject({ type: "object", properties: {} })
-    const input = isRecord(healthInput) ? healthInput : {}
+    const status = toolAt(result.tools, "server.status")
+    const statusInput = Tool.isTool(status) && isRecord(status.input) ? status.input : undefined
+    expect(statusInput).toMatchObject({ type: "object", properties: {} })
+    const input = isRecord(statusInput) ? statusInput : {}
     expect(Object.keys(isRecord(input.properties) ? input.properties : {})).toStrictEqual([])
   })
 
@@ -994,7 +994,7 @@ describe("OpenAPI.fromSpec", () => {
       runtime
         .execute(
           `
-        return search({ query: "global health", namespace: "opencode", limit: 1 })
+        return search({ query: "server status", namespace: "opencode", limit: 1 })
       `,
         )
         .pipe(Effect.provide(layer)),
@@ -1005,12 +1005,12 @@ describe("OpenAPI.fromSpec", () => {
     expect(result.value).toMatchObject({
       items: [
         {
-          path: "tools.opencode.health.get",
-          description: "Check whether the API server is ready to accept requests.",
+          path: "tools.opencode.server.status",
+          description: "Return the server identity, connection URLs, and readiness status.",
         },
       ],
     })
-    expect(JSON.stringify(result.value)).toContain("healthy: true")
+    expect(JSON.stringify(result.value)).toContain("version: string")
   })
 
   test("invokes real opencode path parameters and JSON request bodies", async () => {

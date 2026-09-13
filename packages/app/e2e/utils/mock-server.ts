@@ -219,7 +219,7 @@ function mockHandlers(config: MockServerConfig, state: { cursors: Map<string, st
         }),
       )
       .handleAll({
-        health: () => Effect.succeed({ healthy: true, version: "2.0.0", pid: 1 }),
+        status: () => Effect.succeed({ version: "2.0.0", pid: 1, urls: config.server ? [config.server] : [] }),
         config: () => Effect.succeed([]),
         reference: () =>
           Effect.succeed({
@@ -285,12 +285,6 @@ function mockHandlers(config: MockServerConfig, state: { cursors: Map<string, st
             canonical: project.canonical ?? config.directory,
           })
         },
-        projectCurrent: () =>
-          Effect.succeed({
-            id: (config.project as { id?: string }).id,
-            directory: config.directory,
-            canonical: config.directory,
-          }),
         configPreferences: () => Effect.succeed(preferences.current),
         configUpdatePreferences: (ctx) =>
           Effect.sync(() => {

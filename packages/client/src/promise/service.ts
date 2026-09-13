@@ -11,7 +11,7 @@ import {
 import { defaultEnsureTiming, ensureTiming, type EnsureTiming } from "../service-timing.js"
 import { matchesVersion } from "../service-version.js"
 import { PtyHandoff } from "../pty-handoff.js"
-import type { ServiceHealth } from "./generated/types.js"
+import type { ServerStatus } from "./generated/types.js"
 
 export * from "../service.js"
 
@@ -57,7 +57,7 @@ export async function ensure(options: EnsureOptions = {}): Promise<Endpoint> {
   try {
     while (true) {
       if (Date.now() >= deadline) throw new Error("Timed out waiting for the background service to start")
-      const registration = await registered(options.file, true, timing.requestTimeout)
+      const registration = await registered(options.file, timing.requestTimeout)
       if (registration.timedOut && registration.info !== undefined) {
         timeouts = {
           info: registration.info,
@@ -76,7 +76,7 @@ export async function ensure(options: EnsureOptions = {}): Promise<Endpoint> {
       if (registration.service !== undefined) {
         spawnDelay = timing.spawnDelay
         const service = registration.service
-        const compatible = !service.legacy && matchesVersion(service.version, options)
+        const compatible = matchesVersion(service.version, options)
         if (compatible && service.state === "ready") {
           await PtyHandoff.complete(options.file ?? fallback(), service.info)
           return service.endpoint
@@ -84,11 +84,11 @@ export async function ensure(options: EnsureOptions = {}): Promise<Endpoint> {
         if (compatible && service.state === "failed") throw new Error("Background service failed to start")
         if (!compatible) {
           announce("version-mismatch", service.version)
-          if (!service.legacy && service.state !== "ready")
+          if (service.state !== "ready")
             console.warn("Background service is not ready; replacement cannot preserve persistent terminals")
           await stop({
             file: options.file,
-            pty: !service.legacy && service.state === "ready" ? "handoff" : "clear",
+            pty: service.state === "ready" ? "handoff" : "clear",
           }).catch(() => undefined)
           lastSpawn = 0
         }
@@ -151,10 +151,9 @@ type LocalService = {
   readonly endpoint: Endpoint
   readonly version?: string
   readonly state: "ready" | "waiting" | "failed"
-  readonly legacy: boolean
 }
 
-async function probeResult(info: Info, allowLegacy = false, timeout = defaultEnsureTiming.requestTimeout) {
+async function probeResult(info: Info, timeout = defaultEnsureTiming.requestTimeout) {
   const endpoint = {
     url: info.url,
     auth:
@@ -163,13 +162,10 @@ async function probeResult(info: Info, allowLegacy = false, timeout = defaultEns
         : { type: "basic" as const, username: "opencode", password: info.password },
   } satisfies Endpoint
   const signal = AbortSignal.timeout(timeout)
-  const result = await fetch(new URL("/api/health", info.url), {
-    headers: headers(endpoint),
-    signal,
-  })
+  const result = await fetch(new URL("/api/status", info.url), { headers: headers(endpoint), signal })
     .then(async (response) => ({
       response,
-      body: (await response.json()) as ServiceHealth | { readonly healthy: true },
+      body: (await response.json()) as ServerStatus,
     }))
     .then(
       (value) => ({ value }),
@@ -187,22 +183,17 @@ async function probeResult(info: Info, allowLegacy = false, timeout = defaultEns
         endpoint,
         version: body.version,
         state: response.ok ? "ready" : response.status === 500 ? "failed" : "waiting",
-        legacy: false,
       } satisfies LocalService,
       timedOut: false,
     }
   }
-  if (!allowLegacy || body?.healthy !== true) return { service: undefined, timedOut: false }
-  return {
-    service: { info, endpoint, state: "ready", legacy: true } satisfies LocalService,
-    timedOut: false,
-  }
+  return { service: undefined, timedOut: false }
 }
 
-async function registered(file?: string, allowLegacy = false, timeout?: number) {
+async function registered(file?: string, timeout?: number) {
   const info = await read(file)
   if (info === undefined) return { info: undefined, service: undefined, timedOut: false }
-  return { info, ...(await probeResult(info, allowLegacy, timeout)) }
+  return { info, ...(await probeResult(info, timeout)) }
 }
 
 function signal(pid: number, name: NodeJS.Signals) {

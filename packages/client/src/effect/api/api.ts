@@ -40,18 +40,15 @@ import type { Vcs } from "@opencode/schema/vcs"
 import type { WebSearch } from "@opencode/schema/websearch"
 import type { Config } from "@opencode/schema/config"
 
-export type HealthGetOutput = { readonly healthy: true; readonly version: string; readonly pid: number }
-export type HealthGetOperation<E = never> = () => Effect.Effect<HealthGetOutput, E>
-
-export interface HealthApi<E = never> {
-  readonly get: HealthGetOperation<E>
+export type ServerStatusOutput = {
+  readonly version: string
+  readonly pid: number
+  readonly urls: ReadonlyArray<string>
 }
-
-export type ServerGetOutput = { readonly urls: ReadonlyArray<string> }
-export type ServerGetOperation<E = never> = () => Effect.Effect<ServerGetOutput, E>
+export type ServerStatusOperation<E = never> = () => Effect.Effect<ServerStatusOutput, E>
 
 export interface ServerApi<E = never> {
-  readonly get: ServerGetOperation<E>
+  readonly status: ServerStatusOperation<E>
 }
 
 export type LocationGetInput = {
@@ -2176,7 +2173,6 @@ export interface ConfigApi<E = never> {
 }
 
 export interface AppApi<E = never> {
-  readonly health: HealthApi<E>
   readonly server: ServerApi<E>
   readonly location: LocationApi<E>
   readonly agent: AgentApi<E>

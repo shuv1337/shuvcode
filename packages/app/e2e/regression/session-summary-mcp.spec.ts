@@ -137,7 +137,9 @@ test("MCP authentication starts before a slow resource catalog finishes", async 
 
 test("multiple desktop connections show the session's server name", async ({ page }) => {
   await mockStressTimeline(page)
-  await page.route("http://secondary.test/**", (route) => route.fulfill({ json: { healthy: true, version: "2.0.0" } }))
+  await page.route("http://secondary.test/**", (route) =>
+    route.fulfill({ json: { version: "2.0.0", pid: 1, urls: ["http://secondary.test"] } }),
+  )
   await page.addInitScript(
     ({ directory, server }) => {
       const current = { type: "http", http: { url: server }, displayName: "Design server" }

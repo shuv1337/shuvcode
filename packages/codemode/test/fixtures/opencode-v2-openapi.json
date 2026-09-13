@@ -6,10 +6,10 @@
     "description": "Experimental HttpApi surface for selected instance routes."
   },
   "paths": {
-    "/api/health": {
+    "/api/status": {
       "get": {
-        "tags": ["health"],
-        "operationId": "health.get",
+        "tags": ["server"],
+        "operationId": "server.status",
         "parameters": [],
         "security": [],
         "responses": {
@@ -20,10 +20,6 @@
                 "schema": {
                   "type": "object",
                   "properties": {
-                    "healthy": {
-                      "type": "boolean",
-                      "enum": [true]
-                    },
                     "version": {
                       "type": "string"
                     },
@@ -31,56 +27,10 @@
                       "type": "integer",
                       "allOf": [
                         {
-                          "exclusiveMinimum": 0
+                          "minimum": 0
                         }
                       ]
-                    }
-                  },
-                  "required": ["healthy", "version", "pid"],
-                  "additionalProperties": false
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "InvalidRequestError",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/InvalidRequestError"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "UnauthorizedError",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/UnauthorizedError"
-                }
-              }
-            }
-          }
-        },
-        "description": "Check whether the API server is ready to accept requests.",
-        "summary": "Check server health"
-      }
-    },
-    "/api/server": {
-      "get": {
-        "tags": ["server"],
-        "operationId": "server.get",
-        "parameters": [],
-        "security": [],
-        "responses": {
-          "200": {
-            "description": "Success",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
+                    },
                     "urls": {
                       "type": "array",
                       "items": {
@@ -88,7 +38,7 @@
                       }
                     }
                   },
-                  "required": ["urls"],
+                  "required": ["version", "pid", "urls"],
                   "additionalProperties": false
                 }
               }
@@ -115,8 +65,8 @@
             }
           }
         },
-        "description": "Return the URLs that can be used to connect to this server.",
-        "summary": "Get server information"
+        "description": "Return the server identity, connection URLs, and readiness status.",
+        "summary": "Get server status"
       }
     },
     "/api/location": {

@@ -16,7 +16,6 @@ import { EventGroup, makeEventGroup } from "./groups/event.js"
 import type { Definition } from "@opencode/schema/event"
 import { AgentGroup } from "./groups/agent.js"
 import { PluginGroup } from "./groups/plugin.js"
-import { HealthGroup } from "./groups/health.js"
 import { ServerGroup } from "./groups/server.js"
 import { DebugGroup } from "./groups/debug.js"
 import { PtyGroup } from "./groups/pty.js"
@@ -85,7 +84,6 @@ type ApiGroups<
   SessionLocationService,
   Event extends HttpApiGroup.Constraint,
 > =
-  | typeof HealthGroup
   | typeof ServerGroup
   | typeof DebugGroup
   | typeof MigrationGroup
@@ -151,7 +149,6 @@ const makeApiFromGroup = <
   Group
 > =>
   HttpApi.make("server")
-    .add(HealthGroup)
     .add(ServerGroup)
     .add(LocationGroup.middleware(locationMiddleware))
     .add(AgentGroup.middleware(locationMiddleware))

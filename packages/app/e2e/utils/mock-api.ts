@@ -32,7 +32,7 @@ export class MockBadRequest extends Schema.TaggedError<MockBadRequest>()("MockBa
 }) {}
 
 const Group = HttpApiGroup.make("mock")
-  .add(HttpApiEndpoint.get("health", "/api/health", { success: Json }))
+  .add(HttpApiEndpoint.get("status", "/api/status", { success: Json }))
   .add(
     HttpApiEndpoint.get("event", "/api/event", {
       success: Schema.String.pipe(HttpApiSchema.asText({ contentType: "text/event-stream" })),
