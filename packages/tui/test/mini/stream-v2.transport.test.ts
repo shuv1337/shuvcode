@@ -900,18 +900,18 @@ describe("V2 mini transport", () => {
     await transport.close()
   })
 
-  test("reduces nested form owners idempotently and filters global events by complete location", async () => {
+  test("reduces nested form owners idempotently and filters global events by directory", async () => {
     const events = feed()
     events.push(connected())
     const client = sdk({
       streams: [events],
       sessions: [{ id: "ses_child", parentID: "ses_1", title: "Child", time: { updated: 1 } }],
-      globalLocation: { directory: "/work", workspaceID: "wrk_1" },
+      globalLocation: { directory: "/work" },
     })
     const ui = footer()
     const transport = await createSessionTransport({
       sdk: client,
-      location: { directory: "/work", workspaceID: "wrk_1" },
+      location: { directory: "/work" },
       sessionID: "ses_1",
       thinking: false,
       footer: ui.api,
@@ -939,7 +939,7 @@ describe("V2 mini transport", () => {
       id: "evt_global_wrong",
       created: 4,
       type: "form.created",
-      location: { directory: "/work", workspaceID: "wrk_other" },
+      location: { directory: "/other" },
       data: { form: eventForm(global) },
     })
     await Bun.sleep(0)
@@ -952,7 +952,7 @@ describe("V2 mini transport", () => {
       id: "evt_global_right",
       created: 5,
       type: "form.created",
-      location: { directory: "/work", workspaceID: "wrk_1" },
+      location: { directory: "/work" },
       data: { form: eventForm(global) },
     })
     while (
@@ -965,7 +965,7 @@ describe("V2 mini transport", () => {
       type: "stream.view",
       view: {
         type: "form",
-        request: { id: "frm_global_live", location: { directory: "/work", workspaceID: "wrk_1" } },
+        request: { id: "frm_global_live", location: { directory: "/work" } },
       },
     })
     const beforeCancel = ui.events.filter((event) => event.type === "stream.view").length
@@ -973,7 +973,7 @@ describe("V2 mini transport", () => {
       id: "evt_global_done",
       created: 6,
       type: "form.cancelled",
-      location: { directory: "/work", workspaceID: "wrk_1" },
+      location: { directory: "/work" },
       data: { id: global.id, sessionID: "global" },
     })
     while (ui.events.filter((event) => event.type === "stream.view").length === beforeCancel) await Bun.sleep(0)
@@ -2833,7 +2833,7 @@ describe("V2 mini transport", () => {
     const ui = footer()
     const transport = await createSessionTransport({
       sdk: client,
-      location: { directory: "/project", workspaceID: "wrk_1" },
+      location: { directory: "/project" },
       sessionID: "ses_1",
       thinking: false,
       footer: ui.api,
@@ -2888,7 +2888,7 @@ describe("V2 mini transport", () => {
       { signal: undefined },
     )
     expect(defaultModel).toHaveBeenCalledWith(
-      { location: { directory: "/project", workspace: "wrk_1" } },
+      { location: { directory: "/project" } },
       { signal: undefined },
     )
     await transport.close()
@@ -3556,7 +3556,6 @@ describe("V2 mini transport", () => {
       sdk: client,
       location: {
         directory: "/project",
-        workspaceID: "work-1",
       },
       sessionID: "ses_1",
       thinking: false,
@@ -3577,7 +3576,7 @@ describe("V2 mini transport", () => {
         id: `evt_${type}`,
         created: 0,
         type,
-        location: { directory: "/project", workspaceID: "work-1" },
+        location: { directory: "/project" },
         data: {},
       })
     events.push({
@@ -3598,13 +3597,6 @@ describe("V2 mini transport", () => {
       created: 0,
       type: "catalog.updated",
       location: { directory: "/other" },
-      data: {},
-    })
-    events.push({
-      id: "evt_foreign_workspace_catalog",
-      created: 0,
-      type: "catalog.updated",
-      location: { directory: "/project", workspaceID: "work-2" },
       data: {},
     })
     while (refreshes < 9) await Bun.sleep(0)

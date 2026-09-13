@@ -245,10 +245,6 @@ import type {
   WorktreeRemoveOutput,
   WorktreeRefreshInput,
   WorktreeRefreshOutput,
-  WorkspaceCreateInput,
-  WorkspaceCreateOutput,
-  WorkspaceDestroyInput,
-  WorkspaceDestroyOutput,
   VcsGetInput,
   VcsGetOutput,
   VcsBaseInput,
@@ -356,7 +352,6 @@ const EndpointSessionList = (raw: RawClient["server.session"]) => (input?: Sessi
   preserveEffect<SessionListOutput>()(
     raw["session.list"]({
       query: {
-        workspace: input?.["workspace"],
         limit: input?.["limit"],
         order: input?.["order"],
         search: input?.["search"],
@@ -475,7 +470,7 @@ const EndpointSessionMove = (raw: RawClient["server.session"]) => (input: Sessio
   preserveEffect<SessionMoveOutput>()(
     raw["session.move"]({
       params: { sessionID: input["sessionID"] },
-      payload: { directory: input["directory"], workspaceID: input["workspaceID"], delivery: input["delivery"] },
+      payload: { directory: input["directory"], delivery: input["delivery"] },
     }).pipe(Effect.mapError(mapClientError)),
   )
 
@@ -1492,24 +1487,6 @@ const adaptGroupWorktree = (raw: RawClient["server.worktree"]) => ({
   refresh: EndpointWorktreeRefresh(raw),
 })
 
-const EndpointWorkspaceCreate = (raw: RawClient["server.workspace"]) => (input: WorkspaceCreateInput) =>
-  preserveEffect<WorkspaceCreateOutput>()(
-    raw["workspace.create"]({ payload: { id: input["id"], provider: input["provider"] } }).pipe(
-      Effect.mapError(mapClientError),
-      Effect.map((value) => value.data),
-    ),
-  )
-
-const EndpointWorkspaceDestroy = (raw: RawClient["server.workspace"]) => (input: WorkspaceDestroyInput) =>
-  preserveEffect<WorkspaceDestroyOutput>()(
-    raw["workspace.destroy"]({ params: { workspaceID: input["workspaceID"] } }).pipe(Effect.mapError(mapClientError)),
-  )
-
-const adaptGroupWorkspace = (raw: RawClient["server.workspace"]) => ({
-  create: EndpointWorkspaceCreate(raw),
-  destroy: EndpointWorkspaceDestroy(raw),
-})
-
 const EndpointVcsGet = (raw: RawClient["server.vcs"]) => (input?: VcsGetInput) =>
   preserveEffect<VcsGetOutput>()(
     raw["vcs.get"]({ query: { location: input?.["location"] } }).pipe(Effect.mapError(mapClientError)),
@@ -1633,7 +1610,6 @@ const adaptClient = (raw: RawClient) => ({
   shell: adaptGroupShell(raw["server.shell"]),
   reference: adaptGroupReference(raw["server.reference"]),
   worktree: adaptGroupWorktree(raw["server.worktree"]),
-  workspace: adaptGroupWorkspace(raw["server.workspace"]),
   vcs: adaptGroupVcs(raw["server.vcs"]),
   debug: adaptGroupDebug(raw["server.debug"]),
   migration: adaptGroupMigration(raw["server.migration"]),

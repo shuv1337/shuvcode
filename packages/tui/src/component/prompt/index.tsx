@@ -335,8 +335,8 @@ export function Prompt(props: PromptProps) {
   let promptPartTypeId = 0
   const event = useEvent()
 
-  event.on("tui.prompt.append", (evt, { workspace }) => {
-    if (workspace !== (currentLocation.current?.workspaceID ?? data.location.default().workspaceID)) return
+  event.on("tui.prompt.append", (evt, { directory }) => {
+    if (directory !== (currentLocation.current?.directory ?? data.location.default().directory)) return
     if (!input || input.isDestroyed) return
     input.insertText(evt.data.text)
     setTimeout(() => {
@@ -1234,7 +1234,7 @@ export function Prompt(props: PromptProps) {
       session = data.session.get(created.id)
       newSession = {
         gate: created.request.then(async (info) => {
-          if (info.location.workspaceID === undefined && terminalEnvironment.variables !== undefined) {
+          if (terminalEnvironment.variables !== undefined) {
             await client.api.session.environment({ sessionID: created.id, variables: terminalEnvironment.variables })
           }
         }),

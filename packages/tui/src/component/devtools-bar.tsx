@@ -150,7 +150,7 @@ export function DevToolsBar() {
     const sessionLocation =
       info?.location ??
       (location.current
-        ? { directory: location.current.directory, workspaceID: location.current.workspaceID }
+        ? { directory: location.current.directory }
         : undefined)
     const details = server()
     const backend = {

@@ -330,7 +330,6 @@ export function Autocomplete(props: {
       const { lineRange, base } = parseFileLineRange(input.query ?? "")
       const requestLocation = {
         directory: input.location?.directory,
-        workspace: input.location?.workspaceID ?? data.location.default().workspaceID,
       }
       const width = props.anchor().width - 4
       if (input.visible === "directory") {

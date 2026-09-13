@@ -241,10 +241,6 @@ import type {
   WorktreeRemoveOutput,
   WorktreeRefreshInput,
   WorktreeRefreshOutput,
-  WorkspaceCreateInput,
-  WorkspaceCreateOutput,
-  WorkspaceDestroyInput,
-  WorkspaceDestroyOutput,
   VcsGetInput,
   VcsGetOutput,
   VcsBaseInput,
@@ -517,7 +513,6 @@ export function make(options: ClientOptions) {
             method: "GET",
             path: `/api/session`,
             query: {
-              workspace: input?.["workspace"],
               limit: input?.["limit"],
               order: input?.["order"],
               search: input?.["search"],
@@ -681,7 +676,7 @@ export function make(options: ClientOptions) {
           {
             method: "POST",
             path: `/api/session/${encodeURIComponent(input.sessionID)}/move`,
-            body: { directory: input["directory"], workspaceID: input["workspaceID"], delivery: input["delivery"] },
+            body: { directory: input["directory"], delivery: input["delivery"] },
             successStatus: 204,
             declaredStatuses: [400, 401, 404],
             empty: true,
@@ -2026,31 +2021,6 @@ export function make(options: ClientOptions) {
             successStatus: 204,
             declaredStatuses: [400, 401],
             empty: true,
-          },
-          requestOptions,
-        ),
-    },
-    workspace: {
-      create: (input: WorkspaceCreateInput, requestOptions?: RequestOptions) =>
-        request<{ readonly data: WorkspaceCreateOutput }>(
-          {
-            method: "POST",
-            path: `/api/workspace`,
-            body: { id: input["id"], provider: input["provider"] },
-            successStatus: 200,
-            declaredStatuses: [400, 401, 404, 409],
-            empty: false,
-          },
-          requestOptions,
-        ).then((value) => value.data),
-      destroy: (input: WorkspaceDestroyInput, requestOptions?: RequestOptions) =>
-        request<WorkspaceDestroyOutput>(
-          {
-            method: "DELETE",
-            path: `/api/workspace/${encodeURIComponent(input.workspaceID)}`,
-            successStatus: 200,
-            declaredStatuses: [400, 401, 500],
-            empty: false,
           },
           requestOptions,
         ),

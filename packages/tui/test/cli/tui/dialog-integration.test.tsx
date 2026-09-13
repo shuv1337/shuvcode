@@ -205,7 +205,7 @@ test("hides account rename and delete actions while the add account row is selec
 })
 
 test("uses the active location for integration data and credential requests", async () => {
-  const location = { directory: "/remote/project", workspaceID: "workspace_test" }
+  const location = { directory: "/remote/project" }
   const fixture = await renderIntegration(location)
 
   try {
@@ -235,9 +235,7 @@ async function renderIntegration(activeLocation?: LocationRef) {
     const directory =
       url.searchParams.get("location[directory]") ??
       decodeURIComponent(request.headers.get("x-opencode-directory") ?? process.cwd())
-    const workspaceID =
-      url.searchParams.get("location[workspace]") ?? request.headers.get("x-opencode-workspace") ?? undefined
-    const requestedLocation = { directory, ...(workspaceID ? { workspaceID } : {}) }
+    const requestedLocation = { directory }
     const location = {
       ...requestedLocation,
       project: { id: "proj_test", directory, canonical: directory },

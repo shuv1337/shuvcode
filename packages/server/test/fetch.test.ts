@@ -2,9 +2,6 @@ import { expect } from "bun:test"
 import fs from "node:fs/promises"
 import { createServer } from "node:http"
 import path from "node:path"
-import { makeMemoryDriver } from "@opencode/core/environment/index"
-import { Workspace } from "@opencode/core/workspace"
-import { WorkspaceDriver } from "@opencode/core/workspace/driver"
 import { Agent } from "@opencode/schema/agent"
 import { Integration } from "@opencode/schema/integration"
 import { ServerStatus } from "@opencode/protocol/groups/server"
@@ -92,13 +89,6 @@ const connectOpenAI = (handler: Handler) =>
       ),
     )
   })
-
-const workspaceDriver = WorkspaceDriver.make({
-  create: ({ workspaceID }) => Effect.succeed({ binding: { workspaceID } }),
-  connect: () => Effect.succeed(makeMemoryDriver()),
-  suspendForIdle: () => Effect.void,
-  destroy: () => Effect.void,
-})
 
 it.live("serves the HttpApi and enforces Basic auth like the Node server", () =>
   Effect.gen(function* () {
@@ -277,64 +267,6 @@ it.live(
     }),
   // Real retries wait 18 * 200 ms; startup and scoped cleanup also count toward the deadline.
   { timeout: 10_000 },
-)
-
-it.live("treats destroying a missing workspace as success", () =>
-  Effect.gen(function* () {
-    const handler = yield* ServerFetch.make(options)
-    const response = yield* Effect.promise(() =>
-      handler(
-        new Request(`http://opencode.local/api/workspace/${Workspace.ID.create()}`, {
-          method: "DELETE",
-        }),
-      ),
-    )
-
-    expect(response.status).toBe(200)
-    expect(yield* Effect.promise(() => response.json())).toEqual({ destroyed: false })
-  }),
-)
-
-it.live("creates idempotent caller-identified workspaces through the HttpApi", () =>
-  Effect.gen(function* () {
-    const handler = yield* ServerFetch.make(options, {
-      overrides: [
-        WorkspaceDriver.node.replace(WorkspaceDriver.registryNode({ fake: workspaceDriver, other: workspaceDriver })),
-      ],
-    })
-    const id = Workspace.ID.create()
-    const create = (body: unknown) =>
-      Effect.promise(() =>
-        handler(
-          new Request("http://opencode.local/api/workspace", {
-            method: "POST",
-            headers: { "content-type": "application/json" },
-            body: JSON.stringify(body),
-          }),
-        ),
-      )
-
-    const supplied = yield* create({ id, provider: "fake" })
-    expect(supplied.status).toBe(200)
-    expect(yield* Effect.promise(() => supplied.json())).toEqual({ data: id })
-
-    const repeated = yield* create({ id, provider: "fake" })
-    expect(repeated.status).toBe(200)
-    expect(yield* Effect.promise(() => repeated.json())).toEqual({ data: id })
-
-    const conflict = yield* create({ id, provider: "other" })
-    expect(conflict.status).toBe(409)
-    expect(yield* Effect.promise(() => conflict.json())).toMatchObject({
-      _tag: "ConflictError",
-      resource: id,
-    })
-
-    expect((yield* create({ id: "invalid", provider: "fake" })).status).toBe(400)
-
-    const minted = yield* create({ provider: "fake" })
-    expect(minted.status).toBe(200)
-    expect(yield* Effect.promise(() => minted.json())).toMatchObject({ data: expect.stringMatching(/^wrk_/) })
-  }),
 )
 
 it.live("serves the session view operation and missing-session error", () =>

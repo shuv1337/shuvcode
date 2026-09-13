@@ -230,19 +230,18 @@ describe("run interactive runtime", () => {
       sessionID: "global",
       formID: "frm_global",
       answer: { value: "yes" },
-      location: { directory: "/remote work", workspaceID: "wrk_1" },
+      location: { directory: "/remote work" },
     })
     expect(reply).toHaveBeenCalledWith(
       {
         sessionID: "global",
         formID: "frm_global",
         answer: { value: "yes" },
-        location: { directory: "/remote work", workspaceID: "wrk_1" },
+        location: { directory: "/remote work" },
       },
       {
         headers: {
           "x-opencode-directory": "%2Fremote%20work",
-          "x-opencode-workspace": "wrk_1",
         },
       },
     )
@@ -581,7 +580,7 @@ describe("run interactive runtime", () => {
     painted.resolve()
     await task
 
-    const query = { location: { directory: "/session", workspace: "work-1" } }
+    const query = { location: { directory: "/session" } }
     expect(getDirectory?.()).toBe("/session")
     if (!runtimeConfig) throw new Error("runtime lifecycle did not receive TUI config")
     expect(await runtimeConfig).toBe(tuiConfig)

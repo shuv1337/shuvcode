@@ -2,6 +2,8 @@ export type JsonValue = null | boolean | number | string | Array<JsonValue> | { 
 
 export type ServerStatus = { version: string; pid: number; urls: Array<string> }
 
+export type LocationPublicInfo = { directory: string; project: { id: string; directory: string; canonical: string } }
+
 export type ModelRef = { id: string; providerID: string; variant?: string }
 
 export type ProviderSettings = { [x: string]: any }
@@ -31,8 +33,6 @@ export type TokenUsageInfo = {
   cache: { read: number; write: number }
 }
 
-export type LocationRef = { directory: string; workspaceID?: string }
-
 export type SessionMetadata = { [x: string]: JsonValue }
 
 export type FileDiffInfo = {
@@ -42,6 +42,8 @@ export type FileDiffInfo = {
   deletions: number
   status: "added" | "deleted" | "modified"
 }
+
+export type LocationPublicRef = { directory: string }
 
 export type SessionStatsToolTotals = { calls: number; succeeded: number; failed: number; unfinished: number }
 
@@ -167,6 +169,8 @@ export type InstructionEntryKey = string
 
 export type SessionGenerateResponse = { data: { text: string } }
 
+export type LocationRef = { directory: string; workspaceID?: string }
+
 export type SessionInboxSyntheticPayload1 = { text: string; description?: string; metadata?: { [x: string]: any } }
 
 export type ShellInfo = {
@@ -238,29 +242,21 @@ export type ConnectionCredentialInfo = { type: "credential"; id: string; label: 
 
 export type ConnectionEnvInfo = { type: "env"; name: string }
 
-export type IntegrationAttemptStatus =
-  | {
-      status: "pending"
-      time: { created: number | "Infinity" | "-Infinity" | "NaN"; expires: number | "Infinity" | "-Infinity" | "NaN" }
-    }
-  | {
-      status: "complete"
-      time: { created: number | "Infinity" | "-Infinity" | "NaN"; expires: number | "Infinity" | "-Infinity" | "NaN" }
-    }
-  | {
-      status: "failed"
-      message: string
-      time: { created: number | "Infinity" | "-Infinity" | "NaN"; expires: number | "Infinity" | "-Infinity" | "NaN" }
-    }
-  | {
-      status: "expired"
-      time: { created: number | "Infinity" | "-Infinity" | "NaN"; expires: number | "Infinity" | "-Infinity" | "NaN" }
-    }
-
-export type IntegrationCommandAttempt = {
+export type IntegrationAttempt = {
   attemptID: string
-  time: { created: number | "Infinity" | "-Infinity" | "NaN"; expires: number | "Infinity" | "-Infinity" | "NaN" }
+  url: string
+  instructions: string
+  mode: "auto" | "code"
+  time: { created: number; expires: number }
 }
+
+export type IntegrationAttemptStatus =
+  | { status: "pending"; time: { created: number; expires: number } }
+  | { status: "complete"; time: { created: number; expires: number } }
+  | { status: "failed"; message: string; time: { created: number; expires: number } }
+  | { status: "expired"; time: { created: number; expires: number } }
+
+export type IntegrationCommandAttempt = { attemptID: string; time: { created: number; expires: number } }
 
 export type IntegrationCommandAttemptStatus =
   | {
@@ -416,8 +412,6 @@ export type WorktreeDirectory = { directory: string; strategy?: string }
 
 export type WorktreeInfo = { directory: string }
 
-export type WorkspaceDestroyResult = { destroyed: boolean }
-
 export type VcsBranch = { current?: string; default?: string }
 
 export type VcsBase = { name: string; ref: string; source: "reflog" | "default" }
@@ -451,37 +445,37 @@ export type PermissionRule = { action: string; resource: string; effect: Permiss
 
 export type PluginInfo = { id?: string; source: PluginSource; features: PluginFeatures; state: PluginState }
 
+export type SessionRevert = { messageID: string; partID?: string; snapshot?: string; files?: Array<FileDiffInfo> }
+
 export type SessionMessageLocationSwitched = {
   id: string
   metadata?: { [x: string]: JsonValue }
   time: { created: number }
   type: "location-switched"
-  location: LocationRef
   projectID?: string
   subpath?: string
-  previous?: { location: LocationRef; projectID?: string; subpath?: string }
+  location: LocationPublicRef
+  previous?: { location: LocationPublicRef; projectID?: string; subpath?: string } | null
 }
 
-export type SessionInboxMovePayload = { location: LocationRef; projectID: string; subpath?: string }
+export type SessionInboxMovePayload = { projectID: string; subpath?: string; location: LocationPublicRef }
 
 export type V2EventRpc = {
   id: string
   created: number
   metadata?: { [x: string]: any } | undefined
   type: `${"rpc."}${string}`
-  location: LocationRef
+  location: LocationPublicRef
   data: { [x: string]: any }
 }
 
 export type V2EventServerConnected = {
   id: string
   metadata?: { [x: string]: any } | undefined
-  location?: LocationRef | undefined
+  location?: LocationPublicRef | undefined
   type: "server.connected"
   data: {}
 }
-
-export type SessionRevert = { messageID: string; partID?: string; snapshot?: string; files?: Array<FileDiffInfo> }
 
 export type SessionStatsTools =
   | { mode: "none" }
@@ -579,16 +573,6 @@ export type SessionModelSelected = {
   durable: { aggregateID: string; seq: number; version: 1 }
   location?: LocationRef
   data: { sessionID: string; model: ModelRef; previous?: ModelRef }
-}
-
-export type SessionMoved = {
-  id: string
-  created: number
-  metadata?: { [x: string]: any }
-  type: "session.moved"
-  durable: { aggregateID: string; seq: number; version: 1 }
-  location?: LocationRef
-  data: { sessionID: string; location: LocationRef; projectID: string; subpath?: string }
 }
 
 export type SessionRenamed = {
@@ -1197,6 +1181,18 @@ export type McpResourcesChanged = {
   data: { server: string }
 }
 
+export type SessionMoved = {
+  id: string
+  created: number
+  metadata?: { [x: string]: any }
+  type: "session.moved"
+  durable: { aggregateID: string; seq: number; version: 1 }
+  location?: LocationRef
+  data: { sessionID: string; location: LocationRef; projectID: string; subpath?: string }
+}
+
+export type SessionInboxMovePayload1 = { location: LocationRef; projectID: string; subpath?: string }
+
 export type SessionShellStarted = {
   id: string
   created: number
@@ -1630,15 +1626,6 @@ export type VcsInfo = { branch: VcsBranch }
 
 export type PermissionRuleset = Array<PermissionRule>
 
-export type SessionInboxMove = {
-  id: string
-  sessionID: string
-  timeCreated: number
-  type: "move"
-  payload: SessionInboxMovePayload
-  delivery: SessionInboxDelivery
-}
-
 export type SessionRevertStaged = {
   id: string
   created: number
@@ -1647,6 +1634,15 @@ export type SessionRevertStaged = {
   durable: { aggregateID: string; seq: number; version: 1 }
   location?: LocationRef
   data: { sessionID: string; revert: SessionRevert }
+}
+
+export type SessionInboxMove = {
+  id: string
+  sessionID: string
+  timeCreated: number
+  type: "move"
+  delivery: SessionInboxDelivery
+  payload: SessionInboxMovePayload
 }
 
 export type SessionStatsInfo = {
@@ -1904,11 +1900,11 @@ export type SessionInfo = {
   outcome?: "succeeded" | "failed" | "interrupted"
   time: { created: number; updated: number; idle?: number; viewed?: number; archived?: number }
   title?: string
-  location: LocationRef
   subpath?: string
   metadata?: SessionMetadata
   permissions?: PermissionRuleset
   revert?: SessionRevert
+  location: LocationPublicRef
 }
 
 export type SessionCreated = {
@@ -2119,7 +2115,7 @@ export type SessionInboxItem =
   | { type: "user"; payload: SessionInboxUserPayload1; delivery: SessionInboxDelivery }
   | { type: "synthetic"; payload: SessionInboxSyntheticPayload1; delivery: SessionInboxDelivery }
   | { type: "compaction"; payload: SessionInboxCompactionPayload; delivery: SessionInboxDelivery }
-  | { type: "move"; payload: SessionInboxMovePayload; delivery: SessionInboxDelivery }
+  | { type: "move"; payload: SessionInboxMovePayload1; delivery: SessionInboxDelivery }
 
 export type SessionMessageAssistantTool = {
   type: "tool"
@@ -2605,94 +2601,52 @@ export const isWorktreeError = (value: unknown): value is WorktreeError =>
 export type ServerStatusOutput = ServerStatus
 
 export type LocationGetInput = {
-  readonly location?: {
-    readonly location?: { readonly directory?: string | undefined; readonly workspace?: string | undefined } | undefined
-  }["location"]
+  readonly location?: { readonly location?: { readonly directory?: string | undefined } | undefined }["location"]
 }
 
-export type LocationGetOutput = {
-  directory: string
-  workspaceID?: string
-  project: { id: string; directory: string; canonical: string }
-}
+export type LocationGetOutput = LocationPublicInfo
 
 export type AgentListInput = {
-  readonly location?: {
-    readonly location?: { readonly directory?: string | undefined; readonly workspace?: string | undefined } | undefined
-  }["location"]
+  readonly location?: { readonly location?: { readonly directory?: string | undefined } | undefined }["location"]
 }
 
-export type AgentListOutput = {
-  location: { directory: string; workspaceID?: string; project: { id: string; directory: string; canonical: string } }
-  data: Array<AgentInfo>
-}
+export type AgentListOutput = { location: LocationPublicInfo; data: Array<AgentInfo> }
 
 export type AgentGetInput = {
   readonly agentID: { readonly agentID: string }["agentID"]
-  readonly location?: {
-    readonly location?: { readonly directory?: string | undefined; readonly workspace?: string | undefined } | undefined
-  }["location"]
+  readonly location?: { readonly location?: { readonly directory?: string | undefined } | undefined }["location"]
 }
 
-export type AgentGetOutput = {
-  location: { directory: string; workspaceID?: string; project: { id: string; directory: string; canonical: string } }
-  data: AgentInfo
-}
+export type AgentGetOutput = { location: LocationPublicInfo; data: AgentInfo }
 
 export type PluginListInput = {
-  readonly location?: {
-    readonly location?: { readonly directory?: string | undefined; readonly workspace?: string | undefined } | undefined
-  }["location"]
+  readonly location?: { readonly location?: { readonly directory?: string | undefined } | undefined }["location"]
 }
 
-export type PluginListOutput = {
-  location: { directory: string; workspaceID?: string; project: { id: string; directory: string; canonical: string } }
-  data: Array<PluginInfo>
-}
+export type PluginListOutput = { location: LocationPublicInfo; data: Array<PluginInfo> }
 
 export type PluginAwaitActivationInput = {
-  readonly location?: {
-    readonly location?: { readonly directory?: string | undefined; readonly workspace?: string | undefined } | undefined
-  }["location"]
+  readonly location?: { readonly location?: { readonly directory?: string | undefined } | undefined }["location"]
 }
 
 export type PluginAwaitActivationOutput = void
 
 export type PluginCheckInput = {
-  readonly location?: {
-    readonly location?: { readonly directory?: string | undefined; readonly workspace?: string | undefined } | undefined
-  }["location"]
+  readonly location?: { readonly location?: { readonly directory?: string | undefined } | undefined }["location"]
   readonly target?: { readonly target?: string | undefined }["target"]
 }
 
-export type PluginCheckOutput = {
-  location: { directory: string; workspaceID?: string; project: { id: string; directory: string; canonical: string } }
-  data: Array<PluginInfo>
-}
+export type PluginCheckOutput = { location: LocationPublicInfo; data: Array<PluginInfo> }
 
 export type PluginUpdateInput = {
-  readonly location?: {
-    readonly location?: { readonly directory?: string | undefined; readonly workspace?: string | undefined } | undefined
-  }["location"]
+  readonly location?: { readonly location?: { readonly directory?: string | undefined } | undefined }["location"]
   readonly targets: { readonly targets: ReadonlyArray<string> }["targets"]
 }
 
 export type PluginUpdateOutput = void
 
 export type SessionListInput = {
-  readonly workspace?: {
-    readonly workspace?: string | undefined
-    readonly limit?: number | undefined
-    readonly order?: "asc" | "desc" | undefined
-    readonly search?: string | undefined
-    readonly parentID?: string | null | undefined
-    readonly directory?: string | undefined
-    readonly project?: string | undefined
-    readonly subpath?: string | undefined
-    readonly cursor?: string | undefined
-  }["workspace"]
   readonly limit?: {
-    readonly workspace?: string | undefined
     readonly limit?: number | undefined
     readonly order?: "asc" | "desc" | undefined
     readonly search?: string | undefined
@@ -2703,7 +2657,6 @@ export type SessionListInput = {
     readonly cursor?: string | undefined
   }["limit"]
   readonly order?: {
-    readonly workspace?: string | undefined
     readonly limit?: number | undefined
     readonly order?: "asc" | "desc" | undefined
     readonly search?: string | undefined
@@ -2714,7 +2667,6 @@ export type SessionListInput = {
     readonly cursor?: string | undefined
   }["order"]
   readonly search?: {
-    readonly workspace?: string | undefined
     readonly limit?: number | undefined
     readonly order?: "asc" | "desc" | undefined
     readonly search?: string | undefined
@@ -2725,7 +2677,6 @@ export type SessionListInput = {
     readonly cursor?: string | undefined
   }["search"]
   readonly parentID?: {
-    readonly workspace?: string | undefined
     readonly limit?: number | undefined
     readonly order?: "asc" | "desc" | undefined
     readonly search?: string | undefined
@@ -2736,7 +2687,6 @@ export type SessionListInput = {
     readonly cursor?: string | undefined
   }["parentID"]
   readonly directory?: {
-    readonly workspace?: string | undefined
     readonly limit?: number | undefined
     readonly order?: "asc" | "desc" | undefined
     readonly search?: string | undefined
@@ -2747,7 +2697,6 @@ export type SessionListInput = {
     readonly cursor?: string | undefined
   }["directory"]
   readonly project?: {
-    readonly workspace?: string | undefined
     readonly limit?: number | undefined
     readonly order?: "asc" | "desc" | undefined
     readonly search?: string | undefined
@@ -2758,7 +2707,6 @@ export type SessionListInput = {
     readonly cursor?: string | undefined
   }["project"]
   readonly subpath?: {
-    readonly workspace?: string | undefined
     readonly limit?: number | undefined
     readonly order?: "asc" | "desc" | undefined
     readonly search?: string | undefined
@@ -2769,7 +2717,6 @@ export type SessionListInput = {
     readonly cursor?: string | undefined
   }["subpath"]
   readonly cursor?: {
-    readonly workspace?: string | undefined
     readonly limit?: number | undefined
     readonly order?: "asc" | "desc" | undefined
     readonly search?: string | undefined
@@ -2829,7 +2776,7 @@ export type SessionCreateInput = {
     readonly title?: string | null
     readonly agent?: string | null
     readonly model?: { readonly id: string; readonly providerID: string; readonly variant?: string } | null
-    readonly location?: { readonly directory: string; readonly workspaceID?: string } | null
+    readonly location?: { readonly directory: string } | null
     readonly metadata?: { readonly [x: string]: JsonValue } | null
     readonly permissions?: ReadonlyArray<{
       readonly action: string
@@ -2842,7 +2789,7 @@ export type SessionCreateInput = {
     readonly title?: string | null
     readonly agent?: string | null
     readonly model?: { readonly id: string; readonly providerID: string; readonly variant?: string } | null
-    readonly location?: { readonly directory: string; readonly workspaceID?: string } | null
+    readonly location?: { readonly directory: string } | null
     readonly metadata?: { readonly [x: string]: JsonValue } | null
     readonly permissions?: ReadonlyArray<{
       readonly action: string
@@ -2855,7 +2802,7 @@ export type SessionCreateInput = {
     readonly title?: string | null
     readonly agent?: string | null
     readonly model?: { readonly id: string; readonly providerID: string; readonly variant?: string } | null
-    readonly location?: { readonly directory: string; readonly workspaceID?: string } | null
+    readonly location?: { readonly directory: string } | null
     readonly metadata?: { readonly [x: string]: JsonValue } | null
     readonly permissions?: ReadonlyArray<{
       readonly action: string
@@ -2868,7 +2815,7 @@ export type SessionCreateInput = {
     readonly title?: string | null
     readonly agent?: string | null
     readonly model?: { readonly id: string; readonly providerID: string; readonly variant?: string } | null
-    readonly location?: { readonly directory: string; readonly workspaceID?: string } | null
+    readonly location?: { readonly directory: string } | null
     readonly metadata?: { readonly [x: string]: JsonValue } | null
     readonly permissions?: ReadonlyArray<{
       readonly action: string
@@ -2881,7 +2828,7 @@ export type SessionCreateInput = {
     readonly title?: string | null
     readonly agent?: string | null
     readonly model?: { readonly id: string; readonly providerID: string; readonly variant?: string } | null
-    readonly location?: { readonly directory: string; readonly workspaceID?: string } | null
+    readonly location?: { readonly directory: string } | null
     readonly metadata?: { readonly [x: string]: JsonValue } | null
     readonly permissions?: ReadonlyArray<{
       readonly action: string
@@ -2894,7 +2841,7 @@ export type SessionCreateInput = {
     readonly title?: string | null
     readonly agent?: string | null
     readonly model?: { readonly id: string; readonly providerID: string; readonly variant?: string } | null
-    readonly location?: { readonly directory: string; readonly workspaceID?: string } | null
+    readonly location?: { readonly directory: string } | null
     readonly metadata?: { readonly [x: string]: JsonValue } | null
     readonly permissions?: ReadonlyArray<{
       readonly action: string
@@ -2907,7 +2854,7 @@ export type SessionCreateInput = {
     readonly title?: string | null
     readonly agent?: string | null
     readonly model?: { readonly id: string; readonly providerID: string; readonly variant?: string } | null
-    readonly location?: { readonly directory: string; readonly workspaceID?: string } | null
+    readonly location?: { readonly directory: string } | null
     readonly metadata?: { readonly [x: string]: JsonValue } | null
     readonly permissions?: ReadonlyArray<{
       readonly action: string
@@ -2949,7 +2896,6 @@ export type SessionImportInput = {
         readonly archived?: number
       }
       readonly title?: string
-      readonly location: { readonly directory: string; readonly workspaceID?: string }
       readonly subpath?: string
       readonly metadata?: { readonly [x: string]: JsonValue }
       readonly permissions?: ReadonlyArray<{
@@ -2969,6 +2915,7 @@ export type SessionImportInput = {
           readonly status: "added" | "deleted" | "modified"
         }>
       }
+      readonly location: { readonly directory: string }
     }
     readonly messages: ReadonlyArray<
       | {
@@ -2992,14 +2939,14 @@ export type SessionImportInput = {
           readonly metadata?: { readonly [x: string]: JsonValue }
           readonly time: { readonly created: number }
           readonly type: "location-switched"
-          readonly location: { readonly directory: string; readonly workspaceID?: string }
           readonly projectID?: string
           readonly subpath?: string
+          readonly location: { readonly directory: string }
           readonly previous?: {
-            readonly location: { readonly directory: string; readonly workspaceID?: string }
+            readonly location: { readonly directory: string }
             readonly projectID?: string
             readonly subpath?: string
-          }
+          } | null
         }
       | {
           readonly id: string
@@ -3235,7 +3182,7 @@ export type SessionImportInput = {
           readonly outcome: "succeeded" | "failed" | "interrupted"
         }
     >
-    readonly location?: { readonly directory: string; readonly workspaceID?: string } | null
+    readonly location?: { readonly directory: string } | null
   }["info"]
   readonly messages: {
     readonly info: {
@@ -3266,7 +3213,6 @@ export type SessionImportInput = {
         readonly archived?: number
       }
       readonly title?: string
-      readonly location: { readonly directory: string; readonly workspaceID?: string }
       readonly subpath?: string
       readonly metadata?: { readonly [x: string]: JsonValue }
       readonly permissions?: ReadonlyArray<{
@@ -3286,6 +3232,7 @@ export type SessionImportInput = {
           readonly status: "added" | "deleted" | "modified"
         }>
       }
+      readonly location: { readonly directory: string }
     }
     readonly messages: ReadonlyArray<
       | {
@@ -3309,14 +3256,14 @@ export type SessionImportInput = {
           readonly metadata?: { readonly [x: string]: JsonValue }
           readonly time: { readonly created: number }
           readonly type: "location-switched"
-          readonly location: { readonly directory: string; readonly workspaceID?: string }
           readonly projectID?: string
           readonly subpath?: string
+          readonly location: { readonly directory: string }
           readonly previous?: {
-            readonly location: { readonly directory: string; readonly workspaceID?: string }
+            readonly location: { readonly directory: string }
             readonly projectID?: string
             readonly subpath?: string
-          }
+          } | null
         }
       | {
           readonly id: string
@@ -3552,7 +3499,7 @@ export type SessionImportInput = {
           readonly outcome: "succeeded" | "failed" | "interrupted"
         }
     >
-    readonly location?: { readonly directory: string; readonly workspaceID?: string } | null
+    readonly location?: { readonly directory: string } | null
   }["messages"]
   readonly location?: {
     readonly info: {
@@ -3583,7 +3530,6 @@ export type SessionImportInput = {
         readonly archived?: number
       }
       readonly title?: string
-      readonly location: { readonly directory: string; readonly workspaceID?: string }
       readonly subpath?: string
       readonly metadata?: { readonly [x: string]: JsonValue }
       readonly permissions?: ReadonlyArray<{
@@ -3603,6 +3549,7 @@ export type SessionImportInput = {
           readonly status: "added" | "deleted" | "modified"
         }>
       }
+      readonly location: { readonly directory: string }
     }
     readonly messages: ReadonlyArray<
       | {
@@ -3626,14 +3573,14 @@ export type SessionImportInput = {
           readonly metadata?: { readonly [x: string]: JsonValue }
           readonly time: { readonly created: number }
           readonly type: "location-switched"
-          readonly location: { readonly directory: string; readonly workspaceID?: string }
           readonly projectID?: string
           readonly subpath?: string
+          readonly location: { readonly directory: string }
           readonly previous?: {
-            readonly location: { readonly directory: string; readonly workspaceID?: string }
+            readonly location: { readonly directory: string }
             readonly projectID?: string
             readonly subpath?: string
-          }
+          } | null
         }
       | {
           readonly id: string
@@ -3869,7 +3816,7 @@ export type SessionImportInput = {
           readonly outcome: "succeeded" | "failed" | "interrupted"
         }
     >
-    readonly location?: { readonly directory: string; readonly workspaceID?: string } | null
+    readonly location?: { readonly directory: string } | null
   }["location"]
 }
 
@@ -3926,21 +3873,8 @@ export type SessionRenameOutput = void
 
 export type SessionMoveInput = {
   readonly sessionID: { readonly sessionID: string }["sessionID"]
-  readonly directory: {
-    readonly directory: string
-    readonly workspaceID?: string
-    readonly delivery?: ("steer" | "queue") | null
-  }["directory"]
-  readonly workspaceID?: {
-    readonly directory: string
-    readonly workspaceID?: string
-    readonly delivery?: ("steer" | "queue") | null
-  }["workspaceID"]
-  readonly delivery?: {
-    readonly directory: string
-    readonly workspaceID?: string
-    readonly delivery?: ("steer" | "queue") | null
-  }["delivery"]
+  readonly directory: { readonly directory: string; readonly delivery?: ("steer" | "queue") | undefined }["directory"]
+  readonly delivery?: { readonly directory: string; readonly delivery?: ("steer" | "queue") | undefined }["delivery"]
 }
 
 export type SessionMoveOutput = void
@@ -4544,26 +4478,16 @@ export type MessageListInput = {
 export type MessageListOutput = SessionMessagesResponse
 
 export type ModelListInput = {
-  readonly location?: {
-    readonly location?: { readonly directory?: string | undefined; readonly workspace?: string | undefined } | undefined
-  }["location"]
+  readonly location?: { readonly location?: { readonly directory?: string | undefined } | undefined }["location"]
 }
 
-export type ModelListOutput = {
-  location: { directory: string; workspaceID?: string; project: { id: string; directory: string; canonical: string } }
-  data: Array<ModelInfo>
-}
+export type ModelListOutput = { location: LocationPublicInfo; data: Array<ModelInfo> }
 
 export type ModelDefaultInput = {
-  readonly location?: {
-    readonly location?: { readonly directory?: string | undefined; readonly workspace?: string | undefined } | undefined
-  }["location"]
+  readonly location?: { readonly location?: { readonly directory?: string | undefined } | undefined }["location"]
 }
 
-export type ModelDefaultOutput = {
-  location: { directory: string; workspaceID?: string; project: { id: string; directory: string; canonical: string } }
-  data: ModelInfo | null
-}
+export type ModelDefaultOutput = { location: LocationPublicInfo; data: ModelInfo | null }
 
 export type GenerateTextInput = {
   readonly prompt: {
@@ -4579,55 +4503,33 @@ export type GenerateTextInput = {
 export type GenerateTextOutput = GenerateTextResponse["data"]
 
 export type ProviderListInput = {
-  readonly location?: {
-    readonly location?: { readonly directory?: string | undefined; readonly workspace?: string | undefined } | undefined
-  }["location"]
+  readonly location?: { readonly location?: { readonly directory?: string | undefined } | undefined }["location"]
 }
 
-export type ProviderListOutput = {
-  location: { directory: string; workspaceID?: string; project: { id: string; directory: string; canonical: string } }
-  data: Array<ProviderInfo>
-}
+export type ProviderListOutput = { location: LocationPublicInfo; data: Array<ProviderInfo> }
 
 export type ProviderGetInput = {
   readonly providerID: { readonly providerID: string }["providerID"]
-  readonly location?: {
-    readonly location?: { readonly directory?: string | undefined; readonly workspace?: string | undefined } | undefined
-  }["location"]
+  readonly location?: { readonly location?: { readonly directory?: string | undefined } | undefined }["location"]
 }
 
-export type ProviderGetOutput = {
-  location: { directory: string; workspaceID?: string; project: { id: string; directory: string; canonical: string } }
-  data: ProviderInfo
-}
+export type ProviderGetOutput = { location: LocationPublicInfo; data: ProviderInfo }
 
 export type IntegrationListInput = {
-  readonly location?: {
-    readonly location?: { readonly directory?: string | undefined; readonly workspace?: string | undefined } | undefined
-  }["location"]
+  readonly location?: { readonly location?: { readonly directory?: string | undefined } | undefined }["location"]
 }
 
-export type IntegrationListOutput = {
-  location: { directory: string; workspaceID?: string; project: { id: string; directory: string; canonical: string } }
-  data: Array<IntegrationInfo>
-}
+export type IntegrationListOutput = { location: LocationPublicInfo; data: Array<IntegrationInfo> }
 
 export type IntegrationGetInput = {
   readonly integrationID: { readonly integrationID: string }["integrationID"]
-  readonly location?: {
-    readonly location?: { readonly directory?: string | undefined; readonly workspace?: string | undefined } | undefined
-  }["location"]
+  readonly location?: { readonly location?: { readonly directory?: string | undefined } | undefined }["location"]
 }
 
-export type IntegrationGetOutput = {
-  location: { directory: string; workspaceID?: string; project: { id: string; directory: string; canonical: string } }
-  data: IntegrationInfo | null
-}
+export type IntegrationGetOutput = { location: LocationPublicInfo; data: IntegrationInfo | null }
 
 export type IntegrationWellknownAddInput = {
-  readonly location?: {
-    readonly location?: { readonly directory?: string | undefined; readonly workspace?: string | undefined } | undefined
-  }["location"]
+  readonly location?: { readonly location?: { readonly directory?: string | undefined } | undefined }["location"]
   readonly url: { readonly url: string }["url"]
 }
 
@@ -4635,9 +4537,7 @@ export type IntegrationWellknownAddOutput = void
 
 export type IntegrationConnectKeyInput = {
   readonly integrationID: { readonly integrationID: string }["integrationID"]
-  readonly location?: {
-    readonly location?: { readonly directory?: string | undefined; readonly workspace?: string | undefined } | undefined
-  }["location"]
+  readonly location?: { readonly location?: { readonly directory?: string | undefined } | undefined }["location"]
   readonly key: {
     readonly key: string
     readonly answer?: { readonly [x: string]: string | number | boolean | ReadonlyArray<string> } | undefined
@@ -4659,9 +4559,7 @@ export type IntegrationConnectKeyOutput = void
 
 export type IntegrationOauthConnectInput = {
   readonly integrationID: { readonly integrationID: string }["integrationID"]
-  readonly location?: {
-    readonly location?: { readonly directory?: string | undefined; readonly workspace?: string | undefined } | undefined
-  }["location"]
+  readonly location?: { readonly location?: { readonly directory?: string | undefined } | undefined }["location"]
   readonly methodID: {
     readonly methodID: string
     readonly answer?: { readonly [x: string]: string | number | boolean | ReadonlyArray<string> } | undefined
@@ -4679,36 +4577,20 @@ export type IntegrationOauthConnectInput = {
   }["label"]
 }
 
-export type IntegrationOauthConnectOutput = {
-  location: { directory: string; workspaceID?: string; project: { id: string; directory: string; canonical: string } }
-  data: {
-    attemptID: string
-    url: string
-    instructions: string
-    mode: "auto" | "code"
-    time: { created: number | "Infinity" | "-Infinity" | "NaN"; expires: number | "Infinity" | "-Infinity" | "NaN" }
-  }
-}
+export type IntegrationOauthConnectOutput = { location: LocationPublicInfo; data: IntegrationAttempt }
 
 export type IntegrationOauthStatusInput = {
   readonly integrationID: { readonly integrationID: string; readonly attemptID: string }["integrationID"]
   readonly attemptID: { readonly integrationID: string; readonly attemptID: string }["attemptID"]
-  readonly location?: {
-    readonly location?: { readonly directory?: string | undefined; readonly workspace?: string | undefined } | undefined
-  }["location"]
+  readonly location?: { readonly location?: { readonly directory?: string | undefined } | undefined }["location"]
 }
 
-export type IntegrationOauthStatusOutput = {
-  location: { directory: string; workspaceID?: string; project: { id: string; directory: string; canonical: string } }
-  data: IntegrationAttemptStatus
-}
+export type IntegrationOauthStatusOutput = { location: LocationPublicInfo; data: IntegrationAttemptStatus }
 
 export type IntegrationOauthCompleteInput = {
   readonly integrationID: { readonly integrationID: string; readonly attemptID: string }["integrationID"]
   readonly attemptID: { readonly integrationID: string; readonly attemptID: string }["attemptID"]
-  readonly location?: {
-    readonly location?: { readonly directory?: string | undefined; readonly workspace?: string | undefined } | undefined
-  }["location"]
+  readonly location?: { readonly location?: { readonly directory?: string | undefined } | undefined }["location"]
   readonly code?: { readonly code?: string | undefined }["code"]
 }
 
@@ -4717,66 +4599,45 @@ export type IntegrationOauthCompleteOutput = void
 export type IntegrationOauthCancelInput = {
   readonly integrationID: { readonly integrationID: string; readonly attemptID: string }["integrationID"]
   readonly attemptID: { readonly integrationID: string; readonly attemptID: string }["attemptID"]
-  readonly location?: {
-    readonly location?: { readonly directory?: string | undefined; readonly workspace?: string | undefined } | undefined
-  }["location"]
+  readonly location?: { readonly location?: { readonly directory?: string | undefined } | undefined }["location"]
 }
 
 export type IntegrationOauthCancelOutput = void
 
 export type IntegrationCommandConnectInput = {
   readonly integrationID: { readonly integrationID: string }["integrationID"]
-  readonly location?: {
-    readonly location?: { readonly directory?: string | undefined; readonly workspace?: string | undefined } | undefined
-  }["location"]
+  readonly location?: { readonly location?: { readonly directory?: string | undefined } | undefined }["location"]
   readonly methodID: { readonly methodID: string; readonly label?: string | undefined }["methodID"]
   readonly label?: { readonly methodID: string; readonly label?: string | undefined }["label"]
 }
 
-export type IntegrationCommandConnectOutput = {
-  location: { directory: string; workspaceID?: string; project: { id: string; directory: string; canonical: string } }
-  data: IntegrationCommandAttempt
-}
+export type IntegrationCommandConnectOutput = { location: LocationPublicInfo; data: IntegrationCommandAttempt }
 
 export type IntegrationCommandStatusInput = {
   readonly integrationID: { readonly integrationID: string; readonly attemptID: string }["integrationID"]
   readonly attemptID: { readonly integrationID: string; readonly attemptID: string }["attemptID"]
-  readonly location?: {
-    readonly location?: { readonly directory?: string | undefined; readonly workspace?: string | undefined } | undefined
-  }["location"]
+  readonly location?: { readonly location?: { readonly directory?: string | undefined } | undefined }["location"]
 }
 
-export type IntegrationCommandStatusOutput = {
-  location: { directory: string; workspaceID?: string; project: { id: string; directory: string; canonical: string } }
-  data: IntegrationCommandAttemptStatus
-}
+export type IntegrationCommandStatusOutput = { location: LocationPublicInfo; data: IntegrationCommandAttemptStatus }
 
 export type IntegrationCommandCancelInput = {
   readonly integrationID: { readonly integrationID: string; readonly attemptID: string }["integrationID"]
   readonly attemptID: { readonly integrationID: string; readonly attemptID: string }["attemptID"]
-  readonly location?: {
-    readonly location?: { readonly directory?: string | undefined; readonly workspace?: string | undefined } | undefined
-  }["location"]
+  readonly location?: { readonly location?: { readonly directory?: string | undefined } | undefined }["location"]
 }
 
 export type IntegrationCommandCancelOutput = void
 
 export type McpListInput = {
-  readonly location?: {
-    readonly location?: { readonly directory?: string | undefined; readonly workspace?: string | undefined } | undefined
-  }["location"]
+  readonly location?: { readonly location?: { readonly directory?: string | undefined } | undefined }["location"]
 }
 
-export type McpListOutput = {
-  location: { directory: string; workspaceID?: string; project: { id: string; directory: string; canonical: string } }
-  data: Array<McpServer>
-}
+export type McpListOutput = { location: LocationPublicInfo; data: Array<McpServer> }
 
 export type McpAddInput = {
   readonly server: { readonly server: string }["server"]
-  readonly location?: {
-    readonly location?: { readonly directory?: string | undefined; readonly workspace?: string | undefined } | undefined
-  }["location"]
+  readonly location?: { readonly location?: { readonly directory?: string | undefined } | undefined }["location"]
   readonly config: {
     readonly config:
       | {
@@ -4812,47 +4673,34 @@ export type McpAddOutput = void
 
 export type McpRemoveInput = {
   readonly server: { readonly server: string }["server"]
-  readonly location?: {
-    readonly location?: { readonly directory?: string | undefined; readonly workspace?: string | undefined } | undefined
-  }["location"]
+  readonly location?: { readonly location?: { readonly directory?: string | undefined } | undefined }["location"]
 }
 
 export type McpRemoveOutput = void
 
 export type McpConnectInput = {
   readonly server: { readonly server: string }["server"]
-  readonly location?: {
-    readonly location?: { readonly directory?: string | undefined; readonly workspace?: string | undefined } | undefined
-  }["location"]
+  readonly location?: { readonly location?: { readonly directory?: string | undefined } | undefined }["location"]
 }
 
 export type McpConnectOutput = void
 
 export type McpDisconnectInput = {
   readonly server: { readonly server: string }["server"]
-  readonly location?: {
-    readonly location?: { readonly directory?: string | undefined; readonly workspace?: string | undefined } | undefined
-  }["location"]
+  readonly location?: { readonly location?: { readonly directory?: string | undefined } | undefined }["location"]
 }
 
 export type McpDisconnectOutput = void
 
 export type McpResourceCatalogInput = {
-  readonly location?: {
-    readonly location?: { readonly directory?: string | undefined; readonly workspace?: string | undefined } | undefined
-  }["location"]
+  readonly location?: { readonly location?: { readonly directory?: string | undefined } | undefined }["location"]
 }
 
-export type McpResourceCatalogOutput = {
-  location: { directory: string; workspaceID?: string; project: { id: string; directory: string; canonical: string } }
-  data: McpResourceCatalog
-}
+export type McpResourceCatalogOutput = { location: LocationPublicInfo; data: McpResourceCatalog }
 
 export type CredentialUpdateInput = {
   readonly credentialID: { readonly credentialID: string }["credentialID"]
-  readonly location?: {
-    readonly location?: { readonly directory?: string | undefined; readonly workspace?: string | undefined } | undefined
-  }["location"]
+  readonly location?: { readonly location?: { readonly directory?: string | undefined } | undefined }["location"]
   readonly label: { readonly label: string }["label"]
 }
 
@@ -4860,18 +4708,14 @@ export type CredentialUpdateOutput = void
 
 export type CredentialActivateInput = {
   readonly credentialID: { readonly credentialID: string }["credentialID"]
-  readonly location?: {
-    readonly location?: { readonly directory?: string | undefined; readonly workspace?: string | undefined } | undefined
-  }["location"]
+  readonly location?: { readonly location?: { readonly directory?: string | undefined } | undefined }["location"]
 }
 
 export type CredentialActivateOutput = void
 
 export type CredentialRemoveInput = {
   readonly credentialID: { readonly credentialID: string }["credentialID"]
-  readonly location?: {
-    readonly location?: { readonly directory?: string | undefined; readonly workspace?: string | undefined } | undefined
-  }["location"]
+  readonly location?: { readonly location?: { readonly directory?: string | undefined } | undefined }["location"]
 }
 
 export type CredentialRemoveOutput = void
@@ -4909,15 +4753,10 @@ export type ProjectUpdateInput = {
 export type ProjectUpdateOutput = Project
 
 export type FormRequestListInput = {
-  readonly location?: {
-    readonly location?: { readonly directory?: string | undefined; readonly workspace?: string | undefined } | undefined
-  }["location"]
+  readonly location?: { readonly location?: { readonly directory?: string | undefined } | undefined }["location"]
 }
 
-export type FormRequestListOutput = {
-  location: { directory: string; workspaceID?: string; project: { id: string; directory: string; canonical: string } }
-  data: Array<FormInfo>
-}
+export type FormRequestListOutput = { location: LocationPublicInfo; data: Array<FormInfo> }
 
 export type FormListInput = { readonly sessionID: { readonly sessionID: string }["sessionID"] }
 
@@ -5765,15 +5604,10 @@ export type FormCancelInput = {
 export type FormCancelOutput = void
 
 export type PermissionRequestListInput = {
-  readonly location?: {
-    readonly location?: { readonly directory?: string | undefined; readonly workspace?: string | undefined } | undefined
-  }["location"]
+  readonly location?: { readonly location?: { readonly directory?: string | undefined } | undefined }["location"]
 }
 
-export type PermissionRequestListOutput = {
-  location: { directory: string; workspaceID?: string; project: { id: string; directory: string; canonical: string } }
-  data: Array<PermissionRequest>
-}
+export type PermissionRequestListOutput = { location: LocationPublicInfo; data: Array<PermissionRequest> }
 
 export type PermissionSavedListInput = { readonly projectID?: { readonly projectID?: string | undefined }["projectID"] }
 
@@ -5886,9 +5720,7 @@ export type PermissionRulesInput = {
 export type PermissionRulesOutput = void
 
 export type FileReadInput = {
-  readonly location?: {
-    readonly location?: { readonly directory?: string | undefined; readonly workspace?: string | undefined } | undefined
-  }["location"]
+  readonly location?: { readonly location?: { readonly directory?: string | undefined } | undefined }["location"]
   readonly path: string
 }
 
@@ -5896,80 +5728,62 @@ export type FileReadOutput = globalThis.Uint8Array
 
 export type FileListInput = {
   readonly location?: {
-    readonly location?: { readonly directory?: string | undefined; readonly workspace?: string | undefined } | undefined
+    readonly location?: { readonly directory?: string | undefined } | undefined
     readonly path?: string | undefined
   }["location"]
   readonly path?: {
-    readonly location?: { readonly directory?: string | undefined; readonly workspace?: string | undefined } | undefined
+    readonly location?: { readonly directory?: string | undefined } | undefined
     readonly path?: string | undefined
   }["path"]
 }
 
-export type FileListOutput = {
-  location: { directory: string; workspaceID?: string; project: { id: string; directory: string; canonical: string } }
-  data: Array<FileSystemEntry>
-}
+export type FileListOutput = { location: LocationPublicInfo; data: Array<FileSystemEntry> }
 
 export type FileFindInput = {
   readonly location?: {
-    readonly location?: { readonly directory?: string | undefined; readonly workspace?: string | undefined } | undefined
+    readonly location?: { readonly directory?: string | undefined } | undefined
     readonly query: string
     readonly type?: "file" | "directory" | undefined
     readonly limit?: number | undefined
   }["location"]
   readonly query: {
-    readonly location?: { readonly directory?: string | undefined; readonly workspace?: string | undefined } | undefined
+    readonly location?: { readonly directory?: string | undefined } | undefined
     readonly query: string
     readonly type?: "file" | "directory" | undefined
     readonly limit?: number | undefined
   }["query"]
   readonly type?: {
-    readonly location?: { readonly directory?: string | undefined; readonly workspace?: string | undefined } | undefined
+    readonly location?: { readonly directory?: string | undefined } | undefined
     readonly query: string
     readonly type?: "file" | "directory" | undefined
     readonly limit?: number | undefined
   }["type"]
   readonly limit?: {
-    readonly location?: { readonly directory?: string | undefined; readonly workspace?: string | undefined } | undefined
+    readonly location?: { readonly directory?: string | undefined } | undefined
     readonly query: string
     readonly type?: "file" | "directory" | undefined
     readonly limit?: number | undefined
   }["limit"]
 }
 
-export type FileFindOutput = {
-  location: { directory: string; workspaceID?: string; project: { id: string; directory: string; canonical: string } }
-  data: Array<FileSystemEntry>
-}
+export type FileFindOutput = { location: LocationPublicInfo; data: Array<FileSystemEntry> }
 
 export type CommandListInput = {
-  readonly location?: {
-    readonly location?: { readonly directory?: string | undefined; readonly workspace?: string | undefined } | undefined
-  }["location"]
+  readonly location?: { readonly location?: { readonly directory?: string | undefined } | undefined }["location"]
 }
 
-export type CommandListOutput = {
-  location: { directory: string; workspaceID?: string; project: { id: string; directory: string; canonical: string } }
-  data: Array<CommandInfo>
-}
+export type CommandListOutput = { location: LocationPublicInfo; data: Array<CommandInfo> }
 
 export type SkillListInput = {
-  readonly location?: {
-    readonly location?: { readonly directory?: string | undefined; readonly workspace?: string | undefined } | undefined
-  }["location"]
+  readonly location?: { readonly location?: { readonly directory?: string | undefined } | undefined }["location"]
 }
 
-export type SkillListOutput = {
-  location: { directory: string; workspaceID?: string; project: { id: string; directory: string; canonical: string } }
-  data: Array<SkillInfo>
-}
+export type SkillListOutput = { location: LocationPublicInfo; data: Array<SkillInfo> }
 
 export type RpcCallInput = {
   readonly rpcID: { readonly rpcID: string; readonly method: string }["rpcID"]
   readonly method: { readonly rpcID: string; readonly method: string }["method"]
-  readonly location?: {
-    readonly location?: { readonly directory?: string | undefined; readonly workspace?: string | undefined } | undefined
-  }["location"]
+  readonly location?: { readonly location?: { readonly directory?: string | undefined } | undefined }["location"]
   readonly input?: { readonly input: JsonValue }["input"]
 }
 
@@ -5978,20 +5792,13 @@ export type RpcCallOutput = RpcOutput
 export type EventSubscribeOutput = V2Event
 
 export type PtyListInput = {
-  readonly location?: {
-    readonly location?: { readonly directory?: string | undefined; readonly workspace?: string | undefined } | undefined
-  }["location"]
+  readonly location?: { readonly location?: { readonly directory?: string | undefined } | undefined }["location"]
 }
 
-export type PtyListOutput = {
-  location: { directory: string; workspaceID?: string; project: { id: string; directory: string; canonical: string } }
-  data: Array<Pty>
-}
+export type PtyListOutput = { location: LocationPublicInfo; data: Array<Pty> }
 
 export type PtyCreateInput = {
-  readonly location?: {
-    readonly location?: { readonly directory?: string | undefined; readonly workspace?: string | undefined } | undefined
-  }["location"]
+  readonly location?: { readonly location?: { readonly directory?: string | undefined } | undefined }["location"]
   readonly command?: {
     readonly command?: string
     readonly args?: ReadonlyArray<string>
@@ -6029,28 +5836,18 @@ export type PtyCreateInput = {
   }["env"]
 }
 
-export type PtyCreateOutput = {
-  location: { directory: string; workspaceID?: string; project: { id: string; directory: string; canonical: string } }
-  data: Pty
-}
+export type PtyCreateOutput = { location: LocationPublicInfo; data: Pty }
 
 export type PtyGetInput = {
   readonly ptyID: { readonly ptyID: string }["ptyID"]
-  readonly location?: {
-    readonly location?: { readonly directory?: string | undefined; readonly workspace?: string | undefined } | undefined
-  }["location"]
+  readonly location?: { readonly location?: { readonly directory?: string | undefined } | undefined }["location"]
 }
 
-export type PtyGetOutput = {
-  location: { directory: string; workspaceID?: string; project: { id: string; directory: string; canonical: string } }
-  data: Pty
-}
+export type PtyGetOutput = { location: LocationPublicInfo; data: Pty }
 
 export type PtyUpdateInput = {
   readonly ptyID: { readonly ptyID: string }["ptyID"]
-  readonly location?: {
-    readonly location?: { readonly directory?: string | undefined; readonly workspace?: string | undefined } | undefined
-  }["location"]
+  readonly location?: { readonly location?: { readonly directory?: string | undefined } | undefined }["location"]
   readonly title?: {
     readonly title?: string
     readonly size?: { readonly rows: number; readonly cols: number }
@@ -6058,32 +5855,22 @@ export type PtyUpdateInput = {
   readonly size?: { readonly title?: string; readonly size?: { readonly rows: number; readonly cols: number } }["size"]
 }
 
-export type PtyUpdateOutput = {
-  location: { directory: string; workspaceID?: string; project: { id: string; directory: string; canonical: string } }
-  data: Pty
-}
+export type PtyUpdateOutput = { location: LocationPublicInfo; data: Pty }
 
 export type PtyRemoveInput = {
   readonly ptyID: { readonly ptyID: string }["ptyID"]
-  readonly location?: {
-    readonly location?: { readonly directory?: string | undefined; readonly workspace?: string | undefined } | undefined
-  }["location"]
+  readonly location?: { readonly location?: { readonly directory?: string | undefined } | undefined }["location"]
 }
 
 export type PtyRemoveOutput = void
 
 export type PtyConnectTokenInput = {
   readonly ptyID: { readonly ptyID: string }["ptyID"]
-  readonly location?: {
-    readonly location?: { readonly directory?: string | undefined; readonly workspace?: string | undefined } | undefined
-  }["location"]
+  readonly location?: { readonly location?: { readonly directory?: string | undefined } | undefined }["location"]
   readonly "x-opencode-ticket"?: { readonly "x-opencode-ticket"?: string | undefined }["x-opencode-ticket"]
 }
 
-export type PtyConnectTokenOutput = {
-  location: { directory: string; workspaceID?: string; project: { id: string; directory: string; canonical: string } }
-  data: PtyTicketConnectToken
-}
+export type PtyConnectTokenOutput = { location: LocationPublicInfo; data: PtyTicketConnectToken }
 
 export type ExperimentalPersistentPtyReadInput = {
   readonly sessionID: { readonly sessionID: string }["sessionID"]
@@ -6188,20 +5975,13 @@ export type ExperimentalPersistentPtyConnectTokenInput = {
 export type ExperimentalPersistentPtyConnectTokenOutput = { data: PtyTicketConnectToken }["data"]
 
 export type ShellListInput = {
-  readonly location?: {
-    readonly location?: { readonly directory?: string | undefined; readonly workspace?: string | undefined } | undefined
-  }["location"]
+  readonly location?: { readonly location?: { readonly directory?: string | undefined } | undefined }["location"]
 }
 
-export type ShellListOutput = {
-  location: { directory: string; workspaceID?: string; project: { id: string; directory: string; canonical: string } }
-  data: Array<ShellInfo1>
-}
+export type ShellListOutput = { location: LocationPublicInfo; data: Array<ShellInfo1> }
 
 export type ShellCreateInput = {
-  readonly location?: {
-    readonly location?: { readonly directory?: string | undefined; readonly workspace?: string | undefined } | undefined
-  }["location"]
+  readonly location?: { readonly location?: { readonly directory?: string | undefined } | undefined }["location"]
   readonly command: {
     readonly command: string
     readonly cwd?: string
@@ -6228,92 +6008,68 @@ export type ShellCreateInput = {
   }["metadata"]
 }
 
-export type ShellCreateOutput = {
-  location: { directory: string; workspaceID?: string; project: { id: string; directory: string; canonical: string } }
-  data: ShellInfo1
-}
+export type ShellCreateOutput = { location: LocationPublicInfo; data: ShellInfo1 }
 
 export type ShellGetInput = {
   readonly id: { readonly id: string }["id"]
-  readonly location?: {
-    readonly location?: { readonly directory?: string | undefined; readonly workspace?: string | undefined } | undefined
-  }["location"]
+  readonly location?: { readonly location?: { readonly directory?: string | undefined } | undefined }["location"]
 }
 
-export type ShellGetOutput = {
-  location: { directory: string; workspaceID?: string; project: { id: string; directory: string; canonical: string } }
-  data: ShellInfo1
-}
+export type ShellGetOutput = { location: LocationPublicInfo; data: ShellInfo1 }
 
 export type ShellTimeoutInput = {
   readonly id: { readonly id: string }["id"]
-  readonly location?: {
-    readonly location?: { readonly directory?: string | undefined; readonly workspace?: string | undefined } | undefined
-  }["location"]
+  readonly location?: { readonly location?: { readonly directory?: string | undefined } | undefined }["location"]
   readonly timeout: { readonly timeout: number }["timeout"]
 }
 
-export type ShellTimeoutOutput = {
-  location: { directory: string; workspaceID?: string; project: { id: string; directory: string; canonical: string } }
-  data: ShellInfo1
-}
+export type ShellTimeoutOutput = { location: LocationPublicInfo; data: ShellInfo1 }
 
 export type ShellOutputInput = {
   readonly id: { readonly id: string }["id"]
   readonly location?: {
-    readonly location?: { readonly directory?: string | undefined; readonly workspace?: string | undefined } | undefined
+    readonly location?: { readonly directory?: string | undefined } | undefined
     readonly cursor?: number | undefined
     readonly limit?: number | undefined
   }["location"]
   readonly cursor?: {
-    readonly location?: { readonly directory?: string | undefined; readonly workspace?: string | undefined } | undefined
+    readonly location?: { readonly directory?: string | undefined } | undefined
     readonly cursor?: number | undefined
     readonly limit?: number | undefined
   }["cursor"]
   readonly limit?: {
-    readonly location?: { readonly directory?: string | undefined; readonly workspace?: string | undefined } | undefined
+    readonly location?: { readonly directory?: string | undefined } | undefined
     readonly cursor?: number | undefined
     readonly limit?: number | undefined
   }["limit"]
 }
 
 export type ShellOutputOutput = {
-  location: { directory: string; workspaceID?: string; project: { id: string; directory: string; canonical: string } }
+  location: LocationPublicInfo
   data: { output: string; cursor: number; size: number; truncated: boolean }
 }
 
 export type ShellRemoveInput = {
   readonly id: { readonly id: string }["id"]
-  readonly location?: {
-    readonly location?: { readonly directory?: string | undefined; readonly workspace?: string | undefined } | undefined
-  }["location"]
+  readonly location?: { readonly location?: { readonly directory?: string | undefined } | undefined }["location"]
 }
 
 export type ShellRemoveOutput = void
 
 export type ReferenceListInput = {
-  readonly location?: {
-    readonly location?: { readonly directory?: string | undefined; readonly workspace?: string | undefined } | undefined
-  }["location"]
+  readonly location?: { readonly location?: { readonly directory?: string | undefined } | undefined }["location"]
 }
 
-export type ReferenceListOutput = {
-  location: { directory: string; workspaceID?: string; project: { id: string; directory: string; canonical: string } }
-  data: Array<ReferenceInfo>
-}
+export type ReferenceListOutput = { location: LocationPublicInfo; data: Array<ReferenceInfo> }
 
 export type WorktreeListInput = {
-  readonly location?: {
-    readonly location?: { readonly directory?: string | undefined; readonly workspace?: string | undefined } | undefined
-  }["location"]
+  readonly location?: { readonly location?: { readonly directory?: string | undefined } | undefined }["location"]
 }
 
 export type WorktreeListOutput = WorktreeList
 
 export type WorktreeCreateInput = {
-  readonly location?: {
-    readonly location?: { readonly directory?: string | undefined; readonly workspace?: string | undefined } | undefined
-  }["location"]
+  readonly location?: { readonly location?: { readonly directory?: string | undefined } | undefined }["location"]
   readonly strategy?: {
     readonly strategy?: string
     readonly from?: string
@@ -6354,9 +6110,7 @@ export type WorktreeCreateInput = {
 export type WorktreeCreateOutput = WorktreeInfo
 
 export type WorktreeRemoveInput = {
-  readonly location?: {
-    readonly location?: { readonly directory?: string | undefined; readonly workspace?: string | undefined } | undefined
-  }["location"]
+  readonly location?: { readonly location?: { readonly directory?: string | undefined } | undefined }["location"]
   readonly directory: { readonly directory: string; readonly force: boolean }["directory"]
   readonly force: { readonly directory: string; readonly force: boolean }["force"]
 }
@@ -6364,118 +6118,82 @@ export type WorktreeRemoveInput = {
 export type WorktreeRemoveOutput = void
 
 export type WorktreeRefreshInput = {
-  readonly location?: {
-    readonly location?: { readonly directory?: string | undefined; readonly workspace?: string | undefined } | undefined
-  }["location"]
+  readonly location?: { readonly location?: { readonly directory?: string | undefined } | undefined }["location"]
 }
 
 export type WorktreeRefreshOutput = void
 
-export type WorkspaceCreateInput = {
-  readonly id?: { readonly id?: string | undefined; readonly provider: string }["id"]
-  readonly provider: { readonly id?: string | undefined; readonly provider: string }["provider"]
-}
-
-export type WorkspaceCreateOutput = { data: string }["data"]
-
-export type WorkspaceDestroyInput = { readonly workspaceID: { readonly workspaceID: string }["workspaceID"] }
-
-export type WorkspaceDestroyOutput = WorkspaceDestroyResult
-
 export type VcsGetInput = {
-  readonly location?: {
-    readonly location?: { readonly directory?: string | undefined; readonly workspace?: string | undefined } | undefined
-  }["location"]
+  readonly location?: { readonly location?: { readonly directory?: string | undefined } | undefined }["location"]
 }
 
-export type VcsGetOutput = {
-  location: { directory: string; workspaceID?: string; project: { id: string; directory: string; canonical: string } }
-  data: VcsInfo
-}
+export type VcsGetOutput = { location: LocationPublicInfo; data: VcsInfo }
 
 export type VcsBaseInput = {
-  readonly location?: {
-    readonly location?: { readonly directory?: string | undefined; readonly workspace?: string | undefined } | undefined
-  }["location"]
+  readonly location?: { readonly location?: { readonly directory?: string | undefined } | undefined }["location"]
 }
 
-export type VcsBaseOutput = {
-  location: { directory: string; workspaceID?: string; project: { id: string; directory: string; canonical: string } }
-  data: VcsBase | null
-}
+export type VcsBaseOutput = { location: LocationPublicInfo; data: VcsBase | null }
 
 export type VcsStatusInput = {
-  readonly location?: {
-    readonly location?: { readonly directory?: string | undefined; readonly workspace?: string | undefined } | undefined
-  }["location"]
+  readonly location?: { readonly location?: { readonly directory?: string | undefined } | undefined }["location"]
 }
 
-export type VcsStatusOutput = {
-  location: { directory: string; workspaceID?: string; project: { id: string; directory: string; canonical: string } }
-  data: Array<VcsFileStatus>
-}
+export type VcsStatusOutput = { location: LocationPublicInfo; data: Array<VcsFileStatus> }
 
 export type VcsBranchesInput = {
   readonly location?: {
-    readonly location?: { readonly directory?: string | undefined; readonly workspace?: string | undefined } | undefined
+    readonly location?: { readonly directory?: string | undefined } | undefined
     readonly search?: string | undefined
     readonly limit?: number | undefined
   }["location"]
   readonly search?: {
-    readonly location?: { readonly directory?: string | undefined; readonly workspace?: string | undefined } | undefined
+    readonly location?: { readonly directory?: string | undefined } | undefined
     readonly search?: string | undefined
     readonly limit?: number | undefined
   }["search"]
   readonly limit?: {
-    readonly location?: { readonly directory?: string | undefined; readonly workspace?: string | undefined } | undefined
+    readonly location?: { readonly directory?: string | undefined } | undefined
     readonly search?: string | undefined
     readonly limit?: number | undefined
   }["limit"]
 }
 
-export type VcsBranchesOutput = {
-  location: { directory: string; workspaceID?: string; project: { id: string; directory: string; canonical: string } }
-  data: VcsBranchList
-}
+export type VcsBranchesOutput = { location: LocationPublicInfo; data: VcsBranchList }
 
 export type VcsDiffInput = {
   readonly location?: {
-    readonly location?: { readonly directory?: string | undefined; readonly workspace?: string | undefined } | undefined
+    readonly location?: { readonly directory?: string | undefined } | undefined
     readonly mode: "working" | "branch" | "committed"
     readonly base?: string | undefined
     readonly context?: number | undefined
   }["location"]
   readonly mode: {
-    readonly location?: { readonly directory?: string | undefined; readonly workspace?: string | undefined } | undefined
+    readonly location?: { readonly directory?: string | undefined } | undefined
     readonly mode: "working" | "branch" | "committed"
     readonly base?: string | undefined
     readonly context?: number | undefined
   }["mode"]
   readonly base?: {
-    readonly location?: { readonly directory?: string | undefined; readonly workspace?: string | undefined } | undefined
+    readonly location?: { readonly directory?: string | undefined } | undefined
     readonly mode: "working" | "branch" | "committed"
     readonly base?: string | undefined
     readonly context?: number | undefined
   }["base"]
   readonly context?: {
-    readonly location?: { readonly directory?: string | undefined; readonly workspace?: string | undefined } | undefined
+    readonly location?: { readonly directory?: string | undefined } | undefined
     readonly mode: "working" | "branch" | "committed"
     readonly base?: string | undefined
     readonly context?: number | undefined
   }["context"]
 }
 
-export type VcsDiffOutput = {
-  location: { directory: string; workspaceID?: string; project: { id: string; directory: string; canonical: string } }
-  data: Array<FileDiffInfo>
-}
+export type VcsDiffOutput = { location: LocationPublicInfo; data: Array<FileDiffInfo> }
 
-export type DebugLocationListOutput = Array<LocationRef>
+export type DebugLocationListOutput = Array<LocationPublicRef>
 
 export type DebugLocationEvictInput = {
-  readonly location?: {
-    readonly location?: { readonly directory?: string | undefined; readonly workspace?: string | undefined } | undefined
-  }["location"]
+  readonly location?: { readonly location?: { readonly directory?: string | undefined } | undefined }["location"]
 }
 
 export type DebugLocationEvictOutput = void
@@ -6486,33 +6204,24 @@ export type MigrationV1StatusOutput =
   | { status: "error"; error: string }
 
 export type WebsearchProvidersInput = {
-  readonly location?: {
-    readonly location?: { readonly directory?: string | undefined; readonly workspace?: string | undefined } | undefined
-  }["location"]
+  readonly location?: { readonly location?: { readonly directory?: string | undefined } | undefined }["location"]
 }
 
-export type WebsearchProvidersOutput = {
-  location: { directory: string; workspaceID?: string; project: { id: string; directory: string; canonical: string } }
-  data: Array<WebSearchProvider>
-}
+export type WebsearchProvidersOutput = { location: LocationPublicInfo; data: Array<WebSearchProvider> }
 
 export type WebsearchQueryInput = {
-  readonly location?: {
-    readonly location?: { readonly directory?: string | undefined; readonly workspace?: string | undefined } | undefined
-  }["location"]
+  readonly location?: { readonly location?: { readonly directory?: string | undefined } | undefined }["location"]
   readonly query: { readonly query: string; readonly providerID?: string }["query"]
   readonly providerID?: { readonly query: string; readonly providerID?: string }["providerID"]
 }
 
 export type WebsearchQueryOutput = {
-  location: { directory: string; workspaceID?: string; project: { id: string; directory: string; canonical: string } }
+  location: LocationPublicInfo
   data: { providerID: string; results: Array<WebSearchResult> }
 }
 
 export type ConfigGetInput = {
-  readonly location?: {
-    readonly location?: { readonly directory?: string | undefined; readonly workspace?: string | undefined } | undefined
-  }["location"]
+  readonly location?: { readonly location?: { readonly directory?: string | undefined } | undefined }["location"]
 }
 
 export type ConfigGetOutput = Array<ConfigEntry>

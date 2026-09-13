@@ -8,7 +8,7 @@ import { HttpApiEndpoint, HttpApiGroup, HttpApiSchema, OpenApi } from "effect/un
 const fields = {
   id: Event.ID,
   metadata: Schema.optional(Schema.Record(Schema.String, Schema.Unknown)),
-  location: Schema.optional(Location.Ref),
+  location: Schema.optional(Location.PublicRef),
 }
 
 const rpcEvent = Schema.Struct({
@@ -16,7 +16,7 @@ const rpcEvent = Schema.Struct({
   created: Schema.Finite,
   metadata: Schema.optional(Schema.Record(Schema.String, Schema.Unknown)),
   type: Schema.TemplateLiteral(["rpc.", Schema.String]),
-  location: Location.Ref,
+  location: Location.PublicRef,
   data: Schema.Record(Schema.String, Schema.Unknown),
 }).annotate({ identifier: "V2Event.rpc" })
 

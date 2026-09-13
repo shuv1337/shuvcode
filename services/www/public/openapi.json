@@ -70,16 +70,6 @@
                           "type": "null"
                         }
                       ]
-                    },
-                    "workspace": {
-                      "anyOf": [
-                        {
-                          "type": "string"
-                        },
-                        {
-                          "type": "null"
-                        }
-                      ]
                     }
                   },
                   "additionalProperties": false
@@ -97,11 +87,11 @@
         "security": [],
         "responses": {
           "200": {
-            "description": "Location.Info",
+            "description": "Location.PublicInfo",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Location.InfoEncoded"
+                  "$ref": "#/components/schemas/Location.PublicInfo"
                 }
               }
             }
@@ -153,16 +143,6 @@
                           "type": "null"
                         }
                       ]
-                    },
-                    "workspace": {
-                      "anyOf": [
-                        {
-                          "type": "string"
-                        },
-                        {
-                          "type": "null"
-                        }
-                      ]
                     }
                   },
                   "additionalProperties": false
@@ -187,7 +167,7 @@
                   "type": "object",
                   "properties": {
                     "location": {
-                      "$ref": "#/components/schemas/Location.InfoEncoded"
+                      "$ref": "#/components/schemas/Location.PublicInfo"
                     },
                     "data": {
                       "type": "array",
@@ -257,16 +237,6 @@
                           "type": "null"
                         }
                       ]
-                    },
-                    "workspace": {
-                      "anyOf": [
-                        {
-                          "type": "string"
-                        },
-                        {
-                          "type": "null"
-                        }
-                      ]
                     }
                   },
                   "additionalProperties": false
@@ -291,7 +261,7 @@
                   "type": "object",
                   "properties": {
                     "location": {
-                      "$ref": "#/components/schemas/Location.InfoEncoded"
+                      "$ref": "#/components/schemas/Location.PublicInfo"
                     },
                     "data": {
                       "$ref": "#/components/schemas/Agent.Info"
@@ -360,16 +330,6 @@
                           "type": "null"
                         }
                       ]
-                    },
-                    "workspace": {
-                      "anyOf": [
-                        {
-                          "type": "string"
-                        },
-                        {
-                          "type": "null"
-                        }
-                      ]
                     }
                   },
                   "additionalProperties": false
@@ -394,7 +354,7 @@
                   "type": "object",
                   "properties": {
                     "location": {
-                      "$ref": "#/components/schemas/Location.InfoEncoded"
+                      "$ref": "#/components/schemas/Location.PublicInfo"
                     },
                     "data": {
                       "type": "array",
@@ -448,16 +408,6 @@
                   "type": "object",
                   "properties": {
                     "directory": {
-                      "anyOf": [
-                        {
-                          "type": "string"
-                        },
-                        {
-                          "type": "null"
-                        }
-                      ]
-                    },
-                    "workspace": {
                       "anyOf": [
                         {
                           "type": "string"
@@ -532,16 +482,6 @@
                           "type": "null"
                         }
                       ]
-                    },
-                    "workspace": {
-                      "anyOf": [
-                        {
-                          "type": "string"
-                        },
-                        {
-                          "type": "null"
-                        }
-                      ]
                     }
                   },
                   "additionalProperties": false
@@ -566,7 +506,7 @@
                   "type": "object",
                   "properties": {
                     "location": {
-                      "$ref": "#/components/schemas/Location.InfoEncoded"
+                      "$ref": "#/components/schemas/Location.PublicInfo"
                     },
                     "data": {
                       "type": "array",
@@ -650,16 +590,6 @@
                   "type": "object",
                   "properties": {
                     "directory": {
-                      "anyOf": [
-                        {
-                          "type": "string"
-                        },
-                        {
-                          "type": "null"
-                        }
-                      ]
-                    },
-                    "workspace": {
                       "anyOf": [
                         {
                           "type": "string"
@@ -754,22 +684,6 @@
         "tags": ["session"],
         "operationId": "session.list",
         "parameters": [
-          {
-            "name": "workspace",
-            "in": "query",
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string",
-                  "pattern": "^wrk"
-                },
-                {
-                  "type": "null"
-                }
-              ]
-            },
-            "required": false
-          },
           {
             "name": "limit",
             "in": "query",
@@ -1047,7 +961,7 @@
                   "location": {
                     "anyOf": [
                       {
-                        "$ref": "#/components/schemas/Location.Ref"
+                        "$ref": "#/components/schemas/Location.PublicRef"
                       },
                       {
                         "type": "null"
@@ -1301,7 +1215,7 @@
                   "location": {
                     "anyOf": [
                       {
-                        "$ref": "#/components/schemas/Location.Ref"
+                        "$ref": "#/components/schemas/Location.PublicRef"
                       },
                       {
                         "type": "null"
@@ -1997,10 +1911,6 @@
                 "properties": {
                   "directory": {
                     "type": "string"
-                  },
-                  "workspaceID": {
-                    "type": "string",
-                    "pattern": "^wrk"
                   },
                   "delivery": {
                     "anyOf": [
@@ -4710,16 +4620,6 @@
                           "type": "null"
                         }
                       ]
-                    },
-                    "workspace": {
-                      "anyOf": [
-                        {
-                          "type": "string"
-                        },
-                        {
-                          "type": "null"
-                        }
-                      ]
                     }
                   },
                   "additionalProperties": false
@@ -4744,7 +4644,7 @@
                   "type": "object",
                   "properties": {
                     "location": {
-                      "$ref": "#/components/schemas/Location.InfoEncoded"
+                      "$ref": "#/components/schemas/Location.PublicInfo"
                     },
                     "data": {
                       "type": "array",
@@ -4816,16 +4716,6 @@
                           "type": "null"
                         }
                       ]
-                    },
-                    "workspace": {
-                      "anyOf": [
-                        {
-                          "type": "string"
-                        },
-                        {
-                          "type": "null"
-                        }
-                      ]
                     }
                   },
                   "additionalProperties": false
@@ -4850,7 +4740,7 @@
                   "type": "object",
                   "properties": {
                     "location": {
-                      "$ref": "#/components/schemas/Location.InfoEncoded"
+                      "$ref": "#/components/schemas/Location.PublicInfo"
                     },
                     "data": {
                       "anyOf": [
@@ -5012,16 +4902,6 @@
                           "type": "null"
                         }
                       ]
-                    },
-                    "workspace": {
-                      "anyOf": [
-                        {
-                          "type": "string"
-                        },
-                        {
-                          "type": "null"
-                        }
-                      ]
                     }
                   },
                   "additionalProperties": false
@@ -5046,7 +4926,7 @@
                   "type": "object",
                   "properties": {
                     "location": {
-                      "$ref": "#/components/schemas/Location.InfoEncoded"
+                      "$ref": "#/components/schemas/Location.PublicInfo"
                     },
                     "data": {
                       "type": "array",
@@ -5126,16 +5006,6 @@
                           "type": "null"
                         }
                       ]
-                    },
-                    "workspace": {
-                      "anyOf": [
-                        {
-                          "type": "string"
-                        },
-                        {
-                          "type": "null"
-                        }
-                      ]
                     }
                   },
                   "additionalProperties": false
@@ -5160,7 +5030,7 @@
                   "type": "object",
                   "properties": {
                     "location": {
-                      "$ref": "#/components/schemas/Location.InfoEncoded"
+                      "$ref": "#/components/schemas/Location.PublicInfo"
                     },
                     "data": {
                       "$ref": "#/components/schemas/Provider.Info"
@@ -5239,16 +5109,6 @@
                           "type": "null"
                         }
                       ]
-                    },
-                    "workspace": {
-                      "anyOf": [
-                        {
-                          "type": "string"
-                        },
-                        {
-                          "type": "null"
-                        }
-                      ]
                     }
                   },
                   "additionalProperties": false
@@ -5273,7 +5133,7 @@
                   "type": "object",
                   "properties": {
                     "location": {
-                      "$ref": "#/components/schemas/Location.InfoEncoded"
+                      "$ref": "#/components/schemas/Location.PublicInfo"
                     },
                     "data": {
                       "type": "array",
@@ -5343,16 +5203,6 @@
                           "type": "null"
                         }
                       ]
-                    },
-                    "workspace": {
-                      "anyOf": [
-                        {
-                          "type": "string"
-                        },
-                        {
-                          "type": "null"
-                        }
-                      ]
                     }
                   },
                   "additionalProperties": false
@@ -5377,7 +5227,7 @@
                   "type": "object",
                   "properties": {
                     "location": {
-                      "$ref": "#/components/schemas/Location.InfoEncoded"
+                      "$ref": "#/components/schemas/Location.PublicInfo"
                     },
                     "data": {
                       "anyOf": [
@@ -5435,16 +5285,6 @@
                   "type": "object",
                   "properties": {
                     "directory": {
-                      "anyOf": [
-                        {
-                          "type": "string"
-                        },
-                        {
-                          "type": "null"
-                        }
-                      ]
-                    },
-                    "workspace": {
                       "anyOf": [
                         {
                           "type": "string"
@@ -5543,16 +5383,6 @@
                   "type": "object",
                   "properties": {
                     "directory": {
-                      "anyOf": [
-                        {
-                          "type": "string"
-                        },
-                        {
-                          "type": "null"
-                        }
-                      ]
-                    },
-                    "workspace": {
                       "anyOf": [
                         {
                           "type": "string"
@@ -5679,16 +5509,6 @@
                           "type": "null"
                         }
                       ]
-                    },
-                    "workspace": {
-                      "anyOf": [
-                        {
-                          "type": "string"
-                        },
-                        {
-                          "type": "null"
-                        }
-                      ]
                     }
                   },
                   "additionalProperties": false
@@ -5713,7 +5533,7 @@
                   "type": "object",
                   "properties": {
                     "location": {
-                      "$ref": "#/components/schemas/Location.InfoEncoded"
+                      "$ref": "#/components/schemas/Location.PublicInfo"
                     },
                     "data": {
                       "$ref": "#/components/schemas/Integration.AttemptEncoded"
@@ -5832,16 +5652,6 @@
                           "type": "null"
                         }
                       ]
-                    },
-                    "workspace": {
-                      "anyOf": [
-                        {
-                          "type": "string"
-                        },
-                        {
-                          "type": "null"
-                        }
-                      ]
                     }
                   },
                   "additionalProperties": false
@@ -5866,7 +5676,7 @@
                   "type": "object",
                   "properties": {
                     "location": {
-                      "$ref": "#/components/schemas/Location.InfoEncoded"
+                      "$ref": "#/components/schemas/Location.PublicInfo"
                     },
                     "data": {
                       "$ref": "#/components/schemas/Integration.AttemptStatus"
@@ -5931,16 +5741,6 @@
                   "type": "object",
                   "properties": {
                     "directory": {
-                      "anyOf": [
-                        {
-                          "type": "string"
-                        },
-                        {
-                          "type": "null"
-                        }
-                      ]
-                    },
-                    "workspace": {
                       "anyOf": [
                         {
                           "type": "string"
@@ -6023,16 +5823,6 @@
                   "type": "object",
                   "properties": {
                     "directory": {
-                      "anyOf": [
-                        {
-                          "type": "string"
-                        },
-                        {
-                          "type": "null"
-                        }
-                      ]
-                    },
-                    "workspace": {
                       "anyOf": [
                         {
                           "type": "string"
@@ -6145,16 +5935,6 @@
                           "type": "null"
                         }
                       ]
-                    },
-                    "workspace": {
-                      "anyOf": [
-                        {
-                          "type": "string"
-                        },
-                        {
-                          "type": "null"
-                        }
-                      ]
                     }
                   },
                   "additionalProperties": false
@@ -6179,7 +5959,7 @@
                   "type": "object",
                   "properties": {
                     "location": {
-                      "$ref": "#/components/schemas/Location.InfoEncoded"
+                      "$ref": "#/components/schemas/Location.PublicInfo"
                     },
                     "data": {
                       "$ref": "#/components/schemas/Integration.CommandAttempt"
@@ -6288,16 +6068,6 @@
                           "type": "null"
                         }
                       ]
-                    },
-                    "workspace": {
-                      "anyOf": [
-                        {
-                          "type": "string"
-                        },
-                        {
-                          "type": "null"
-                        }
-                      ]
                     }
                   },
                   "additionalProperties": false
@@ -6322,7 +6092,7 @@
                   "type": "object",
                   "properties": {
                     "location": {
-                      "$ref": "#/components/schemas/Location.InfoEncoded"
+                      "$ref": "#/components/schemas/Location.PublicInfo"
                     },
                     "data": {
                       "$ref": "#/components/schemas/Integration.CommandAttemptStatus"
@@ -6387,16 +6157,6 @@
                   "type": "object",
                   "properties": {
                     "directory": {
-                      "anyOf": [
-                        {
-                          "type": "string"
-                        },
-                        {
-                          "type": "null"
-                        }
-                      ]
-                    },
-                    "workspace": {
                       "anyOf": [
                         {
                           "type": "string"
@@ -6471,16 +6231,6 @@
                           "type": "null"
                         }
                       ]
-                    },
-                    "workspace": {
-                      "anyOf": [
-                        {
-                          "type": "string"
-                        },
-                        {
-                          "type": "null"
-                        }
-                      ]
                     }
                   },
                   "additionalProperties": false
@@ -6505,7 +6255,7 @@
                   "type": "object",
                   "properties": {
                     "location": {
-                      "$ref": "#/components/schemas/Location.InfoEncoded"
+                      "$ref": "#/components/schemas/Location.PublicInfo"
                     },
                     "data": {
                       "type": "array",
@@ -6567,16 +6317,6 @@
                   "type": "object",
                   "properties": {
                     "directory": {
-                      "anyOf": [
-                        {
-                          "type": "string"
-                        },
-                        {
-                          "type": "null"
-                        }
-                      ]
-                    },
-                    "workspace": {
                       "anyOf": [
                         {
                           "type": "string"
@@ -6681,16 +6421,6 @@
                           "type": "null"
                         }
                       ]
-                    },
-                    "workspace": {
-                      "anyOf": [
-                        {
-                          "type": "string"
-                        },
-                        {
-                          "type": "null"
-                        }
-                      ]
                     }
                   },
                   "additionalProperties": false
@@ -6767,16 +6497,6 @@
                   "type": "object",
                   "properties": {
                     "directory": {
-                      "anyOf": [
-                        {
-                          "type": "string"
-                        },
-                        {
-                          "type": "null"
-                        }
-                      ]
-                    },
-                    "workspace": {
                       "anyOf": [
                         {
                           "type": "string"
@@ -6869,16 +6589,6 @@
                           "type": "null"
                         }
                       ]
-                    },
-                    "workspace": {
-                      "anyOf": [
-                        {
-                          "type": "string"
-                        },
-                        {
-                          "type": "null"
-                        }
-                      ]
                     }
                   },
                   "additionalProperties": false
@@ -6955,16 +6665,6 @@
                           "type": "null"
                         }
                       ]
-                    },
-                    "workspace": {
-                      "anyOf": [
-                        {
-                          "type": "string"
-                        },
-                        {
-                          "type": "null"
-                        }
-                      ]
                     }
                   },
                   "additionalProperties": false
@@ -6989,7 +6689,7 @@
                   "type": "object",
                   "properties": {
                     "location": {
-                      "$ref": "#/components/schemas/Location.InfoEncoded"
+                      "$ref": "#/components/schemas/Location.PublicInfo"
                     },
                     "data": {
                       "$ref": "#/components/schemas/Mcp.ResourceCatalog"
@@ -7048,16 +6748,6 @@
                   "type": "object",
                   "properties": {
                     "directory": {
-                      "anyOf": [
-                        {
-                          "type": "string"
-                        },
-                        {
-                          "type": "null"
-                        }
-                      ]
-                    },
-                    "workspace": {
                       "anyOf": [
                         {
                           "type": "string"
@@ -7155,16 +6845,6 @@
                           "type": "null"
                         }
                       ]
-                    },
-                    "workspace": {
-                      "anyOf": [
-                        {
-                          "type": "string"
-                        },
-                        {
-                          "type": "null"
-                        }
-                      ]
                     }
                   },
                   "additionalProperties": false
@@ -7231,16 +6911,6 @@
                   "type": "object",
                   "properties": {
                     "directory": {
-                      "anyOf": [
-                        {
-                          "type": "string"
-                        },
-                        {
-                          "type": "null"
-                        }
-                      ]
-                    },
-                    "workspace": {
                       "anyOf": [
                         {
                           "type": "string"
@@ -7446,16 +7116,6 @@
                           "type": "null"
                         }
                       ]
-                    },
-                    "workspace": {
-                      "anyOf": [
-                        {
-                          "type": "string"
-                        },
-                        {
-                          "type": "null"
-                        }
-                      ]
                     }
                   },
                   "additionalProperties": false
@@ -7480,7 +7140,7 @@
                   "type": "object",
                   "properties": {
                     "location": {
-                      "$ref": "#/components/schemas/Location.InfoEncoded"
+                      "$ref": "#/components/schemas/Location.PublicInfo"
                     },
                     "data": {
                       "type": "array",
@@ -8070,16 +7730,6 @@
                           "type": "null"
                         }
                       ]
-                    },
-                    "workspace": {
-                      "anyOf": [
-                        {
-                          "type": "string"
-                        },
-                        {
-                          "type": "null"
-                        }
-                      ]
                     }
                   },
                   "additionalProperties": false
@@ -8104,7 +7754,7 @@
                   "type": "object",
                   "properties": {
                     "location": {
-                      "$ref": "#/components/schemas/Location.InfoEncoded"
+                      "$ref": "#/components/schemas/Location.PublicInfo"
                     },
                     "data": {
                       "type": "array",
@@ -8759,16 +8409,6 @@
                           "type": "null"
                         }
                       ]
-                    },
-                    "workspace": {
-                      "anyOf": [
-                        {
-                          "type": "string"
-                        },
-                        {
-                          "type": "null"
-                        }
-                      ]
                     }
                   },
                   "additionalProperties": false
@@ -8853,16 +8493,6 @@
                           "type": "null"
                         }
                       ]
-                    },
-                    "workspace": {
-                      "anyOf": [
-                        {
-                          "type": "string"
-                        },
-                        {
-                          "type": "null"
-                        }
-                      ]
                     }
                   },
                   "additionalProperties": false
@@ -8903,7 +8533,7 @@
                   "type": "object",
                   "properties": {
                     "location": {
-                      "$ref": "#/components/schemas/Location.InfoEncoded"
+                      "$ref": "#/components/schemas/Location.PublicInfo"
                     },
                     "data": {
                       "type": "array",
@@ -8957,16 +8587,6 @@
                   "type": "object",
                   "properties": {
                     "directory": {
-                      "anyOf": [
-                        {
-                          "type": "string"
-                        },
-                        {
-                          "type": "null"
-                        }
-                      ]
-                    },
-                    "workspace": {
                       "anyOf": [
                         {
                           "type": "string"
@@ -9031,7 +8651,7 @@
                   "type": "object",
                   "properties": {
                     "location": {
-                      "$ref": "#/components/schemas/Location.InfoEncoded"
+                      "$ref": "#/components/schemas/Location.PublicInfo"
                     },
                     "data": {
                       "type": "array",
@@ -9093,16 +8713,6 @@
                           "type": "null"
                         }
                       ]
-                    },
-                    "workspace": {
-                      "anyOf": [
-                        {
-                          "type": "string"
-                        },
-                        {
-                          "type": "null"
-                        }
-                      ]
                     }
                   },
                   "additionalProperties": false
@@ -9127,7 +8737,7 @@
                   "type": "object",
                   "properties": {
                     "location": {
-                      "$ref": "#/components/schemas/Location.InfoEncoded"
+                      "$ref": "#/components/schemas/Location.PublicInfo"
                     },
                     "data": {
                       "type": "array",
@@ -9189,16 +8799,6 @@
                           "type": "null"
                         }
                       ]
-                    },
-                    "workspace": {
-                      "anyOf": [
-                        {
-                          "type": "string"
-                        },
-                        {
-                          "type": "null"
-                        }
-                      ]
                     }
                   },
                   "additionalProperties": false
@@ -9223,7 +8823,7 @@
                   "type": "object",
                   "properties": {
                     "location": {
-                      "$ref": "#/components/schemas/Location.InfoEncoded"
+                      "$ref": "#/components/schemas/Location.PublicInfo"
                     },
                     "data": {
                       "type": "array",
@@ -9293,16 +8893,6 @@
                   "type": "object",
                   "properties": {
                     "directory": {
-                      "anyOf": [
-                        {
-                          "type": "string"
-                        },
-                        {
-                          "type": "null"
-                        }
-                      ]
-                    },
-                    "workspace": {
                       "anyOf": [
                         {
                           "type": "string"
@@ -9534,16 +9124,6 @@
                           "type": "null"
                         }
                       ]
-                    },
-                    "workspace": {
-                      "anyOf": [
-                        {
-                          "type": "string"
-                        },
-                        {
-                          "type": "null"
-                        }
-                      ]
                     }
                   },
                   "additionalProperties": false
@@ -9568,7 +9148,7 @@
                   "type": "object",
                   "properties": {
                     "location": {
-                      "$ref": "#/components/schemas/Location.InfoEncoded"
+                      "$ref": "#/components/schemas/Location.PublicInfo"
                     },
                     "data": {
                       "type": "array",
@@ -9628,16 +9208,6 @@
                           "type": "null"
                         }
                       ]
-                    },
-                    "workspace": {
-                      "anyOf": [
-                        {
-                          "type": "string"
-                        },
-                        {
-                          "type": "null"
-                        }
-                      ]
                     }
                   },
                   "additionalProperties": false
@@ -9662,7 +9232,7 @@
                   "type": "object",
                   "properties": {
                     "location": {
-                      "$ref": "#/components/schemas/Location.InfoEncoded"
+                      "$ref": "#/components/schemas/Location.PublicInfo"
                     },
                     "data": {
                       "$ref": "#/components/schemas/Pty"
@@ -9764,16 +9334,6 @@
                           "type": "null"
                         }
                       ]
-                    },
-                    "workspace": {
-                      "anyOf": [
-                        {
-                          "type": "string"
-                        },
-                        {
-                          "type": "null"
-                        }
-                      ]
                     }
                   },
                   "additionalProperties": false
@@ -9798,7 +9358,7 @@
                   "type": "object",
                   "properties": {
                     "location": {
-                      "$ref": "#/components/schemas/Location.InfoEncoded"
+                      "$ref": "#/components/schemas/Location.PublicInfo"
                     },
                     "data": {
                       "$ref": "#/components/schemas/Pty"
@@ -9874,16 +9434,6 @@
                           "type": "null"
                         }
                       ]
-                    },
-                    "workspace": {
-                      "anyOf": [
-                        {
-                          "type": "string"
-                        },
-                        {
-                          "type": "null"
-                        }
-                      ]
                     }
                   },
                   "additionalProperties": false
@@ -9908,7 +9458,7 @@
                   "type": "object",
                   "properties": {
                     "location": {
-                      "$ref": "#/components/schemas/Location.InfoEncoded"
+                      "$ref": "#/components/schemas/Location.PublicInfo"
                     },
                     "data": {
                       "$ref": "#/components/schemas/Pty"
@@ -10007,16 +9557,6 @@
                   "type": "object",
                   "properties": {
                     "directory": {
-                      "anyOf": [
-                        {
-                          "type": "string"
-                        },
-                        {
-                          "type": "null"
-                        }
-                      ]
-                    },
-                    "workspace": {
                       "anyOf": [
                         {
                           "type": "string"
@@ -10125,16 +9665,6 @@
                           "type": "null"
                         }
                       ]
-                    },
-                    "workspace": {
-                      "anyOf": [
-                        {
-                          "type": "string"
-                        },
-                        {
-                          "type": "null"
-                        }
-                      ]
                     }
                   },
                   "additionalProperties": false
@@ -10159,7 +9689,7 @@
                   "type": "object",
                   "properties": {
                     "location": {
-                      "$ref": "#/components/schemas/Location.InfoEncoded"
+                      "$ref": "#/components/schemas/Location.PublicInfo"
                     },
                     "data": {
                       "$ref": "#/components/schemas/PtyTicket.ConnectToken"
@@ -10233,13 +9763,6 @@
           {
             "in": "query",
             "name": "location[directory]",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "in": "query",
-            "name": "location[workspace]",
             "schema": {
               "type": "string"
             }
@@ -11223,16 +10746,6 @@
                           "type": "null"
                         }
                       ]
-                    },
-                    "workspace": {
-                      "anyOf": [
-                        {
-                          "type": "string"
-                        },
-                        {
-                          "type": "null"
-                        }
-                      ]
                     }
                   },
                   "additionalProperties": false
@@ -11257,7 +10770,7 @@
                   "type": "object",
                   "properties": {
                     "location": {
-                      "$ref": "#/components/schemas/Location.InfoEncoded"
+                      "$ref": "#/components/schemas/Location.PublicInfo"
                     },
                     "data": {
                       "type": "array",
@@ -11317,16 +10830,6 @@
                           "type": "null"
                         }
                       ]
-                    },
-                    "workspace": {
-                      "anyOf": [
-                        {
-                          "type": "string"
-                        },
-                        {
-                          "type": "null"
-                        }
-                      ]
                     }
                   },
                   "additionalProperties": false
@@ -11351,7 +10854,7 @@
                   "type": "object",
                   "properties": {
                     "location": {
-                      "$ref": "#/components/schemas/Location.InfoEncoded"
+                      "$ref": "#/components/schemas/Location.PublicInfo"
                     },
                     "data": {
                       "$ref": "#/components/schemas/Shell.Info"
@@ -11446,16 +10949,6 @@
                           "type": "null"
                         }
                       ]
-                    },
-                    "workspace": {
-                      "anyOf": [
-                        {
-                          "type": "string"
-                        },
-                        {
-                          "type": "null"
-                        }
-                      ]
                     }
                   },
                   "additionalProperties": false
@@ -11480,7 +10973,7 @@
                   "type": "object",
                   "properties": {
                     "location": {
-                      "$ref": "#/components/schemas/Location.InfoEncoded"
+                      "$ref": "#/components/schemas/Location.PublicInfo"
                     },
                     "data": {
                       "$ref": "#/components/schemas/Shell.Info"
@@ -11548,16 +11041,6 @@
                   "type": "object",
                   "properties": {
                     "directory": {
-                      "anyOf": [
-                        {
-                          "type": "string"
-                        },
-                        {
-                          "type": "null"
-                        }
-                      ]
-                    },
-                    "workspace": {
                       "anyOf": [
                         {
                           "type": "string"
@@ -11651,16 +11134,6 @@
                           "type": "null"
                         }
                       ]
-                    },
-                    "workspace": {
-                      "anyOf": [
-                        {
-                          "type": "string"
-                        },
-                        {
-                          "type": "null"
-                        }
-                      ]
                     }
                   },
                   "additionalProperties": false
@@ -11685,7 +11158,7 @@
                   "type": "object",
                   "properties": {
                     "location": {
-                      "$ref": "#/components/schemas/Location.InfoEncoded"
+                      "$ref": "#/components/schemas/Location.PublicInfo"
                     },
                     "data": {
                       "$ref": "#/components/schemas/Shell.Info"
@@ -11781,16 +11254,6 @@
                           "type": "null"
                         }
                       ]
-                    },
-                    "workspace": {
-                      "anyOf": [
-                        {
-                          "type": "string"
-                        },
-                        {
-                          "type": "null"
-                        }
-                      ]
                     }
                   },
                   "additionalProperties": false
@@ -11833,7 +11296,7 @@
                   "type": "object",
                   "properties": {
                     "location": {
-                      "$ref": "#/components/schemas/Location.InfoEncoded"
+                      "$ref": "#/components/schemas/Location.PublicInfo"
                     },
                     "data": {
                       "type": "object",
@@ -11920,16 +11383,6 @@
                           "type": "null"
                         }
                       ]
-                    },
-                    "workspace": {
-                      "anyOf": [
-                        {
-                          "type": "string"
-                        },
-                        {
-                          "type": "null"
-                        }
-                      ]
                     }
                   },
                   "additionalProperties": false
@@ -11954,7 +11407,7 @@
                   "type": "object",
                   "properties": {
                     "location": {
-                      "$ref": "#/components/schemas/Location.InfoEncoded"
+                      "$ref": "#/components/schemas/Location.PublicInfo"
                     },
                     "data": {
                       "type": "array",
@@ -12008,16 +11461,6 @@
                   "type": "object",
                   "properties": {
                     "directory": {
-                      "anyOf": [
-                        {
-                          "type": "string"
-                        },
-                        {
-                          "type": "null"
-                        }
-                      ]
-                    },
-                    "workspace": {
                       "anyOf": [
                         {
                           "type": "string"
@@ -12096,16 +11539,6 @@
                   "type": "object",
                   "properties": {
                     "directory": {
-                      "anyOf": [
-                        {
-                          "type": "string"
-                        },
-                        {
-                          "type": "null"
-                        }
-                      ]
-                    },
-                    "workspace": {
                       "anyOf": [
                         {
                           "type": "string"
@@ -12202,16 +11635,6 @@
                           "type": "null"
                         }
                       ]
-                    },
-                    "workspace": {
-                      "anyOf": [
-                        {
-                          "type": "string"
-                        },
-                        {
-                          "type": "null"
-                        }
-                      ]
                     }
                   },
                   "additionalProperties": false
@@ -12295,16 +11718,6 @@
                           "type": "null"
                         }
                       ]
-                    },
-                    "workspace": {
-                      "anyOf": [
-                        {
-                          "type": "string"
-                        },
-                        {
-                          "type": "null"
-                        }
-                      ]
                     }
                   },
                   "additionalProperties": false
@@ -12356,166 +11769,6 @@
         "summary": "Refresh worktrees"
       }
     },
-    "/api/workspace": {
-      "post": {
-        "tags": ["workspace"],
-        "operationId": "workspace.create",
-        "parameters": [],
-        "security": [],
-        "responses": {
-          "200": {
-            "description": "Success",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "data": {
-                      "type": "string",
-                      "pattern": "^wrk"
-                    }
-                  },
-                  "required": ["data"],
-                  "additionalProperties": false
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "InvalidRequestError",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/InvalidRequestErrorEncoded"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "UnauthorizedError",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "ProviderNotFoundError",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProviderNotFoundErrorEncoded"
-                }
-              }
-            }
-          },
-          "409": {
-            "description": "ConflictError",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ConflictErrorEncoded"
-                }
-              }
-            }
-          }
-        },
-        "description": "Create a logical workspace. A caller-supplied ID is idempotent when retried with the same provider; reusing it with another provider returns a conflict.",
-        "summary": "Create workspace",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "properties": {
-                  "id": {
-                    "anyOf": [
-                      {
-                        "type": "string",
-                        "pattern": "^wrk"
-                      },
-                      {
-                        "type": "null"
-                      }
-                    ]
-                  },
-                  "provider": {
-                    "type": "string"
-                  }
-                },
-                "required": ["provider"],
-                "additionalProperties": false
-              }
-            }
-          },
-          "required": true
-        }
-      }
-    },
-    "/api/workspace/{workspaceID}": {
-      "delete": {
-        "tags": ["workspace"],
-        "operationId": "workspace.destroy",
-        "parameters": [
-          {
-            "name": "workspaceID",
-            "in": "path",
-            "schema": {
-              "type": "string",
-              "pattern": "^wrk"
-            },
-            "required": true
-          }
-        ],
-        "security": [],
-        "responses": {
-          "200": {
-            "description": "Reports whether this request destroyed an existing workspace.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/WorkspaceDestroyResult"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "InvalidRequestError",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/InvalidRequestErrorEncoded"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "UnauthorizedError",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "UnknownError",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/UnknownErrorEncoded"
-                }
-              }
-            }
-          }
-        },
-        "description": "Make a workspace not exist. This operation is idempotent: an already-missing workspace succeeds with `destroyed: false`, while a workspace removed by this request returns `destroyed: true`.",
-        "summary": "Destroy workspace"
-      }
-    },
     "/api/vcs": {
       "get": {
         "tags": ["vcs"],
@@ -12530,16 +11783,6 @@
                   "type": "object",
                   "properties": {
                     "directory": {
-                      "anyOf": [
-                        {
-                          "type": "string"
-                        },
-                        {
-                          "type": "null"
-                        }
-                      ]
-                    },
-                    "workspace": {
                       "anyOf": [
                         {
                           "type": "string"
@@ -12572,7 +11815,7 @@
                   "type": "object",
                   "properties": {
                     "location": {
-                      "$ref": "#/components/schemas/Location.InfoEncoded"
+                      "$ref": "#/components/schemas/Location.PublicInfo"
                     },
                     "data": {
                       "$ref": "#/components/schemas/Vcs.Info"
@@ -12631,16 +11874,6 @@
                           "type": "null"
                         }
                       ]
-                    },
-                    "workspace": {
-                      "anyOf": [
-                        {
-                          "type": "string"
-                        },
-                        {
-                          "type": "null"
-                        }
-                      ]
                     }
                   },
                   "additionalProperties": false
@@ -12665,7 +11898,7 @@
                   "type": "object",
                   "properties": {
                     "location": {
-                      "$ref": "#/components/schemas/Location.InfoEncoded"
+                      "$ref": "#/components/schemas/Location.PublicInfo"
                     },
                     "data": {
                       "anyOf": [
@@ -12741,16 +11974,6 @@
                           "type": "null"
                         }
                       ]
-                    },
-                    "workspace": {
-                      "anyOf": [
-                        {
-                          "type": "string"
-                        },
-                        {
-                          "type": "null"
-                        }
-                      ]
                     }
                   },
                   "additionalProperties": false
@@ -12775,7 +11998,7 @@
                   "type": "object",
                   "properties": {
                     "location": {
-                      "$ref": "#/components/schemas/Location.InfoEncoded"
+                      "$ref": "#/components/schemas/Location.PublicInfo"
                     },
                     "data": {
                       "type": "array",
@@ -12829,16 +12052,6 @@
                   "type": "object",
                   "properties": {
                     "directory": {
-                      "anyOf": [
-                        {
-                          "type": "string"
-                        },
-                        {
-                          "type": "null"
-                        }
-                      ]
-                    },
-                    "workspace": {
                       "anyOf": [
                         {
                           "type": "string"
@@ -12901,7 +12114,7 @@
                   "type": "object",
                   "properties": {
                     "location": {
-                      "$ref": "#/components/schemas/Location.InfoEncoded"
+                      "$ref": "#/components/schemas/Location.PublicInfo"
                     },
                     "data": {
                       "$ref": "#/components/schemas/Vcs.BranchList"
@@ -12952,16 +12165,6 @@
                   "type": "object",
                   "properties": {
                     "directory": {
-                      "anyOf": [
-                        {
-                          "type": "string"
-                        },
-                        {
-                          "type": "null"
-                        }
-                      ]
-                    },
-                    "workspace": {
                       "anyOf": [
                         {
                           "type": "string"
@@ -13025,7 +12228,7 @@
                   "type": "object",
                   "properties": {
                     "location": {
-                      "$ref": "#/components/schemas/Location.InfoEncoded"
+                      "$ref": "#/components/schemas/Location.PublicInfo"
                     },
                     "data": {
                       "type": "array",
@@ -13089,7 +12292,7 @@
                 "schema": {
                   "type": "array",
                   "items": {
-                    "$ref": "#/components/schemas/Location.Ref"
+                    "$ref": "#/components/schemas/Location.PublicRef"
                   }
                 }
               }
@@ -13132,16 +12335,6 @@
                   "type": "object",
                   "properties": {
                     "directory": {
-                      "anyOf": [
-                        {
-                          "type": "string"
-                        },
-                        {
-                          "type": "null"
-                        }
-                      ]
-                    },
-                    "workspace": {
                       "anyOf": [
                         {
                           "type": "string"
@@ -13327,16 +12520,6 @@
                           "type": "null"
                         }
                       ]
-                    },
-                    "workspace": {
-                      "anyOf": [
-                        {
-                          "type": "string"
-                        },
-                        {
-                          "type": "null"
-                        }
-                      ]
                     }
                   },
                   "additionalProperties": false
@@ -13361,7 +12544,7 @@
                   "type": "object",
                   "properties": {
                     "location": {
-                      "$ref": "#/components/schemas/Location.InfoEncoded"
+                      "$ref": "#/components/schemas/Location.PublicInfo"
                     },
                     "data": {
                       "type": "array",
@@ -13433,16 +12616,6 @@
                           "type": "null"
                         }
                       ]
-                    },
-                    "workspace": {
-                      "anyOf": [
-                        {
-                          "type": "string"
-                        },
-                        {
-                          "type": "null"
-                        }
-                      ]
                     }
                   },
                   "additionalProperties": false
@@ -13467,7 +12640,7 @@
                   "type": "object",
                   "properties": {
                     "location": {
-                      "$ref": "#/components/schemas/Location.InfoEncoded"
+                      "$ref": "#/components/schemas/Location.PublicInfo"
                     },
                     "data": {
                       "$ref": "#/components/schemas/WebSearch.ResponseEncoded"
@@ -13555,16 +12728,6 @@
                   "type": "object",
                   "properties": {
                     "directory": {
-                      "anyOf": [
-                        {
-                          "type": "string"
-                        },
-                        {
-                          "type": "null"
-                        }
-                      ]
-                    },
-                    "workspace": {
                       "anyOf": [
                         {
                           "type": "string"
@@ -16187,15 +15350,11 @@
         "required": ["_tag", "message"],
         "additionalProperties": false
       },
-      "Location.InfoEncoded": {
+      "Location.PublicInfo": {
         "type": "object",
         "properties": {
           "directory": {
             "type": "string"
-          },
-          "workspaceID": {
-            "type": "string",
-            "pattern": "^wrk"
           },
           "project": {
             "type": "object",
@@ -16217,15 +15376,11 @@
         "required": ["directory", "project"],
         "additionalProperties": false
       },
-      "Location.Ref": {
+      "Location.PublicRef": {
         "type": "object",
         "properties": {
           "directory": {
             "type": "string"
-          },
-          "workspaceID": {
-            "type": "string",
-            "pattern": "^wrk"
           }
         },
         "required": ["directory"],
@@ -18091,30 +17246,30 @@
             "type": "string",
             "enum": ["move"]
           },
-          "payload": {
-            "$ref": "#/components/schemas/Session.Inbox.MovePayload"
-          },
           "delivery": {
             "$ref": "#/components/schemas/Session.Inbox.Delivery"
+          },
+          "payload": {
+            "$ref": "#/components/schemas/Session.Inbox.MovePayload"
           }
         },
-        "required": ["id", "sessionID", "timeCreated", "type", "payload", "delivery"],
+        "required": ["id", "sessionID", "timeCreated", "type", "delivery", "payload"],
         "additionalProperties": false
       },
       "Session.Inbox.MovePayload": {
         "type": "object",
         "properties": {
-          "location": {
-            "$ref": "#/components/schemas/Location.Ref"
-          },
           "projectID": {
             "type": "string"
           },
           "subpath": {
             "type": "string"
+          },
+          "location": {
+            "$ref": "#/components/schemas/Location.PublicRef"
           }
         },
-        "required": ["location", "projectID"],
+        "required": ["projectID", "location"],
         "additionalProperties": false
       },
       "Session.Inbox.Synthetic": {
@@ -18289,9 +17444,6 @@
           "title": {
             "type": "string"
           },
-          "location": {
-            "$ref": "#/components/schemas/Location.Ref"
-          },
           "subpath": {
             "type": "string"
           },
@@ -18303,6 +17455,9 @@
           },
           "revert": {
             "$ref": "#/components/schemas/Session.Revert"
+          },
+          "location": {
+            "$ref": "#/components/schemas/Location.PublicRef"
           }
         },
         "required": ["id", "projectID", "cost", "tokens", "time", "location"],
@@ -18810,30 +17965,37 @@
             "type": "string",
             "enum": ["location-switched"]
           },
-          "location": {
-            "$ref": "#/components/schemas/Location.Ref"
-          },
           "projectID": {
             "type": "string"
           },
           "subpath": {
             "type": "string"
           },
+          "location": {
+            "$ref": "#/components/schemas/Location.PublicRef"
+          },
           "previous": {
-            "type": "object",
-            "properties": {
-              "location": {
-                "$ref": "#/components/schemas/Location.Ref"
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "location": {
+                    "$ref": "#/components/schemas/Location.PublicRef"
+                  },
+                  "projectID": {
+                    "type": "string"
+                  },
+                  "subpath": {
+                    "type": "string"
+                  }
+                },
+                "required": ["location"],
+                "additionalProperties": false
               },
-              "projectID": {
-                "type": "string"
-              },
-              "subpath": {
-                "type": "string"
+              {
+                "type": "null"
               }
-            },
-            "required": ["location"],
-            "additionalProperties": false
+            ]
           }
         },
         "required": ["id", "time", "type", "location"],
@@ -20038,18 +19200,6 @@
         "required": ["url", "time"],
         "additionalProperties": false
       },
-      "WorkspaceDestroyResult": {
-        "type": "object",
-        "properties": {
-          "destroyed": {
-            "type": "boolean",
-            "description": "True when this request transitioned the workspace from existing to destroyed."
-          }
-        },
-        "required": ["destroyed"],
-        "additionalProperties": false,
-        "description": "Reports whether this request destroyed an existing workspace."
-      },
       "Worktree.CreateInput": {
         "type": "object",
         "properties": {
@@ -20244,10 +19394,6 @@
     {
       "name": "worktree",
       "description": "Location-scoped worktree management routes."
-    },
-    {
-      "name": "workspace",
-      "description": "Workspace lifecycle routes."
     },
     {
       "name": "vcs",

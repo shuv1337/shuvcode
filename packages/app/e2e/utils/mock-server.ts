@@ -652,11 +652,6 @@ export function currentSession(session: { id: string } & Record<string, unknown>
           : typeof session.directory === "string"
             ? session.directory
             : fallbackDirectory,
-      ...(typeof session.workspaceID === "string"
-        ? { workspaceID: session.workspaceID }
-        : "workspaceID" in location && typeof location.workspaceID === "string"
-          ? { workspaceID: location.workspaceID }
-          : {}),
     },
     subpath: session.subpath ?? session.path,
     revert: session.revert,

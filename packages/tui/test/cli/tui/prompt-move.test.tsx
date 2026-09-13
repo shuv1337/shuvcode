@@ -45,7 +45,7 @@ test.each([
 
     await fixture.create()
 
-    expect(fixture.requests).toEqual([{ payload: { name: "fresh" }, directory: input.directory, workspace: null }])
+    expect(fixture.requests).toEqual([{ payload: { name: "fresh" }, directory: input.directory }])
     expect(fixture.data.location.info({ directory: created })?.project.canonical).toBe(clone)
     expect(fixture.reads.locations.filter((directory) => directory === input.directory)).toHaveLength(input.home ? 3 : 1)
     expect(fixture.reads.session).toBe(input.home ? 0 : 1)
@@ -59,12 +59,11 @@ test.each([
 test.each([
   { name: "another clone", launch: main },
   { name: "another project", launch: "/tmp/opencode/elsewhere", launchProjectID: "proj_launch" },
-  { name: "another workspace", launch: main, workspaceID: "wrk_clone" },
 ])("uses Home's selected location instead of launch in $name", async (input) => {
   const fixture = await renderMove({ ...input, directory: `${clone}/packages/tui`, home: true })
   try {
     await fixture.data.location.syncInfo()
-    const selected = { directory: `${clone}/packages/tui`, workspaceID: input.workspaceID }
+    const selected = { directory: `${clone}/packages/tui` }
     fixture.location.set(selected)
     expect(fixture.data.location.default().directory).toBe(input.launch)
     expect(fixture.data.location.info(selected)).toBeUndefined()
@@ -75,7 +74,7 @@ test.each([
     expect(frame).toContain(clone)
     expect(frame.indexOf(clone)).toBeLessThan(frame.indexOf(main))
     expect(fixture.requests).toEqual([
-      { payload: { name: "fresh" }, directory: `${clone}/packages/tui`, workspace: input.workspaceID ?? null },
+      { payload: { name: "fresh" }, directory: `${clone}/packages/tui` },
     ])
     expect(fixture.data.location.info(selected)?.project.canonical).toBe(clone)
     expect(fixture.moves).toEqual([])
@@ -215,7 +214,6 @@ async function renderMove(input: {
         return json({ message: "Location unavailable" }, { status: 503 })
       return json({
         directory,
-        workspaceID: url.searchParams.get("location[workspace]") ?? undefined,
         project,
       })
     }
@@ -249,7 +247,6 @@ async function renderMove(input: {
         requests.push({
           payload: await request.json(),
           directory: url.searchParams.get("location[directory]"),
-          workspace: url.searchParams.get("location[workspace]"),
         })
         return json({ directory: created })
       }

@@ -15,7 +15,7 @@ type Recorded = {
 }
 
 const opencodeSpec = async (): Promise<Document> => {
-  return Bun.file(new URL("./fixtures/opencode-v2-openapi.json", import.meta.url)).json() as Promise<Document>
+  return Bun.file(new URL("../../protocol/openapi.json", import.meta.url)).json() as Promise<Document>
 }
 
 const happyPathSpec = async (): Promise<Document> => {
@@ -223,7 +223,7 @@ describe("OpenAPI.fromSpec", () => {
     const spec = await opencodeSpec()
     const result = OpenAPI.fromSpec({ spec, baseUrl })
 
-    expect(result.skipped).toHaveLength(4)
+    expect(result.skipped).toHaveLength(5)
     expect(result.skipped).toContainEqual({
       method: "GET",
       path: "/api/pty/{ptyID}/connect",
@@ -1051,14 +1051,11 @@ describe("OpenAPI.fromSpec", () => {
     if (!Tool.isTool(location)) throw new Error("location.get was not generated")
 
     await Effect.runPromise(
-      location
-        .execute({ location: { directory: "/tmp", workspace: "workspace-1" } })
-        .pipe(Effect.provide(client.layer)),
+      location.execute({ location: { directory: "/tmp" } }).pipe(Effect.provide(client.layer)),
     )
 
     const url = new URL(client.requests[0]!.url)
     expect(url.searchParams.get("location[directory]")).toBe("/tmp")
-    expect(url.searchParams.get("location[workspace]")).toBe("workspace-1")
   })
 
   test("serializes supported simple and form parameter shapes", async () => {

@@ -1,5 +1,4 @@
 import { SessionMessage } from "@opencode/schema/session-message"
-import { SessionTransfer } from "@opencode/schema/session-transfer"
 import { SessionInbox } from "@opencode/schema/session-inbox"
 import { PromptInput } from "@opencode/schema/prompt-input"
 import { Session } from "@opencode/schema/session"
@@ -8,7 +7,6 @@ import { InstructionEntry } from "@opencode/schema/instruction-entry"
 import { Project } from "@opencode/schema/project"
 import { AbsolutePath, NonNegativeInt, PositiveInt, RelativePath, statics } from "@opencode/schema/schema"
 import { Event } from "@opencode/schema/event"
-import { Workspace } from "@opencode/schema/workspace"
 import { Context, Effect, Encoding, Result, Schema, SchemaGetter, Struct } from "effect"
 import { HttpApiEndpoint, HttpApiGroup, HttpApiMiddleware, HttpApiSchema, OpenApi } from "effect/unstable/httpapi"
 import {
@@ -32,6 +30,7 @@ import { Location } from "@opencode/schema/location"
 import { SessionEvent } from "@opencode/schema/session-event"
 import { EventLog } from "@opencode/schema/event-log"
 import { FileDiff } from "@opencode/schema/file-diff"
+import { PublicSessionMessage } from "./message.js"
 
 const ParentIDFilter = Schema.Union([
   Session.ID,
@@ -46,7 +45,6 @@ const ParentIDFilter = Schema.Union([
 })
 
 const SessionsQueryFields = {
-  workspace: Workspace.ID.pipe(Schema.optional),
   limit: Schema.NumberFromString.pipe(Schema.decodeTo(PositiveInt), Schema.optional).annotate({
     description: "Maximum number of sessions to return. Defaults to the newest 50 sessions.",
   }),
@@ -108,6 +106,33 @@ const SessionActive = Schema.Struct({
   type: Schema.Literal("running"),
 }).annotate({ identifier: "SessionActive" })
 
+const PublicSessionInfo = Schema.Struct({
+  ...Struct.omit(Session.Info.fields, ["location"]),
+  location: Location.PublicRef,
+}).annotate({ identifier: "Session.Info" })
+
+const PublicSessionTransfer = Schema.Struct({
+  info: PublicSessionInfo,
+  messages: Schema.Array(PublicSessionMessage),
+}).annotate({ identifier: "SessionTransfer.Data" })
+
+const PublicMovePayload = Schema.Struct({
+  ...Struct.omit(SessionInbox.MovePayload.fields, ["location"]),
+  location: Location.PublicRef,
+}).annotate({ identifier: "Session.Inbox.MovePayload" })
+
+const PublicMove = Schema.Struct({
+  ...Struct.omit(SessionInbox.Move.fields, ["payload"]),
+  payload: PublicMovePayload,
+}).annotate({ identifier: "Session.Inbox.Move" })
+
+const PublicInboxInfo = Schema.Union([
+  SessionInbox.User,
+  SessionInbox.Synthetic,
+  SessionInbox.Compaction,
+  PublicMove,
+]).annotate({ identifier: "Session.Inbox.Info" })
+
 const BooleanFromString = Schema.Literals(["true", "false"]).pipe(
   Schema.decodeTo(Schema.Boolean, {
     decode: SchemaGetter.transform((value) => value === "true"),
@@ -133,7 +158,7 @@ export const makeSessionGroup = <I extends HttpApiMiddleware.AnyId, S>(sessionLo
       HttpApiEndpoint.get("session.list", "/api/session", {
         query: SessionsQuery,
         success: Schema.Struct({
-          data: Schema.Array(Session.Info),
+          data: Schema.Array(PublicSessionInfo),
           cursor: Schema.Struct({
             previous: SessionsCursor.pipe(Schema.optional),
             next: SessionsCursor.pipe(Schema.optional),
@@ -175,11 +200,11 @@ export const makeSessionGroup = <I extends HttpApiMiddleware.AnyId, S>(sessionLo
           title: Schema.String.pipe(Schema.optional),
           agent: Agent.ID.pipe(Schema.optional),
           model: Model.Ref.pipe(Schema.optional),
-          location: Location.Ref.pipe(Schema.optional),
+          location: Location.PublicRef.pipe(Schema.optional),
           metadata: Session.Metadata.pipe(Schema.optional),
           permissions: Permission.Ruleset.pipe(Schema.optional),
         }),
-        success: Schema.Struct({ data: Session.Info }),
+        success: Schema.Struct({ data: PublicSessionInfo }),
       }).annotateMerge(
         OpenApi.annotations({
           identifier: "session.create",
@@ -191,10 +216,10 @@ export const makeSessionGroup = <I extends HttpApiMiddleware.AnyId, S>(sessionLo
     .add(
       HttpApiEndpoint.post("session.import", "/api/session/import", {
         payload: Schema.Struct({
-          ...SessionTransfer.Data.fields,
-          location: Location.Ref.pipe(Schema.optional),
+          ...PublicSessionTransfer.fields,
+          location: Location.PublicRef.pipe(Schema.optional),
         }),
-        success: Schema.Struct({ data: Session.Info }),
+        success: Schema.Struct({ data: PublicSessionInfo }),
         error: [ConflictError, SessionNotFoundError],
       }).annotateMerge(
         OpenApi.annotations({
@@ -209,7 +234,7 @@ export const makeSessionGroup = <I extends HttpApiMiddleware.AnyId, S>(sessionLo
       HttpApiEndpoint.get("session.export", "/api/session/:sessionID/export", {
         params: { sessionID: Session.ID },
         query: Schema.Struct({ sanitize: BooleanFromString.pipe(Schema.optional) }),
-        success: Schema.Struct({ data: SessionTransfer.Data }),
+        success: Schema.Struct({ data: PublicSessionTransfer }),
         error: [SessionNotFoundError, UnknownError],
       }).annotateMerge(
         OpenApi.annotations({
@@ -234,7 +259,7 @@ export const makeSessionGroup = <I extends HttpApiMiddleware.AnyId, S>(sessionLo
     .add(
       HttpApiEndpoint.get("session.get", "/api/session/:sessionID", {
         params: { sessionID: Session.ID },
-        success: Schema.Struct({ data: Session.Info }),
+        success: Schema.Struct({ data: PublicSessionInfo }),
         error: SessionNotFoundError,
       }).annotateMerge(
         OpenApi.annotations({
@@ -261,7 +286,7 @@ export const makeSessionGroup = <I extends HttpApiMiddleware.AnyId, S>(sessionLo
       HttpApiEndpoint.post("session.fork", "/api/session/:sessionID/fork", {
         params: { sessionID: Session.ID },
         payload: Schema.Struct({ boundary: Session.ForkRequestBoundary }),
-        success: Schema.Struct({ data: Session.Info }),
+        success: Schema.Struct({ data: PublicSessionInfo }),
         error: [SessionNotFoundError, MessageNotFoundError, InvalidRequestError],
       })
         .middleware(sessionLocationMiddleware)
@@ -324,7 +349,7 @@ export const makeSessionGroup = <I extends HttpApiMiddleware.AnyId, S>(sessionLo
     .add(
       HttpApiEndpoint.post("session.move", "/api/session/:sessionID/move", {
         params: { sessionID: Session.ID },
-        payload: Schema.Struct({ ...Location.Ref.fields, delivery: SessionInbox.Delivery.pipe(Schema.optional) }),
+        payload: Schema.Struct({ ...Location.PublicRef.fields, delivery: SessionInbox.Delivery.pipe(Schema.optional) }),
         success: HttpApiSchema.NoContent,
         error: [SessionNotFoundError, InvalidRequestError],
       }).annotateMerge(
@@ -514,7 +539,7 @@ export const makeSessionGroup = <I extends HttpApiMiddleware.AnyId, S>(sessionLo
     .add(
       HttpApiEndpoint.get("session.context", "/api/session/:sessionID/context", {
         params: { sessionID: Session.ID },
-        success: Schema.Struct({ data: Schema.Array(SessionMessage.Info) }),
+        success: Schema.Struct({ data: Schema.Array(PublicSessionMessage) }),
         error: [SessionNotFoundError, UnknownError],
       }).annotateMerge(
         OpenApi.annotations({
@@ -552,7 +577,7 @@ export const makeSessionGroup = <I extends HttpApiMiddleware.AnyId, S>(sessionLo
     .add(
       HttpApiEndpoint.get("session.inbox.list", "/api/session/:sessionID/inbox", {
         params: { sessionID: Session.ID },
-        success: Schema.Struct({ data: Schema.Array(SessionInbox.Info) }),
+        success: Schema.Struct({ data: Schema.Array(PublicInboxInfo) }),
         error: SessionNotFoundError,
       }).annotateMerge(
         OpenApi.annotations({
@@ -728,7 +753,7 @@ export const makeSessionGroup = <I extends HttpApiMiddleware.AnyId, S>(sessionLo
     .add(
       HttpApiEndpoint.get("session.message", "/api/session/:sessionID/message/:messageID", {
         params: { sessionID: Session.ID, messageID: SessionMessage.ID },
-        success: Schema.Struct({ data: SessionMessage.Info }),
+        success: Schema.Struct({ data: PublicSessionMessage }),
         error: [SessionNotFoundError, MessageNotFoundError],
       }).annotateMerge(
         OpenApi.annotations({

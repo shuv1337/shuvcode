@@ -182,11 +182,11 @@ function sessionID(event: RunV2Event) {
 }
 
 function sameLocation(left: LocationRef | undefined, right: LocationRef | undefined) {
-  return !!left && !!right && left.directory === right.directory && left.workspaceID === right.workspaceID
+  return !!left && !!right && left.directory === right.directory
 }
 
 function globalForm(form: FormInfo, location: LocationRef): MiniFormRequest {
-  return { ...form, location: { directory: location.directory, workspaceID: location.workspaceID } }
+  return { ...form, location: { directory: location.directory } }
 }
 
 function errorMessage(error: { message?: string; _tag?: string }) {
@@ -461,7 +461,6 @@ async function resolveSelectedModel(
         ? {
             location: {
               directory: input.location.directory,
-              workspace: input.location.workspaceID,
             },
           }
         : undefined,
@@ -948,7 +947,7 @@ export async function createSessionTransport(input: StreamInput): Promise<Sessio
       input.location
         ? client.form.request.list(
             {
-              location: { directory: input.location.directory, workspace: input.location.workspaceID },
+              location: { directory: input.location.directory },
             },
             options,
           )
@@ -995,12 +994,7 @@ export async function createSessionTransport(input: StreamInput): Promise<Sessio
     if (!current(attempt)) return
     const client = attempt.client
     if (catalogEvents.has(event.type)) {
-      if (
-        input.location &&
-        event.location &&
-        (event.location.directory !== input.location.directory ||
-          event.location.workspaceID !== input.location.workspaceID)
-      )
+      if (input.location && event.location && event.location.directory !== input.location.directory)
         return
       void refreshCatalog(attempt)
       return

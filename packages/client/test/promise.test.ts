@@ -30,7 +30,6 @@ test("exposes every standard HTTP API group", () => {
     "shell",
     "reference",
     "worktree",
-    "workspace",
     "vcs",
     "debug",
     "migration",
@@ -408,21 +407,6 @@ test("worktree operations send the configuration location separately from their 
     { directory: "/configured/task", strategy: "git" },
   ])
   expect(requests[3]?.url).toBe("http://localhost:3000/api/worktree?location%5Bdirectory%5D=%2Frepo%2Fnested")
-})
-
-test("workspace.destroy returns the transition result", async () => {
-  let request: Request | undefined
-  const client = OpenCode.make({
-    baseUrl: "http://localhost:3000",
-    fetch: async (input, init) => {
-      request = input instanceof Request ? input : new Request(input, init)
-      return Response.json({ destroyed: false })
-    },
-  })
-
-  expect(await client.workspace.destroy({ workspaceID: "wrk_missing" })).toEqual({ destroyed: false })
-  expect(request?.method).toBe("DELETE")
-  expect(request?.url).toBe("http://localhost:3000/api/workspace/wrk_missing")
 })
 
 test("shell list and remove use the public HTTP contract", async () => {

@@ -1,7 +1,7 @@
 # V2 HTTP API audit checklist
 
 **Source:** `packages/protocol/openapi.json`  
-**Current endpoint count:** 142
+**Current endpoint count:** 140
 **Last regenerated:** 2026-09-13
 
 ## How to use this checklist
@@ -28,7 +28,7 @@ Review endpoints in document order. For each endpoint, select one disposition an
 
 ## Progress
 
-- [ ] Group 1: Foundation and placement (6)
+- [ ] Group 1: Foundation and placement (4)
 - [ ] Group 2: Configuration and capability catalogs (17)
 - [ ] Group 3: Credentials, integrations, MCP, and web search (22)
 - [ ] Group 4: Session lifecycle (12)
@@ -53,18 +53,21 @@ Review endpoints in document order. For each endpoint, select one disposition an
 - **Replacement:** `GET /api/location`, using `project` from the response.
 - **Notes:** The endpoint duplicated `Location.Info.project`; production callers were migrated.
 
+### [x] `POST /api/workspace` and `DELETE /api/workspace/{workspaceID}`
+
+- **Decision:** Remove
+- **Notes:** Provider-backed workspaces are not part of the V2 HTTP contract and can be introduced later. Core and the embedded SDK retain internal workspace support.
+
 ## Group 1: Foundation and placement
 
-**Endpoints:** 6
+**Endpoints:** 4
 
 | Done | Method | Path | Operation ID | Decision | Notes |
 |---|---|---|---|---|---|
 | [x] 001–002 | `GET` | `/api/status` | `server.status` | Keep | Replaces the former health and server endpoints. |
-| [ ] 003 | `GET` | `/api/location` | `location.get` |  |  |
+| [x] 003 | `GET` | `/api/location` | `location.get` | Keep | Workspace selectors and response fields removed until workspace support ships. |
 | [ ] 004 | `GET` | `/api/project` | `project.list` |  |  |
 | [ ] 005 | `PATCH` | `/api/project/{projectID}` | `project.update` |  |  |
-| [ ] 006 | `POST` | `/api/workspace` | `workspace.create` | Proposed remove | Awaiting feedback in `#core`. |
-| [ ] 007 | `DELETE` | `/api/workspace/{workspaceID}` | `workspace.destroy` | Proposed remove | Awaiting feedback in `#core`. |
 
 ## Group 2: Configuration and capability catalogs
 

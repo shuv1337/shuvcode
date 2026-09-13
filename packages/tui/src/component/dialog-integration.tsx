@@ -1033,7 +1033,7 @@ function providerID(data: ReturnType<typeof useData>, location: LocationRef, int
 }
 
 function locationQuery(location: LocationRef) {
-  return { directory: location.directory, workspace: location.workspaceID }
+  return { directory: location.directory }
 }
 
 function message(cause: unknown) {

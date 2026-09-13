@@ -506,7 +506,7 @@ function App(props: { pair?: DialogPairCredentials }) {
     const session = data.session.get(route.data.sessionID)
     if (!session) return
     if (data.session.creating(session.id)) return
-    if (session.location.workspaceID !== undefined || terminalEnvironment.variables === undefined) return
+    if (terminalEnvironment.variables === undefined) return
     void client.api.session
       .environment({ sessionID: session.id, variables: terminalEnvironment.variables })
       .catch(toast.error)
@@ -671,7 +671,6 @@ function App(props: { pair?: DialogPairCredentials }) {
         order: "desc",
         parentID: null,
         directory: location.directory,
-        workspace: location.workspaceID,
       })
       .then((response) => {
         const match = response.data[0]?.id
@@ -1222,13 +1221,13 @@ function App(props: { pair?: DialogPairCredentials }) {
     bindings: ["app.exit"],
   }))
 
-  event.on("tui.command.execute", (evt, { workspace }) => {
-    if (workspace !== (location.current?.workspaceID ?? data.location.default().workspaceID)) return
+  event.on("tui.command.execute", (evt, { directory }) => {
+    if (directory !== (location.current?.directory ?? data.location.default().directory)) return
     keymap.dispatch(evt.data.command)
   })
 
-  event.on("tui.toast.show", (evt, { workspace }) => {
-    if (workspace !== (location.current?.workspaceID ?? data.location.default().workspaceID)) return
+  event.on("tui.toast.show", (evt, { directory }) => {
+    if (directory !== (location.current?.directory ?? data.location.default().directory)) return
     toast.show({
       title: evt.data.title,
       message: evt.data.message,
@@ -1237,8 +1236,8 @@ function App(props: { pair?: DialogPairCredentials }) {
     })
   })
 
-  event.on("tui.session.select", (evt, { workspace }) => {
-    if (workspace !== (location.current?.workspaceID ?? data.location.default().workspaceID)) return
+  event.on("tui.session.select", (evt, { directory }) => {
+    if (directory !== (location.current?.directory ?? data.location.default().directory)) return
     route.navigate({
       type: "session",
       sessionID: evt.data.sessionID,

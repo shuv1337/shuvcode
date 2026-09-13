@@ -6,7 +6,7 @@ import { LocationQuery, locationQueryOpenApi } from "./location.js"
 export const DebugGroup = HttpApiGroup.make("server.debug")
   .add(
     HttpApiEndpoint.get("debug.location", "/api/debug/location", {
-      success: Schema.Array(Location.Ref),
+      success: Schema.Array(Location.PublicRef),
     }).annotateMerge(
       OpenApi.annotations({
         identifier: "debug.location.list",
