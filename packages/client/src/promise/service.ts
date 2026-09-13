@@ -11,7 +11,6 @@ import {
 import { defaultEnsureTiming, ensureTiming, type EnsureTiming } from "../service-timing.js"
 import { matchesVersion } from "../service-version.js"
 import { PtyHandoff } from "../pty-handoff.js"
-import type { ServerStatus } from "./generated/types.js"
 
 export * from "../service.js"
 
@@ -25,6 +24,7 @@ export * from "../service.js"
 export async function discover(options: DiscoverOptions = {}) {
   const found = (await registered(options.file)).service
   if (found?.state !== "ready") return undefined
+  if (!found.compatible) return undefined
   if (!matchesVersion(found.version, options)) return undefined
   return found.endpoint
 }
@@ -76,7 +76,7 @@ export async function ensure(options: EnsureOptions = {}): Promise<Endpoint> {
       if (registration.service !== undefined) {
         spawnDelay = timing.spawnDelay
         const service = registration.service
-        const compatible = matchesVersion(service.version, options)
+        const compatible = service.compatible && matchesVersion(service.version, options)
         if (compatible && service.state === "ready") {
           await PtyHandoff.complete(options.file ?? fallback(), service.info)
           return service.endpoint
@@ -151,6 +151,7 @@ type LocalService = {
   readonly endpoint: Endpoint
   readonly version?: string
   readonly state: "ready" | "waiting" | "failed"
+  readonly compatible: boolean
 }
 
 async function probeResult(info: Info, timeout = defaultEnsureTiming.requestTimeout) {
@@ -165,7 +166,7 @@ async function probeResult(info: Info, timeout = defaultEnsureTiming.requestTime
   const result = await fetch(new URL("/api/status", info.url), { headers: headers(endpoint), signal })
     .then(async (response) => ({
       response,
-      body: (await response.json()) as ServerStatus,
+      body: response.status === 404 ? undefined : ((await response.json()) as unknown),
     }))
     .then(
       (value) => ({ value }),
@@ -173,21 +174,42 @@ async function probeResult(info: Info, timeout = defaultEnsureTiming.requestTime
     )
   if ("cause" in result) return { service: undefined, timedOut: signal.aborted }
   const response = result.value.response
-  const body = result.value.body
-  if (body !== undefined && "version" in body && "pid" in body) {
-    if (body.pid !== info.pid) return { service: undefined, timedOut: false }
-    if (info.version !== undefined && body.version !== info.version) return { service: undefined, timedOut: false }
+  // The previous V2 service exposes /api/health instead. Its authenticated 404 is enough
+  // to recognize the registered daemon as incompatible and route it through replacement.
+  if (response.status === 404)
     return {
       service: {
         info,
         endpoint,
-        version: body.version,
+        version: info.version,
+        state: "ready" as const,
+        compatible: false,
+      } satisfies LocalService,
+      timedOut: false,
+    }
+  const status = decodeStatus(result.value.body)
+  if (status !== undefined) {
+    if (status.pid !== info.pid) return { service: undefined, timedOut: false }
+    if (info.version !== undefined && status.version !== info.version) return { service: undefined, timedOut: false }
+    return {
+      service: {
+        info,
+        endpoint,
+        version: status.version,
         state: response.ok ? "ready" : response.status === 500 ? "failed" : "waiting",
+        compatible: true,
       } satisfies LocalService,
       timedOut: false,
     }
   }
   return { service: undefined, timedOut: false }
+}
+
+function decodeStatus(input: unknown) {
+  if (typeof input !== "object" || input === null) return
+  if (!("version" in input) || typeof input.version !== "string") return
+  if (!("pid" in input) || typeof input.pid !== "number" || !Number.isInteger(input.pid) || input.pid < 0) return
+  return { version: input.version, pid: input.pid }
 }
 
 async function registered(file?: string, timeout?: number) {

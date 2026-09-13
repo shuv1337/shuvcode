@@ -1,4 +1,3 @@
-import { ServerStatus } from "@opencode/protocol/groups/server"
 import { Effect, FileSystem, Option, Schedule, Schema } from "effect"
 import { homedir } from "node:os"
 import { join } from "node:path"
@@ -31,6 +30,7 @@ export type Info = import("../service.js").Info
 export const discover = Effect.fn("service.discover")(function* (options: DiscoverOptions = {}) {
   const found = (yield* registered(options.file)).service
   if (found?.state !== "ready") return undefined
+  if (!found.compatible) return undefined
   if (!matchesVersion(found.version, options)) return undefined
   return found.endpoint
 })
@@ -42,6 +42,7 @@ export const incumbent = Effect.fn("service.incumbent")(function* (
   const info = yield* read(options.file)
   const found = info === undefined ? undefined : yield* probe({ ...info, url: options.url })
   if (found === undefined) return undefined
+  if (!found.compatible) return undefined
   if (!matchesVersion(found.version, options)) return undefined
   return { endpoint: found.endpoint, state: found.state }
 })
@@ -94,7 +95,7 @@ export const ensure = Effect.fn("service.ensure")(function* (options: EnsureOpti
     } else timeouts = undefined
     if (service !== undefined) {
       spawnDelay = timing.spawnDelay
-      const compatible = matchesVersion(service.version, options)
+      const compatible = service.compatible && matchesVersion(service.version, options)
       if (compatible && service.state === "ready") {
         yield* Effect.tryPromise(() => PtyHandoff.complete(options.file ?? fallback(), service.info))
         return Option.some(service)
@@ -171,7 +172,12 @@ export const Info = Schema.Struct({
 })
 
 const decode = Schema.decodeUnknownEffect(Schema.fromJsonString(Info))
-const decodeStatus = Schema.decodeUnknownOption(ServerStatus)
+const decodeStatus = Schema.decodeUnknownOption(
+  Schema.Struct({
+    version: Schema.String,
+    pid: Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)),
+  }),
+)
 
 // A missing or corrupt file means no valid info; callers treat both
 // the same (the registering server self-evicts, clients rediscover).
@@ -187,6 +193,7 @@ type LocalService = {
   readonly endpoint: Endpoint
   readonly version?: string
   readonly state: "ready" | "waiting" | "failed"
+  readonly compatible: boolean
 }
 
 const probe = Effect.fnUntraced(function* (info: Info) {
@@ -207,7 +214,10 @@ const probeResult = Effect.fnUntraced(function* (
   const signal = AbortSignal.timeout(timeout)
   const result = yield* Effect.promise(() =>
     fetch(new URL("/api/status", info.url), { headers: headers(endpoint), signal })
-      .then(async (response) => ({ response, body: (await response.json()) as unknown }))
+      .then(async (response) => ({
+        response,
+        body: response.status === 404 ? undefined : ((await response.json()) as unknown),
+      }))
       .then(
         (value) => ({ value }),
         (cause: unknown) => ({ cause }),
@@ -215,6 +225,19 @@ const probeResult = Effect.fnUntraced(function* (
   )
   if ("cause" in result) return { service: undefined, timedOut: signal.aborted }
   const response = result.value.response
+  // The previous V2 service exposes /api/health instead. Its authenticated 404 is enough
+  // to recognize the registered daemon as incompatible and route it through replacement.
+  if (response.status === 404)
+    return {
+      service: {
+        info,
+        endpoint,
+        version: info.version,
+        state: "ready" as const,
+        compatible: false,
+      } satisfies LocalService,
+      timedOut: false,
+    }
   const body = result.value.body
   const status = decodeStatus(body)
   if (Option.isSome(status)) {
@@ -227,6 +250,7 @@ const probeResult = Effect.fnUntraced(function* (
         endpoint,
         version: status.value.version,
         state: response.ok ? "ready" : response.status === 500 ? "failed" : "waiting",
+        compatible: true,
       } satisfies LocalService,
       timedOut: false,
     }
