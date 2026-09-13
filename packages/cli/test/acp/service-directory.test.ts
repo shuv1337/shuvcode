@@ -32,14 +32,12 @@ describe("acp service directory behavior", () => {
         "/api/model/default",
         "/api/agent",
         "/api/command",
-        "/api/skill",
       ].map((path) =>
         fixture.requests
           .filter((request) => request.path === path)
           .map((request) => request.query["location[directory]"]),
       ),
     ).toEqual([
-      ["/workspace", "/other"],
       ["/workspace", "/other"],
       ["/workspace", "/other"],
       ["/workspace", "/other"],
@@ -73,9 +71,9 @@ describe("acp service directory behavior", () => {
           : [],
       ),
     ).toEqual([
-      ["review", "verify"],
-      ["review", "verify"],
-      ["review", "verify"],
+      ["review"],
+      ["review"],
+      ["review"],
     ])
   })
 

@@ -520,17 +520,6 @@ export function Autocomplete(props: {
       })
     }
 
-    for (const skill of data.location.skill
-      .list(location.current)
-      ?.filter((skill) => skill.slash === true && !commandNames.has(skill.id)) ?? []) {
-      results.push({
-        display: "/" + skill.id,
-        description: skill.description,
-        kind: "skill",
-        onSelect: () => insertSlash(skill.id),
-      })
-    }
-
     results.sort((a, b) => a.display.localeCompare(b.display))
 
     const max = firstBy(results, [(x) => x.display.length, "desc"])?.display.length

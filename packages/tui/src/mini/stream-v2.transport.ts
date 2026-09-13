@@ -1789,8 +1789,7 @@ export async function createSessionTransport(input: StreamInput): Promise<Sessio
 
   return {
     async admitPromptTurn(next, delivery) {
-      if (next.prompt.mode === "shell" || next.prompt.command?.source === "skill")
-        throw new Error("This prompt cannot be queued")
+      if (next.prompt.mode === "shell") throw new Error("This prompt cannot be queued")
       if (!state.connected) throw new Error("Event stream is reconnecting")
       const client = sdk
       if (!next.prompt.command && next.agent)
@@ -1822,23 +1821,6 @@ export async function createSessionTransport(input: StreamInput): Promise<Sessio
       if (!messageID) throw new Error("Prompt message ID is required")
 
       const command = next.prompt.command
-      if (command?.source === "skill") {
-        if (next.agent)
-          await client.session.switchAgent({ sessionID: input.sessionID, agent: next.agent }, { signal: next.signal })
-        input.trace?.write("send.skill", { sessionID: input.sessionID, messageID, skill: command.name })
-        await runTurnWait(
-          next,
-          messageID,
-          client,
-          () =>
-            client.session.skill(
-              { sessionID: input.sessionID, id: messageID, skill: command.name },
-              { signal: next.signal },
-            ),
-          admitted,
-        )
-        return
-      }
       if (command) {
         await admitPrompt(next, client, next.prompt.delivery ?? "steer")
         admitted?.()

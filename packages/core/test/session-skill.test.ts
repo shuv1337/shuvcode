@@ -31,7 +31,7 @@ const info = Skill.Info.make({
   id: Skill.ID.make("effect"),
   name: Skill.Name.make("Effect"),
   description: "Effect guidance",
-  location: AbsolutePath.make(path.resolve("/skills/effect.md")),
+  path: AbsolutePath.make(path.resolve("/skills/effect.md")),
   content: "  Use Effect\n",
 })
 const locations = makeGlobalNode({

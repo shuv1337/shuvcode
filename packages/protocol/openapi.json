@@ -16864,12 +16864,6 @@
           },
           "branch": {
             "type": "string"
-          },
-          "description": {
-            "type": "string"
-          },
-          "hidden": {
-            "type": "boolean"
           }
         },
         "required": ["type", "repository"],
@@ -16906,12 +16900,6 @@
           },
           "path": {
             "type": "string"
-          },
-          "description": {
-            "type": "string"
-          },
-          "hidden": {
-            "type": "boolean"
           }
         },
         "required": ["type", "path"],
@@ -18850,20 +18838,17 @@
           "description": {
             "type": "string"
           },
-          "slash": {
-            "type": "boolean"
-          },
           "autoinvoke": {
             "type": "boolean"
           },
-          "location": {
+          "path": {
             "type": "string"
           },
           "content": {
             "type": "string"
           }
         },
-        "required": ["id", "name", "location", "content"],
+        "required": ["id", "name", "path", "content"],
         "additionalProperties": false
       },
       "SkillNotFoundErrorEncoded": {

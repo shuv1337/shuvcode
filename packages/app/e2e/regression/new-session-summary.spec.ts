@@ -404,7 +404,7 @@ async function openDraft(page: Page, worktree = "main", options: { git?: boolean
             {
               id: "summary-skill",
               name: "summary-skill",
-              location: "/skills/summary/SKILL.md",
+              path: "/skills/summary/SKILL.md",
               content: "Summary skill",
             },
           ],

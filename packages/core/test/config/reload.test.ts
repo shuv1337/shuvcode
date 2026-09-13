@@ -80,7 +80,7 @@ describe("config plugin reloads", () => {
                 Bun.write(skill, "---\nname: probe\ndescription: Hot reload\n---\nTest skill"),
               )
               yield* waitUntil(skills.list().pipe(Effect.map((items) => items.some((item) => item.id === "probe"))))
-              expect((yield* skills.list())[0]?.location).toBe(AbsolutePath.make(skill))
+              expect((yield* skills.list())[0]?.path).toBe(AbsolutePath.make(skill))
               yield* Effect.promise(() => fs.rm(root, { recursive: true }))
               yield* waitUntil(skills.list().pipe(Effect.map((items) => items.length === 0)))
               yield* Effect.promise(() => Bun.write(skill, "---\nname: probe\ndescription: Recreated\n---\nTest skill"))

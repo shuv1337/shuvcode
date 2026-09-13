@@ -124,7 +124,6 @@ describe("SkillFile.parse", () => {
 name: Manual
 description: Manual only
 metadata:
-  opencode/slash: "true"
   opencode/autoinvoke: false
 ---
 # manual`,
@@ -135,13 +134,12 @@ metadata:
         id: Skill.ID.make("manual"),
         name: Skill.Name.make("Manual"),
         description: "Manual only",
-        slash: true,
         autoinvoke: false,
-        location: AbsolutePath.make("/repo/skills/manual/SKILL.md"),
+        path: AbsolutePath.make("/repo/skills/manual/SKILL.md"),
         content: "# manual",
       },
     })
-    expect(SkillFile.parse(directory, "/repo/skills/foo.md", "---\nslash: true\n---\n# foo")).toMatchObject({
+    expect(SkillFile.parse(directory, "/repo/skills/foo.md", "# foo")).toMatchObject({
       _tag: "Parsed",
       skill: { id: Skill.ID.make("foo") },
     })
@@ -152,11 +150,6 @@ metadata:
     expect(
       SkillFile.parse(directory, "/repo/skills/broken.md", "---\ndescription: foo: bar\nmetadata: [\n---\n# broken"),
     ).toEqual({ _tag: "Skipped", reason: "markdown" })
-    expect(SkillFile.parse(directory, "/repo/skills/broken.md", "---\nslash: nope\n---\n# broken")).toMatchObject({
-      _tag: "Skipped",
-      reason: "frontmatter",
-      issue: expect.anything(),
-    })
   })
 })
 
@@ -257,7 +250,7 @@ describe("ConfigSkillPlugin.Plugin", () => {
           const review = (yield* skill.list()).find((item) => item.id === "review")
 
           expect(review?.description).toBe("Worktree")
-          expect(review?.location).toBe(AbsolutePath.make(path.join(worktreeSkills, "review", "SKILL.md")))
+          expect(review?.path).toBe(AbsolutePath.make(path.join(worktreeSkills, "review", "SKILL.md")))
         }),
       ),
     ),

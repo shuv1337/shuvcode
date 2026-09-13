@@ -1144,19 +1144,9 @@ export function Prompt(props: PromptProps) {
       }),
     )
     const slashHead = parseSlashHead(inputText, /\s/)
-    const isSkill =
-      !(store.prompt.skills?.length ?? 0) &&
-      slashHead !== undefined &&
-      (data.location.skill.list(currentLocation.ref) ?? []).some(
-        (skill) => skill.slash === true && skill.id === slashHead.name,
-      )
     const isCommand =
       slashHead !== undefined &&
       (data.location.command.list(currentLocation.ref) ?? []).some((command) => command.name === slashHead.name)
-    if (delivery === "queue" && isSkill) {
-      toast.show({ message: "Skills cannot be queued", variant: "warning" })
-      return false
-    }
     const editorSelection = editorContext()
     const pendingEditorSelection = editorSelection && editor.labelState() === "pending" ? editorSelection : undefined
     if (delivery === "queue" && pendingEditorSelection) {
@@ -1170,7 +1160,7 @@ export function Prompt(props: PromptProps) {
       void promptModelWarning()
       return false
     }
-    const usesModel = !props.sessionID || (store.mode !== "shell" && !isSkill)
+    const usesModel = !props.sessionID || store.mode !== "shell"
     if (usesModel && !local.model.available(selection)) {
       toast.show({
         title: "Model unavailable",
@@ -1311,9 +1301,6 @@ export function Prompt(props: PromptProps) {
         toast.show({ title: "Failed to run command", message: errorMessage(error), variant: "error" })
         restoreEntry()
       })
-    } else if (isSkill) {
-      move.startSubmit()
-      dispatch(() => client.api.session.skill({ sessionID: target, skill: slashHead.name }))
     } else {
       move.startSubmit()
       try {

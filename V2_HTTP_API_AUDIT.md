@@ -88,15 +88,15 @@ Review endpoints in document order. For each endpoint, select one disposition an
 | [x] 008 | `GET` | `/api/agent` | `agent.list` | Keep | Request and response accepted as-is. |
 | [x] 009 | `GET` | `/api/agent/{agentID}` | `agent.get` | Keep | Request, response, and not-found error accepted as-is. |
 | [x] 010 | `GET` | `/api/plugin` | `plugin.list` | Keep | Request and response accepted as-is. |
-| [ ] 012 | `POST` | `/api/plugin/check` | `plugin.check` |  |  |
-| [ ] 013 | `POST` | `/api/plugin/update` | `plugin.update` |  |  |
-| [ ] 014 | `GET` | `/api/model` | `model.list` |  |  |
-| [ ] 015 | `GET` | `/api/model/default` | `model.default` |  |  |
-| [ ] 016 | `GET` | `/api/provider` | `provider.list` |  |  |
-| [ ] 017 | `GET` | `/api/provider/{providerID}` | `provider.get` |  |  |
-| [ ] 018 | `GET` | `/api/command` | `command.list` |  |  |
-| [ ] 019 | `GET` | `/api/skill` | `skill.list` |  |  |
-| [ ] 020 | `GET` | `/api/reference` | `reference.list` |  |  |
+| [x] 012 | `POST` | `/api/plugin/check` | `plugin.check` | Keep | Request and response accepted as-is. |
+| [x] 013 | `POST` | `/api/plugin/update` | `plugin.update` | Keep | Request and errors accepted as-is. |
+| [x] 014 | `GET` | `/api/model` | `model.list` | Keep | Request and response accepted as-is. |
+| [x] 015 | `GET` | `/api/model/default` | `model.default` | Keep | Request and nullable response accepted as-is. |
+| [x] 016 | `GET` | `/api/provider` | `provider.list` | Keep | Request and response accepted as-is. |
+| [x] 017 | `GET` | `/api/provider/{providerID}` | `provider.get` | Keep | Request, response, and not-found error accepted as-is. |
+| [x] 018 | `GET` | `/api/command` | `command.list` | Keep | Request and response accepted as-is. |
+| [x] 019 | `GET` | `/api/skill` | `skill.list` | Keep | Renamed `location` to `path`; removed the skill-specific `slash` flag and slash-command behavior. |
+| [x] 020 | `GET` | `/api/reference` | `reference.list` | Keep | Removed duplicate `description` and `hidden` fields from nested `source`. |
 | [ ] 021 | `GET` | `/api/config` | `config.get` |  |  |
 | [ ] 022 | `GET` | `/api/config/preferences` | `config.preferences` |  |  |
 | [ ] 023 | `PATCH` | `/api/config/preferences` | `config.updatePreferences` |  |  |

@@ -322,9 +322,8 @@ export type SkillInfo = {
   id: string
   name: string
   description?: string
-  slash?: boolean
   autoinvoke?: boolean
-  location: string
+  path: string
   content: string
 }
 
@@ -398,15 +397,9 @@ export type ShellInfo1 = {
   time: { started: number; completed?: number }
 }
 
-export type ReferenceLocalSource = { type: "local"; path: string; description?: string; hidden?: boolean }
+export type ReferenceLocalSource = { type: "local"; path: string }
 
-export type ReferenceGitSource = {
-  type: "git"
-  repository: string
-  branch?: string
-  description?: string
-  hidden?: boolean
-}
+export type ReferenceGitSource = { type: "git"; repository: string; branch?: string }
 
 export type WorktreeDirectory = { directory: string; strategy?: string }
 
