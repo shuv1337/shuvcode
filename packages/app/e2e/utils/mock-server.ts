@@ -11,6 +11,7 @@ export interface MockServerConfig {
   integrationMethods?: Record<string, unknown[]>
   onConnectKey?: (input: { integrationID: string; body: unknown }) => void
   shells?: unknown[]
+  configEntries?: unknown[]
   websearchProviders?: unknown[]
   directory: string
   project: unknown
@@ -197,6 +198,7 @@ const corsHeaders = {
 function mockHandlers(config: MockServerConfig, state: { cursors: Map<string, string>; nextCursor: number }) {
   const noContent = Effect.succeed(HttpApiSchema.NoContent.make())
   const delay = config.messageDelay === undefined ? Effect.void : Effect.sleep(Duration.millis(config.messageDelay))
+  const configEntries = config.configEntries ?? []
   return HttpApiBuilder.group(MockApi, "mock", (handlers) =>
     handlers
       .handleRaw("event", () => {
@@ -218,7 +220,7 @@ function mockHandlers(config: MockServerConfig, state: { cursors: Map<string, st
       )
       .handleAll({
         status: () => Effect.succeed({ version: "2.0.0", pid: 1, urls: config.server ? [config.server] : [] }),
-        config: () => Effect.succeed([]),
+        config: () => Effect.succeed(configEntries),
         reference: () =>
           Effect.succeed({
             location: {
@@ -284,6 +286,7 @@ function mockHandlers(config: MockServerConfig, state: { cursors: Map<string, st
           })
         },
         configShells: () => Effect.succeed(config.shells ?? []),
+        configUpdate: () => noContent,
         websearchProviders: () => Effect.succeed({ location: location(config), data: config.websearchProviders ?? [] }),
         worktreeList: () =>
           Effect.succeed([

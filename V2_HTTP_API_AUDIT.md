@@ -101,6 +101,7 @@ Review endpoints in document order. For each endpoint, select one disposition an
 | [x] 022 | `GET` | `/api/config/preferences` | `config.preferences` | Remove | Redundant special projection of global config. |
 | [x] 023 | `PATCH` | `/api/config/preferences` | `config.updatePreferences` | Remove | Redundant field-specific config mutation API. |
 | [ ] 024 | `GET` | `/api/config/shell` | `config.shells` |  |  |
+| [x] 024a | `PATCH` | `/api/experimental/config` | `experimental.config.update` | Change | Experimental global config mutation; initially accepts only `shell`. |
 
 ## Group 3: Credentials, integrations, MCP, and web search
 

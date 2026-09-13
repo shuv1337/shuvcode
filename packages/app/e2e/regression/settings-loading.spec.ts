@@ -24,6 +24,14 @@ test.beforeEach(async ({ page }) => {
       sandboxes,
     },
     provider: { all: [], connected: [], default: {} },
+    configEntries: [
+      { type: "document", path: "/home/test/.config/opencode/opencode.jsonc", info: { shell: "/bin/zsh" } },
+      { type: "directory", path: "/home/test/.config/opencode" },
+    ],
+    shells: [
+      { path: "/bin/zsh", name: "zsh", acceptable: true },
+      { path: "/bin/bash", name: "bash", acceptable: true },
+    ],
     sessions: sandboxes.map((directory, index) => ({
       id: `ses_settings_${index + 1}`,
       title: `Workspace ${index + 1} session`,
@@ -81,6 +89,14 @@ test("single-server settings expose scoped pages without a server picker", async
   await expect(connection.locator(".settings-servers-row")).toHaveCSS("padding-top", "20px")
   await expect(connection.locator(".settings-servers-lead")).toHaveCSS("column-gap", "4px")
   await expect(connection.locator(".settings-servers-copy")).toHaveCSS("row-gap", "6px")
+  await expect(settings.getByRole("heading", { name: "Preferences", exact: true })).toBeVisible()
+  await expect(settings.getByText("Terminal shell", { exact: true })).toBeVisible()
+  await settings.getByText("zsh", { exact: true }).click()
+  const updated = page.waitForRequest(
+    (request) => request.method() === "PATCH" && new URL(request.url()).pathname === "/api/experimental/config",
+  )
+  await page.getByRole("option", { name: "bash", exact: true }).click()
+  expect((await updated).postDataJSON()).toEqual({ shell: "/bin/bash" })
 })
 
 test("project settings open as a nested autosaving view", async ({ page }) => {

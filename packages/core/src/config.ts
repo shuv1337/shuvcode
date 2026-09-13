@@ -3,9 +3,9 @@ export * as Config from "./config.js"
 import { makeLocationNode } from "@opencode/util/effect/app-node"
 import path from "path"
 import { isDeepStrictEqual } from "node:util"
-import { type ParseError, parse } from "jsonc-parser"
+import { applyEdits, modify, type ParseError, parse } from "jsonc-parser"
 import { Context, Effect, FiberMap, Layer, Option, PubSub, Ref, Schema, Semaphore, Stream } from "effect"
-import { Directory, Document, Info, type Entry, Event } from "@opencode/schema/config"
+import { Directory, Document, Info, type Patch, type Entry, Event } from "@opencode/schema/config"
 import { Credential } from "./credential.js"
 import { Bus } from "./bus.js"
 import { Watcher } from "./filesystem/watcher.js"
@@ -38,6 +38,8 @@ export interface Interface {
    * source files they parse and rebuild their own state.
    */
   readonly changes: () => Stream.Stream<Watcher.Update>
+  /** Updates supported global config fields while preserving unrelated JSONC content. */
+  readonly update?: (patch: Patch) => Effect.Effect<void, FSUtil.Error>
 }
 
 export const Options = Schema.Struct({
@@ -96,6 +98,7 @@ export const layer = (options?: Options) =>
       const globalService = yield* Global.Service
       const wellknown = yield* WellKnown.Service
       const reloadLock = Semaphore.makeUnsafe(1)
+      const updateLock = Semaphore.makeUnsafe(1)
       const decodeOptions = { errors: "all", onExcessProperty: "ignore", propertyOrder: "original" } as const
       const decodeInfo = Schema.decodeUnknownOption(Info, decodeOptions)
       const parseInfo = Effect.fn("Config.parseInfo")(function* (text: string, source: string) {
@@ -323,6 +326,28 @@ export const layer = (options?: Options) =>
       )
       yield* reloadLock.withPermit(reconcile(initial))
 
+      const update = Effect.fn("Config.update")(
+        function* (patch: Patch) {
+          const directory = initial.global ?? AbsolutePath.make(globalService.config)
+          const candidates = ConfigDiscovery.names.map((name) => path.join(directory, name))
+          const filepath = (yield* Effect.filter(candidates, fs.isFile)).at(-1) ?? path.join(directory, "opencode.jsonc")
+          const text = (yield* fs.readFileStringSafe(filepath)) ?? "{}\n"
+          const updated = yield* Effect.try({
+            try: () =>
+              applyEdits(
+                text,
+                modify(text, ["shell"], patch.shell ?? undefined, {
+                  formattingOptions: { tabSize: 2, insertSpaces: true },
+                }),
+              ),
+            catch: (cause) => new FSUtil.FileSystemError({ method: "config.update", cause }),
+          })
+          yield* fs.writeWithDirs(filepath, updated.endsWith("\n") ? updated : `${updated}\n`)
+          yield* requestReload
+        },
+        (effect) => updateLock.withPermit(effect),
+      )
+
       return Service.of({
         entries: Effect.fnUntraced(function* () {
           return configs
@@ -333,6 +358,7 @@ export const layer = (options?: Options) =>
             agents: Effect.filter(sources.agents, fs.isDir),
           }),
         changes: () => Stream.fromPubSub(updates),
+        update,
       })
     }),
   )

@@ -10,6 +10,8 @@ import { DialogServer } from "@/servers/connect/dialog"
 import { AddServerMenu, WslServerSettings } from "@/servers/wsl/settings"
 import { SshServerSettings } from "@/servers/ssh/settings"
 import { SettingsList } from "@/settings/list"
+import { ShellSetting } from "@/settings/general/general"
+import { createServerShellController } from "@/settings/general/controllers"
 import type { SettingsServer } from "./inventory"
 import "@/settings/settings.css"
 
@@ -89,7 +91,24 @@ export const SettingsServerGeneral: Component<{
             </Show>
           </SettingsList>
         </section>
+
+        <Show when={props.entry.connection} keyed>
+          {(server) => <ServerShell server={server} />}
+        </Show>
       </div>
     </>
+  )
+}
+
+function ServerShell(props: { server: ServerConnection.Any }) {
+  const language = useLanguage()
+  const controller = createServerShellController(() => props.server)
+  return (
+    <section class="settings-section">
+      <h3 class="settings-section-title">{language.t("settings.tab.preferences")}</h3>
+      <SettingsList>
+        <ShellSetting controller={controller} />
+      </SettingsList>
+    </section>
   )
 }

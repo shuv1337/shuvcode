@@ -12768,6 +12768,51 @@
         "description": "Return shells available to terminal and agent execution.",
         "summary": "List available shells"
       }
+    },
+    "/api/experimental/config": {
+      "patch": {
+        "tags": ["config"],
+        "operationId": "experimental.config.update",
+        "parameters": [],
+        "security": [],
+        "responses": {
+          "204": {
+            "description": "<No Content>"
+          },
+          "400": {
+            "description": "InvalidRequestError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvalidRequestErrorEncoded"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UnauthorizedError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
+                }
+              }
+            }
+          }
+        },
+        "description": "Patch supported fields in the highest-precedence global configuration document.",
+        "summary": "Update global configuration",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Config.Patch"
+              }
+            }
+          },
+          "required": true
+        }
+      }
     }
   },
   "components": {
@@ -13579,6 +13624,23 @@
             "additionalProperties": false
           }
         },
+        "additionalProperties": false
+      },
+      "Config.Patch": {
+        "type": "object",
+        "properties": {
+          "shell": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": ["shell"],
         "additionalProperties": false
       },
       "Config.Plugin.EntryEncoded": {

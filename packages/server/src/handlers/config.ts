@@ -8,6 +8,14 @@ export const ConfigHandler = HttpApiBuilder.group(Api, "server.config", (handler
   handlers
     .handle("config.get", () => Config.Service.use((config) => config.entries()))
     .handle(
+      "config.update",
+      Effect.fn(function* (ctx) {
+        const config = yield* Config.Service
+        if (!config.update) return yield* Effect.die(new Error("Config updates are unavailable"))
+        return yield* config.update(ctx.payload).pipe(Effect.orDie)
+      }),
+    )
+    .handle(
       "config.shells",
       Effect.fn(function* () {
         const shell = yield* ShellSelect.Service

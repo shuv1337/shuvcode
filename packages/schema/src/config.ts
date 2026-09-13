@@ -109,6 +109,11 @@ export class Info extends Schema.Class<Info>("Config.Info")({
   experimental: ConfigExperimental.Info.pipe(optional),
 }) {}
 
+export const Patch = Schema.Struct({
+  shell: Schema.NullOr(Schema.String),
+}).annotate({ identifier: "Config.Patch" })
+export interface Patch extends Schema.Schema.Type<typeof Patch> {}
+
 export class Document extends Schema.Class<Document>("Config.Document")({
   type: Schema.Literal("document"),
   path: AbsolutePath.pipe(optional),

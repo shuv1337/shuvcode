@@ -78,6 +78,12 @@ const Group = HttpApiGroup.make("mock")
     }),
   )
   .add(HttpApiEndpoint.get("configShells", "/api/config/shell", { success: Json }))
+  .add(
+    HttpApiEndpoint.patch("configUpdate", "/api/experimental/config", {
+      payload: Schema.Struct({ shell: Schema.NullOr(Schema.String) }),
+      success: HttpApiSchema.NoContent,
+    }),
+  )
   .add(HttpApiEndpoint.get("websearchProviders", "/api/websearch/provider", { success: Json }))
   .add(
     HttpApiEndpoint.get("worktreeList", "/api/worktree", {

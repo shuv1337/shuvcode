@@ -2314,9 +2314,14 @@ export type ConfigShellsOutput = ReadonlyArray<{
 }>
 export type ConfigShellsOperation<E = never> = () => Effect.Effect<ConfigShellsOutput, E>
 
+export type ConfigUpdateInput = { readonly shell: string | null }
+export type ConfigUpdateOutput = void
+export type ConfigUpdateOperation<E = never> = (input: ConfigUpdateInput) => Effect.Effect<ConfigUpdateOutput, E>
+
 export interface ConfigApi<E = never> {
   readonly get: ConfigGetOperation<E>
   readonly shells: ConfigShellsOperation<E>
+  readonly update: ConfigUpdateOperation<E>
 }
 
 export interface AppApi<E = never> {

@@ -260,6 +260,8 @@ import type {
   ConfigGetInput,
   ConfigGetOutput,
   ConfigShellsOutput,
+  ConfigUpdateInput,
+  ConfigUpdateOutput,
 } from "./types.js"
 import { ClientError } from "./client-error.js"
 
@@ -2155,6 +2157,18 @@ export function make(options: ClientOptions) {
       shells: (requestOptions?: RequestOptions) =>
         request<ConfigShellsOutput>(
           { method: "GET", path: `/api/config/shell`, successStatus: 200, declaredStatuses: [400, 401], empty: false },
+          requestOptions,
+        ),
+      update: (input: ConfigUpdateInput, requestOptions?: RequestOptions) =>
+        request<ConfigUpdateOutput>(
+          {
+            method: "PATCH",
+            path: `/api/experimental/config`,
+            body: { shell: input["shell"] },
+            successStatus: 204,
+            declaredStatuses: [400, 401],
+            empty: true,
+          },
           requestOptions,
         ),
     },
