@@ -14,7 +14,7 @@ export const McpGroup = HttpApiGroup.make("server.mcp")
       .annotateMerge(locationQueryOpenApi)
       .annotateMerge(
         OpenApi.annotations({
-          identifier: "v2.mcp.list",
+          identifier: "mcp.list",
           summary: "List MCP servers",
           description: "Retrieve configured MCP servers and their connection status.",
         }),
@@ -32,7 +32,7 @@ export const McpGroup = HttpApiGroup.make("server.mcp")
       .annotateMerge(locationQueryOpenApi)
       .annotateMerge(
         OpenApi.annotations({
-          identifier: "v2.mcp.add",
+          identifier: "mcp.add",
           summary: "Add MCP server",
           description: "Add an MCP server at runtime or replace an existing one, connecting it immediately.",
         }),
@@ -48,7 +48,7 @@ export const McpGroup = HttpApiGroup.make("server.mcp")
       .annotateMerge(locationQueryOpenApi)
       .annotateMerge(
         OpenApi.annotations({
-          identifier: "v2.mcp.remove",
+          identifier: "mcp.remove",
           summary: "Remove MCP server",
           description: "Stop an MCP server and remove it from the runtime set until restart.",
         }),
@@ -64,7 +64,7 @@ export const McpGroup = HttpApiGroup.make("server.mcp")
       .annotateMerge(locationQueryOpenApi)
       .annotateMerge(
         OpenApi.annotations({
-          identifier: "v2.mcp.connect",
+          identifier: "mcp.connect",
           summary: "Connect MCP server",
           description: "Connect an MCP server at runtime, overriding a disabled configuration until restart.",
         }),
@@ -80,7 +80,7 @@ export const McpGroup = HttpApiGroup.make("server.mcp")
       .annotateMerge(locationQueryOpenApi)
       .annotateMerge(
         OpenApi.annotations({
-          identifier: "v2.mcp.disconnect",
+          identifier: "mcp.disconnect",
           summary: "Disconnect MCP server",
           description: "Disconnect an MCP server at runtime, removing its tools until reconnected.",
         }),
@@ -94,7 +94,7 @@ export const McpGroup = HttpApiGroup.make("server.mcp")
       .annotateMerge(locationQueryOpenApi)
       .annotateMerge(
         OpenApi.annotations({
-          identifier: "v2.mcp.resource.catalog",
+          identifier: "mcp.resource.catalog",
           summary: "List MCP resources",
           description: "Retrieve resources and resource templates from connected MCP servers.",
         }),

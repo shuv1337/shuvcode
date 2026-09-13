@@ -9,7 +9,7 @@
     "/api/health": {
       "get": {
         "tags": ["health"],
-        "operationId": "v2.health.get",
+        "operationId": "health.get",
         "parameters": [],
         "security": [],
         "responses": {
@@ -51,7 +51,7 @@
     "/api/server": {
       "get": {
         "tags": ["server"],
-        "operationId": "v2.server.get",
+        "operationId": "server.get",
         "parameters": [],
         "security": [],
         "responses": {
@@ -103,7 +103,7 @@
     "/api/location": {
       "get": {
         "tags": ["location"],
-        "operationId": "v2.location.get",
+        "operationId": "location.get",
         "parameters": [
           {
             "name": "location",
@@ -186,7 +186,7 @@
     "/api/agent": {
       "get": {
         "tags": ["agent"],
-        "operationId": "v2.agent.list",
+        "operationId": "agent.list",
         "parameters": [
           {
             "name": "location",
@@ -282,7 +282,7 @@
     "/api/agent/{agentID}": {
       "get": {
         "tags": ["agent"],
-        "operationId": "v2.agent.get",
+        "operationId": "agent.get",
         "parameters": [
           {
             "name": "agentID",
@@ -393,7 +393,7 @@
     "/api/plugin": {
       "get": {
         "tags": ["plugin"],
-        "operationId": "v2.plugin.list",
+        "operationId": "plugin.list",
         "parameters": [
           {
             "name": "location",
@@ -489,7 +489,7 @@
     "/api/plugin/await-activation": {
       "post": {
         "tags": ["plugin"],
-        "operationId": "v2.plugin.awaitActivation",
+        "operationId": "plugin.awaitActivation",
         "parameters": [
           {
             "name": "location",
@@ -565,7 +565,7 @@
     "/api/plugin/check": {
       "post": {
         "tags": ["plugin"],
-        "operationId": "v2.plugin.check",
+        "operationId": "plugin.check",
         "parameters": [
           {
             "name": "location",
@@ -691,7 +691,7 @@
     "/api/plugin/update": {
       "post": {
         "tags": ["plugin"],
-        "operationId": "v2.plugin.update",
+        "operationId": "plugin.update",
         "parameters": [
           {
             "name": "location",
@@ -804,7 +804,7 @@
     "/api/session": {
       "get": {
         "tags": ["session"],
-        "operationId": "v2.session.list",
+        "operationId": "session.list",
         "parameters": [
           {
             "name": "workspace",
@@ -1005,7 +1005,7 @@
       },
       "post": {
         "tags": ["session"],
-        "operationId": "v2.session.create",
+        "operationId": "session.create",
         "parameters": [],
         "security": [],
         "responses": {
@@ -1138,7 +1138,7 @@
     "/api/session/stats": {
       "get": {
         "tags": ["session"],
-        "operationId": "v2.session.stats",
+        "operationId": "session.stats",
         "parameters": [
           {
             "name": "from",
@@ -1271,7 +1271,7 @@
     "/api/session/import": {
       "post": {
         "tags": ["session"],
-        "operationId": "v2.session.import",
+        "operationId": "session.import",
         "parameters": [],
         "security": [],
         "responses": {
@@ -1373,7 +1373,7 @@
     "/api/session/{sessionID}/export": {
       "get": {
         "tags": ["session"],
-        "operationId": "v2.session.export",
+        "operationId": "session.export",
         "parameters": [
           {
             "name": "sessionID",
@@ -1468,7 +1468,7 @@
     "/api/session/active": {
       "get": {
         "tags": ["session"],
-        "operationId": "v2.session.active",
+        "operationId": "session.active",
         "parameters": [],
         "security": [],
         "responses": {
@@ -1522,7 +1522,7 @@
     "/api/session/{sessionID}": {
       "get": {
         "tags": ["session"],
-        "operationId": "v2.session.get",
+        "operationId": "session.get",
         "parameters": [
           {
             "name": "sessionID",
@@ -1589,7 +1589,7 @@
       },
       "delete": {
         "tags": ["session"],
-        "operationId": "v2.session.remove",
+        "operationId": "session.remove",
         "parameters": [
           {
             "name": "sessionID",
@@ -1644,7 +1644,7 @@
     "/api/session/{sessionID}/fork": {
       "post": {
         "tags": ["session"],
-        "operationId": "v2.session.fork",
+        "operationId": "session.fork",
         "parameters": [
           {
             "name": "sessionID",
@@ -1747,7 +1747,7 @@
     "/api/session/{sessionID}/agent": {
       "post": {
         "tags": ["session"],
-        "operationId": "v2.session.switchAgent",
+        "operationId": "session.switchAgent",
         "parameters": [
           {
             "name": "sessionID",
@@ -1826,7 +1826,7 @@
     "/api/session/{sessionID}/model": {
       "post": {
         "tags": ["session"],
-        "operationId": "v2.session.switchModel",
+        "operationId": "session.switchModel",
         "parameters": [
           {
             "name": "sessionID",
@@ -1905,7 +1905,7 @@
     "/api/session/{sessionID}/rename": {
       "post": {
         "tags": ["session"],
-        "operationId": "v2.session.rename",
+        "operationId": "session.rename",
         "parameters": [
           {
             "name": "sessionID",
@@ -1984,7 +1984,7 @@
     "/api/session/{sessionID}/move": {
       "post": {
         "tags": ["session"],
-        "operationId": "v2.session.move",
+        "operationId": "session.move",
         "parameters": [
           {
             "name": "sessionID",
@@ -2077,7 +2077,7 @@
     "/api/session/{sessionID}/prompt": {
       "post": {
         "tags": ["session"],
-        "operationId": "v2.session.prompt",
+        "operationId": "session.prompt",
         "parameters": [
           {
             "name": "sessionID",
@@ -2239,7 +2239,7 @@
     "/api/session/{sessionID}/command": {
       "post": {
         "tags": ["session"],
-        "operationId": "v2.session.command",
+        "operationId": "session.command",
         "parameters": [
           {
             "name": "sessionID",
@@ -2362,7 +2362,7 @@
     "/api/session/{sessionID}/skill": {
       "post": {
         "tags": ["session"],
-        "operationId": "v2.session.skill",
+        "operationId": "session.skill",
         "parameters": [
           {
             "name": "sessionID",
@@ -2465,7 +2465,7 @@
     "/api/session/{sessionID}/synthetic": {
       "post": {
         "tags": ["session"],
-        "operationId": "v2.session.synthetic",
+        "operationId": "session.synthetic",
         "parameters": [
           {
             "name": "sessionID",
@@ -2612,7 +2612,7 @@
     "/api/session/{sessionID}/shell": {
       "post": {
         "tags": ["session"],
-        "operationId": "v2.session.shell",
+        "operationId": "session.shell",
         "parameters": [
           {
             "name": "sessionID",
@@ -2702,7 +2702,7 @@
     "/api/session/{sessionID}/compact": {
       "post": {
         "tags": ["session"],
-        "operationId": "v2.session.compact",
+        "operationId": "session.compact",
         "parameters": [
           {
             "name": "sessionID",
@@ -2822,7 +2822,7 @@
     "/api/session/{sessionID}/wait": {
       "post": {
         "tags": ["session"],
-        "operationId": "v2.session.wait",
+        "operationId": "session.wait",
         "parameters": [
           {
             "name": "sessionID",
@@ -2894,7 +2894,7 @@
     "/api/session/{sessionID}/revert/stage": {
       "post": {
         "tags": ["session"],
-        "operationId": "v2.session.revert.stage",
+        "operationId": "session.revert.stage",
         "parameters": [
           {
             "name": "sessionID",
@@ -3021,7 +3021,7 @@
     "/api/session/{sessionID}/revert/clear": {
       "post": {
         "tags": ["session"],
-        "operationId": "v2.session.revert.clear",
+        "operationId": "session.revert.clear",
         "parameters": [
           {
             "name": "sessionID",
@@ -3102,7 +3102,7 @@
     "/api/session/{sessionID}/revert/commit": {
       "post": {
         "tags": ["session"],
-        "operationId": "v2.session.revert.commit",
+        "operationId": "session.revert.commit",
         "parameters": [
           {
             "name": "sessionID",
@@ -3173,7 +3173,7 @@
     "/api/session/{sessionID}/context": {
       "get": {
         "tags": ["session"],
-        "operationId": "v2.session.context",
+        "operationId": "session.context",
         "parameters": [
           {
             "name": "sessionID",
@@ -3255,7 +3255,7 @@
     "/api/session/{sessionID}/diff": {
       "get": {
         "tags": ["session"],
-        "operationId": "v2.session.diff",
+        "operationId": "session.diff",
         "parameters": [
           {
             "name": "sessionID",
@@ -3401,7 +3401,7 @@
     "/api/session/{sessionID}/inbox": {
       "get": {
         "tags": ["session"],
-        "operationId": "v2.session.inbox.list",
+        "operationId": "session.inbox.list",
         "parameters": [
           {
             "name": "sessionID",
@@ -3473,7 +3473,7 @@
     "/api/session/{sessionID}/inbox/{inboxID}": {
       "delete": {
         "tags": ["session"],
-        "operationId": "v2.session.inbox.cancel",
+        "operationId": "session.inbox.cancel",
         "parameters": [
           {
             "name": "sessionID",
@@ -3547,7 +3547,7 @@
     "/api/session/{sessionID}/inbox/{inboxID}/steer": {
       "post": {
         "tags": ["session"],
-        "operationId": "v2.session.inbox.steer",
+        "operationId": "session.inbox.steer",
         "parameters": [
           {
             "name": "sessionID",
@@ -3621,7 +3621,7 @@
     "/api/session/{sessionID}/inbox/{inboxID}/queue": {
       "post": {
         "tags": ["session"],
-        "operationId": "v2.session.inbox.queue",
+        "operationId": "session.inbox.queue",
         "parameters": [
           {
             "name": "sessionID",
@@ -3695,7 +3695,7 @@
     "/api/session/{sessionID}/instructions/entries": {
       "get": {
         "tags": ["session"],
-        "operationId": "v2.session.instructions.entry.list",
+        "operationId": "session.instructions.entry.list",
         "parameters": [
           {
             "name": "sessionID",
@@ -3774,7 +3774,7 @@
     "/api/session/{sessionID}/instructions/entries/{key}": {
       "put": {
         "tags": ["session"],
-        "operationId": "v2.session.instructions.entry.put",
+        "operationId": "session.instructions.entry.put",
         "parameters": [
           {
             "name": "sessionID",
@@ -3867,7 +3867,7 @@
       },
       "delete": {
         "tags": ["session"],
-        "operationId": "v2.session.instructions.entry.remove",
+        "operationId": "session.instructions.entry.remove",
         "parameters": [
           {
             "name": "sessionID",
@@ -3937,7 +3937,7 @@
     "/api/session/{sessionID}/generate": {
       "post": {
         "tags": ["session"],
-        "operationId": "v2.session.generate",
+        "operationId": "session.generate",
         "parameters": [
           {
             "name": "sessionID",
@@ -4033,7 +4033,7 @@
     "/api/experimental/session/{sessionID}/log": {
       "get": {
         "tags": ["session"],
-        "operationId": "v2.session.log",
+        "operationId": "session.log",
         "parameters": [
           {
             "name": "sessionID",
@@ -4207,7 +4207,7 @@
     "/api/session/{sessionID}/interrupt": {
       "post": {
         "tags": ["session"],
-        "operationId": "v2.session.interrupt",
+        "operationId": "session.interrupt",
         "parameters": [
           {
             "name": "sessionID",
@@ -4292,7 +4292,7 @@
     "/api/session/{sessionID}/background": {
       "post": {
         "tags": ["session"],
-        "operationId": "v2.session.background",
+        "operationId": "session.background",
         "parameters": [
           {
             "name": "sessionID",
@@ -4354,7 +4354,7 @@
     "/api/session/{sessionID}/message/{messageID}": {
       "get": {
         "tags": ["session"],
-        "operationId": "v2.session.message",
+        "operationId": "session.message",
         "parameters": [
           {
             "name": "sessionID",
@@ -4439,7 +4439,7 @@
     "/api/session/{sessionID}/environment": {
       "put": {
         "tags": ["session"],
-        "operationId": "v2.session.environment",
+        "operationId": "session.environment",
         "parameters": [
           {
             "name": "sessionID",
@@ -4514,7 +4514,7 @@
     "/api/session/{sessionID}/view": {
       "post": {
         "tags": ["session"],
-        "operationId": "v2.session.view",
+        "operationId": "session.view",
         "parameters": [
           {
             "name": "sessionID",
@@ -4587,7 +4587,7 @@
     "/api/session/{sessionID}/message": {
       "get": {
         "tags": ["session"],
-        "operationId": "v2.message.list",
+        "operationId": "message.list",
         "parameters": [
           {
             "name": "sessionID",
@@ -4743,7 +4743,7 @@
     "/api/model": {
       "get": {
         "tags": ["model"],
-        "operationId": "v2.model.list",
+        "operationId": "model.list",
         "parameters": [
           {
             "name": "location",
@@ -4849,7 +4849,7 @@
     "/api/model/default": {
       "get": {
         "tags": ["model"],
-        "operationId": "v2.model.default",
+        "operationId": "model.default",
         "parameters": [
           {
             "name": "location",
@@ -4959,7 +4959,7 @@
     "/api/generate": {
       "post": {
         "tags": ["generate"],
-        "operationId": "v2.generate.text",
+        "operationId": "generate.text",
         "parameters": [],
         "security": [],
         "responses": {
@@ -5045,7 +5045,7 @@
     "/api/provider": {
       "get": {
         "tags": ["provider"],
-        "operationId": "v2.provider.list",
+        "operationId": "provider.list",
         "parameters": [
           {
             "name": "location",
@@ -5151,7 +5151,7 @@
     "/api/provider/{providerID}": {
       "get": {
         "tags": ["provider"],
-        "operationId": "v2.provider.get",
+        "operationId": "provider.get",
         "parameters": [
           {
             "name": "providerID",
@@ -5272,7 +5272,7 @@
     "/api/integration": {
       "get": {
         "tags": ["integration"],
-        "operationId": "v2.integration.list",
+        "operationId": "integration.list",
         "parameters": [
           {
             "name": "location",
@@ -5368,7 +5368,7 @@
     "/api/integration/{integrationID}": {
       "get": {
         "tags": ["integration"],
-        "operationId": "v2.integration.get",
+        "operationId": "integration.get",
         "parameters": [
           {
             "name": "integrationID",
@@ -5476,7 +5476,7 @@
     "/api/experimental/integration/wellknown": {
       "post": {
         "tags": ["integration"],
-        "operationId": "v2.experimental.integration.wellknown.add",
+        "operationId": "experimental.integration.wellknown.add",
         "parameters": [
           {
             "name": "location",
@@ -5576,7 +5576,7 @@
     "/api/integration/{integrationID}/connect/key": {
       "post": {
         "tags": ["integration"],
-        "operationId": "v2.integration.connect.key",
+        "operationId": "integration.connect.key",
         "parameters": [
           {
             "name": "integrationID",
@@ -5704,7 +5704,7 @@
     "/api/integration/{integrationID}/connect/oauth": {
       "post": {
         "tags": ["integration"],
-        "operationId": "v2.integration.oauth.connect",
+        "operationId": "integration.oauth.connect",
         "parameters": [
           {
             "name": "integrationID",
@@ -5849,7 +5849,7 @@
     "/api/integration/{integrationID}/connect/oauth/{attemptID}": {
       "get": {
         "tags": ["integration"],
-        "operationId": "v2.integration.oauth.status",
+        "operationId": "integration.oauth.status",
         "parameters": [
           {
             "name": "integrationID",
@@ -5956,7 +5956,7 @@
       },
       "delete": {
         "tags": ["integration"],
-        "operationId": "v2.integration.oauth.cancel",
+        "operationId": "integration.oauth.cancel",
         "parameters": [
           {
             "name": "integrationID",
@@ -6048,7 +6048,7 @@
     "/api/integration/{integrationID}/connect/oauth/{attemptID}/complete": {
       "post": {
         "tags": ["integration"],
-        "operationId": "v2.integration.oauth.complete",
+        "operationId": "integration.oauth.complete",
         "parameters": [
           {
             "name": "integrationID",
@@ -6170,7 +6170,7 @@
     "/api/integration/{integrationID}/connect/command": {
       "post": {
         "tags": ["integration"],
-        "operationId": "v2.integration.command.connect",
+        "operationId": "integration.command.connect",
         "parameters": [
           {
             "name": "integrationID",
@@ -6305,7 +6305,7 @@
     "/api/integration/{integrationID}/connect/command/{attemptID}": {
       "get": {
         "tags": ["integration"],
-        "operationId": "v2.integration.command.status",
+        "operationId": "integration.command.status",
         "parameters": [
           {
             "name": "integrationID",
@@ -6412,7 +6412,7 @@
       },
       "delete": {
         "tags": ["integration"],
-        "operationId": "v2.integration.command.cancel",
+        "operationId": "integration.command.cancel",
         "parameters": [
           {
             "name": "integrationID",
@@ -6504,7 +6504,7 @@
     "/api/mcp": {
       "get": {
         "tags": ["mcp"],
-        "operationId": "v2.mcp.list",
+        "operationId": "mcp.list",
         "parameters": [
           {
             "name": "location",
@@ -6600,7 +6600,7 @@
     "/api/mcp/{server}": {
       "put": {
         "tags": ["mcp"],
-        "operationId": "v2.mcp.add",
+        "operationId": "mcp.add",
         "parameters": [
           {
             "name": "server",
@@ -6706,7 +6706,7 @@
       },
       "delete": {
         "tags": ["mcp"],
-        "operationId": "v2.mcp.remove",
+        "operationId": "mcp.remove",
         "parameters": [
           {
             "name": "server",
@@ -6800,7 +6800,7 @@
     "/api/mcp/{server}/connect": {
       "post": {
         "tags": ["mcp"],
-        "operationId": "v2.mcp.connect",
+        "operationId": "mcp.connect",
         "parameters": [
           {
             "name": "server",
@@ -6894,7 +6894,7 @@
     "/api/mcp/{server}/disconnect": {
       "post": {
         "tags": ["mcp"],
-        "operationId": "v2.mcp.disconnect",
+        "operationId": "mcp.disconnect",
         "parameters": [
           {
             "name": "server",
@@ -6988,7 +6988,7 @@
     "/api/mcp/resource": {
       "get": {
         "tags": ["mcp"],
-        "operationId": "v2.mcp.resource.catalog",
+        "operationId": "mcp.resource.catalog",
         "parameters": [
           {
             "name": "location",
@@ -7081,7 +7081,7 @@
     "/api/credential/{credentialID}": {
       "patch": {
         "tags": ["credential"],
-        "operationId": "v2.credential.update",
+        "operationId": "credential.update",
         "parameters": [
           {
             "name": "credentialID",
@@ -7180,7 +7180,7 @@
       },
       "delete": {
         "tags": ["credential"],
-        "operationId": "v2.credential.remove",
+        "operationId": "credential.remove",
         "parameters": [
           {
             "name": "credentialID",
@@ -7264,7 +7264,7 @@
     "/api/credential/{credentialID}/activate": {
       "post": {
         "tags": ["credential"],
-        "operationId": "v2.credential.activate",
+        "operationId": "credential.activate",
         "parameters": [
           {
             "name": "credentialID",
@@ -7348,7 +7348,7 @@
     "/api/project": {
       "get": {
         "tags": ["project"],
-        "operationId": "v2.project.list",
+        "operationId": "project.list",
         "parameters": [],
         "security": [],
         "responses": {
@@ -7393,7 +7393,7 @@
     "/api/project/{projectID}": {
       "patch": {
         "tags": ["project"],
-        "operationId": "v2.project.update",
+        "operationId": "project.update",
         "parameters": [
           {
             "name": "projectID",
@@ -7479,7 +7479,7 @@
     "/api/form/request": {
       "get": {
         "tags": ["form"],
-        "operationId": "v2.form.request.list",
+        "operationId": "form.request.list",
         "parameters": [
           {
             "name": "location",
@@ -7575,7 +7575,7 @@
     "/api/session/{sessionID}/form": {
       "get": {
         "tags": ["form"],
-        "operationId": "v2.session.form.list",
+        "operationId": "session.form.list",
         "parameters": [
           {
             "name": "sessionID",
@@ -7644,7 +7644,7 @@
       },
       "post": {
         "tags": ["form"],
-        "operationId": "v2.session.form.create",
+        "operationId": "session.form.create",
         "parameters": [
           {
             "name": "sessionID",
@@ -7746,7 +7746,7 @@
     "/api/session/{sessionID}/form/{formID}": {
       "get": {
         "tags": ["form"],
-        "operationId": "v2.session.form.get",
+        "operationId": "session.form.get",
         "parameters": [
           {
             "name": "sessionID",
@@ -7833,7 +7833,7 @@
     "/api/session/{sessionID}/form/{formID}/state": {
       "get": {
         "tags": ["form"],
-        "operationId": "v2.session.form.state",
+        "operationId": "session.form.state",
         "parameters": [
           {
             "name": "sessionID",
@@ -7920,7 +7920,7 @@
     "/api/session/{sessionID}/form/{formID}/reply": {
       "post": {
         "tags": ["form"],
-        "operationId": "v2.session.form.reply",
+        "operationId": "session.form.reply",
         "parameters": [
           {
             "name": "sessionID",
@@ -8020,7 +8020,7 @@
     "/api/session/{sessionID}/form/{formID}/cancel": {
       "post": {
         "tags": ["form"],
-        "operationId": "v2.session.form.cancel",
+        "operationId": "session.form.cancel",
         "parameters": [
           {
             "name": "sessionID",
@@ -8103,7 +8103,7 @@
     "/api/permission/request": {
       "get": {
         "tags": ["permission"],
-        "operationId": "v2.permission.request.list",
+        "operationId": "permission.request.list",
         "parameters": [
           {
             "name": "location",
@@ -8199,7 +8199,7 @@
     "/api/permission/saved": {
       "get": {
         "tags": ["permission"],
-        "operationId": "v2.permission.saved.list",
+        "operationId": "permission.saved.list",
         "parameters": [
           {
             "name": "projectID",
@@ -8267,7 +8267,7 @@
     "/api/permission/saved/{id}": {
       "delete": {
         "tags": ["permission"],
-        "operationId": "v2.permission.saved.remove",
+        "operationId": "permission.saved.remove",
         "parameters": [
           {
             "name": "id",
@@ -8311,7 +8311,7 @@
     "/api/session/{sessionID}/permission": {
       "post": {
         "tags": ["permission"],
-        "operationId": "v2.session.permission.create",
+        "operationId": "session.permission.create",
         "parameters": [
           {
             "name": "sessionID",
@@ -8452,7 +8452,7 @@
       },
       "get": {
         "tags": ["permission"],
-        "operationId": "v2.session.permission.list",
+        "operationId": "session.permission.list",
         "parameters": [
           {
             "name": "sessionID",
@@ -8524,7 +8524,7 @@
     "/api/session/{sessionID}/permission/{requestID}": {
       "get": {
         "tags": ["permission"],
-        "operationId": "v2.session.permission.get",
+        "operationId": "session.permission.get",
         "parameters": [
           {
             "name": "sessionID",
@@ -8612,7 +8612,7 @@
     "/api/session/{sessionID}/permission/{requestID}/reply": {
       "post": {
         "tags": ["permission"],
-        "operationId": "v2.session.permission.reply",
+        "operationId": "session.permission.reply",
         "parameters": [
           {
             "name": "sessionID",
@@ -8713,7 +8713,7 @@
     "/api/session/{sessionID}/permission/rules": {
       "put": {
         "tags": ["permission"],
-        "operationId": "v2.session.permission.rules",
+        "operationId": "session.permission.rules",
         "parameters": [
           {
             "name": "sessionID",
@@ -8792,7 +8792,7 @@
     "/api/fs/read/*": {
       "get": {
         "tags": ["filesystem"],
-        "operationId": "v2.fs.read",
+        "operationId": "fs.read",
         "parameters": [
           {
             "name": "location",
@@ -8886,7 +8886,7 @@
     "/api/fs/list": {
       "get": {
         "tags": ["filesystem"],
-        "operationId": "v2.fs.list",
+        "operationId": "fs.list",
         "parameters": [
           {
             "name": "location",
@@ -8998,7 +8998,7 @@
     "/api/fs/find": {
       "get": {
         "tags": ["filesystem"],
-        "operationId": "v2.fs.find",
+        "operationId": "fs.find",
         "parameters": [
           {
             "name": "location",
@@ -9126,7 +9126,7 @@
     "/api/command": {
       "get": {
         "tags": ["command"],
-        "operationId": "v2.command.list",
+        "operationId": "command.list",
         "parameters": [
           {
             "name": "location",
@@ -9222,7 +9222,7 @@
     "/api/skill": {
       "get": {
         "tags": ["skill"],
-        "operationId": "v2.skill.list",
+        "operationId": "skill.list",
         "parameters": [
           {
             "name": "location",
@@ -9318,7 +9318,7 @@
     "/api/rpc/{rpcID}/{method}": {
       "post": {
         "tags": ["rpc"],
-        "operationId": "v2.rpc.call",
+        "operationId": "rpc.call",
         "parameters": [
           {
             "name": "rpcID",
@@ -9444,7 +9444,7 @@
     "/api/event": {
       "get": {
         "tags": ["event"],
-        "operationId": "v2.event.subscribe",
+        "operationId": "event.subscribe",
         "parameters": [],
         "security": [],
         "responses": {
@@ -9567,7 +9567,7 @@
     "/api/pty": {
       "get": {
         "tags": ["pty"],
-        "operationId": "v2.pty.list",
+        "operationId": "pty.list",
         "parameters": [
           {
             "name": "location",
@@ -9661,7 +9661,7 @@
       },
       "post": {
         "tags": ["pty"],
-        "operationId": "v2.pty.create",
+        "operationId": "pty.create",
         "parameters": [
           {
             "name": "location",
@@ -9788,7 +9788,7 @@
     "/api/pty/{ptyID}": {
       "get": {
         "tags": ["pty"],
-        "operationId": "v2.pty.get",
+        "operationId": "pty.get",
         "parameters": [
           {
             "name": "ptyID",
@@ -9898,7 +9898,7 @@
       },
       "put": {
         "tags": ["pty"],
-        "operationId": "v2.pty.update",
+        "operationId": "pty.update",
         "parameters": [
           {
             "name": "ptyID",
@@ -10039,7 +10039,7 @@
       },
       "delete": {
         "tags": ["pty"],
-        "operationId": "v2.pty.remove",
+        "operationId": "pty.remove",
         "parameters": [
           {
             "name": "ptyID",
@@ -10134,7 +10134,7 @@
     "/api/pty/{ptyID}/connect-token": {
       "post": {
         "tags": ["pty"],
-        "operationId": "v2.pty.connect.token",
+        "operationId": "pty.connect.token",
         "parameters": [
           {
             "name": "ptyID",
@@ -10271,7 +10271,7 @@
     "/api/pty/{ptyID}/connect": {
       "get": {
         "tags": ["pty"],
-        "operationId": "v2.pty.connect",
+        "operationId": "pty.connect",
         "parameters": [
           {
             "name": "ptyID",
@@ -11131,7 +11131,7 @@
     "/api/experimental/persistent-pty/{ptyID}/connect": {
       "get": {
         "tags": ["persistentPty"],
-        "operationId": "v2.persistentPty.connect",
+        "operationId": "persistentPty.connect",
         "parameters": [
           {
             "name": "ptyID",
@@ -11256,7 +11256,7 @@
     "/api/shell": {
       "get": {
         "tags": ["shell"],
-        "operationId": "v2.shell.list",
+        "operationId": "shell.list",
         "parameters": [
           {
             "name": "location",
@@ -11350,7 +11350,7 @@
       },
       "post": {
         "tags": ["shell"],
-        "operationId": "v2.shell.create",
+        "operationId": "shell.create",
         "parameters": [
           {
             "name": "location",
@@ -11470,7 +11470,7 @@
     "/api/shell/{id}": {
       "get": {
         "tags": ["shell"],
-        "operationId": "v2.shell.get",
+        "operationId": "shell.get",
         "parameters": [
           {
             "name": "id",
@@ -11580,7 +11580,7 @@
       },
       "delete": {
         "tags": ["shell"],
-        "operationId": "v2.shell.remove",
+        "operationId": "shell.remove",
         "parameters": [
           {
             "name": "id",
@@ -11675,7 +11675,7 @@
     "/api/shell/{id}/timeout": {
       "patch": {
         "tags": ["shell"],
-        "operationId": "v2.shell.timeout",
+        "operationId": "shell.timeout",
         "parameters": [
           {
             "name": "id",
@@ -11805,7 +11805,7 @@
     "/api/shell/{id}/output": {
       "get": {
         "tags": ["shell"],
-        "operationId": "v2.shell.output",
+        "operationId": "shell.output",
         "parameters": [
           {
             "name": "id",
@@ -11953,7 +11953,7 @@
     "/api/reference": {
       "get": {
         "tags": ["reference"],
-        "operationId": "v2.reference.list",
+        "operationId": "reference.list",
         "parameters": [
           {
             "name": "location",
@@ -12049,7 +12049,7 @@
     "/api/worktree": {
       "get": {
         "tags": ["worktree"],
-        "operationId": "v2.worktree.list",
+        "operationId": "worktree.list",
         "parameters": [
           {
             "name": "location",
@@ -12137,7 +12137,7 @@
       },
       "post": {
         "tags": ["worktree"],
-        "operationId": "v2.worktree.create",
+        "operationId": "worktree.create",
         "parameters": [
           {
             "name": "location",
@@ -12235,7 +12235,7 @@
       },
       "delete": {
         "tags": ["worktree"],
-        "operationId": "v2.worktree.remove",
+        "operationId": "worktree.remove",
         "parameters": [
           {
             "name": "location",
@@ -12328,7 +12328,7 @@
     "/api/worktree/refresh": {
       "post": {
         "tags": ["worktree"],
-        "operationId": "v2.worktree.refresh",
+        "operationId": "worktree.refresh",
         "parameters": [
           {
             "name": "location",
@@ -12411,7 +12411,7 @@
     "/api/workspace": {
       "post": {
         "tags": ["workspace"],
-        "operationId": "v2.workspace.create",
+        "operationId": "workspace.create",
         "parameters": [],
         "security": [],
         "responses": {
@@ -12509,7 +12509,7 @@
     "/api/workspace/{workspaceID}": {
       "delete": {
         "tags": ["workspace"],
-        "operationId": "v2.workspace.destroy",
+        "operationId": "workspace.destroy",
         "parameters": [
           {
             "name": "workspaceID",
@@ -12571,7 +12571,7 @@
     "/api/vcs": {
       "get": {
         "tags": ["vcs"],
-        "operationId": "v2.vcs.get",
+        "operationId": "vcs.get",
         "parameters": [
           {
             "name": "location",
@@ -12664,7 +12664,7 @@
     "/api/vcs/base": {
       "get": {
         "tags": ["vcs"],
-        "operationId": "v2.vcs.base",
+        "operationId": "vcs.base",
         "parameters": [
           {
             "name": "location",
@@ -12774,7 +12774,7 @@
     "/api/vcs/status": {
       "get": {
         "tags": ["vcs"],
-        "operationId": "v2.vcs.status",
+        "operationId": "vcs.status",
         "parameters": [
           {
             "name": "location",
@@ -12870,7 +12870,7 @@
     "/api/vcs/branches": {
       "get": {
         "tags": ["vcs"],
-        "operationId": "v2.vcs.branches",
+        "operationId": "vcs.branches",
         "parameters": [
           {
             "name": "location",
@@ -12993,7 +12993,7 @@
     "/api/vcs/diff": {
       "get": {
         "tags": ["vcs"],
-        "operationId": "v2.vcs.diff",
+        "operationId": "vcs.diff",
         "parameters": [
           {
             "name": "location",
@@ -13130,7 +13130,7 @@
     "/api/debug/location": {
       "get": {
         "tags": ["debug"],
-        "operationId": "v2.debug.location.list",
+        "operationId": "debug.location.list",
         "parameters": [],
         "security": [],
         "responses": {
@@ -13173,7 +13173,7 @@
       },
       "delete": {
         "tags": ["debug"],
-        "operationId": "v2.debug.location.evict",
+        "operationId": "debug.location.evict",
         "parameters": [
           {
             "name": "location",
@@ -13249,7 +13249,7 @@
     "/api/experimental/migration/v1": {
       "get": {
         "tags": ["migration"],
-        "operationId": "v2.experimental.migration.v1.status",
+        "operationId": "experimental.migration.v1.status",
         "parameters": [],
         "security": [],
         "responses": {
@@ -13360,7 +13360,7 @@
     "/api/websearch/provider": {
       "get": {
         "tags": ["websearch"],
-        "operationId": "v2.websearch.providers",
+        "operationId": "websearch.providers",
         "parameters": [
           {
             "name": "location",
@@ -13466,7 +13466,7 @@
     "/api/websearch": {
       "post": {
         "tags": ["websearch"],
-        "operationId": "v2.websearch.query",
+        "operationId": "websearch.query",
         "parameters": [
           {
             "name": "location",
@@ -13596,7 +13596,7 @@
     "/api/config": {
       "get": {
         "tags": ["config"],
-        "operationId": "v2.config.get",
+        "operationId": "config.get",
         "parameters": [
           {
             "name": "location",
@@ -13682,7 +13682,7 @@
     "/api/config/preferences": {
       "get": {
         "tags": ["config"],
-        "operationId": "v2.config.preferences",
+        "operationId": "config.preferences",
         "parameters": [],
         "security": [],
         "responses": {
@@ -13722,7 +13722,7 @@
       },
       "patch": {
         "tags": ["config"],
-        "operationId": "v2.config.updatePreferences",
+        "operationId": "config.updatePreferences",
         "parameters": [],
         "security": [],
         "responses": {
@@ -13774,7 +13774,7 @@
     "/api/config/shell": {
       "get": {
         "tags": ["config"],
-        "operationId": "v2.config.shells",
+        "operationId": "config.shells",
         "parameters": [],
         "security": [],
         "responses": {

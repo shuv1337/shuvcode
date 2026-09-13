@@ -9,7 +9,7 @@ export const DebugGroup = HttpApiGroup.make("server.debug")
       success: Schema.Array(Location.Ref),
     }).annotateMerge(
       OpenApi.annotations({
-        identifier: "v2.debug.location.list",
+        identifier: "debug.location.list",
         summary: "List loaded locations",
         description: "List locations currently loaded by the server.",
       }),
@@ -23,7 +23,7 @@ export const DebugGroup = HttpApiGroup.make("server.debug")
       .annotateMerge(locationQueryOpenApi)
       .annotateMerge(
         OpenApi.annotations({
-          identifier: "v2.debug.location.evict",
+          identifier: "debug.location.evict",
           summary: "Evict a loaded location",
           description: "Dispose the requested location's cached services so its next use boots them fresh.",
         }),

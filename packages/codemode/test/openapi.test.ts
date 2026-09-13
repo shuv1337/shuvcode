@@ -235,32 +235,32 @@ describe("OpenAPI.fromSpec", () => {
       path: "/api/fs/read/*",
       reason: "binary responses are not supported",
     })
-    expect(toolAt(result.tools, "v2.health.get")).not.toBeUndefined()
-    expect(toolAt(result.tools, "v2.session.get")).not.toBeUndefined()
-    expect(toolAt(result.tools, "v2.session.create")).not.toBeUndefined()
+    expect(toolAt(result.tools, "health.get")).not.toBeUndefined()
+    expect(toolAt(result.tools, "session.get")).not.toBeUndefined()
+    expect(toolAt(result.tools, "session.create")).not.toBeUndefined()
 
-    const sessionGet = toolAt(result.tools, "v2.session.get")
+    const sessionGet = toolAt(result.tools, "session.get")
     expect(Tool.isTool(sessionGet)).toBe(true)
-    if (!Tool.isTool(sessionGet)) throw new Error("v2.session.get was not generated")
+    if (!Tool.isTool(sessionGet)) throw new Error("session.get was not generated")
     expect(inputTypeScript(sessionGet)).toBe("{ sessionID: string }")
     expect(outputTypeScript(sessionGet)).toContain("id: string")
     expect(outputTypeScript(sessionGet)).toContain("additions: number")
 
-    const switchAgent = toolAt(result.tools, "v2.session.switchAgent")
+    const switchAgent = toolAt(result.tools, "session.switchAgent")
     expect(Tool.isTool(switchAgent)).toBe(true)
-    if (!Tool.isTool(switchAgent)) throw new Error("v2.session.switchAgent was not generated")
+    if (!Tool.isTool(switchAgent)) throw new Error("session.switchAgent was not generated")
     expect(inputTypeScript(switchAgent)).toBe("{ sessionID: string; agent: string }")
 
-    const instructionPut = toolAt(result.tools, "v2.session.instructions.entry.put")
+    const instructionPut = toolAt(result.tools, "session.instructions.entry.put")
     expect(Tool.isTool(instructionPut)).toBe(true)
-    if (!Tool.isTool(instructionPut)) throw new Error("v2.session.instructions.entry.put was not generated")
+    if (!Tool.isTool(instructionPut)) throw new Error("session.instructions.entry.put was not generated")
     expect(inputTypeScript(instructionPut)).toBe("{ sessionID: string; key: string; value: unknown }")
-    expect(toolAt(result.tools, "v2_session_instructions_entry_put_2")).toBeUndefined()
-    expect(Tool.isTool(toolAt(result.tools, "v2.pty.connect"))).toBe(false)
-    expect(toolAt(result.tools, "v2.session.log")).toBeUndefined()
-    expect(toolAt(result.tools, "v2.event.subscribe")).toBeUndefined()
-    expect(toolAt(result.tools, "v2.fs.read")).toBeUndefined()
-    expect(toolAt(result.tools, "v2.pty.connect.token")).not.toBeUndefined()
+    expect(toolAt(result.tools, "session_instructions_entry_put_2")).toBeUndefined()
+    expect(Tool.isTool(toolAt(result.tools, "pty.connect"))).toBe(false)
+    expect(toolAt(result.tools, "session.log")).toBeUndefined()
+    expect(toolAt(result.tools, "event.subscribe")).toBeUndefined()
+    expect(toolAt(result.tools, "fs.read")).toBeUndefined()
+    expect(toolAt(result.tools, "pty.connect.token")).not.toBeUndefined()
   })
 
   test("preserves operation path sanitization and collision handling", () => {
@@ -978,7 +978,7 @@ describe("OpenAPI.fromSpec", () => {
 
     expect(spec.security).toStrictEqual([])
     expect(isRecord(components.securitySchemes) ? Object.keys(components.securitySchemes) : []).toStrictEqual([])
-    const health = toolAt(result.tools, "v2.health.get")
+    const health = toolAt(result.tools, "health.get")
     const healthInput = Tool.isTool(health) && isRecord(health.input) ? health.input : undefined
     expect(healthInput).toMatchObject({ type: "object", properties: {} })
     const input = isRecord(healthInput) ? healthInput : {}
@@ -1005,7 +1005,7 @@ describe("OpenAPI.fromSpec", () => {
     expect(result.value).toMatchObject({
       items: [
         {
-          path: "tools.opencode.v2.health.get",
+          path: "tools.opencode.health.get",
           description: "Check whether the API server is ready to accept requests.",
         },
       ],
@@ -1026,8 +1026,8 @@ describe("OpenAPI.fromSpec", () => {
       runtime
         .execute(
           `
-          const existing = await tools.opencode.v2.session.get({ sessionID: "ses_123" })
-          const created = await tools.opencode.v2.session.create({ id: "ses_456" })
+          const existing = await tools.opencode.session.get({ sessionID: "ses_123" })
+          const created = await tools.opencode.session.create({ id: "ses_456" })
           return { existing, created }
         `,
         )
@@ -1047,8 +1047,8 @@ describe("OpenAPI.fromSpec", () => {
 
   test("serializes deep-object query parameters from the opencode fixture", async () => {
     const client = recordingClient(() => json({ directory: "/tmp" }))
-    const location = toolAt(OpenAPI.fromSpec({ spec: await opencodeSpec(), baseUrl }).tools, "v2.location.get")
-    if (!Tool.isTool(location)) throw new Error("v2.location.get was not generated")
+    const location = toolAt(OpenAPI.fromSpec({ spec: await opencodeSpec(), baseUrl }).tools, "location.get")
+    if (!Tool.isTool(location)) throw new Error("location.get was not generated")
 
     await Effect.runPromise(
       location
@@ -1470,7 +1470,7 @@ describe("OpenAPI.fromSpec", () => {
     })
 
     const result = await Effect.runPromise(
-      runtime.execute("return await tools.opencode.v2.session.get({})").pipe(Effect.provide(layer)),
+      runtime.execute("return await tools.opencode.session.get({})").pipe(Effect.provide(layer)),
     )
 
     expect(result).toMatchObject({ ok: false })

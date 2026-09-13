@@ -45,7 +45,7 @@ const make = <const Definitions extends ReadonlyArray<Definition>>(definitions: 
           success: HttpApiSchema.StreamSse({ data: EventSchema }),
         }).annotateMerge(
           OpenApi.annotations({
-            identifier: "v2.event.subscribe",
+            identifier: "event.subscribe",
             summary: "Subscribe to events",
             description:
               "Subscribe to native events and plugin RPC events across all server locations. Volatile by contract: a slow consumer overflows and fails the stream, and events during disconnection are missed.",

@@ -35,7 +35,7 @@ export const LocationGroup = HttpApiGroup.make("server.location")
       .annotateMerge(locationQueryOpenApi)
       .annotateMerge(
         OpenApi.annotations({
-          identifier: "v2.location.get",
+          identifier: "location.get",
           summary: "Get location",
           description: "Resolve the requested location or the server default location.",
         }),

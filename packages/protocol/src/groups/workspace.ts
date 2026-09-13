@@ -14,7 +14,7 @@ export const WorkspaceGroup = HttpApiGroup.make("server.workspace")
       error: [ConflictError, ProviderNotFoundError],
     }).annotateMerge(
       OpenApi.annotations({
-        identifier: "v2.workspace.create",
+        identifier: "workspace.create",
         summary: "Create workspace",
         description:
           "Create a logical workspace. A caller-supplied ID is idempotent when retried with the same provider; reusing it with another provider returns a conflict.",
@@ -28,7 +28,7 @@ export const WorkspaceGroup = HttpApiGroup.make("server.workspace")
       error: UnknownError,
     }).annotateMerge(
       OpenApi.annotations({
-        identifier: "v2.workspace.destroy",
+        identifier: "workspace.destroy",
         summary: "Destroy workspace",
         description:
           "Make a workspace not exist. This operation is idempotent: an already-missing workspace succeeds with `destroyed: false`, while a workspace removed by this request returns `destroyed: true`.",

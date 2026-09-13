@@ -12,7 +12,7 @@ export const ProjectGroup = HttpApiGroup.make("server.project")
       success: Schema.Array(Project.Info),
     }).annotateMerge(
       OpenApi.annotations({
-        identifier: "v2.project.list",
+        identifier: "project.list",
         summary: "List projects",
         description: "List known projects.",
       }),
@@ -26,7 +26,7 @@ export const ProjectGroup = HttpApiGroup.make("server.project")
       error: ProjectNotFoundError,
     }).annotateMerge(
       OpenApi.annotations({
-        identifier: "v2.project.update",
+        identifier: "project.update",
         summary: "Update project",
         description: "Update the project canonical directory, display metadata, and workspace commands.",
       }),

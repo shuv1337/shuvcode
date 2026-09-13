@@ -7,7 +7,7 @@ export const ServerGroup = HttpApiGroup.make("server.server")
       success: Schema.Struct({ urls: Schema.Array(Schema.String) }),
     }).annotateMerge(
       OpenApi.annotations({
-        identifier: "v2.server.get",
+        identifier: "server.get",
         summary: "Get server information",
         description: "Return the URLs that can be used to connect to this server.",
       }),

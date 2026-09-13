@@ -17,7 +17,7 @@ export const HealthGroup = HttpApiGroup.make("server.health")
       success: ServiceStatus.Health,
     }).annotateMerge(
       OpenApi.annotations({
-        identifier: "v2.health.get",
+        identifier: "health.get",
         summary: "Check server health",
         description: "Report the owning server process and its application status.",
       }),

@@ -13,7 +13,7 @@ export const ConfigGroup = HttpApiGroup.make("server.config")
       .annotateMerge(locationQueryOpenApi)
       .annotateMerge(
         OpenApi.annotations({
-          identifier: "v2.config.get",
+          identifier: "config.get",
           summary: "Get configuration",
           description:
             "Return configuration documents and discovery sources for the requested location, from lowest to highest priority.",
@@ -25,7 +25,7 @@ export const ConfigGroup = HttpApiGroup.make("server.config")
       success: Config.Preferences,
     }).annotateMerge(
       OpenApi.annotations({
-        identifier: "v2.config.preferences",
+        identifier: "config.preferences",
         summary: "Get global preferences",
         description: "Return preferences from the highest-precedence global configuration document.",
       }),
@@ -37,7 +37,7 @@ export const ConfigGroup = HttpApiGroup.make("server.config")
       success: Config.Preferences,
     }).annotateMerge(
       OpenApi.annotations({
-        identifier: "v2.config.updatePreferences",
+        identifier: "config.updatePreferences",
         summary: "Update global preferences",
         description: "Patch preferences in the highest-precedence global configuration document.",
       }),
@@ -48,7 +48,7 @@ export const ConfigGroup = HttpApiGroup.make("server.config")
       success: Schema.Array(ConfigShell.Option),
     }).annotateMerge(
       OpenApi.annotations({
-        identifier: "v2.config.shells",
+        identifier: "config.shells",
         summary: "List available shells",
         description: "Return shells available to terminal and agent execution.",
       }),
