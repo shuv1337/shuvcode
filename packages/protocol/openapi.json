@@ -13048,34 +13048,6 @@
         },
         "additionalProperties": false
       },
-      "Config.AgentsDirectoryEncoded": {
-        "type": "object",
-        "properties": {
-          "type": {
-            "type": "string",
-            "enum": ["agents"]
-          },
-          "path": {
-            "type": "string"
-          }
-        },
-        "required": ["type", "path"],
-        "additionalProperties": false
-      },
-      "Config.ClaudeDirectoryEncoded": {
-        "type": "object",
-        "properties": {
-          "type": {
-            "type": "string",
-            "enum": ["claude"]
-          },
-          "path": {
-            "type": "string"
-          }
-        },
-        "required": ["type", "path"],
-        "additionalProperties": false
-      },
       "Config.CommandEncoded": {
         "type": "object",
         "properties": {
@@ -13164,12 +13136,6 @@
           },
           {
             "$ref": "#/components/schemas/Config.DirectoryEncoded"
-          },
-          {
-            "$ref": "#/components/schemas/Config.AgentsDirectoryEncoded"
-          },
-          {
-            "$ref": "#/components/schemas/Config.ClaudeDirectoryEncoded"
           }
         ]
       },

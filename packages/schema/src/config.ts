@@ -132,17 +132,7 @@ export class Directory extends Schema.Class<Directory>("Config.Directory")({
   path: AbsolutePath,
 }) {}
 
-export class AgentsDirectory extends Schema.Class<AgentsDirectory>("Config.AgentsDirectory")({
-  type: Schema.Literal("agents"),
-  path: AbsolutePath,
-}) {}
-
-export class ClaudeDirectory extends Schema.Class<ClaudeDirectory>("Config.ClaudeDirectory")({
-  type: Schema.Literal("claude"),
-  path: AbsolutePath,
-}) {}
-
-export const Entry = Schema.Union([Document, Directory, AgentsDirectory, ClaudeDirectory]).annotate({
+export const Entry = Schema.Union([Document, Directory]).annotate({
   identifier: "Config.Entry",
 })
 export type Entry = typeof Entry.Type

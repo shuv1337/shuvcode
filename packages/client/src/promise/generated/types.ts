@@ -2092,8 +2092,6 @@ export type ConfigEntry =
       }
     }
   | { type: "directory"; path: string }
-  | { type: "agents"; path: string }
-  | { type: "claude"; path: string }
 
 export type SessionInboxUser = {
   id: string

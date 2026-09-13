@@ -97,7 +97,7 @@ Review endpoints in document order. For each endpoint, select one disposition an
 | [x] 018 | `GET` | `/api/command` | `command.list` | Keep | Request and response accepted as-is. |
 | [x] 019 | `GET` | `/api/skill` | `skill.list` | Keep | Renamed `location` to `path`; removed the skill-specific `slash` flag and slash-command behavior. |
 | [x] 020 | `GET` | `/api/reference` | `reference.list` | Keep | Removed duplicate `description` and `hidden` fields from nested `source`. |
-| [ ] 021 | `GET` | `/api/config` | `config.get` |  |  |
+| [ ] 021 | `GET` | `/api/config` | `config.get` | Change | Removed `claude` and `agents` entry variants; one compatibility plugin now normalizes their skills. |
 | [ ] 022 | `GET` | `/api/config/preferences` | `config.preferences` |  |  |
 | [ ] 023 | `PATCH` | `/api/config/preferences` | `config.updatePreferences` |  |  |
 | [ ] 024 | `GET` | `/api/config/shell` | `config.shells` |  |  |
