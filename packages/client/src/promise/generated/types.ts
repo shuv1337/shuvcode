@@ -310,8 +310,6 @@ export type ProjectCommands = { start?: string }
 
 export type ProjectTime = { created: number; updated: number; initialized?: number }
 
-export type ProjectCurrent = { id: string; directory: string; canonical: string }
-
 export type FormMetadata = { [x: string]: JsonValue }
 
 export type FormValue = string | number | boolean | Array<string>
@@ -4911,14 +4909,6 @@ export type ProjectUpdateInput = {
 }
 
 export type ProjectUpdateOutput = Project
-
-export type ProjectCurrentInput = {
-  readonly location?: {
-    readonly location?: { readonly directory?: string | undefined; readonly workspace?: string | undefined } | undefined
-  }["location"]
-}
-
-export type ProjectCurrentOutput = ProjectCurrent
 
 export type FormRequestListInput = {
   readonly location?: {

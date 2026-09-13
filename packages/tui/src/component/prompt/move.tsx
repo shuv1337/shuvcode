@@ -118,9 +118,9 @@ export function usePromptMove(input: { projectID: () => string | undefined; sess
     const location = homeLocation()
     const current = data.location.info(location)
     if (current) return current.project.id
-    return client.api.project
-      .current({ location: { directory: location.directory, workspace: location.workspaceID } })
-      .then((project) => project.id)
+    return client.api.location
+      .get({ location: { directory: location.directory, workspace: location.workspaceID } })
+      .then((result) => result.project.id)
       .catch(() => undefined)
   }
 

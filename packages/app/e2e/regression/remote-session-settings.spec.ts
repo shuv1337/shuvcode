@@ -398,8 +398,6 @@ async function mockServers(
         },
       ])
     }
-    if (url.pathname === "/api/project/current")
-      return json(route, { id: remote ? sessionB.projectID : "project-server-a", directory, canonical: directory })
     if (url.pathname === "/api/session")
       return json(route, { data: sessions.map((session) => currentSession(session)), cursor: {} })
     if (url.pathname === "/api/session/active")

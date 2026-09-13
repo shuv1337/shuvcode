@@ -153,8 +153,6 @@ import type {
   ProjectListOutput,
   ProjectUpdateInput,
   ProjectUpdateOutput,
-  ProjectCurrentInput,
-  ProjectCurrentOutput,
   FormRequestListInput,
   FormRequestListOutput,
   FormListInput,
@@ -1029,15 +1027,9 @@ const EndpointProjectUpdate = (raw: RawClient["server.project"]) => (input: Proj
     }).pipe(Effect.mapError(mapClientError)),
   )
 
-const EndpointProjectCurrent = (raw: RawClient["server.project"]) => (input?: ProjectCurrentInput) =>
-  preserveEffect<ProjectCurrentOutput>()(
-    raw["project.current"]({ query: { location: input?.["location"] } }).pipe(Effect.mapError(mapClientError)),
-  )
-
 const adaptGroupProject = (raw: RawClient["server.project"]) => ({
   list: EndpointProjectList(raw),
   update: EndpointProjectUpdate(raw),
-  current: EndpointProjectCurrent(raw),
 })
 
 const EndpointFormRequestList = (raw: RawClient["server.form"]) => (input?: FormRequestListInput) =>

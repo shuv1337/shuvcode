@@ -77,7 +77,6 @@ const Group = HttpApiGroup.make("mock")
       success: Json,
     }),
   )
-  .add(HttpApiEndpoint.get("projectCurrent", "/api/project/current", { success: Json }))
   .add(HttpApiEndpoint.get("configPreferences", "/api/config/preferences", { success: Json }))
   .add(
     HttpApiEndpoint.patch("configUpdatePreferences", "/api/config/preferences", {

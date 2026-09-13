@@ -76,7 +76,7 @@ async function mockServers(page: Page, requests: string[]) {
     if (url.pathname === "/api/mcp") return json(route, { location: { directory: current.directory }, data: [] })
     if (url.pathname === "/api/mcp/resource")
       return json(route, { location: { directory: current.directory }, data: { resources: [], templates: [] } })
-    if (url.pathname === "/api/project" || url.pathname === "/api/project/current") {
+    if (url.pathname === "/api/project") {
       const project = {
         id: current.projectID,
         canonical: current.directory,
@@ -84,7 +84,7 @@ async function mockServers(page: Page, requests: string[]) {
         time: { created: 1, updated: 1 },
         sandboxes: [],
       }
-      return json(route, url.pathname === "/api/project" ? [project] : { id: project.id, directory: current.directory })
+      return json(route, [project])
     }
     if (url.pathname === "/api/location")
       return json(route, {

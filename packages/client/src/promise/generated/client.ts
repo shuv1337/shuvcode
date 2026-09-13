@@ -147,8 +147,6 @@ import type {
   ProjectListOutput,
   ProjectUpdateInput,
   ProjectUpdateOutput,
-  ProjectCurrentInput,
-  ProjectCurrentOutput,
   FormRequestListInput,
   FormRequestListOutput,
   FormListInput,
@@ -1392,18 +1390,6 @@ export function make(options: ClientOptions) {
             },
             successStatus: 200,
             declaredStatuses: [400, 401, 404],
-            empty: false,
-          },
-          requestOptions,
-        ),
-      current: (input?: ProjectCurrentInput, requestOptions?: RequestOptions) =>
-        request<ProjectCurrentOutput>(
-          {
-            method: "GET",
-            path: `/api/project/current`,
-            query: { location: input?.["location"] },
-            successStatus: 200,
-            declaredStatuses: [400, 401],
             empty: false,
           },
           requestOptions,

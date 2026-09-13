@@ -1115,6 +1115,16 @@
                         "type": "null"
                       }
                     ]
+                  },
+                  "permissions": {
+                    "anyOf": [
+                      {
+                        "$ref": "#/components/schemas/Permission.Ruleset"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
                   }
                 },
                 "additionalProperties": false
@@ -7466,89 +7476,6 @@
         }
       }
     },
-    "/api/project/current": {
-      "get": {
-        "tags": ["project"],
-        "operationId": "v2.project.current",
-        "parameters": [
-          {
-            "name": "location",
-            "in": "query",
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "object",
-                  "properties": {
-                    "directory": {
-                      "anyOf": [
-                        {
-                          "type": "string"
-                        },
-                        {
-                          "type": "null"
-                        }
-                      ]
-                    },
-                    "workspace": {
-                      "anyOf": [
-                        {
-                          "type": "string"
-                        },
-                        {
-                          "type": "null"
-                        }
-                      ]
-                    }
-                  },
-                  "additionalProperties": false
-                },
-                {
-                  "type": "null"
-                }
-              ]
-            },
-            "required": false,
-            "style": "deepObject",
-            "explode": true
-          }
-        ],
-        "security": [],
-        "responses": {
-          "200": {
-            "description": "Project.Current",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Project.Current"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "InvalidRequestError",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/InvalidRequestErrorEncoded"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "UnauthorizedError",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
-                }
-              }
-            }
-          }
-        },
-        "description": "Resolve the project for the requested location.",
-        "summary": "Get current project"
-      }
-    },
     "/api/form/request": {
       "get": {
         "tags": ["form"],
@@ -8775,6 +8702,85 @@
                   }
                 },
                 "required": ["reply"],
+                "additionalProperties": false
+              }
+            }
+          },
+          "required": true
+        }
+      }
+    },
+    "/api/session/{sessionID}/permission/rules": {
+      "put": {
+        "tags": ["permission"],
+        "operationId": "v2.session.permission.rules",
+        "parameters": [
+          {
+            "name": "sessionID",
+            "in": "path",
+            "schema": {
+              "type": "string",
+              "pattern": "^ses"
+            },
+            "required": true
+          }
+        ],
+        "security": [],
+        "responses": {
+          "204": {
+            "description": "<No Content>"
+          },
+          "400": {
+            "description": "InvalidRequestError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvalidRequestErrorEncoded"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UnauthorizedError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "SessionNotFoundError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/SessionNotFoundErrorEncoded"
+                    },
+                    {
+                      "$ref": "#/components/schemas/SessionNotFoundErrorEncoded"
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "description": "Replace the session-scoped permission rules. Rules are evaluated after the agent's rules, and the last matching rule wins.",
+        "summary": "Replace session permission rules",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "permissions": {
+                    "$ref": "#/components/schemas/Permission.Ruleset"
+                  }
+                },
+                "required": ["permissions"],
                 "additionalProperties": false
               }
             }
@@ -13672,6 +13678,143 @@
         "description": "Return configuration documents and discovery sources for the requested location, from lowest to highest priority.",
         "summary": "Get configuration"
       }
+    },
+    "/api/config/preferences": {
+      "get": {
+        "tags": ["config"],
+        "operationId": "v2.config.preferences",
+        "parameters": [],
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "Config.Preferences",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Config.Preferences"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "InvalidRequestError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvalidRequestErrorEncoded"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UnauthorizedError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
+                }
+              }
+            }
+          }
+        },
+        "description": "Return preferences from the highest-precedence global configuration document.",
+        "summary": "Get global preferences"
+      },
+      "patch": {
+        "tags": ["config"],
+        "operationId": "v2.config.updatePreferences",
+        "parameters": [],
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "Config.Preferences",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Config.Preferences"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "InvalidRequestError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvalidRequestErrorEncoded"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UnauthorizedError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
+                }
+              }
+            }
+          }
+        },
+        "description": "Patch preferences in the highest-precedence global configuration document.",
+        "summary": "Update global preferences",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Config.PreferencesPatch"
+              }
+            }
+          },
+          "required": true
+        }
+      }
+    },
+    "/api/config/shell": {
+      "get": {
+        "tags": ["config"],
+        "operationId": "v2.config.shells",
+        "parameters": [],
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ConfigShell.Option"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "InvalidRequestError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvalidRequestErrorEncoded"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UnauthorizedError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
+                }
+              }
+            }
+          }
+        },
+        "description": "Return shells available to terminal and agent execution.",
+        "summary": "List available shells"
+      }
     }
   },
   "components": {
@@ -14532,6 +14675,60 @@
         "required": ["package"],
         "additionalProperties": false
       },
+      "Config.Preferences": {
+        "type": "object",
+        "properties": {
+          "shell": {
+            "type": "string"
+          },
+          "websearch": {
+            "anyOf": [
+              {
+                "type": "boolean",
+                "enum": [false]
+              },
+              {
+                "$ref": "#/components/schemas/ConfigWebSearch.InfoEncoded"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
+      "Config.PreferencesPatch": {
+        "type": "object",
+        "properties": {
+          "shell": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "websearch": {
+            "anyOf": [
+              {
+                "anyOf": [
+                  {
+                    "type": "boolean",
+                    "enum": [false]
+                  },
+                  {
+                    "$ref": "#/components/schemas/ConfigWebSearch.InfoEncoded"
+                  }
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
       "Config.ProviderEncoded": {
         "type": "object",
         "properties": {
@@ -14635,6 +14832,22 @@
           }
         },
         "required": ["directory"],
+        "additionalProperties": false
+      },
+      "ConfigShell.Option": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "acceptable": {
+            "type": "boolean"
+          }
+        },
+        "required": ["path", "name", "acceptable"],
         "additionalProperties": false
       },
       "ConfigWebSearch.InfoEncoded": {
@@ -17231,22 +17444,6 @@
         },
         "additionalProperties": false
       },
-      "Project.Current": {
-        "type": "object",
-        "properties": {
-          "id": {
-            "type": "string"
-          },
-          "directory": {
-            "type": "string"
-          },
-          "canonical": {
-            "type": "string"
-          }
-        },
-        "required": ["id", "directory", "canonical"],
-        "additionalProperties": false
-      },
       "Project.Icon": {
         "type": "object",
         "properties": {
@@ -18150,6 +18347,9 @@
           },
           "metadata": {
             "$ref": "#/components/schemas/Session.Metadata"
+          },
+          "permissions": {
+            "$ref": "#/components/schemas/Permission.Ruleset"
           },
           "revert": {
             "$ref": "#/components/schemas/Session.Revert"

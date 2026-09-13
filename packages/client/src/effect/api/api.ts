@@ -1489,16 +1489,9 @@ export type ProjectUpdateInput = {
 export type ProjectUpdateOutput = Project.Info
 export type ProjectUpdateOperation<E = never> = (input: ProjectUpdateInput) => Effect.Effect<ProjectUpdateOutput, E>
 
-export type ProjectCurrentInput = {
-  readonly location?: { readonly directory?: string | undefined; readonly workspace?: string | undefined } | undefined
-}
-export type ProjectCurrentOutput = Project.Current
-export type ProjectCurrentOperation<E = never> = (input?: ProjectCurrentInput) => Effect.Effect<ProjectCurrentOutput, E>
-
 export interface ProjectApi<E = never> {
   readonly list: ProjectListOperation<E>
   readonly update: ProjectUpdateOperation<E>
-  readonly current: ProjectCurrentOperation<E>
 }
 
 export type FormRequestListInput = {
