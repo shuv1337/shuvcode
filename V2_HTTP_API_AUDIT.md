@@ -66,7 +66,7 @@ Review endpoints in document order. For each endpoint, select one disposition an
 |---|---|---|---|---|---|
 | [x] 001–002 | `GET` | `/api/status` | `server.status` | Keep | Replaces the former health and server endpoints. |
 | [x] 003 | `GET` | `/api/location` | `location.get` | Keep | Workspace selectors and response fields removed until workspace support ships. |
-| [ ] 004 | `GET` | `/api/project` | `project.list` |  |  |
+| [x] 004 | `GET` | `/api/project` | `project.list` | Keep | Removed unused `time.initialized`; the database column remains for migration data. |
 | [ ] 005 | `PATCH` | `/api/project/{projectID}` | `project.update` |  |  |
 
 ## Group 2: Configuration and capability catalogs

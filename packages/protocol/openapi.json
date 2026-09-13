@@ -16572,10 +16572,6 @@
           "updated": {
             "type": "integer",
             "minimum": 0
-          },
-          "initialized": {
-            "type": "integer",
-            "minimum": 0
           }
         },
         "required": ["created", "updated"],

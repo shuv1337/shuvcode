@@ -304,7 +304,7 @@ export type ProjectIcon = { url?: string; override?: string; color?: string }
 
 export type ProjectCommands = { start?: string }
 
-export type ProjectTime = { created: number; updated: number; initialized?: number }
+export type ProjectTime = { created: number; updated: number }
 
 export type FormMetadata = { [x: string]: JsonValue }
 
