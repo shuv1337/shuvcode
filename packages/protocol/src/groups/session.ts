@@ -332,7 +332,7 @@ export const makeSessionGroup = <I extends HttpApiMiddleware.AnyId, S>(sessionLo
         ),
     )
     .add(
-      HttpApiEndpoint.post("session.rename", "/api/session/:sessionID/rename", {
+      HttpApiEndpoint.patch("session.rename", "/api/session/:sessionID", {
         params: { sessionID: Session.ID },
         payload: Schema.Struct({ title: Schema.String }),
         success: HttpApiSchema.NoContent,
@@ -357,7 +357,7 @@ export const makeSessionGroup = <I extends HttpApiMiddleware.AnyId, S>(sessionLo
         OpenApi.annotations({
           identifier: "session.move",
           summary: "Move session",
-          description: "Move a session to another project directory, optionally transferring local changes.",
+          description: "Move a session to another project directory at the requested delivery boundary.",
         }),
       ),
     )
@@ -387,7 +387,7 @@ export const makeSessionGroup = <I extends HttpApiMiddleware.AnyId, S>(sessionLo
       HttpApiEndpoint.post("session.command", "/api/session/:sessionID/command", {
         params: { sessionID: Session.ID },
         payload: Schema.Struct({
-          command: Schema.String,
+          name: Schema.String,
           ...PromptInput.Prompt.fields,
           delivery: SessionInbox.Delivery.pipe(Schema.optional),
         }),
@@ -404,11 +404,10 @@ export const makeSessionGroup = <I extends HttpApiMiddleware.AnyId, S>(sessionLo
         ),
     )
     .add(
-      HttpApiEndpoint.post("session.skill", "/api/session/:sessionID/skill", {
+      HttpApiEndpoint.post("session.skill", "/api/experimental/session/:sessionID/skill", {
         params: { sessionID: Session.ID },
         payload: Schema.Struct({
-          id: SessionMessage.ID.pipe(Schema.optional),
-          skill: Skill.ID,
+          id: Skill.ID,
           resume: Schema.Boolean.pipe(Schema.optional),
         }),
         success: HttpApiSchema.NoContent,
@@ -417,7 +416,7 @@ export const makeSessionGroup = <I extends HttpApiMiddleware.AnyId, S>(sessionLo
         .middleware(sessionLocationMiddleware)
         .annotateMerge(
           OpenApi.annotations({
-            identifier: "session.skill",
+            identifier: "experimental.session.skill",
             summary: "Activate skill",
             description: "Activate a skill for a session by appending a skill message and resuming execution.",
           }),
@@ -450,7 +449,7 @@ export const makeSessionGroup = <I extends HttpApiMiddleware.AnyId, S>(sessionLo
       HttpApiEndpoint.post("session.shell", "/api/session/:sessionID/shell", {
         params: { sessionID: Session.ID },
         payload: Schema.Struct({
-          id: Event.ID.pipe(Schema.optional),
+          id: SessionMessage.ID.pipe(Schema.optional),
           command: Schema.String,
         }),
         success: HttpApiSchema.NoContent,

@@ -490,7 +490,7 @@ const EndpointSessionCommand = (raw: RawClient["server.session"]) => (input: Ses
     raw["session.command"]({
       params: { sessionID: input["sessionID"] },
       payload: {
-        command: input["command"],
+        name: input["name"],
         text: input["text"],
         files: input["files"],
         agents: input["agents"],
@@ -504,7 +504,7 @@ const EndpointSessionSkill = (raw: RawClient["server.session"]) => (input: Sessi
   preserveEffect<SessionSkillOutput>()(
     raw["session.skill"]({
       params: { sessionID: input["sessionID"] },
-      payload: { id: input["id"], skill: input["skill"], resume: input["resume"] },
+      payload: { id: input["id"], resume: input["resume"] },
     }).pipe(Effect.mapError(mapClientError)),
   )
 

@@ -377,7 +377,7 @@ async function submitPrompt(client: OpenCodeClient, session: Attached, prompt: P
     return client.session.command(
       {
         sessionID: session.id,
-        command: prompt.command.name,
+        name: prompt.command.name,
         text: prompt.slash?.args ?? "",
         files: prompt.files,
         delivery: "steer",

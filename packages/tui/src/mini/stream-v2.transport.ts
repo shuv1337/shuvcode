@@ -376,6 +376,10 @@ function messageIDFromEvent(id: string) {
   return SessionMessage.ID.fromEvent(Event.ID.make(id))
 }
 
+function eventIDFromMessage(id: SessionMessage.ID) {
+  return Event.ID.make(id.replace(/^msg_/, "evt_"))
+}
+
 const catalogEvents = new Set([
   "provider.updated",
   "model.updated",
@@ -1568,19 +1572,20 @@ export async function createSessionTransport(input: StreamInput): Promise<Sessio
     const output = new Promise<void>((resolve) => {
       rendered = resolve
     })
-    const eventID = Event.ID.create()
+    const messageID = SessionMessage.ID.create()
+    const eventID = eventIDFromMessage(messageID)
     const active: ShellWait = {
       eventID,
-      messageID: messageIDFromEvent(eventID),
+      messageID,
       resolve: rendered,
       abort: () => abort.abort(),
     }
     state.shellWait = active
-    input.trace?.write("send.shell", { sessionID: input.sessionID, id: eventID, command: next.prompt.text })
+    input.trace?.write("send.shell", { sessionID: input.sessionID, id: messageID, command: next.prompt.text })
     write([], { phase: "running", status: "running shell" })
     try {
       await client.session.shell(
-        { sessionID: input.sessionID, id: eventID, command: next.prompt.text },
+        { sessionID: input.sessionID, id: messageID, command: next.prompt.text },
         { signal: abort.signal },
       )
       await Promise.race([output, wait(SHELL_OUTPUT_GRACE_MS, abort.signal)])
@@ -1752,7 +1757,7 @@ export async function createSessionTransport(input: StreamInput): Promise<Sessio
     return client.session.command(
       {
         sessionID: input.sessionID,
-        command: command.name,
+        name: command.name,
         text: command.arguments,
         files: attachments.files.length ? attachments.files : undefined,
         agents: agents.length ? agents : undefined,

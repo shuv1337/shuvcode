@@ -150,7 +150,7 @@ describe("Session.skill", () => {
         }),
       )
 
-      yield* sessions.skill({ id, sessionID: session.id, skill: Skill.ID.make("effect"), resume: false })
+      yield* sessions.skill({ messageID: id, sessionID: session.id, skill: Skill.ID.make("effect"), resume: false })
 
       expect(events).toEqual([
         expect.objectContaining({

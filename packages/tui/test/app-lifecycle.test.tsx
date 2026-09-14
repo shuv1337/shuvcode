@@ -500,13 +500,13 @@ test("automatic rename refreshes the displayed title before settling, even witho
         return json({ location, data: [{ id: "model", providerID: "provider", name: "Model", variants: [] }] })
       if (url.pathname === "/api/provider") return json({ location, data: [{ id: "provider", name: "Provider" }] })
       if (url.pathname === "/api/session") return json({ data: [], cursor: {} })
-      if (url.pathname === "/api/session/ses_rename") return json({ data: session })
-      if (/^\/api\/session\/ses_rename\/(message|inbox|permission)$/.test(url.pathname))
-        return json({ data: [], cursor: {} })
-      if (url.pathname === "/api/session/ses_rename/rename") {
+      if (url.pathname === "/api/session/ses_rename" && request.method === "PATCH") {
         bodies.push(await request.json())
         return response.promise
       }
+      if (url.pathname === "/api/session/ses_rename") return json({ data: session })
+      if (/^\/api\/session\/ses_rename\/(message|inbox|permission)$/.test(url.pathname))
+        return json({ data: [], cursor: {} })
       return undefined
     },
   })

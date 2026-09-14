@@ -635,7 +635,7 @@ describe("Composer submission", () => {
     expect(requests).toEqual([
       {
         sessionID: target.id,
-        command: "review",
+        name: "review",
         text: "https://github.com/example/repo/pull/1",
         files: [],
         agents: [],

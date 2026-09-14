@@ -11,8 +11,9 @@ test("renames, exports, and deletes a home session from its context menu", async
     project: fixture.project,
     pageMessages,
   })
-  await page.route("**/api/session/*/rename", async (route) => {
-    const sessionID = new URL(route.request().url()).pathname.split("/").at(-2)
+  await page.route("**/api/session/*", async (route) => {
+    if (route.request().method() !== "PATCH") return route.fallback()
+    const sessionID = new URL(route.request().url()).pathname.split("/").at(-1)
     const session = sessions.find((item) => item.id === sessionID)
     const payload: unknown = route.request().postDataJSON()
     if (!payload || typeof payload !== "object" || !("title" in payload) || typeof payload.title !== "string")

@@ -543,7 +543,7 @@ export const make = Effect.fn("PluginHost.make")(function* (
       switchModel: sessions.switchModel,
       prompt: sessions.prompt,
       generate: (input) => sessions.generate(input).pipe(Effect.map((text) => ({ text }))),
-      command: sessions.command,
+      command: (input) => sessions.command({ ...input, command: input.name }),
       rename: sessions.rename,
       move: sessions.move,
       synthetic: sessions.synthetic,

@@ -1,6 +1,5 @@
 import { SessionMessage } from "@opencode/schema/session-message"
 import type { SessionMessageUser } from "@opencode/client/promise"
-import { Event } from "@opencode/schema/event"
 import type { Accessor } from "solid-js"
 import type { PromptHistoryComment } from "./history/entry"
 import type { ImageAttachmentPart, Prompt } from "./state"
@@ -278,7 +277,7 @@ function restoreSubmission(
 }
 
 async function sendShell(session: ComposerSession, value: ComposerSubmission) {
-  await session.api.shell({ sessionID: session.id, id: Event.ID.create(), command: value.text })
+  await session.api.shell({ sessionID: session.id, id: value.id, command: value.text })
 }
 
 function findCommand(commands: ReturnType<ComposerSubmitInput["commands"]>, text: string) {
@@ -301,7 +300,7 @@ async function sendCommand(
   if (value.delivery === "steer") await applySelection(session, value.selection, track)
   await session.api.command({
     sessionID: session.id,
-    command: command.command,
+    name: command.command,
     text: command.arguments,
     files: request.files.map((file) => ({ uri: file.uri, name: file.name, mention: file.mention })),
     agents: request.agents,

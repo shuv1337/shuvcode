@@ -4076,8 +4076,8 @@ export type SessionPromptOutput = { data: SessionInboxUser }["data"]
 
 export type SessionCommandInput = {
   readonly sessionID: { readonly sessionID: string }["sessionID"]
-  readonly command: {
-    readonly command: string
+  readonly name: {
+    readonly name: string
     readonly text: string
     readonly files?: ReadonlyArray<{
       readonly uri: string
@@ -4094,9 +4094,9 @@ export type SessionCommandInput = {
       readonly mention?: { readonly start: number; readonly end: number; readonly text: string }
     }>
     readonly delivery?: ("steer" | "queue") | null
-  }["command"]
+  }["name"]
   readonly text: {
-    readonly command: string
+    readonly name: string
     readonly text: string
     readonly files?: ReadonlyArray<{
       readonly uri: string
@@ -4115,7 +4115,7 @@ export type SessionCommandInput = {
     readonly delivery?: ("steer" | "queue") | null
   }["text"]
   readonly files?: {
-    readonly command: string
+    readonly name: string
     readonly text: string
     readonly files?: ReadonlyArray<{
       readonly uri: string
@@ -4134,7 +4134,7 @@ export type SessionCommandInput = {
     readonly delivery?: ("steer" | "queue") | null
   }["files"]
   readonly agents?: {
-    readonly command: string
+    readonly name: string
     readonly text: string
     readonly files?: ReadonlyArray<{
       readonly uri: string
@@ -4153,7 +4153,7 @@ export type SessionCommandInput = {
     readonly delivery?: ("steer" | "queue") | null
   }["agents"]
   readonly skills?: {
-    readonly command: string
+    readonly name: string
     readonly text: string
     readonly files?: ReadonlyArray<{
       readonly uri: string
@@ -4172,7 +4172,7 @@ export type SessionCommandInput = {
     readonly delivery?: ("steer" | "queue") | null
   }["skills"]
   readonly delivery?: {
-    readonly command: string
+    readonly name: string
     readonly text: string
     readonly files?: ReadonlyArray<{
       readonly uri: string
@@ -4196,21 +4196,8 @@ export type SessionCommandOutput = void
 
 export type SessionSkillInput = {
   readonly sessionID: { readonly sessionID: string }["sessionID"]
-  readonly id?: {
-    readonly id?: string | undefined
-    readonly skill: string
-    readonly resume?: boolean | undefined
-  }["id"]
-  readonly skill: {
-    readonly id?: string | undefined
-    readonly skill: string
-    readonly resume?: boolean | undefined
-  }["skill"]
-  readonly resume?: {
-    readonly id?: string | undefined
-    readonly skill: string
-    readonly resume?: boolean | undefined
-  }["resume"]
+  readonly id: { readonly id: string; readonly resume?: boolean | undefined }["id"]
+  readonly resume?: { readonly id: string; readonly resume?: boolean | undefined }["resume"]
 }
 
 export type SessionSkillOutput = void

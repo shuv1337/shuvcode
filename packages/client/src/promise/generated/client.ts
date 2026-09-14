@@ -647,8 +647,8 @@ export function make(options: ClientOptions) {
       rename: (input: SessionRenameInput, requestOptions?: RequestOptions) =>
         request<SessionRenameOutput>(
           {
-            method: "POST",
-            path: `/api/session/${encodeURIComponent(input.sessionID)}/rename`,
+            method: "PATCH",
+            path: `/api/session/${encodeURIComponent(input.sessionID)}`,
             body: { title: input["title"] },
             successStatus: 204,
             declaredStatuses: [400, 401, 404],
@@ -695,7 +695,7 @@ export function make(options: ClientOptions) {
             method: "POST",
             path: `/api/session/${encodeURIComponent(input.sessionID)}/command`,
             body: {
-              command: input["command"],
+              name: input["name"],
               text: input["text"],
               files: input["files"],
               agents: input["agents"],
@@ -712,8 +712,8 @@ export function make(options: ClientOptions) {
         request<SessionSkillOutput>(
           {
             method: "POST",
-            path: `/api/session/${encodeURIComponent(input.sessionID)}/skill`,
-            body: { id: input["id"], skill: input["skill"], resume: input["resume"] },
+            path: `/api/experimental/session/${encodeURIComponent(input.sessionID)}/skill`,
+            body: { id: input["id"], resume: input["resume"] },
             successStatus: 204,
             declaredStatuses: [400, 401, 404],
             empty: true,

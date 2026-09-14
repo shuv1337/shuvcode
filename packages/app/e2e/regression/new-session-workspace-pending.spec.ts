@@ -423,7 +423,7 @@ test("executes a selected slash command after creating its worktree", async ({ p
     .toEqual([
       {
         sessionID: pending.sessionID,
-        body: { command: "review", text: "latest commit", files: [], agents: [], skills: [], delivery: "steer" },
+        body: { name: "review", text: "latest commit", files: [], agents: [], skills: [], delivery: "steer" },
       },
     ])
   await expect(pending.shimmer).toHaveCount(0)

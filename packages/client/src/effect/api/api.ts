@@ -16,10 +16,10 @@ import type { SessionInbox } from "@opencode/schema/session-inbox"
 import type { PromptInput } from "@opencode/schema/prompt-input"
 import type { AgentAttachment } from "@opencode/schema/prompt"
 import type { Skill } from "@opencode/schema/skill"
-import type { Event } from "@opencode/schema/event"
 import type { FileDiff } from "@opencode/schema/file-diff"
 import type { InstructionEntry } from "@opencode/schema/instruction-entry"
 import type { Schema } from "effect"
+import type { Event } from "@opencode/schema/event"
 import type { EventLog } from "@opencode/schema/event-log"
 import type { Shell } from "@opencode/schema/shell"
 import type { Provider } from "@opencode/schema/provider"
@@ -261,7 +261,7 @@ export type SessionPromptOperation<E = never> = (input: SessionPromptInput) => E
 
 export type SessionCommandInput = {
   readonly sessionID: Session.ID
-  readonly command: string
+  readonly name: string
   readonly text: string
   readonly files?: ReadonlyArray<PromptInput.FileAttachment> | undefined
   readonly agents?: ReadonlyArray<AgentAttachment> | undefined
@@ -273,8 +273,7 @@ export type SessionCommandOperation<E = never> = (input: SessionCommandInput) =>
 
 export type SessionSkillInput = {
   readonly sessionID: Session.ID
-  readonly id?: SessionMessage.ID | undefined
-  readonly skill: Skill.ID
+  readonly id: Skill.ID
   readonly resume?: boolean | undefined
 }
 export type SessionSkillOutput = void
@@ -296,7 +295,7 @@ export type SessionSyntheticOperation<E = never> = (
 
 export type SessionShellInput = {
   readonly sessionID: Session.ID
-  readonly id?: Event.ID | undefined
+  readonly id?: SessionMessage.ID | undefined
   readonly command: string
 }
 export type SessionShellOutput = void

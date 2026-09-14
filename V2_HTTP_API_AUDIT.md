@@ -145,11 +145,11 @@ Review endpoints in document order. For each endpoint, select one disposition an
 | [x] 051 | `GET` | `/api/session/{sessionID}` | `session.get` | Keep | Specific session read and typed `404` retained. |
 | [x] 052 | `DELETE` | `/api/session/{sessionID}` | `session.remove` | Keep | Session and child deletion with typed `404` retained. |
 | [x] 053 | `POST` | `/api/session/{sessionID}/fork` | `session.fork` | Change | Request now accepts optional branded `before` message ID; omission copies full history. |
-| [ ] 054 | `POST` | `/api/session/{sessionID}/agent` | `session.switchAgent` |  |  |
-| [ ] 055 | `POST` | `/api/session/{sessionID}/model` | `session.switchModel` |  |  |
-| [ ] 056 | `POST` | `/api/session/{sessionID}/rename` | `session.rename` |  |  |
-| [ ] 057 | `POST` | `/api/session/{sessionID}/move` | `session.move` |  |  |
-| [ ] 058 | `POST` | `/api/session/{sessionID}/background` | `session.background` |  |  |
+| [x] 054 | `POST` | `/api/session/{sessionID}/agent` | `session.switchAgent` | Keep | Subsequent-execution agent selection retained. |
+| [x] 055 | `POST` | `/api/session/{sessionID}/model` | `session.switchModel` | Keep | Subsequent-execution model and optional variant selection retained. |
+| [x] 056 | `PATCH` | `/api/session/{sessionID}` | `session.rename` | Change | Title-only rename now uses the session resource path. |
+| [x] 057 | `POST` | `/api/session/{sessionID}/move` | `session.move` | Change | Removed inaccurate local-change transfer claim; delivery behavior retained. |
+| [x] 058 | `POST` | `/api/session/{sessionID}/background` | `session.background` | Keep | Backgroundable foreground tools transition to background observation; idle requests remain no-ops. |
 
 ## Group 5: Session execution and inputs
 
@@ -157,11 +157,11 @@ Review endpoints in document order. For each endpoint, select one disposition an
 
 | Done | Method | Path | Operation ID | Decision | Notes |
 |---|---|---|---|---|---|
-| [ ] 059 | `POST` | `/api/session/{sessionID}/prompt` | `session.prompt` |  |  |
-| [ ] 060 | `POST` | `/api/session/{sessionID}/command` | `session.command` |  |  |
-| [ ] 061 | `POST` | `/api/session/{sessionID}/skill` | `session.skill` |  |  |
-| [ ] 062 | `POST` | `/api/session/{sessionID}/synthetic` | `session.synthetic` |  |  |
-| [ ] 063 | `POST` | `/api/session/{sessionID}/shell` | `session.shell` |  |  |
+| [x] 059 | `POST` | `/api/session/{sessionID}/prompt` | `session.prompt` | Keep | Durable admission, delivery mode, and admit-only resume control retained. |
+| [x] 060 | `POST` | `/api/session/{sessionID}/command` | `session.command` | Change | Renamed request field from `command` to `name`; `204` retained. |
+| [x] 061 | `POST` | `/api/experimental/session/{sessionID}/skill` | `experimental.session.skill` | Experimental-only | Skill ID is now the `id` field; standalone activation remains experimental. |
+| [x] 062 | `POST` | `/api/session/{sessionID}/synthetic` | `session.synthetic` | Keep | Durable synthetic admission and delivery controls retained. |
+| [x] 063 | `POST` | `/api/session/{sessionID}/shell` | `session.shell` | Change | Caller ID is now the optimistic shell message ID; server derives its event ID. |
 | [ ] 064 | `POST` | `/api/session/{sessionID}/compact` | `session.compact` |  |  |
 | [ ] 065 | `POST` | `/api/session/{sessionID}/wait` | `session.wait` |  |  |
 | [ ] 066 | `POST` | `/api/session/{sessionID}/generate` | `session.generate` |  |  |

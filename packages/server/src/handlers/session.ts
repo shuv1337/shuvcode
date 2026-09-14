@@ -318,7 +318,7 @@ export const SessionHandler = HttpApiBuilder.group(Api, "server.session", (handl
           yield* session
             .command({
               sessionID: ctx.params.sessionID,
-              command: ctx.payload.command,
+              command: ctx.payload.name,
               text: ctx.payload.text,
               files: ctx.payload.files,
               agents: ctx.payload.agents,
@@ -353,8 +353,7 @@ export const SessionHandler = HttpApiBuilder.group(Api, "server.session", (handl
           yield* session
             .skill({
               sessionID: ctx.params.sessionID,
-              id: ctx.payload.id,
-              skill: ctx.payload.skill,
+              skill: ctx.payload.id,
               resume: ctx.payload.resume,
             })
             .pipe(

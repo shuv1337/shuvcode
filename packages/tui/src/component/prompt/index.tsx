@@ -1287,7 +1287,7 @@ export function Prompt(props: PromptProps) {
         await commitModel()
         return client.api.session.command({
           sessionID: target,
-          command: slashHead.name,
+          name: slashHead.name,
           text: slashHead.arguments,
           files: entry.files,
           agents: entry.agents,

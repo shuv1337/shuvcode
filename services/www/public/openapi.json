@@ -1435,6 +1435,83 @@
         },
         "description": "Delete a session and its child sessions.",
         "summary": "Delete session"
+      },
+      "patch": {
+        "tags": ["session"],
+        "operationId": "session.rename",
+        "parameters": [
+          {
+            "name": "sessionID",
+            "in": "path",
+            "schema": {
+              "type": "string",
+              "pattern": "^ses"
+            },
+            "required": true
+          }
+        ],
+        "security": [],
+        "responses": {
+          "204": {
+            "description": "<No Content>"
+          },
+          "400": {
+            "description": "InvalidRequestError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvalidRequestErrorEncoded"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UnauthorizedError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "SessionNotFoundError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/SessionNotFoundErrorEncoded"
+                    },
+                    {
+                      "$ref": "#/components/schemas/SessionNotFoundErrorEncoded"
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "description": "Update the session title.",
+        "summary": "Rename session",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "title": {
+                    "type": "string"
+                  }
+                },
+                "required": ["title"],
+                "additionalProperties": false
+              }
+            }
+          },
+          "required": true
+        }
       }
     },
     "/api/session/{sessionID}/fork": {
@@ -1705,85 +1782,6 @@
         }
       }
     },
-    "/api/session/{sessionID}/rename": {
-      "post": {
-        "tags": ["session"],
-        "operationId": "session.rename",
-        "parameters": [
-          {
-            "name": "sessionID",
-            "in": "path",
-            "schema": {
-              "type": "string",
-              "pattern": "^ses"
-            },
-            "required": true
-          }
-        ],
-        "security": [],
-        "responses": {
-          "204": {
-            "description": "<No Content>"
-          },
-          "400": {
-            "description": "InvalidRequestError",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/InvalidRequestErrorEncoded"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "UnauthorizedError",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "SessionNotFoundError",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "anyOf": [
-                    {
-                      "$ref": "#/components/schemas/SessionNotFoundErrorEncoded"
-                    },
-                    {
-                      "$ref": "#/components/schemas/SessionNotFoundErrorEncoded"
-                    }
-                  ]
-                }
-              }
-            }
-          }
-        },
-        "description": "Update the session title.",
-        "summary": "Rename session",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "properties": {
-                  "title": {
-                    "type": "string"
-                  }
-                },
-                "required": ["title"],
-                "additionalProperties": false
-              }
-            }
-          },
-          "required": true
-        }
-      }
-    },
     "/api/session/{sessionID}/move": {
       "post": {
         "tags": ["session"],
@@ -1842,7 +1840,7 @@
             }
           }
         },
-        "description": "Move a session to another project directory, optionally transferring local changes.",
+        "description": "Move a session to another project directory at the requested delivery boundary.",
         "summary": "Move session",
         "requestBody": {
           "content": {
@@ -2114,7 +2112,7 @@
               "schema": {
                 "type": "object",
                 "properties": {
-                  "command": {
+                  "name": {
                     "type": "string"
                   },
                   "text": {
@@ -2149,7 +2147,7 @@
                     ]
                   }
                 },
-                "required": ["command", "text"],
+                "required": ["name", "text"],
                 "additionalProperties": false
               }
             }
@@ -2158,10 +2156,10 @@
         }
       }
     },
-    "/api/session/{sessionID}/skill": {
+    "/api/experimental/session/{sessionID}/skill": {
       "post": {
         "tags": ["session"],
-        "operationId": "session.skill",
+        "operationId": "experimental.session.skill",
         "parameters": [
           {
             "name": "sessionID",
@@ -2228,17 +2226,6 @@
                 "type": "object",
                 "properties": {
                   "id": {
-                    "anyOf": [
-                      {
-                        "type": "string",
-                        "pattern": "^msg_"
-                      },
-                      {
-                        "type": "null"
-                      }
-                    ]
-                  },
-                  "skill": {
                     "type": "string"
                   },
                   "resume": {
@@ -2252,7 +2239,7 @@
                     ]
                   }
                 },
-                "required": ["skill"],
+                "required": ["id"],
                 "additionalProperties": false
               }
             }
@@ -2478,7 +2465,7 @@
                     "anyOf": [
                       {
                         "type": "string",
-                        "pattern": "^evt_"
+                        "pattern": "^msg_"
                       },
                       {
                         "type": "null"
@@ -15302,6 +15289,9 @@
               }
             },
             "additionalProperties": false
+          },
+          "protocol": {
+            "$ref": "#/components/schemas/Mcp.Protocol"
           }
         },
         "required": ["type", "command"],
@@ -15329,6 +15319,11 @@
           }
         },
         "additionalProperties": false
+      },
+      "Mcp.Protocol": {
+        "type": "string",
+        "enum": ["legacy", "auto", "2026-07-28"],
+        "description": "MCP protocol negotiation. \"legacy\" (default) opens with the initialize handshake and speaks protocol revisions up to 2025-11-25. \"auto\" probes for the 2026-07-28 revision and falls back to legacy when the server does not support it. \"2026-07-28\" requires that revision and fails otherwise."
       },
       "Mcp.RemoteConfigEncoded": {
         "type": "object",
@@ -15380,6 +15375,9 @@
               }
             },
             "additionalProperties": false
+          },
+          "protocol": {
+            "$ref": "#/components/schemas/Mcp.Protocol"
           }
         },
         "required": ["type", "url"],
@@ -15522,9 +15520,12 @@
           "status": {
             "type": "string",
             "enum": ["needs_auth"]
+          },
+          "error": {
+            "type": "string"
           }
         },
-        "required": ["status"],
+        "required": ["status", "error"],
         "additionalProperties": false
       },
       "Mcp.Status.Pending": {
