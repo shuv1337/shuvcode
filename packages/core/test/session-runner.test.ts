@@ -21,7 +21,6 @@ import { AnthropicMessages, OpenAIResponses } from "@opencode/ai/protocols"
 import { compileRequest } from "@opencode/ai/route/client"
 import { TestLLM } from "@opencode/ai/testing"
 import type { SessionHooks } from "@opencode/plugin/effect/session"
-import { Catalog } from "@opencode/core/catalog"
 import { Database } from "@opencode/core/database/database"
 import { makeLocationNode } from "@opencode/util/effect/app-node"
 import { AppNodeBuilder } from "@opencode/core/effect/app-node-builder"
@@ -89,7 +88,7 @@ import { promptLocationNode } from "./fixture/prompt-location"
 import { LocationServiceMap } from "@opencode/core/location-service-map"
 import { Expected } from "./lib/session-message"
 import { permissionLayer } from "./lib/permission"
-import { agentHost, catalogHost, host } from "./plugin/host"
+import { agentHost, modelHost, host } from "./plugin/host"
 import { CodeModeInstructions } from "@opencode/core/codemode/instructions"
 
 const emptyCodeMode = `\n\n${CodeModeInstructions.render({ total: 0, shown: 0, namespaces: [] })}`
@@ -392,19 +391,12 @@ const layer = Layer.unwrap(
         }),
       }),
     ])
-    const promptCatalog = Layer.mock(Catalog.Service, {
-      provider: {
-        get: () => Effect.undefined,
-        all: () => Effect.succeed([]),
-        available: () => Effect.succeed([]),
-      },
-      model: {
-        get: () => Effect.undefined,
-        all: () => Effect.succeed([]),
-        available: () => Effect.succeed([]),
-        default: () => Effect.undefined,
-        small: () => Effect.undefined,
-      },
+    const promptModels = Layer.mock(Model.Service, {
+      get: () => Effect.undefined,
+      all: () => Effect.succeed([]),
+      available: () => Effect.succeed([]),
+      default: () => Effect.undefined,
+      small: () => Effect.undefined,
     })
     const replacements: LayerNode.Replacements = [
       Snapshot.node.replace(Snapshot.noopLayer),
@@ -464,7 +456,7 @@ const layer = Layer.unwrap(
         SessionStore.node,
         SessionInbox.node,
         Agent.node,
-        Catalog.node,
+        Model.node,
         Tool.node,
         PluginHooks.node,
         echoNode,
@@ -485,7 +477,7 @@ const layer = Layer.unwrap(
         ...replacements,
         Bus.node.replace(Bus.configured({ persist: true })),
         LocationServiceMap.node.replace(promptLocationNode),
-        Catalog.node.replace(promptCatalog),
+        Model.node.replace(promptModels),
         SessionExecution.node.replace(execution),
       ],
     )
@@ -518,11 +510,11 @@ const setup = Effect.gen(function* () {
   const bus = yield* Bus.Service
   const sessionInbox = yield* SessionInbox.Service
   const agents = yield* Agent.Service
-  const catalog = yield* Catalog.Service
+  const models = yield* Model.Service
   const hooks = yield* PluginHooks.Service
   const pluginHost = host({
     agent: agentHost(agents),
-    catalog: catalogHost(catalog),
+    model: modelHost(models),
     session: { hook: (name, callback) => hooks.register("session", name, callback) },
   })
   yield* Effect.forEach(OptimizePlugin.Plugins, (plugin) => plugin.effect(pluginHost), {

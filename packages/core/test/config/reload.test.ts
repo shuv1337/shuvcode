@@ -4,7 +4,6 @@ import { writeFileSync } from "node:fs"
 import { describe, expect } from "bun:test"
 import { Document, Event, Info } from "@opencode/schema/config"
 import { Agent } from "@opencode/core/agent"
-import { Catalog } from "@opencode/core/catalog"
 import { Command } from "@opencode/core/command"
 import { Config } from "@opencode/core/config"
 import { ConfigAgentPlugin } from "@opencode/core/config/plugin/agent"
@@ -269,7 +268,7 @@ describe("config plugin reloads", () => {
   it.live("reloads config-backed domains without reloading external plugins", () =>
     Effect.gen(function* () {
       const agents = yield* Agent.Service
-      const catalog = yield* Catalog.Service
+      const providers = yield* Provider.Service
       const commands = yield* Command.Service
       const integrations = yield* Integration.Service
       const bus = yield* Bus.Service
@@ -290,7 +289,7 @@ describe("config plugin reloads", () => {
       expect(yield* integrations.get(Integration.ID.make("first"))).toBeDefined()
       expect((yield* skills.list()).some((skill) => skill.id === "first")).toBe(true)
       expect((yield* references.list()).map((reference) => reference.name)).toEqual(["first"])
-      expect(yield* catalog.provider.get(Provider.ID.make("first"))).toBeDefined()
+      expect(yield* providers.get(Provider.ID.make("first"))).toBeDefined()
 
       yield* test.setEntries([config("second")])
       yield* Effect.yieldNow
@@ -305,8 +304,8 @@ describe("config plugin reloads", () => {
             (yield* integrations.get(Integration.ID.make("first"))) === undefined &&
             (yield* integrations.get(Integration.ID.make("second"))) !== undefined &&
             (yield* references.list()).some((reference) => reference.name === "second") &&
-            (yield* catalog.provider.get(Provider.ID.make("first"))) === undefined &&
-            (yield* catalog.provider.get(Provider.ID.make("second"))) !== undefined
+            (yield* providers.get(Provider.ID.make("first"))) === undefined &&
+            (yield* providers.get(Provider.ID.make("second"))) !== undefined
           )
         }),
       )

@@ -7,7 +7,8 @@ import { AppProcess } from "@opencode/util/process"
 import { Context, Effect, Scope } from "effect"
 import { HttpClient } from "effect/unstable/http"
 import { Agent } from "../agent.js"
-import { Catalog } from "../catalog.js"
+import { Model } from "../model.js"
+import { Provider } from "../provider.js"
 import { Command } from "../command.js"
 import { Config } from "../config.js"
 import { Credential } from "../credential.js"
@@ -98,7 +99,8 @@ import { WellKnownPlugin } from "../wellknown/plugin.js"
 const services = [
   Agent.Service,
   AppProcess.Service,
-  Catalog.Service,
+  Provider.Service,
+  Model.Service,
   Command.Service,
   Config.Service,
   Credential.Service,
@@ -147,7 +149,8 @@ export type Requirements = Context.Service.Identifier<(typeof services)[number]>
 export const requirements = LayerNode.group([
   Agent.node,
   AppProcess.node,
-  Catalog.node,
+  Provider.node,
+  Model.node,
   Command.node,
   Config.node,
   Credential.node,

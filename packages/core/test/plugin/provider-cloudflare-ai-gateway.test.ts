@@ -1,7 +1,6 @@
 import { AISDK } from "@opencode/core/aisdk"
 import { describe, expect, mock } from "bun:test"
 import { Effect } from "effect"
-import { Catalog } from "@opencode/core/catalog"
 import { Model } from "@opencode/core/model"
 import { Plugin } from "@opencode/core/plugin"
 import { PluginHost } from "@opencode/core/plugin/host"
@@ -346,9 +345,9 @@ describe("CloudflareAIGatewayPlugin", () => {
         Effect.gen(function* () {
           resetCalls()
           const aisdk = yield* AISDK.Service
-          const catalog = yield* Catalog.Service
+          const catalog = yield* Provider.Service
           yield* catalog.transform((catalog) =>
-            catalog.provider.update(Provider.ID.make("cloudflare-ai-gateway"), (provider) => {
+            catalog.update(Provider.ID.make("cloudflare-ai-gateway"), (provider) => {
               provider.settings = { ...provider.settings, baseURL: "https://proxy.example/v1" }
             }),
           )

@@ -303,18 +303,6 @@ export function fromPromise(plugin: Plugin) {
                 host.aisdk.hook(name, (event) => Effect.promise(() => Promise.resolve(callback(event))), options),
               ),
           },
-          catalog: {
-            provider: {
-              list: adaptApiMethod(ProviderEndpoints["provider.list"], host.catalog.provider.list),
-              get: adaptApiMethod(ProviderEndpoints["provider.get"], host.catalog.provider.get),
-            },
-            model: {
-              list: adaptApiMethod(ModelEndpoints["model.list"], host.catalog.model.list),
-              default: adaptApiMethod(ModelEndpoints["model.default"], host.catalog.model.default),
-            },
-            transform: transform(host.catalog),
-            reload: () => run(host.catalog.reload()),
-          },
           command: {
             list: adaptApiMethod(CommandEndpoints["command.list"], host.command.list),
             transform: (callback) =>
@@ -349,6 +337,18 @@ export function fromPromise(plugin: Plugin) {
           },
           generate: {
             text: adaptApiMethod(GenerateEndpoints["generate.text"], host.generate.text),
+          },
+          model: {
+            list: adaptApiMethod(ModelEndpoints["model.list"], host.model.list),
+            default: adaptApiMethod(ModelEndpoints["model.default"], host.model.default),
+            transform: transform(host.model),
+            reload: () => run(host.model.reload()),
+          },
+          provider: {
+            list: adaptApiMethod(ProviderEndpoints["provider.list"], host.provider.list),
+            get: adaptApiMethod(ProviderEndpoints["provider.get"], host.provider.get),
+            transform: transform(host.provider),
+            reload: () => run(host.provider.reload()),
           },
           integration: {
             list: adaptApiMethod(IntegrationEndpoints["integration.list"], host.integration.list),

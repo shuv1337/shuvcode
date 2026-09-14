@@ -1,7 +1,6 @@
 import { AISDK } from "@opencode/core/aisdk"
 import { describe, expect, mock } from "bun:test"
 import { Effect } from "effect"
-import { Catalog } from "@opencode/core/catalog"
 import { Model } from "@opencode/core/model"
 import { Plugin } from "@opencode/core/plugin"
 import { PluginHost } from "@opencode/core/plugin/host"
@@ -66,16 +65,16 @@ void mock.module("google-auth-library", () => ({
 describe("GoogleVertexPlugin", () => {
   it.effect("ignores OpenAI-compatible providers that are not Google Vertex", () =>
     Effect.gen(function* () {
-      const catalog = yield* Catalog.Service
+      const catalog = yield* Provider.Service
       yield* catalog.transform((catalog) =>
-        catalog.provider.update(Provider.ID.opencode, (provider) => {
+        catalog.update(Provider.ID.opencode, (provider) => {
           provider.package = Provider.aisdk("@ai-sdk/openai-compatible")
           provider.settings = { ...provider.settings, baseURL: "https://opencode.ai/zen/v1" }
         }),
       )
       yield* addPlugin()
 
-      const provider = required(yield* catalog.provider.get(Provider.ID.opencode))
+      const provider = required(yield* catalog.get(Provider.ID.opencode))
       expect(provider.settings).toEqual({ baseURL: "https://opencode.ai/zen/v1" })
     }),
   )
@@ -92,9 +91,9 @@ describe("GoogleVertexPlugin", () => {
       },
       () =>
         Effect.gen(function* () {
-          const catalog = yield* Catalog.Service
+          const catalog = yield* Provider.Service
           yield* catalog.transform((catalog) =>
-            catalog.provider.update(Provider.ID.make("google-vertex"), (provider) => {
+            catalog.update(Provider.ID.make("google-vertex"), (provider) => {
               provider.package = Provider.aisdk("@ai-sdk/openai-compatible")
               provider.settings = {
                 ...provider.settings,
@@ -104,7 +103,7 @@ describe("GoogleVertexPlugin", () => {
             }),
           )
           yield* addPlugin()
-          const provider = required(yield* catalog.provider.get(Provider.ID.make("google-vertex")))
+          const provider = required(yield* catalog.get(Provider.ID.make("google-vertex")))
           expect(provider.settings?.project).toBe("google-cloud-project")
           expect(provider.settings?.location).toBe("google-vertex-location")
           expect(provider).toMatchObject({
@@ -128,15 +127,15 @@ describe("GoogleVertexPlugin", () => {
       },
       () =>
         Effect.gen(function* () {
-          const catalog = yield* Catalog.Service
+          const catalog = yield* Provider.Service
           yield* catalog.transform((catalog) =>
-            catalog.provider.update(Provider.ID.make("google-vertex"), (provider) => {
+            catalog.update(Provider.ID.make("google-vertex"), (provider) => {
               provider.package = Provider.aisdk("@ai-sdk/google-vertex")
             }),
           )
           yield* addPlugin()
 
-          expect(required(yield* catalog.provider.get(Provider.ID.make("google-vertex"))).activation).toBe("auto")
+          expect(required(yield* catalog.get(Provider.ID.make("google-vertex"))).activation).toBe("auto")
         }),
     ),
   )
@@ -151,15 +150,15 @@ describe("GoogleVertexPlugin", () => {
       },
       () =>
         Effect.gen(function* () {
-          const catalog = yield* Catalog.Service
+          const catalog = yield* Provider.Service
           yield* catalog.transform((catalog) =>
-            catalog.provider.update(Provider.ID.make("google-vertex"), (provider) => {
+            catalog.update(Provider.ID.make("google-vertex"), (provider) => {
               provider.package = Provider.aisdk("@ai-sdk/google-vertex")
             }),
           )
           yield* addPlugin()
 
-          expect(required(yield* catalog.provider.get(Provider.ID.make("google-vertex"))).activation).toBe("enabled")
+          expect(required(yield* catalog.get(Provider.ID.make("google-vertex"))).activation).toBe("enabled")
         }),
     ),
   )
@@ -177,9 +176,9 @@ describe("GoogleVertexPlugin", () => {
       },
       () =>
         Effect.gen(function* () {
-          const catalog = yield* Catalog.Service
+          const catalog = yield* Provider.Service
           yield* catalog.transform((catalog) =>
-            catalog.provider.update(Provider.ID.make("google-vertex"), (provider) => {
+            catalog.update(Provider.ID.make("google-vertex"), (provider) => {
               provider.package = Provider.aisdk("@ai-sdk/openai-compatible")
               provider.settings = {
                 ...provider.settings,
@@ -189,7 +188,7 @@ describe("GoogleVertexPlugin", () => {
             }),
           )
           yield* addPlugin()
-          const provider = required(yield* catalog.provider.get(Provider.ID.make("google-vertex")))
+          const provider = required(yield* catalog.get(Provider.ID.make("google-vertex")))
 
           expect(provider.settings?.project).toBe("vertex-project")
           expect(provider).toMatchObject({
@@ -215,9 +214,10 @@ describe("GoogleVertexPlugin", () => {
       },
       () =>
         Effect.gen(function* () {
-          const catalog = yield* Catalog.Service
+          const catalog = yield* Provider.Service
+          const models = yield* Model.Service
           yield* catalog.transform((catalog) => {
-            catalog.provider.update(Provider.ID.make("google-vertex"), (provider) => {
+            catalog.update(Provider.ID.make("google-vertex"), (provider) => {
               provider.package = Provider.aisdk("@ai-sdk/openai-compatible")
               provider.settings = {
                 ...provider.settings,
@@ -226,11 +226,11 @@ describe("GoogleVertexPlugin", () => {
               }
               provider.settings = { ...provider.settings, project: "config-project", location: "global" }
             })
-            catalog.model.update(Provider.ID.make("google-vertex"), Model.ID.make("gemini"), () => {})
+            catalog.models.update(Provider.ID.make("google-vertex"), Model.ID.make("gemini"), () => {})
           })
           yield* addPlugin()
-          const provider = required(yield* catalog.provider.get(Provider.ID.make("google-vertex")))
-          const model = required(yield* catalog.model.get(Provider.ID.make("google-vertex"), Model.ID.make("gemini")))
+          const provider = required(yield* catalog.get(Provider.ID.make("google-vertex")))
+          const model = required(yield* models.get(Provider.ID.make("google-vertex"), Model.ID.make("gemini")))
           expect(provider.settings?.project).toBe("config-project")
           expect(provider.settings?.location).toBe("global")
           expect(provider).toMatchObject({
@@ -244,9 +244,9 @@ describe("GoogleVertexPlugin", () => {
 
   it.effect("keeps OpenAI-compatible Vertex endpoint templates regional for eu", () =>
     Effect.gen(function* () {
-      const catalog = yield* Catalog.Service
+      const catalog = yield* Provider.Service
       yield* catalog.transform((catalog) =>
-        catalog.provider.update(Provider.ID.make("google-vertex"), (provider) => {
+        catalog.update(Provider.ID.make("google-vertex"), (provider) => {
           provider.package = Provider.aisdk("@ai-sdk/openai-compatible")
           provider.settings = {
             ...provider.settings,
@@ -257,7 +257,7 @@ describe("GoogleVertexPlugin", () => {
         }),
       )
       yield* addPlugin()
-      const provider = required(yield* catalog.provider.get(Provider.ID.make("google-vertex")))
+      const provider = required(yield* catalog.get(Provider.ID.make("google-vertex")))
       expect(provider).toMatchObject({
         package: "aisdk:@ai-sdk/openai-compatible",
         settings: { baseURL: "https://eu-aiplatform.googleapis.com/v1/projects/config-project/locations/eu" },
@@ -277,15 +277,15 @@ describe("GoogleVertexPlugin", () => {
       },
       () =>
         Effect.gen(function* () {
-          const catalog = yield* Catalog.Service
+          const catalog = yield* Provider.Service
           yield* catalog.transform((catalog) =>
-            catalog.provider.update(Provider.ID.make("google-vertex"), (provider) => {
+            catalog.update(Provider.ID.make("google-vertex"), (provider) => {
               provider.package = Provider.aisdk("@ai-sdk/google-vertex")
               provider.settings = { ...provider.settings, project: "config-project" }
             }),
           )
           yield* addPlugin()
-          const provider = required(yield* catalog.provider.get(Provider.ID.make("google-vertex")))
+          const provider = required(yield* catalog.get(Provider.ID.make("google-vertex")))
           expect(provider.settings?.project).toBe("config-project")
           expect(provider.settings?.location).toBe("us-central1")
         }),

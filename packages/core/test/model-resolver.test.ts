@@ -6,10 +6,9 @@ import { ConfigProvider, Effect, Layer } from "effect"
 import { Headers } from "effect/unstable/http"
 import { Credential } from "@opencode/core/credential"
 import { Integration } from "@opencode/core/integration"
-import { Compatibility, ID, Info, VariantID } from "@opencode/core/model"
+import { Compatibility, ID, Info, Model, VariantID } from "@opencode/core/model"
 import { Provider } from "@opencode/core/provider"
 import { ModelResolver } from "@opencode/core/model-resolver"
-import { Catalog } from "@opencode/core/catalog"
 import { AISDK } from "@opencode/core/aisdk"
 import { Npm } from "@opencode/util/npm"
 import { it } from "./lib/effect"
@@ -335,21 +334,14 @@ describe("ModelResolver", () => {
       settings: selected.settings,
       headers: selected.headers,
     })
-    const catalog = Layer.mock(Catalog.Service, {
-      provider: {
-        get: () => Effect.succeed(provider),
-        all: () => Effect.die("unused"),
-        available: () => Effect.die("unused"),
-      },
-      model: {
-        get: () => Effect.succeed(selected),
-        all: () => Effect.die("unused"),
-        available: () => Effect.die("unused"),
-        default: () => Effect.die("unused"),
-        small: () => Effect.die("unused"),
-      },
+    const providers = Layer.mock(Provider.Service, {
+      get: () => Effect.succeed(provider),
+    })
+    const models = Layer.mock(Model.Service, {
+      get: () => Effect.succeed(selected),
     })
     const integrations = Layer.mock(Integration.Service, {
+      revision: () => 0,
       connection: {
         active: (id) => {
           expect(id).toBe(Integration.ID.make("gateway"))
@@ -384,7 +376,7 @@ describe("ModelResolver", () => {
       },
       model: () => Effect.die("unused"),
     })
-    const layer = ModelResolver.layer.pipe(Layer.provide(Layer.mergeAll(catalog, integrations, npm, aisdk)))
+    const layer = ModelResolver.layer.pipe(Layer.provide(Layer.mergeAll(providers, models, integrations, npm, aisdk)))
 
     return withConfigEnv({}, () =>
       Effect.gen(function* () {

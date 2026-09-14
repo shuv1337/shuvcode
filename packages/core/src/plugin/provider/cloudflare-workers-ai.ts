@@ -35,10 +35,10 @@ export const CloudflareWorkersAIPlugin = define({
         },
       })
     })
-    yield* ctx.catalog.transform((evt) => {
-      const item = evt.provider.get(providerID)
+    yield* ctx.provider.transform((evt) => {
+      const item = evt.get(providerID)
       if (!item) return
-      evt.provider.update(item.provider.id, (provider) => {
+      evt.update(item.provider.id, (provider) => {
         if (!Provider.isAISDK(provider.package)) return
         if (typeof provider.settings?.baseURL === "string") return
         const accountId = resolveAccountId(provider.settings ?? {})

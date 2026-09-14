@@ -9,7 +9,6 @@ import { App } from "../app.js"
 import { Effect, Schema, Stream } from "effect"
 import { Agent } from "../agent.js"
 import { AISDK } from "../aisdk.js"
-import { Catalog } from "../catalog.js"
 import { Command } from "../command.js"
 import { Credential } from "../credential.js"
 import { Bus } from "../bus.js"
@@ -51,7 +50,8 @@ export const make = Effect.fn("PluginHost.make")(function* (
   const app = yield* App.Metadata
   const agents = yield* Agent.Service
   const aisdk = yield* AISDK.Service
-  const catalog = yield* Catalog.Service
+  const providers = yield* Provider.Service
+  const models = yield* Model.Service
   const commands = yield* Command.Service
   const bus = yield* Bus.Service
   const integration = yield* Integration.Service
@@ -198,49 +198,66 @@ export const make = Effect.fn("PluginHost.make")(function* (
         })
       },
     },
-    catalog: {
-      provider: {
-        list: () => response(catalog.provider.available()),
-        get: (input) =>
-          catalog.provider
-            .get(Provider.ID.make(input.providerID))
-            .pipe(
-              Effect.flatMap((provider) =>
-                provider === undefined
-                  ? Effect.fail(new Error(`Provider not found: ${input.providerID}`))
-                  : response(Effect.succeed(provider)),
-              ),
+    provider: {
+      list: () => response(providers.available()),
+      get: (input) =>
+        providers
+          .get(Provider.ID.make(input.providerID))
+          .pipe(
+            Effect.flatMap((provider) =>
+              provider === undefined
+                ? Effect.fail(new Error(`Provider not found: ${input.providerID}`))
+                : response(Effect.succeed(provider)),
             ),
-      },
-      model: {
-        list: () => response(catalog.model.available()),
-        default: () => response(catalog.model.default()),
-      },
-      reload: catalog.reload,
+          ),
+      reload: providers.reload,
       transform: (callback) =>
-        catalog.transform((editor) => {
+        providers.transform((editor) => {
           callback({
-            provider: {
-              list: () => mutable(editor.provider.list()),
-              get: (id) => mutable(editor.provider.get(Provider.ID.make(id))),
-              update: (id, update) => editor.provider.update(Provider.ID.make(id), update),
-              remove: (id) => editor.provider.remove(Provider.ID.make(id)),
-            },
-            model: {
-              get: (providerID, modelID) =>
-                mutable(editor.model.get(Provider.ID.make(providerID), Model.ID.make(modelID))),
+            list: editor.list,
+            get: (id) => editor.get(Provider.ID.make(id)),
+            add: (definition) =>
+              editor.add({
+                ...definition,
+                sourceConnection:
+                  definition.sourceConnection?.type === "credential"
+                    ? { ...definition.sourceConnection, id: Credential.ID.make(definition.sourceConnection.id) }
+                    : definition.sourceConnection,
+              }),
+            update: (id, update) => editor.update(Provider.ID.make(id), update),
+            remove: (id) => editor.remove(Provider.ID.make(id)),
+            models: {
+              set: (id, models) => editor.models.set(Provider.ID.make(id), models),
               update: (providerID, modelID, update) =>
-                editor.model.update(Provider.ID.make(providerID), Model.ID.make(modelID), update),
+                editor.models.update(Provider.ID.make(providerID), Model.ID.make(modelID), update),
               remove: (providerID, modelID) =>
-                editor.model.remove(Provider.ID.make(providerID), Model.ID.make(modelID)),
-              default: {
-                get: editor.model.default.get,
-                set: (providerID, modelID) =>
-                  editor.model.default.set(Provider.ID.make(providerID), Model.ID.make(modelID)),
-              },
+                editor.models.remove(Provider.ID.make(providerID), Model.ID.make(modelID)),
             },
           })
         }),
+    },
+    model: {
+      list: () => response(models.available()),
+      default: () => response(models.default()),
+      reload: models.reload,
+      transform: (callback) =>
+        models.transform((editor) =>
+          callback({
+            list: (providerID) => editor.list(providerID === undefined ? undefined : Provider.ID.make(providerID)),
+            get: (providerID, modelID) => editor.get(Provider.ID.make(providerID), Model.ID.make(modelID)),
+            update: (providerID, modelID, update) =>
+              editor.update(Provider.ID.make(providerID), Model.ID.make(modelID), update),
+            remove: (providerID, modelID) => editor.remove(Provider.ID.make(providerID), Model.ID.make(modelID)),
+            default: {
+              get: editor.default.get,
+              set: (providerID, modelID) => editor.default.set(Provider.ID.make(providerID), Model.ID.make(modelID)),
+            },
+            provider: {
+              list: editor.provider.list,
+              get: (id) => editor.provider.get(Provider.ID.make(id)),
+            },
+          }),
+        ),
     },
     command: {
       list: () => response(commands.list()),
@@ -545,7 +562,8 @@ export const requirements = LayerNode.group([
   App.node,
   Agent.node,
   AISDK.node,
-  Catalog.node,
+  Provider.node,
+  Model.node,
   Command.node,
   Bus.node,
   Integration.node,

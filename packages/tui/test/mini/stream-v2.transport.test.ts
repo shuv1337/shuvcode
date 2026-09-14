@@ -3501,7 +3501,8 @@ describe("V2 mini transport", () => {
     expect(refreshes).toBe(1)
 
     for (const type of [
-      "catalog.updated",
+      "provider.updated",
+      "model.updated",
       "integration.updated",
       "agent.updated",
       "command.updated",
@@ -3528,17 +3529,18 @@ describe("V2 mini transport", () => {
         type: "credential.switched",
         data: { credentialID, integrationID: "integration" },
       })
-    events.push({
-      id: "evt_foreign_catalog",
-      created: 0,
-      type: "catalog.updated",
-      location: { directory: "/other" },
-      data: {},
-    })
-    while (refreshes < 9) await Bun.sleep(0)
+    for (const type of ["provider.updated", "model.updated"] as const)
+      events.push({
+        id: `evt_foreign_${type}`,
+        created: 0,
+        type,
+        location: { directory: "/other" },
+        data: {},
+      })
+    while (refreshes < 10) await Bun.sleep(0)
     await Bun.sleep(0)
 
-    expect(refreshes).toBe(9)
+    expect(refreshes).toBe(10)
     await transport.close()
   })
 

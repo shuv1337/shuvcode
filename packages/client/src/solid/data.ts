@@ -1187,10 +1187,13 @@ export function createData(config: CreateDataInput) {
     if (!event.location) return
     const location = event.location
     switch (event.type) {
-      case "catalog.updated":
-        result.location.model.invalidate(location)
+      case "provider.updated":
         result.location.provider.invalidate(location)
-        refresh(() => Promise.all([result.location.model.sync(location), result.location.provider.sync(location)]))
+        refresh(() => result.location.provider.sync(location))
+        break
+      case "model.updated":
+        result.location.model.invalidate(location)
+        refresh(() => result.location.model.sync(location))
         break
       case "agent.updated":
         result.location.agent.invalidate(location)

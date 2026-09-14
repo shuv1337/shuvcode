@@ -30,10 +30,10 @@ export const AmazonBedrockPlugin = define({
         method: { type: "env", names: ["AWS_BEARER_TOKEN_BEDROCK"] },
       })
     })
-    yield* ctx.catalog.transform((evt) => {
-      for (const item of evt.provider.list()) {
+    yield* ctx.provider.transform((evt) => {
+      for (const item of evt.list()) {
         if (!isBedrock(item.provider)) continue
-        evt.provider.update(item.provider.id, (provider) => {
+        evt.update(item.provider.id, (provider) => {
           const settings = provider.settings ?? {}
           const chain = typeof settings.profile === "string" || CHAIN_ENV.some((name) => process.env[name])
           // SigV4 authenticates through the AWS default chain rather than a key

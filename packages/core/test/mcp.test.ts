@@ -308,6 +308,7 @@ function resourceMcpLayer(
           },
         }),
         Layer.mock(Integration.Service, {
+          revision: () => 0,
           connection: {
             active: unusedIntegration,
             resolve: unusedIntegration,

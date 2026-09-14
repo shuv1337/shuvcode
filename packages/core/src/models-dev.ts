@@ -684,7 +684,7 @@ export const layer = (options?: Options) =>
               const digest = bodyDigest(text)
               // models.dev rarely changes between polls; skip the cache write,
               // invalidation, and Refreshed event for a byte-identical body so
-              // downstream catalog.updated listeners stay quiet.
+              // downstream provider/model update listeners stay quiet.
               if (!force && stored?.digest === digest) return
               yield* decodeCatalog(text)
               yield* writeCache(text, digest)

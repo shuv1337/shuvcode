@@ -1936,7 +1936,7 @@ test("refreshes MCP resources after catalog updates", async () => {
   }
 })
 
-test("refreshes effective catalog data after catalog updates", async () => {
+test("refreshes provider and model data independently after domain updates", async () => {
   const events = createEventStream()
   const requests = { model: 0, provider: 0 }
   const calls = createFetch((url) => {
@@ -1965,8 +1965,13 @@ test("refreshes effective catalog data after catalog updates", async () => {
   try {
     await wait(() => requests.model > 0 && requests.provider > 0)
     const before = { ...requests }
-    emitEvent(events, { id: "evt_catalog", created: 0, type: "catalog.updated", data: {} })
-    await wait(() => requests.model > before.model && requests.provider > before.provider)
+    emitEvent(events, { id: "evt_provider", created: 0, type: "provider.updated", data: {} })
+    await wait(() => requests.provider > before.provider)
+    expect(requests).toEqual({ model: before.model, provider: before.provider + 1 })
+
+    emitEvent(events, { id: "evt_model", created: 0, type: "model.updated", data: {} })
+    await wait(() => requests.model > before.model)
+    expect(requests).toEqual({ model: before.model + 1, provider: before.provider + 1 })
   } finally {
     app.renderer.destroy()
   }

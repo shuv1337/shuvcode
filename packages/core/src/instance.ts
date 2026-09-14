@@ -1,7 +1,8 @@
 import { Effect, Layer } from "effect"
 import { Agent } from "./agent.js"
 import { AISDK } from "./aisdk.js"
-import { Catalog } from "./catalog.js"
+import { Model } from "./model.js"
+import { Provider } from "./provider.js"
 import { Command } from "./command.js"
 import { Config } from "./config.js"
 import { LayerNode } from "@opencode/util/effect/layer-node"
@@ -65,7 +66,8 @@ const nodes = [
   Rpc.node,
   WebSearch.node,
   Integration.node,
-  Catalog.node,
+  Provider.node,
+  Model.node,
   ModelResolver.node,
   AISDK.node,
   Plugin.node,

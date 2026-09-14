@@ -97,7 +97,7 @@ export const AzurePlugin = define({
               if (!resourceName) return yield* Effect.fail(new Error("Azure resource name is required"))
               const current = yield* token(cognitiveScope)
               loaded.resource = resourceName
-              yield* ctx.catalog.reload()
+              yield* ctx.provider.reload()
               return Credential.OAuth.make({
                 type: "oauth",
                 methodID,
@@ -132,13 +132,13 @@ export const AzurePlugin = define({
     })
 
     yield* load()
-    yield* ctx.catalog.transform((evt) => {
-      for (const item of evt.provider.list()) {
+    yield* ctx.provider.transform((evt) => {
+      for (const item of evt.list()) {
         if (item.provider.id !== Provider.ID.azure && Provider.packageName(item.provider.package) !== "@ai-sdk/azure")
           continue
         const resourceName = resolveResourceName(item.provider.settings, loaded.resource)
         if (resourceName)
-          evt.provider.update(item.provider.id, (provider) => {
+          evt.update(item.provider.id, (provider) => {
             provider.settings = {
               ...provider.settings,
               resourceName,
@@ -147,8 +147,15 @@ export const AzurePlugin = define({
                 : {}),
             }
           })
-        for (const model of item.models.values()) {
-          evt.model.update(item.provider.id, model.id, (draft) => {
+      }
+    })
+    yield* ctx.model.transform((models) => {
+      for (const item of models.provider.list()) {
+        if (item.provider.id !== Provider.ID.azure && Provider.packageName(item.provider.package) !== "@ai-sdk/azure")
+          continue
+        const resourceName = resolveResourceName(item.provider.settings, loaded.resource)
+        for (const model of models.list(item.provider.id)) {
+          models.update(item.provider.id, model.id, (draft) => {
             if (resourceName && typeof draft.settings?.baseURL === "string")
               draft.settings.baseURL = expandResourceName(
                 draft.settings.baseURL,
@@ -163,7 +170,7 @@ export const AzurePlugin = define({
       }
     })
 
-    const reload = () => loading.withPermit(load().pipe(Effect.andThen(ctx.catalog.reload())))
+    const reload = () => loading.withPermit(load().pipe(Effect.andThen(ctx.provider.reload())))
     yield* bus.subscribe(Credential.Event.Switched).pipe(
       Stream.filter((event) => event.data.integrationID === Integration.ID.make("azure")),
       Stream.runForEach(reload),

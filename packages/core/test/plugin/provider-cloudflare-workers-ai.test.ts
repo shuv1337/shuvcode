@@ -1,7 +1,6 @@
 import { AISDK } from "@opencode/core/aisdk"
 import { describe, expect } from "bun:test"
 import { Effect } from "effect"
-import { Catalog } from "@opencode/core/catalog"
 import { Model } from "@opencode/core/model"
 import { Plugin } from "@opencode/core/plugin"
 import { PluginHost } from "@opencode/core/plugin/host"
@@ -92,9 +91,9 @@ describe("CloudflareWorkersAIPlugin", () => {
     withEnv({ CLOUDFLARE_ACCOUNT_ID: "acct", CLOUDFLARE_API_KEY: "key" }, () =>
       Effect.gen(function* () {
         const aisdk = yield* AISDK.Service
-        const catalog = yield* Catalog.Service
+        const catalog = yield* Provider.Service
         yield* catalog.transform((catalog) =>
-          catalog.provider.update(Provider.ID.make("cloudflare-workers-ai"), (provider) => {
+          catalog.update(Provider.ID.make("cloudflare-workers-ai"), (provider) => {
             provider.package = Provider.aisdk("test-provider")
           }),
         )
@@ -104,7 +103,7 @@ describe("CloudflareWorkersAIPlugin", () => {
           type: "key",
           label: "API key",
         })
-        const provider = required(yield* catalog.provider.get(Provider.ID.make("cloudflare-workers-ai")))
+        const provider = required(yield* catalog.get(Provider.ID.make("cloudflare-workers-ai")))
         const sdk = yield* aisdk.runSDK({
           model: Model.Info.make({
             ...Model.Info.default(Provider.ID.make("cloudflare-workers-ai"), Model.ID.make("@cf/model")),
@@ -127,15 +126,15 @@ describe("CloudflareWorkersAIPlugin", () => {
   it.effect("preserves a configured endpoint URL instead of deriving one from account ID", () =>
     withEnv({ CLOUDFLARE_ACCOUNT_ID: "acct" }, () =>
       Effect.gen(function* () {
-        const catalog = yield* Catalog.Service
+        const catalog = yield* Provider.Service
         yield* catalog.transform((catalog) =>
-          catalog.provider.update(Provider.ID.make("cloudflare-workers-ai"), (provider) => {
+          catalog.update(Provider.ID.make("cloudflare-workers-ai"), (provider) => {
             provider.package = Provider.aisdk("test-provider")
             provider.settings = { ...provider.settings, baseURL: "https://proxy.example/v1" }
           }),
         )
         yield* addPlugin()
-        expect(required(yield* catalog.provider.get(Provider.ID.make("cloudflare-workers-ai")))).toMatchObject({
+        expect(required(yield* catalog.get(Provider.ID.make("cloudflare-workers-ai")))).toMatchObject({
           package: "aisdk:test-provider",
           settings: { baseURL: "https://proxy.example/v1" },
         })
@@ -147,9 +146,9 @@ describe("CloudflareWorkersAIPlugin", () => {
     withEnv({ CLOUDFLARE_ACCOUNT_ID: undefined, CLOUDFLARE_API_KEY: "key" }, () =>
       Effect.gen(function* () {
         const aisdk = yield* AISDK.Service
-        const catalog = yield* Catalog.Service
+        const catalog = yield* Provider.Service
         yield* catalog.transform((catalog) =>
-          catalog.provider.update(Provider.ID.make("cloudflare-workers-ai"), (provider) => {
+          catalog.update(Provider.ID.make("cloudflare-workers-ai"), (provider) => {
             provider.settings = { ...provider.settings, baseURL: "https://proxy.example/v1" }
           }),
         )
@@ -177,15 +176,15 @@ describe("CloudflareWorkersAIPlugin", () => {
   it.effect("uses env account ID over configured account ID", () =>
     withEnv({ CLOUDFLARE_ACCOUNT_ID: "env-acct" }, () =>
       Effect.gen(function* () {
-        const catalog = yield* Catalog.Service
+        const catalog = yield* Provider.Service
         yield* catalog.transform((catalog) =>
-          catalog.provider.update(Provider.ID.make("cloudflare-workers-ai"), (provider) => {
+          catalog.update(Provider.ID.make("cloudflare-workers-ai"), (provider) => {
             provider.package = Provider.aisdk("test-provider")
             provider.settings = { ...provider.settings, accountId: "configured-acct" }
           }),
         )
         yield* addPlugin()
-        expect(required(yield* catalog.provider.get(Provider.ID.make("cloudflare-workers-ai")))).toMatchObject({
+        expect(required(yield* catalog.get(Provider.ID.make("cloudflare-workers-ai")))).toMatchObject({
           package: "aisdk:test-provider",
           settings: { baseURL: "https://api.cloudflare.com/client/v4/accounts/env-acct/ai/v1" },
         })
