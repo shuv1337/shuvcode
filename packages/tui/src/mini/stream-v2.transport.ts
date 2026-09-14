@@ -926,7 +926,7 @@ export async function createSessionTransport(input: StreamInput): Promise<Sessio
     ]
     const messages = await Promise.allSettled(
       messageIDs.map((messageID) =>
-        client.session.message({ sessionID: input.sessionID, messageID }, { signal: attempt.signal }),
+        client.session.message.get({ sessionID: input.sessionID, messageID }, { signal: attempt.signal }),
       ),
     )
     if (!current(attempt)) return permissions
@@ -1034,7 +1034,7 @@ export async function createSessionTransport(input: StreamInput): Promise<Sessio
       mergePending({
         id: event.data.inboxID,
         sessionID: event.data.sessionID,
-        timeCreated: event.created,
+        time: { created: event.created },
         ...event.data.item,
       })
       return

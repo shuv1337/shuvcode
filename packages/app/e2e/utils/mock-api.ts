@@ -254,7 +254,7 @@ const Group = HttpApiGroup.make("mock")
     }),
   )
   .add(
-    HttpApiEndpoint.post("sessionRevertClear", "/api/session/:sessionID/revert/clear", {
+    HttpApiEndpoint.delete("sessionRevertClear", "/api/session/:sessionID/revert", {
       params: SessionParams,
       success: NoContent,
     }),

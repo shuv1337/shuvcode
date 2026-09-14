@@ -529,7 +529,7 @@ export type SessionProviderContext = { version: 1; provenance: SessionProviderCo
 export type SessionInboxSynthetic = {
   id: string
   sessionID: string
-  timeCreated: number
+  time: { created: number }
   type: "synthetic"
   payload: SessionInboxSyntheticPayload
   delivery: SessionInboxDelivery
@@ -538,7 +538,7 @@ export type SessionInboxSynthetic = {
 export type SessionInboxCompaction = {
   id: string
   sessionID: string
-  timeCreated: number
+  time: { created: number }
   type: "compaction"
   payload: SessionInboxCompactionPayload
   delivery: SessionInboxDelivery
@@ -1629,7 +1629,7 @@ export type VcsInfo = { branch: VcsBranch }
 export type SessionInboxMove = {
   id: string
   sessionID: string
-  timeCreated: number
+  time: { created: number }
   type: "move"
   delivery: SessionInboxDelivery
   payload: SessionInboxMovePayload
@@ -2107,7 +2107,7 @@ export type ConfigEntry =
 export type SessionInboxUser = {
   id: string
   sessionID: string
-  timeCreated: number
+  time: { created: number }
   type: "user"
   payload: SessionInboxUserPayload
   delivery: SessionInboxDelivery
@@ -4390,12 +4390,12 @@ export type SessionBackgroundInput = { readonly sessionID: { readonly sessionID:
 
 export type SessionBackgroundOutput = void
 
-export type SessionMessageInput = {
+export type SessionMessageGetInput = {
   readonly sessionID: { readonly sessionID: string; readonly messageID: string }["sessionID"]
   readonly messageID: { readonly sessionID: string; readonly messageID: string }["messageID"]
 }
 
-export type SessionMessageOutput = { data: SessionMessageInfo }["data"]
+export type SessionMessageGetOutput = { data: SessionMessageInfo }["data"]
 
 export type SessionEnvironmentInput = {
   readonly sessionID: { readonly sessionID: string }["sessionID"]

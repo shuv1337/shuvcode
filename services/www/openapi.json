@@ -1064,10 +1064,10 @@
         "summary": "Get session statistics"
       }
     },
-    "/api/session/import": {
+    "/api/experimental/session/import": {
       "post": {
         "tags": ["session"],
-        "operationId": "session.import",
+        "operationId": "experimental.session.import",
         "parameters": [],
         "security": [],
         "responses": {
@@ -1166,10 +1166,10 @@
         }
       }
     },
-    "/api/session/{sessionID}/export": {
+    "/api/experimental/session/{sessionID}/export": {
       "get": {
         "tags": ["session"],
-        "operationId": "session.export",
+        "operationId": "experimental.session.export",
         "parameters": [
           {
             "name": "sessionID",
@@ -2804,8 +2804,8 @@
         }
       }
     },
-    "/api/session/{sessionID}/revert/clear": {
-      "post": {
+    "/api/session/{sessionID}/revert": {
+      "delete": {
         "tags": ["session"],
         "operationId": "session.revert.clear",
         "parameters": [
@@ -3478,10 +3478,10 @@
         "summary": "Queue steered item"
       }
     },
-    "/api/session/{sessionID}/instructions/entries": {
+    "/api/experimental/session/{sessionID}/instructions/entries": {
       "get": {
         "tags": ["session"],
-        "operationId": "session.instructions.entry.list",
+        "operationId": "experimental.session.instructions.entry.list",
         "parameters": [
           {
             "name": "sessionID",
@@ -3557,10 +3557,10 @@
         "summary": "List instruction entries"
       }
     },
-    "/api/session/{sessionID}/instructions/entries/{key}": {
+    "/api/experimental/session/{sessionID}/instructions/entries/{key}": {
       "put": {
         "tags": ["session"],
-        "operationId": "session.instructions.entry.put",
+        "operationId": "experimental.session.instructions.entry.put",
         "parameters": [
           {
             "name": "sessionID",
@@ -3653,7 +3653,7 @@
       },
       "delete": {
         "tags": ["session"],
-        "operationId": "session.instructions.entry.remove",
+        "operationId": "experimental.session.instructions.entry.remove",
         "parameters": [
           {
             "name": "sessionID",
@@ -4140,7 +4140,7 @@
     "/api/session/{sessionID}/message/{messageID}": {
       "get": {
         "tags": ["session"],
-        "operationId": "session.message",
+        "operationId": "session.message.get",
         "parameters": [
           {
             "name": "sessionID",
@@ -4372,7 +4372,7 @@
     "/api/session/{sessionID}/message": {
       "get": {
         "tags": ["session"],
-        "operationId": "message.list",
+        "operationId": "session.message.list",
         "parameters": [
           {
             "name": "sessionID",
@@ -17006,8 +17006,15 @@
             "type": "string",
             "pattern": "^ses"
           },
-          "timeCreated": {
-            "type": "number"
+          "time": {
+            "type": "object",
+            "properties": {
+              "created": {
+                "type": "number"
+              }
+            },
+            "required": ["created"],
+            "additionalProperties": false
           },
           "type": {
             "type": "string",
@@ -17020,7 +17027,7 @@
             "$ref": "#/components/schemas/Session.Inbox.Delivery"
           }
         },
-        "required": ["id", "sessionID", "timeCreated", "type", "payload", "delivery"],
+        "required": ["id", "sessionID", "time", "type", "payload", "delivery"],
         "additionalProperties": false
       },
       "Session.Inbox.CompactionPayload": {
@@ -17064,8 +17071,15 @@
             "type": "string",
             "pattern": "^ses"
           },
-          "timeCreated": {
-            "type": "number"
+          "time": {
+            "type": "object",
+            "properties": {
+              "created": {
+                "type": "number"
+              }
+            },
+            "required": ["created"],
+            "additionalProperties": false
           },
           "type": {
             "type": "string",
@@ -17078,7 +17092,7 @@
             "$ref": "#/components/schemas/Session.Inbox.MovePayload"
           }
         },
-        "required": ["id", "sessionID", "timeCreated", "type", "delivery", "payload"],
+        "required": ["id", "sessionID", "time", "type", "delivery", "payload"],
         "additionalProperties": false
       },
       "Session.Inbox.MovePayload": {
@@ -17108,8 +17122,15 @@
             "type": "string",
             "pattern": "^ses"
           },
-          "timeCreated": {
-            "type": "number"
+          "time": {
+            "type": "object",
+            "properties": {
+              "created": {
+                "type": "number"
+              }
+            },
+            "required": ["created"],
+            "additionalProperties": false
           },
           "type": {
             "type": "string",
@@ -17122,7 +17143,7 @@
             "$ref": "#/components/schemas/Session.Inbox.Delivery"
           }
         },
-        "required": ["id", "sessionID", "timeCreated", "type", "payload", "delivery"],
+        "required": ["id", "sessionID", "time", "type", "payload", "delivery"],
         "additionalProperties": false
       },
       "Session.Inbox.SyntheticPayload": {
@@ -17152,8 +17173,15 @@
             "type": "string",
             "pattern": "^ses"
           },
-          "timeCreated": {
-            "type": "number"
+          "time": {
+            "type": "object",
+            "properties": {
+              "created": {
+                "type": "number"
+              }
+            },
+            "required": ["created"],
+            "additionalProperties": false
           },
           "type": {
             "type": "string",
@@ -17166,7 +17194,7 @@
             "$ref": "#/components/schemas/Session.Inbox.Delivery"
           }
         },
-        "required": ["id", "sessionID", "timeCreated", "type", "payload", "delivery"],
+        "required": ["id", "sessionID", "time", "type", "payload", "delivery"],
         "additionalProperties": false
       },
       "Session.Inbox.UserPayload": {

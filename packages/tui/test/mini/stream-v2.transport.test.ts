@@ -91,7 +91,7 @@ function promptAdmission(input: Parameters<OpenCodeClient["session"]["prompt"]>[
       metadata: input.metadata,
     },
     delivery: input.delivery ?? ("steer" as const),
-    timeCreated: 2,
+    time: { created: 2 },
   }
 }
 
@@ -192,7 +192,7 @@ function sdk(input: {
   spyOn(client.session, "active").mockImplementation(() => ok(input.active?.() ?? {}))
   spyOn(client.session.inbox, "list").mockImplementation((request) => ok(input.pending?.[request.sessionID] ?? []))
   spyOn(client.session, "wait").mockImplementation(() => input.wait?.() ?? ok(undefined))
-  spyOn(client.session, "message").mockImplementation((request) => {
+  spyOn(client.session.message, "get").mockImplementation((request) => {
     const message = input.messages?.[request.sessionID]?.find((item) => item.id === request.messageID)
     return message ? (ok(message) as never) : Promise.reject(new Error(`message not found: ${request.messageID}`))
   })
@@ -327,7 +327,7 @@ describe("V2 mini transport", () => {
       type: "user",
       payload: { text: "look [Image 1]", files },
       delivery: "steer",
-      timeCreated: 1,
+      time: { created: 1 },
     } satisfies SessionInboxInfo
     const prompt = spyOn(client.session, "prompt").mockImplementation(() => {
       requested.resolve()
@@ -843,7 +843,7 @@ describe("V2 mini transport", () => {
     })
     const releaseSource = defer<void>()
     let sourceLookups = 0
-    spyOn(client.session, "message").mockImplementation(async () => {
+    spyOn(client.session.message, "get").mockImplementation(async () => {
       sourceLookups++
       if (sourceLookups === 1) throw new Error("source temporarily unavailable")
       await releaseSource.promise
@@ -1079,7 +1079,7 @@ describe("V2 mini transport", () => {
           {
             id: "msg_queued",
             sessionID: "ses_1",
-            timeCreated: 1,
+            time: { created: 1 },
             type: "user",
             payload: {
               text: "follow up",
@@ -1094,7 +1094,7 @@ describe("V2 mini transport", () => {
           {
             id: "msg_cancelled",
             sessionID: "ses_1",
-            timeCreated: 2,
+            time: { created: 2 },
             type: "user",
             payload: { text: "remove me", files: [image] },
             delivery,
@@ -3449,7 +3449,7 @@ describe("V2 mini transport", () => {
         type: "user" as const,
         payload: { text: input.text },
         delivery: "steer" as const,
-        timeCreated: 2,
+        time: { created: 2 },
       })
     })
 
@@ -4049,7 +4049,7 @@ describe("V2 mini transport", () => {
               type: "user",
               payload: { text: "", files: [image] },
               delivery: "queue",
-              timeCreated: 3,
+              time: { created: 3 },
             },
           ],
         },

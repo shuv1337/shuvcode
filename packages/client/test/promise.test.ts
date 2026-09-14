@@ -487,17 +487,17 @@ test("session instructions methods use the public HTTP contract", async () => {
   expect(requests).toEqual([
     {
       method: "GET",
-      url: "http://localhost:3000/api/session/ses_test/instructions/entries",
+      url: "http://localhost:3000/api/experimental/session/ses_test/instructions/entries",
       body: undefined,
     },
     {
       method: "PUT",
-      url: "http://localhost:3000/api/session/ses_test/instructions/entries/review-notes",
+      url: "http://localhost:3000/api/experimental/session/ses_test/instructions/entries/review-notes",
       body: { value: { text: "Check the diff", priority: 1 } },
     },
     {
       method: "DELETE",
-      url: "http://localhost:3000/api/session/ses_test/instructions/entries/review-notes",
+      url: "http://localhost:3000/api/experimental/session/ses_test/instructions/entries/review-notes",
       body: undefined,
     },
   ])
@@ -509,7 +509,7 @@ test("session.inbox.list uses the public HTTP contract", async () => {
     {
       id: "msg_pending",
       sessionID: "ses_test",
-      timeCreated: 1_717_171_717_000,
+      time: { created: 1_717_171_717_000 },
       type: "user",
       payload: { text: "Fix the failing tests" },
       delivery: "steer",
@@ -859,7 +859,7 @@ test("session methods use the public HTTP contract", async () => {
   const log = []
   for await (const item of client.session.log({ sessionID: "ses_test", after: 0 })) log.push(item)
   const interrupted = await client.session.interrupt({ sessionID: "ses_test", continue: true })
-  const message = await client.session.message({ sessionID: "ses_test", messageID: "msg_model" })
+  const message = await client.session.message.get({ sessionID: "ses_test", messageID: "msg_model" })
 
   expect(page.cursor.next).toBe("next")
   expect(page.data[0].time).toMatchObject({ idle: 1_717_171_717_002, viewed: 1_717_171_717_001 })
@@ -969,7 +969,7 @@ const admission = {
     type: "user",
     data: { text: "Hello" },
     delivery: "steer",
-    timeCreated: 1_717_171_717_000,
+    time: { created: 1_717_171_717_000 },
   },
 }
 
@@ -980,7 +980,7 @@ const syntheticAdmission = {
     type: "synthetic",
     data: { text: "Completed" },
     delivery: "queue",
-    timeCreated: 1_717_171_717_000,
+    time: { created: 1_717_171_717_000 },
   },
 }
 
@@ -989,7 +989,7 @@ const compactionAdmission = {
     type: "compaction",
     id: "msg_compaction",
     sessionID: "ses_test",
-    timeCreated: 1_717_171_717_000,
+    time: { created: 1_717_171_717_000 },
   },
 }
 

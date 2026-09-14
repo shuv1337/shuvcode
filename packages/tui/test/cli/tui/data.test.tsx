@@ -1669,7 +1669,7 @@ test("restores queued compaction from durable pending input", async () => {
     {
       id: "message-compaction-queued",
       sessionID,
-      timeCreated: 1,
+      time: { created: 1 },
       type: "compaction" as const,
       payload: {},
       delivery: "queue" as const,
@@ -1677,7 +1677,7 @@ test("restores queued compaction from durable pending input", async () => {
     {
       id: "message-compaction-later",
       sessionID,
-      timeCreated: 2,
+      time: { created: 2 },
       type: "compaction" as const,
       payload: {},
       delivery: "queue" as const,
@@ -2921,7 +2921,7 @@ test("renders admitted prompts immediately and tracks them until promoted", asyn
       {
         id: messageID,
         sessionID,
-        timeCreated: 0,
+        time: { created: 0 },
         type: "user",
         payload: { text: "hello" },
         delivery: "steer",
@@ -3275,7 +3275,7 @@ test("admits prompts optimistically and reconciles with the durable echo", async
       {
         id: messageID,
         sessionID,
-        timeCreated: 5,
+        time: { created: 5 },
         type: "user",
         payload: { text: "hello", files: [echoFile] },
         delivery: "steer",
@@ -3303,7 +3303,7 @@ test("hydrates durable pending prompts into the visible transcript", async () =>
   const item = {
     id: "msg_pending_1",
     sessionID,
-    timeCreated: 5,
+    time: { created: 5 },
     type: "user" as const,
     payload: { text: "waiting" },
     delivery: "steer" as const,
@@ -3357,7 +3357,7 @@ test("keeps the row when the response lands before the echo", async () => {
   const admission = {
     id: messageID,
     sessionID,
-    timeCreated: 1,
+    time: { created: 1 },
     type: "user",
     payload: { text: "hello" },
     delivery: "steer",
@@ -3464,7 +3464,7 @@ test("a retry under the same client-minted ID cannot duplicate rows", async () =
   const admission = {
     id: messageID,
     sessionID,
-    timeCreated: 1,
+    time: { created: 1 },
     type: "user",
     payload: { text: "hello" },
     delivery: "steer",

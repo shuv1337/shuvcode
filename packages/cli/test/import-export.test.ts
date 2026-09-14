@@ -62,7 +62,7 @@ test("export is raw by default and supports explicit sanitization", async () => 
       const url = new URL(request.url)
       if (url.pathname === "/api/status") return status()
       if (url.pathname === `/api/session/${info.id}`) return Response.json({ data: info })
-      if (url.pathname === `/api/session/${info.id}/export`) {
+      if (url.pathname === `/api/experimental/session/${info.id}/export`) {
         sanitization.push(url.searchParams.get("sanitize") ?? "")
         return Response.json({ data: url.searchParams.get("sanitize") === "true" ? sanitizedTransfer : transfer })
       }
@@ -128,7 +128,7 @@ test("export reports a missing session without a stack trace", async () => {
     fetch(request) {
       const url = new URL(request.url)
       if (url.pathname === "/api/status") return status()
-      if (url.pathname === `/api/session/${sessionID}/export`) {
+      if (url.pathname === `/api/experimental/session/${sessionID}/export`) {
         return Response.json(
           { _tag: "SessionNotFoundError", sessionID, message: `Session not found: ${sessionID}` },
           { status: 404 },
@@ -165,7 +165,7 @@ test("import validates a file and sends it to the resolved location", async () =
           project: { id: "global", directory: root, canonical: root },
         })
       }
-      if (url.pathname === "/api/session/import") {
+      if (url.pathname === "/api/experimental/session/import") {
         imported = await request.json()
         return Response.json({ data: { ...info, location: { directory: root } } })
       }
@@ -208,7 +208,7 @@ test("import reports an existing session without a stack trace", async () => {
           project: { id: "global", directory: root, canonical: root },
         })
       }
-      if (url.pathname === "/api/session/import") return new Response("Conflict", { status: 409 })
+      if (url.pathname === "/api/experimental/session/import") return new Response("Conflict", { status: 409 })
       return new Response("Not found", { status: 404 })
     },
   })
