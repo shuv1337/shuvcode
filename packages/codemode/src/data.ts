@@ -13,6 +13,7 @@ import {
   ProgramDate,
   ProgramError,
   ProgramGenerator,
+  ProgramHandle,
   ProgramMap,
   ProgramObject,
   ProgramPromise,
@@ -22,7 +23,7 @@ import {
   ProgramURLSearchParams,
 } from "./interpreter/objects.js"
 
-const MAX_VALUE_DEPTH = 32
+export const MAX_VALUE_DEPTH = 32
 
 export class ToolRuntimeError extends Error {
   constructor(
@@ -96,6 +97,16 @@ const copy = (
   }
   if ((value instanceof Callable || value instanceof ProgramGenerator) && mode !== "program") {
     throw new ToolRuntimeError("InvalidDataValue", `${label} must contain data only.`)
+  }
+  if (value instanceof ProgramHandle && mode !== "program") {
+    throw new ToolRuntimeError(
+      "InvalidDataValue",
+      `${label} contains a ${value.instance.constructor.name}, which only extension functions accept.`,
+    )
+  }
+  // Host-produced input never holds program objects; one arriving here would come back as a host object.
+  if (value instanceof ProgramObject && mode === "data") {
+    throw new ToolRuntimeError("InvalidDataValue", `${label} must be host data, not a program value.`)
   }
 
   if (protos !== undefined && mode === "program") {

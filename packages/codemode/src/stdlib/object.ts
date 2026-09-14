@@ -129,7 +129,7 @@ export const objectGlobal = <R>(
   const construct = (args: Array<unknown>): unknown => {
     const first = args[0]
     if (first === null || first === undefined) return new ProgramObject(protos.Object)
-    if (typeof first === "object") return first
+    if (first instanceof ProgramObject) return first
     throw typeError(`Object(${typeof first}) wrapper objects are not supported; use the primitive value directly.`)
   }
   const object = constructor<R>(protos, protos.Object, {

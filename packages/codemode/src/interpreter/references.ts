@@ -8,6 +8,7 @@ import {
   ProgramArray,
   ProgramDate,
   ProgramGenerator,
+  ProgramHandle,
   ProgramMap,
   ProgramObject,
   ProgramPromise,
@@ -21,6 +22,7 @@ import {
 export const isRuntimeReference = (value: unknown): boolean =>
   value instanceof Callable ||
   value instanceof ProgramGenerator ||
+  value instanceof ProgramHandle ||
   value instanceof ToolReference ||
   value instanceof ProgramPromise ||
   isWrapper(value)
@@ -85,6 +87,7 @@ export const describeValue = (value: unknown): string => {
   if (value instanceof ProgramURL) return "a URL"
   if (value instanceof ProgramURLSearchParams) return "a URLSearchParams"
   if (value instanceof ProgramGenerator) return "a generator"
+  if (value instanceof ProgramHandle) return `a ${value.instance.constructor.name}`
   if (isRuntimeReference(value)) return "a function"
   if (typeof value === "object") return "a data object"
   return `a ${typeof value}`

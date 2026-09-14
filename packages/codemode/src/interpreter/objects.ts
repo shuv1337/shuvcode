@@ -168,6 +168,16 @@ export class ProgramURL extends ProgramObject {
   }
 }
 
+/** An instance of an extension class: the host object lives in a field no property path reaches. */
+export class ProgramHandle extends ProgramObject {
+  constructor(
+    proto: ProgramObject,
+    readonly instance: object,
+  ) {
+    super(proto)
+  }
+}
+
 /** Built-in objects that wrap a host value; data-like, but never plain data. */
 export const isWrapper = (
   value: unknown,
@@ -287,7 +297,12 @@ export const define = (target: ProgramObject, key: PropertyKey, value: unknown, 
   target.props.set(name, { value, ...attrs })
 }
 
-export const defineAccessor = (target: ProgramObject, key: PropertyKey, get: Getter, set?: Setter): void => {
+export const defineAccessor = (
+  target: ProgramObject,
+  key: PropertyKey,
+  get: Getter | undefined,
+  set?: Setter,
+): void => {
   target.props.set(canonical(key), { get, set, enumerable: false, configurable: true })
 }
 

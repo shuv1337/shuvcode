@@ -423,6 +423,32 @@ ultimate source of truth. Upstream test262 files run verbatim from `test/test262
 - [ ] `crypto.getRandomValues` and `crypto.subtle`, `TextEncoder`/`TextDecoder`, and `Blob`: these need a binary
       value type, which the JSON-like data model does not have yet.
 
+## Extensions
+
+Host classes and functions a host opts in through `Extension.make({ name, globals })` and `CodeMode.make({ extensions })`.
+Nothing is exposed unless a host provides it; extension calls are not tool calls.
+
+- [x] Each global is a class or a function, exposed as-is: constructors with `new`, prototype methods, accessors,
+      and statics (including through an exposed subclass, so `new this()` works), plus inheritance
+      up to the nearest exposed ancestor. A global that shadows a built-in or another extension throws at `make`.
+- [x] Instances of exposed classes stay on the host; the program holds a handle whose only members are the class's.
+      The same host instance is always the same handle within a run, so identity and `instanceof` hold. Handles
+      cannot cross the data boundary: returning, stringifying, throwing, or passing one to a tool fails.
+- [x] Every value crossing in either direction is converted, never shared: plain objects and arrays are copied,
+      `Date`, `RegExp`, `URL`, `URLSearchParams`, `Map`, and `Set` become fresh copies with their contents converted,
+      errors cross as errors with their name and message, and a `__proto__` key is dropped. Functions, generators,
+      un-awaited promises, and symbols cannot be passed in; an instance of an unexposed class, a symbol, or a BigInt
+      cannot come out.
+- [x] A host `Promise` becomes a program promise. Whatever host code returns, resolves, throws, or rejects with
+      crosses the same way, so `catch (e)` receives a copy of the thrown value (an `Error` of the matching type, or
+      plain data). A getter must be synchronous.
+- [x] A prototype member runs only with a handle of its own class as `this`; a detached call, a plain object, or a
+      handle of another class throws `TypeError: Illegal invocation`. Program edits to an exposed prototype affect
+      that run only. Data properties on a class or prototype are not exposed, since a program write would change the
+      host class itself; expose one through an accessor.
+- [ ] Program functions as arguments to extension code (callbacks such as `forEach`).
+- [ ] Binary values (`Uint8Array`, `ArrayBuffer`) at the extension boundary; needs the binary value type above.
+
 ## Errors and diagnostics
 
 - [x] `Error`, `TypeError`, `RangeError`, `SyntaxError`, `ReferenceError`, `EvalError`, and `URIError`, callable with
