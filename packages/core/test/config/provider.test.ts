@@ -374,6 +374,40 @@ describe("ConfigProviderPlugin.Plugin", () => {
     }),
   )
 
+  it.effect("generates variants after rewriting a configured model package", () =>
+    Effect.gen(function* () {
+      const models = yield* Model.Service
+      yield* addPlugin([
+        new Document({
+          type: "document",
+          info: decode({
+            providers: {
+              custom: {
+                package: "aisdk:@ai-sdk/openai",
+                models: {
+                  claude: {
+                    modelID: "claude-opus-4-8",
+                    package: "aisdk:@ai-sdk/anthropic",
+                  },
+                },
+              },
+            },
+          }),
+        }),
+      ])
+
+      const model = required(yield* models.get(Provider.ID.make("custom"), Model.ID.make("claude")))
+      expect(model.package).toBe("@opencode/ai/providers/anthropic")
+      expect(model.variants.map((variant) => variant.id)).toEqual([
+        Model.VariantID.make("low"),
+        Model.VariantID.make("medium"),
+        Model.VariantID.make("high"),
+        Model.VariantID.make("xhigh"),
+        Model.VariantID.make("max"),
+      ])
+    }),
+  )
+
   it.effect("keeps configured model variant bodies unchanged", () =>
     Effect.gen(function* () {
       const models = yield* Model.Service

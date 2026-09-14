@@ -75,7 +75,7 @@ const richSnapshot = (name = "Acme") => {
         id: providerID,
         name,
         activation: "auto",
-        package: Provider.aisdk("@ai-sdk/openai-compatible"),
+        package: "@opencode/ai/providers/openai-compatible",
         settings: { baseURL: "https://api.acme.test/v1", thinking: { type: "adaptive", display: "summarized" } },
         headers: { "x-acme": "provider" },
         body: { service_tier: "default", tags: ["stable"] },
@@ -305,7 +305,7 @@ describe("ModelsDevPlugin", () => {
                 id: providerID,
                 name: "Acme",
                 activation: "auto",
-                package: Provider.aisdk("@ai-sdk/openai-compatible"),
+                package: "@opencode/ai/providers/openai-compatible",
               },
               environment: [],
               models: [
@@ -362,7 +362,7 @@ describe("ModelsDevPlugin", () => {
             id: providerID,
             name: "Acme",
             activation: "auto",
-            package: Provider.aisdk("@ai-sdk/openai-compatible"),
+            package: "@opencode/ai/providers/openai-compatible",
             settings: { baseURL: "https://api.acme.test/v1" },
             headers: { "x-acme": "provider" },
           },
@@ -441,7 +441,7 @@ describe("ModelsDevPlugin", () => {
                 id: providerID,
                 name: "Acme",
                 activation: "auto",
-                package: Provider.aisdk("@ai-sdk/openai-compatible"),
+                package: "@opencode/ai/providers/openai-compatible",
                 settings: { baseURL: "https://api.acme.test/v1" },
               },
               environment: [],
@@ -493,7 +493,7 @@ describe("ModelsDevPlugin", () => {
                   providerID,
                   name: "GPT-5.4 Fast",
                   family: Model.Family.make("gpt"),
-                  package: Provider.aisdk("@ai-sdk/openai-compatible"),
+                  package: "@opencode/ai/providers/openai-compatible",
                   settings: { baseURL: "https://api.acme.test/v1" },
                   headers: { "x-mode": "fast" },
                   body: { service_tier: "priority" },
@@ -556,7 +556,7 @@ describe("ModelsDevPlugin", () => {
         modelID: "gpt-5.4",
         providerID: "acme",
         name: "GPT-5.4 Fast",
-        package: Provider.aisdk("@ai-sdk/openai-compatible"),
+        package: "@opencode/ai/providers/openai-compatible",
         settings: { baseURL: "https://api.acme.test/v1" },
         headers: { "x-mode": "fast" },
         body: { service_tier: "priority" },
@@ -619,7 +619,7 @@ describe("ModelsDevPlugin", () => {
             id: providerID,
             name: "Acme",
             activation: "auto",
-            package: Provider.aisdk("@ai-sdk/openai-compatible"),
+            package: "@opencode/ai/providers/openai-compatible",
           },
           environment: [],
           models: [
@@ -713,7 +713,7 @@ describe("ModelsDevPlugin", () => {
                         id: providerID,
                         name: "Acme",
                         activation: "auto",
-                        package: Provider.aisdk("@ai-sdk/openai-compatible"),
+                        package: "@opencode/ai/providers/openai-compatible",
                         settings: { baseURL: "https://${ACME_HOST}/${UNDECLARED_HOST}/v1" },
                       },
                       environment: ["ACME_HOST", "ACME_MODEL_PATH", "ACME_API_KEY"],
@@ -765,7 +765,7 @@ describe("ModelsDevPlugin", () => {
           id: providerID,
           name: "Acme",
           activation: "auto",
-          package: Provider.aisdk("@ai-sdk/openai-compatible"),
+          package: "@opencode/ai/providers/openai-compatible",
         },
         environment: [],
         models: [
@@ -863,7 +863,7 @@ describe("ModelsDevPlugin", () => {
     }),
   )
 
-  it.effect("advertises only key-bearing Google Vertex environment variables", () =>
+  it.effect("advertises only credential-bearing environment variables", () =>
     Effect.gen(function* () {
       const integrations = yield* Integration.Service
       const providers = yield* Provider.Service
@@ -881,10 +881,20 @@ describe("ModelsDevPlugin", () => {
               Effect.succeed([
                 {
                   info: {
+                    id: Provider.ID.make("cloudflare-workers-ai"),
+                    name: "Cloudflare Workers AI",
+                    activation: "auto",
+                    package: "@opencode/ai/providers/cloudflare-workers-ai",
+                  },
+                  environment: ["CLOUDFLARE_ACCOUNT_ID", "CLOUDFLARE_API_KEY"],
+                  models: [],
+                },
+                {
+                  info: {
                     id: Provider.ID.make("google-vertex"),
                     name: "Google Vertex",
                     activation: "auto",
-                    package: Provider.aisdk("@ai-sdk/google-vertex"),
+                    package: "@opencode/ai/providers/google-vertex",
                   },
                   environment: ["GOOGLE_VERTEX_PROJECT", "GOOGLE_VERTEX_LOCATION", "GOOGLE_APPLICATION_CREDENTIALS"],
                   models: [],
@@ -900,6 +910,24 @@ describe("ModelsDevPlugin", () => {
       expect(yield* integrations.get(Integration.ID.make("google-vertex"))).toMatchObject({
         methods: [{ type: "key" }, { type: "env", names: ["GOOGLE_VERTEX_API_KEY"] }],
       })
+      expect(yield* integrations.get(Integration.ID.make("cloudflare-workers-ai"))).toMatchObject({
+        methods: [
+          { type: "key" },
+          {
+            type: "env",
+            names: ["CLOUDFLARE_API_KEY", "CLOUDFLARE_WORKERS_AI_TOKEN", "CLOUDFLARE_API_TOKEN"],
+          },
+        ],
+      })
+      yield* withEnv({ CLOUDFLARE_ACCOUNT_ID: "account", CLOUDFLARE_API_KEY: "token" }, () =>
+        integrations.connection
+          .active(Integration.ID.make("cloudflare-workers-ai"))
+          .pipe(
+            Effect.tap((connection) =>
+              Effect.sync(() => expect(connection).toEqual({ type: "env", name: "CLOUDFLARE_API_KEY" })),
+            ),
+          ),
+      )
     }),
   )
 
@@ -959,11 +987,11 @@ describe("ModelsDevPlugin", () => {
       const budgetModel = yield* modelState.get(Provider.ID.anthropic, Model.ID.make("claude-budget"))
       expect(budgetModel?.variants).toContainEqual({
         id: Model.VariantID.make("high"),
-        settings: { thinking: { type: "enabled", budgetTokens: 16000 } },
+        settings: { thinking: { type: "enabled", budgetTokens: 32000 } },
       })
       expect(budgetModel?.variants).toContainEqual({
         id: Model.VariantID.make("max"),
-        settings: { thinking: { type: "enabled", budgetTokens: 31999 } },
+        settings: { thinking: { type: "enabled", budgetTokens: 63999 } },
       })
 
       const anthropicEffortModel = yield* modelState.get(Provider.ID.anthropic, Model.ID.make("claude-opus-4.7"))
@@ -986,8 +1014,14 @@ describe("ModelsDevPlugin", () => {
 
       const opus45 = yield* modelState.get(Provider.ID.anthropic, Model.ID.make("claude-opus-4-5"))
       expect(opus45?.variants).toEqual([
-        { id: Model.VariantID.make("low"), settings: { effort: "low" } },
-        { id: Model.VariantID.make("high"), settings: { effort: "high" } },
+        {
+          id: Model.VariantID.make("low"),
+          settings: { effort: "low", thinking: { type: "enabled", budgetTokens: 8191 } },
+        },
+        {
+          id: Model.VariantID.make("high"),
+          settings: { effort: "high", thinking: { type: "enabled", budgetTokens: 8191 } },
+        },
       ])
 
       const grok = yield* modelState.get(Provider.ID.make("xai"), Model.ID.make("grok-4.5"))
@@ -1119,15 +1153,15 @@ describe("ModelsDevPlugin", () => {
       expect(bedrock?.variants).toEqual([
         {
           id: Model.VariantID.make("none"),
-          settings: { additionalModelRequestFields: { reasoningConfig: { type: "disabled" } } },
+          body: { additionalModelRequestFields: { reasoningConfig: { type: "disabled" } } },
         },
         {
           id: Model.VariantID.make("low"),
-          settings: { reasoningConfig: { type: "enabled", maxReasoningEffort: "low" } },
+          body: { additionalModelRequestFields: { reasoningConfig: { type: "enabled", maxReasoningEffort: "low" } } },
         },
         {
           id: Model.VariantID.make("high"),
-          settings: { reasoningConfig: { type: "enabled", maxReasoningEffort: "high" } },
+          body: { additionalModelRequestFields: { reasoningConfig: { type: "enabled", maxReasoningEffort: "high" } } },
         },
       ])
 

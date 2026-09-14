@@ -5,7 +5,6 @@ import { LanguageModel, ProviderConfigurationError } from "@opencode/ai"
 import { Auth } from "@opencode/ai/route"
 import { Context, Effect, Layer, Schema, Struct } from "effect"
 import { AISDK } from "./aisdk.js"
-import { AISDKNative } from "./aisdk-native.js"
 import { Credential } from "./credential.js"
 import { Integration } from "./integration.js"
 import { Capabilities, ID, Info, Model, Ref, VariantID } from "./model.js"
@@ -193,19 +192,9 @@ const resolveCatalogModel = Effect.fn("ModelResolver.resolveCatalogModel")(funct
   dependencies?: Dependencies,
 ) {
   const resolved = prepareRuntimeModel(model, credential)
-  const packageName = Provider.packageName(resolved.package)
   const configuration = credential?.type === "key" ? credential.configuration : undefined
   const configured = { ...resolved.settings, ...credential?.metadata, ...configuration }
-  const mapping = Provider.isAISDK(resolved.package)
-    ? AISDKNative.map({
-        packageName,
-        settings: configured,
-        modelID: resolved.modelID ?? resolved.id,
-        providerID: resolved.canonical ?? resolved.providerID,
-      })
-    : undefined
-  const native = mapping?.package ?? packageName
-  if (Provider.isAISDK(resolved.package) && !mapping) {
+  if (Provider.isAISDK(resolved.package)) {
     const loadAISDK = dependencies?.loadAISDK
     if (!loadAISDK) return yield* unsupported(resolved)
     const settings = yield* prepareProviderSettings(
@@ -220,10 +209,9 @@ const resolveCatalogModel = Effect.fn("ModelResolver.resolveCatalogModel")(funct
       Effect.mapError((error) => initialization(resolved, "init", error.cause)),
     )
   }
-  if (!native) return yield* unsupported(resolved)
-
-  const specifier = native
-  const mapped = yield* prepareProviderSettings(resolved, Provider.nativeSettings(mapping?.settings ?? configured))
+  const specifier = Provider.packageName(resolved.package)
+  if (!specifier) return yield* unsupported(resolved)
+  const mapped = yield* prepareProviderSettings(resolved, Provider.nativeSettings(configured))
   const module = yield* (dependencies?.loadPackage ?? Provider.loadPackage)(specifier).pipe(
     Effect.mapError((error) => initialization(resolved, "load", error.cause)),
   )
@@ -231,8 +219,8 @@ const resolveCatalogModel = Effect.fn("ModelResolver.resolveCatalogModel")(funct
     ...(credential ? Struct.omit(mapped, ["accessToken", "apiKey", "authToken"]) : mapped),
     ...(resolved.canonical === undefined ? {} : { provider: resolved.canonical }),
     ...nativeCredentialSettings(specifier, credential),
-    headers: Provider.mergeHeaders(mapping?.headers, resolved.headers),
-    body: Provider.mergeOverlay(mapping?.body, resolved.body),
+    headers: resolved.headers,
+    body: resolved.body,
   }
   return yield* Effect.try({
     try: () => {

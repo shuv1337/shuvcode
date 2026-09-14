@@ -432,11 +432,11 @@ describe("OpencodePlugin", () => {
           const integrations = yield* Integration.Service
           yield* providers.transform((editor) => {
             editor.update(Provider.ID.openai, (provider) => {
-              provider.package = Provider.aisdk("@ai-sdk/openai")
+              provider.package = "@opencode/ai/providers/openai"
               provider.integrationID = Integration.ID.make("openai")
             })
             editor.models.update(Provider.ID.openai, Model.ID.make("api-model"), (model) => {
-              model.package = Provider.aisdk("@ai-sdk/openai")
+              model.package = "@opencode/ai/providers/openai"
               model.settings = { baseURL: "https://upstream.example/v1" }
               model.variants = [
                 {
@@ -468,7 +468,7 @@ describe("OpencodePlugin", () => {
             canonical: "openai",
             name: "Remote",
             integrationID: "opencode",
-            package: Provider.aisdk("@ai-sdk/openai-compatible"),
+            package: "@opencode/ai/providers/openai-compatible",
             settings: { baseURL: `${server.url.origin}/v1`, custom: "value" },
             headers: { "x-org-id": "org" },
           })
@@ -485,13 +485,18 @@ describe("OpencodePlugin", () => {
             capabilities: { tools: true, input: ["text", "image"], output: ["text"] },
             cost: [{ input: 1, output: 2, cache: { read: 0.1, write: 0 } }],
             limit: { context: 1000, output: 100 },
-            package: Provider.aisdk("@ai-sdk/openai-compatible"),
+            package: "@opencode/ai/providers/openai-compatible",
             settings: { baseURL: `${server.url.origin}/v1`, custom: "value", temperature: 0.5 },
             headers: { "x-org-id": "org" },
           })
-          expect(model.settings).toEqual({ baseURL: `${server.url.origin}/v1`, custom: "value", temperature: 0.5 })
+          expect(model.settings).toEqual({
+            baseURL: `${server.url.origin}/v1`,
+            custom: "value",
+            temperature: 0.5,
+            provider: "openai",
+          })
           const override = required(yield* models.get(Provider.ID.make("remote"), Model.ID.make("override")))
-          expect(override.package).toBe(Provider.aisdk("@ai-sdk/anthropic"))
+          expect(override.package).toBe("@opencode/ai/providers/anthropic")
           expect(override.settings?.baseURL).toBe(`${server.url.origin}/anthropic`)
           expect(model.variants).toEqual([
             {
@@ -506,9 +511,7 @@ describe("OpencodePlugin", () => {
               headers: { "x-variant": "high" },
             },
           ])
-          expect(
-            required(yield* models.get(Provider.ID.make("remote"), Model.ID.make("disabled"))).enabled,
-          ).toBe(false)
+          expect(required(yield* models.get(Provider.ID.make("remote"), Model.ID.make("disabled"))).enabled).toBe(false)
           expect(yield* models.get(Provider.ID.make("remote"), Model.ID.make("stale"))).toBeDefined()
           expect(
             (yield* providers.snapshot()).records.get(Provider.ID.openai)?.models.get(Model.ID.make("api-model"))
@@ -1120,9 +1123,7 @@ describe("OpencodePlugin", () => {
         })
         yield* addPlugin()
         expect(required(yield* catalog.get(Provider.ID.opencode)).settings?.apiKey).toBe("public")
-        expect(required(yield* models.get(Provider.ID.opencode, Model.ID.make("output-only"))).enabled).toBe(
-          true,
-        )
+        expect(required(yield* models.get(Provider.ID.opencode, Model.ID.make("output-only"))).enabled).toBe(true)
       }),
     ),
   )

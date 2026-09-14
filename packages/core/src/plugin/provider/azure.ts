@@ -134,7 +134,10 @@ export const AzurePlugin = define({
     yield* load()
     yield* ctx.provider.transform((evt) => {
       for (const item of evt.list()) {
-        if (item.provider.id !== Provider.ID.azure && Provider.packageName(item.provider.package) !== "@ai-sdk/azure")
+        if (
+          item.provider.id !== Provider.ID.azure &&
+          !item.provider.package.startsWith("@opencode/ai/providers/azure/")
+        )
           continue
         const resourceName = resolveResourceName(item.provider.settings, loaded.resource)
         if (resourceName)
@@ -151,7 +154,10 @@ export const AzurePlugin = define({
     })
     yield* ctx.model.transform((models) => {
       for (const item of models.provider.list()) {
-        if (item.provider.id !== Provider.ID.azure && Provider.packageName(item.provider.package) !== "@ai-sdk/azure")
+        if (
+          item.provider.id !== Provider.ID.azure &&
+          !item.provider.package.startsWith("@opencode/ai/providers/azure/")
+        )
           continue
         const resourceName = resolveResourceName(item.provider.settings, loaded.resource)
         for (const model of models.list(item.provider.id)) {
@@ -216,9 +222,9 @@ function expandResourceName(baseURL: string, resourceName: string) {
 }
 
 function responsesWebSocketCapable(provider: Provider.Info, model: Model.Info) {
-  if (Provider.packageName(model.package ?? provider.package) !== "@ai-sdk/azure") return false
+  if ((model.package ?? provider.package) !== "@opencode/ai/providers/azure/responses") return false
   const settings = Provider.mergeOverlay(provider.settings, model.settings)
-  if (settings?.useCompletionUrls === true || settings?.useDeploymentBasedUrls === true) return false
+  if (settings?.useDeploymentBasedUrls === true) return false
   if (settings?.apiVersion !== undefined && settings.apiVersion !== "v1") return false
   if (typeof settings?.baseURL !== "string") return true
   return /^https:\/\/[^/]+\.openai\.azure\.com(?:\/|$)/i.test(settings.baseURL)

@@ -16,6 +16,7 @@ import { IntegrationConnection } from "./integration/connection.js"
 import { Credential } from "@opencode/schema/credential"
 import { Location } from "./location.js"
 import { freeze } from "immer"
+import { AISDKNative } from "./aisdk-native.js"
 
 export const ID = Provider.ID
 export type ID = typeof ID.Type
@@ -55,6 +56,9 @@ const builtins = new Map<string, () => Promise<unknown>>([
     "@opencode/ai/providers/amazon-bedrock/mantle/responses",
     () => import("@opencode/ai/providers/amazon-bedrock/mantle/responses"),
   ],
+  ["@opencode/ai/providers/alibaba/chat", () => import("@opencode/ai/providers/alibaba/chat")],
+  ["@opencode/ai/providers/alibaba/messages", () => import("@opencode/ai/providers/alibaba/messages")],
+  ["@opencode/ai/providers/alibaba/responses", () => import("@opencode/ai/providers/alibaba/responses")],
   ["@opencode/ai/providers/anthropic", () => import("@opencode/ai/providers/anthropic")],
   ["@opencode/ai/providers/azure", () => import("@opencode/ai/providers/azure")],
   ["@opencode/ai/providers/azure/chat", () => import("@opencode/ai/providers/azure/chat")],
@@ -73,7 +77,16 @@ const builtins = new Map<string, () => Promise<unknown>>([
   ["@opencode/ai/providers/google-vertex/responses", () => import("@opencode/ai/providers/google-vertex/responses")],
   ["@opencode/ai/providers/google-vertex/messages", () => import("@opencode/ai/providers/google-vertex/messages")],
   ["@opencode/ai/providers/groq", () => import("@opencode/ai/providers/groq")],
+  ["@opencode/ai/providers/meta/chat", () => import("@opencode/ai/providers/meta/chat")],
+  ["@opencode/ai/providers/meta/messages", () => import("@opencode/ai/providers/meta/messages")],
+  ["@opencode/ai/providers/meta/responses", () => import("@opencode/ai/providers/meta/responses")],
+  ["@opencode/ai/providers/minimax/chat", () => import("@opencode/ai/providers/minimax/chat")],
+  ["@opencode/ai/providers/minimax/messages", () => import("@opencode/ai/providers/minimax/messages")],
+  ["@opencode/ai/providers/minimax/responses", () => import("@opencode/ai/providers/minimax/responses")],
   ["@opencode/ai/providers/mistral", () => import("@opencode/ai/providers/mistral")],
+  ["@opencode/ai/providers/moonshot/chat", () => import("@opencode/ai/providers/moonshot/chat")],
+  ["@opencode/ai/providers/moonshot/messages", () => import("@opencode/ai/providers/moonshot/messages")],
+  ["@opencode/ai/providers/moonshot/responses", () => import("@opencode/ai/providers/moonshot/responses")],
   ["@opencode/ai/providers/openai", () => import("@opencode/ai/providers/openai")],
   ["@opencode/ai/providers/openai/chat", () => import("@opencode/ai/providers/openai/chat")],
   ["@opencode/ai/providers/openai/responses", () => import("@opencode/ai/providers/openai/responses")],
@@ -81,6 +94,13 @@ const builtins = new Map<string, () => Promise<unknown>>([
   ["@opencode/ai/providers/openrouter", () => import("@opencode/ai/providers/openrouter")],
   ["@opencode/ai/providers/togetherai", () => import("@opencode/ai/providers/togetherai")],
   ["@opencode/ai/providers/xai", () => import("@opencode/ai/providers/xai")],
+  ["@opencode/ai/providers/zai/chat", () => import("@opencode/ai/providers/zai/chat")],
+  ["@opencode/ai/providers/zai-coding-plan/chat", () => import("@opencode/ai/providers/zai-coding-plan/chat")],
+  ["@opencode/ai/providers/zai-coding-plan/messages", () => import("@opencode/ai/providers/zai-coding-plan/messages")],
+  [
+    "@opencode/ai/providers/zai-coding-plan/responses",
+    () => import("@opencode/ai/providers/zai-coding-plan/responses"),
+  ],
 ])
 
 export const loadPackage = Effect.fn("Provider.loadPackage")(function* (input: string, npm?: Npm.Interface) {
@@ -269,6 +289,11 @@ const layer = Layer.effect(
             const record = entry(id)
             update(record.provider)
             record.provider.id = id
+            AISDKNative.rewrite(record.provider, {
+              specifier: record.provider.package,
+              providerID: id,
+              canonical: record.provider.canonical,
+            })
           },
           remove: (id) => {
             records.delete(id)
@@ -278,19 +303,26 @@ const layer = Layer.effect(
               entry(id).models = index(values)
             },
             update: (providerID, modelID, update) => {
+              const record = entry(providerID)
               const target = writable(providerID)
               const current = target.get(modelID)
               const model = // An earlier add/set can publish and freeze an owned model within this fold.
-              (
-                current && models.has(current) && !Object.isFrozen(current)
-                  ? current
-                  : current
-                    ? structuredClone(current)
-                    : Model.Info.default(providerID, modelID)
-              ) as DeepMutable<Model.Info>
+                (
+                  current && models.has(current) && !Object.isFrozen(current)
+                    ? current
+                    : current
+                      ? structuredClone(current)
+                      : Model.Info.default(providerID, modelID)
+                ) as DeepMutable<Model.Info>
               update(model)
               model.id = modelID
               model.providerID = providerID
+              AISDKNative.rewrite(model, {
+                specifier: model.package ?? record.provider.package,
+                providerID,
+                canonical: model.canonical ?? record.provider.canonical,
+                modelID: model.modelID ?? modelID,
+              })
               models.add(model)
               target.set(modelID, model)
             },

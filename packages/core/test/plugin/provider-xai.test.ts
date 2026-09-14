@@ -75,7 +75,7 @@ describe("XAIPlugin", () => {
       const providerID = Provider.ID.make("xai")
       yield* providers.transform((editor) => {
         editor.update(providerID, (provider) => {
-          provider.package = Provider.aisdk("@ai-sdk/xai")
+          provider.package = "@opencode/ai/providers/xai"
           provider.activation = "enabled"
         })
         editor.models.update(providerID, Model.ID.make("grok-4.6"), () => {})

@@ -244,7 +244,7 @@ describe("AzurePlugin", () => {
           const models = yield* Model.Service
           yield* catalog.transform((editor) => {
             editor.update(Provider.ID.azure, (provider) => {
-              provider.package = Provider.aisdk("@ai-sdk/azure")
+              provider.package = "@opencode/ai/providers/azure/responses"
             })
             editor.models.update(Provider.ID.azure, Model.ID.make("gpt-5-mini"), () => {})
             editor.models.update(Provider.ID.azure, Model.ID.make("gpt-5-nano"), () => {})
@@ -311,7 +311,7 @@ describe("AzurePlugin", () => {
         const catalog = yield* Provider.Service
         yield* catalog.transform((catalog) => {
           catalog.update(Provider.ID.azure, (item) => {
-            item.package = Provider.aisdk("@ai-sdk/azure")
+            item.package = "@opencode/ai/providers/azure/responses"
           })
         })
         yield* addPlugin()
@@ -326,7 +326,7 @@ describe("AzurePlugin", () => {
         const catalog = yield* Provider.Service
         yield* catalog.transform((catalog) => {
           catalog.update(Provider.ID.azure, (item) => {
-            item.package = Provider.aisdk("@ai-sdk/azure")
+            item.package = "@opencode/ai/providers/azure/responses"
           })
         })
         yield* addPlugin()
@@ -342,14 +342,14 @@ describe("AzurePlugin", () => {
         const models = yield* Model.Service
         yield* catalog.transform((catalog) => {
           catalog.update(Provider.ID.azure, (provider) => {
-            provider.package = Provider.aisdk("@ai-sdk/openai-compatible")
+            provider.package = "@opencode/ai/providers/openai-compatible"
             provider.activation = "enabled"
             provider.settings = {
               baseURL: "https://${AZURE_COGNITIVE_SERVICES_RESOURCE_NAME}.cognitiveservices.azure.com/openai",
             }
           })
           catalog.models.update(Provider.ID.azure, Model.ID.make("anthropic"), (model) => {
-            model.package = Provider.aisdk("@ai-sdk/anthropic")
+            model.package = "@opencode/ai/providers/anthropic"
             model.settings = {
               resourceName: "model-resource",
               baseURL: "https://${AZURE_RESOURCE_NAME}.services.ai.azure.com/anthropic/v1",
@@ -378,7 +378,7 @@ describe("AzurePlugin", () => {
         const catalog = yield* Provider.Service
         yield* catalog.transform((catalog) => {
           catalog.update(Provider.ID.azure, (item) => {
-            item.package = Provider.aisdk("@ai-sdk/azure")
+            item.package = "@opencode/ai/providers/azure/responses"
             item.settings = { resourceName: "from-config" }
           })
           catalog.update(Provider.ID.openai, () => {})
@@ -396,7 +396,7 @@ describe("AzurePlugin", () => {
         const catalog = yield* Provider.Service
         yield* catalog.transform((catalog) => {
           catalog.update(Provider.ID.azure, (item) => {
-            item.package = Provider.aisdk("@ai-sdk/azure")
+            item.package = "@opencode/ai/providers/azure/responses"
             item.settings = { resourceName: "" }
           })
         })
@@ -412,7 +412,7 @@ describe("AzurePlugin", () => {
         const catalog = yield* Provider.Service
         yield* catalog.transform((catalog) => {
           catalog.update(Provider.ID.azure, (item) => {
-            item.package = Provider.aisdk("@ai-sdk/azure")
+            item.package = "@opencode/ai/providers/azure/responses"
             item.settings = { resourceName: "   " }
           })
         })
@@ -437,12 +437,12 @@ describe("AzurePlugin", () => {
         }
         yield* catalog.transform((editor) => {
           editor.update(Provider.ID.azure, (provider) => {
-            provider.package = Provider.aisdk("@ai-sdk/azure")
+            provider.package = "@opencode/ai/providers/azure/responses"
             provider.activation = "enabled"
           })
           editor.models.update(Provider.ID.azure, models.responses, () => {})
           editor.models.update(Provider.ID.azure, models.chat, (model) => {
-            model.settings = { useCompletionUrls: true }
+            model.package = "@opencode/ai/providers/azure/chat"
           })
           editor.models.update(Provider.ID.azure, models.preview, (model) => {
             model.settings = { apiVersion: "2025-04-01-preview" }
@@ -454,7 +454,7 @@ describe("AzurePlugin", () => {
             model.settings = { baseURL: "https://gateway.example/azure" }
           })
           editor.models.update(Provider.ID.azure, models.nonAzure, (model) => {
-            model.package = Provider.aisdk("@ai-sdk/anthropic")
+            model.package = "@opencode/ai/providers/anthropic"
           })
         })
 

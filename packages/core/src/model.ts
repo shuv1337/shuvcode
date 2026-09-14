@@ -7,6 +7,7 @@ import { Bus } from "./bus.js"
 import { State } from "./state.js"
 import { Location } from "./location.js"
 import { freeze } from "immer"
+import { AISDKNative } from "./aisdk-native.js"
 
 export const ID = Model.ID
 export type ID = typeof ID.Type
@@ -111,6 +112,13 @@ const layer = Layer.effect(
           update(model)
           model.id = modelID
           model.providerID = providerID
+          const provider = input?.records.get(providerID)?.provider
+          AISDKNative.rewrite(model, {
+            specifier: model.package ?? provider?.package,
+            providerID,
+            canonical: model.canonical ?? provider?.canonical,
+            modelID: model.modelID ?? modelID,
+          })
           models.set(modelID, model)
         },
         remove: (providerID, modelID) => {

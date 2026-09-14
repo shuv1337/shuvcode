@@ -77,6 +77,8 @@ function environmentNames(provider: ModelsDev.Snapshot) {
   // Vertex. Those configure Google auth rather than carrying a key, so only the
   // Express Mode key may become a credential; GoogleVertexPlugin handles activation.
   if (provider.info.id === Provider.ID.googleVertex) return ["GOOGLE_VERTEX_API_KEY"]
+  if (provider.info.id === "cloudflare-workers-ai")
+    return ["CLOUDFLARE_API_KEY", "CLOUDFLARE_WORKERS_AI_TOKEN", "CLOUDFLARE_API_TOKEN"]
   return [...provider.environment]
 }
 
