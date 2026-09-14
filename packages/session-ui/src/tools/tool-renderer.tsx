@@ -1030,7 +1030,6 @@ function FileAccordionGroup(props: { children: JSX.Element }) {
     <div
       data-component="accordion"
       data-scope="apply-patch"
-      style={{ "--sticky-accordion-offset": "calc(32px + var(--tool-content-gap))" }}
       onKeyDown={(event) => {
         if (event.defaultPrevented || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return
         if (!["ArrowUp", "ArrowDown", "Home", "End"].includes(event.key)) return
