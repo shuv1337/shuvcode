@@ -16,7 +16,7 @@ import {
   type JSX,
 } from "solid-js"
 import stripAnsi from "strip-ansi"
-import { createTwoFilesPatch } from "diff"
+import { createTwoFilesPatch, diffLines } from "diff"
 import { Dynamic } from "solid-js/web"
 import { type SessionSummary, useData } from "../context"
 import { useFileComponent } from "@opencode/ui/context/file"
@@ -566,13 +566,7 @@ export function CurrentContextToolGroup(props: {
         return groups
       }
       const previous = groups.at(-1)
-      if (
-        tool.name === "patch" &&
-        tool.state.status !== "error" &&
-        Array.isArray(previous) &&
-        previous?.[0]?.name === "patch" &&
-        previous[0].state.status !== "error"
-      ) {
+      if (isFileChangeTool(tool) && Array.isArray(previous) && previous[0] && isFileChangeTool(previous[0])) {
         previous.push(tool)
         return groups
       }
@@ -595,7 +589,7 @@ export function CurrentContextToolGroup(props: {
   const patchKeys = createMemo(() => {
     const keys = new Map<SessionMessageAssistantTool, string>()
     items().forEach((item) => {
-      if (!Array.isArray(item) || item[0]?.name !== "patch" || item[0].state.status === "error") return
+      if (!Array.isArray(item) || !item[0] || !isFileChangeTool(item[0])) return
       const key = props.patchGroupKey?.(item) ?? item[0].id
       item.forEach((tool) => keys.set(tool, key))
     })
@@ -715,7 +709,7 @@ export function CurrentContextToolGroup(props: {
                               when={tool().name === "skill" && group().length > 1 && skills().length === group().length}
                               fallback={
                                 <Show
-                                  when={tool().name === "patch" && tool().state.status !== "error"}
+                                  when={isFileChangeTool(tool())}
                                   fallback={
                                     <ToolDisplay
                                       id={tool().id}
@@ -844,9 +838,32 @@ export function CurrentFileToolGroup(props: {
       const files = currentToolMetadata(tool).files
       if (Array.isArray(files) && files.length > 0)
         return files.map((value, index) => ({ key: `${tool.id}:${index}`, toolID: tool.id, value }))
-      if (tool.name !== "write") return []
       const input = currentToolInput(tool)
-      if (typeof input.path !== "string" || typeof input.content !== "string" || !input.content) return []
+      if (typeof input.path !== "string") return []
+      if (tool.name === "edit" && typeof input.oldString === "string" && typeof input.newString === "string") {
+        const changes = diffLines(input.oldString, input.newString)
+        const additions = changes
+          .filter((change) => change.added)
+          .reduce((total, change) => total + (change.count ?? 0), 0)
+        const deletions = changes
+          .filter((change) => change.removed)
+          .reduce((total, change) => total + (change.count ?? 0), 0)
+        if (additions === 0 && deletions === 0) return []
+        return [
+          {
+            key: `${tool.id}:0`,
+            toolID: tool.id,
+            value: {
+              file: input.path,
+              patch: createTwoFilesPatch(input.path, input.path, input.oldString, input.newString),
+              additions,
+              deletions,
+              status: "modified",
+            },
+          },
+        ]
+      }
+      if (tool.name !== "write" || typeof input.content !== "string" || !input.content) return []
       return [
         {
           key: `${tool.id}:0`,
@@ -910,6 +927,10 @@ export function CurrentFileToolGroup(props: {
       />
     </div>
   )
+}
+
+function isFileChangeTool(tool: SessionMessageAssistantTool) {
+  return tool.state.status !== "error" && (tool.name === "edit" || tool.name === "write" || tool.name === "patch")
 }
 
 function samePatchFile(a: unknown, b: unknown) {
