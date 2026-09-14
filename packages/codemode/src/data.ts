@@ -59,8 +59,12 @@ export const fromData = (protos: Prototypes, value: unknown, label: string): unk
  * dropped ("json") or become null ("result", for program results where the consumer must never see
  * undefined); a bare `undefined` follows the same rule.
  */
-export const toData = (value: unknown, label: string, undefinedAs: "json" | "result" = "json"): unknown =>
-  copy(value, label, undefinedAs, 0, new Set())
+export const toData = (
+  value: unknown,
+  label: string,
+  undefinedAs: "json" | "result" = "json",
+  stripProto = true,
+): unknown => copy(value, label, undefinedAs, 0, new Set(), undefined, stripProto)
 
 // "program" and "data" build program objects; "json" and "result" build ordinary objects for the host.
 type Mode = "program" | "data" | "json" | "result"
@@ -72,8 +76,9 @@ const copy = (
   depth: number,
   seen: Set<object>,
   protos?: Prototypes,
+  stripProto = true,
 ): unknown => {
-  const next = (item: unknown) => copy(item, label, mode, depth + 1, seen, protos)
+  const next = (item: unknown) => copy(item, label, mode, depth + 1, seen, protos, stripProto)
   if (depth > MAX_VALUE_DEPTH) {
     throw new ToolRuntimeError("InvalidDataValue", `${label} exceeds the maximum value depth of ${MAX_VALUE_DEPTH}.`)
   }
@@ -145,6 +150,7 @@ const copy = (
       defineHost(copied, "message", next(get(value, "message")))
     }
     for (const [key, item] of entries(value)) {
+      if (stripProto && key === "__proto__") continue
       const copiedItem = next(item)
       if (copiedItem === undefined && mode === "json") continue
       defineHost(copied, key, copiedItem)
@@ -180,6 +186,7 @@ const copy = (
   }
   const copied: Record<string, unknown> = {}
   for (const [key, item] of Object.entries(value)) {
+    if (stripProto && key === "__proto__") continue
     const copiedItem = next(item)
     if (copiedItem === undefined && mode === "json") continue
     defineHost(copied, key, copiedItem)

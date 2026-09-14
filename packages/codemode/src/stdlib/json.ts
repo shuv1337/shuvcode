@@ -56,7 +56,8 @@ const stringify = <R>(runner: Runner<R>, args: Array<unknown>): Effect.Effect<un
             .filter((item): item is string | number => typeof item === "string" || typeof item === "number")
             .map(String)
         : null
-    return Effect.succeed(JSON.stringify(toData(args[0], "JSON.stringify value"), properties, indent))
+    // A string cannot pollute, so __proto__ stays: JSON.stringify includes own __proto__ keys, like JS.
+    return Effect.succeed(JSON.stringify(toData(args[0], "JSON.stringify value", "json", false), properties, indent))
   }
 
   // Validate up front; the replacer walk below reads the original value.

@@ -20,7 +20,9 @@ ultimate source of truth. Upstream test262 files run verbatim from `test/test262
 - [x] Top-level `await` and `return` through the program's implicit async-function scope.
 - [x] Explicit `return`, final top-level expression as a REPL-style result, and `null` when no value is produced.
 - [x] Program results use JSON-like boundaries, with `undefined` and non-finite numbers normalized to `null`. Tool
-      arguments follow JSON serialization semantics before their schema applies (see the tools section).
+      arguments follow JSON serialization semantics before their schema applies (see the tools section). Own
+      `__proto__` keys are dropped wherever a host object crosses to the host, so merging tool inputs or results
+      cannot replace a prototype; `JSON.stringify` still emits the key, like JS, since a string cannot pollute.
 - [x] Live Date, RegExp, Map, Set, URL, and URLSearchParams values inside CodeMode.
 - [x] Tool calls through the host-provided `tools` tree only.
 - [x] The global `search(...)` built-in: synchronous tool discovery that counts as an admitted tool call and is
