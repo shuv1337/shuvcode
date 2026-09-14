@@ -14,6 +14,7 @@
       "devDependencies": {
         "@actions/artifact": "5.0.1",
         "@ast-grep/cli": "0.44.0",
+        "@opencode/client": "workspace:*",
         "@tsconfig/bun": "catalog:",
         "@types/mime-types": "3.0.1",
         "@types/react": "19.2.17",
