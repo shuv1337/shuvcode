@@ -430,7 +430,7 @@ const EndpointSessionRemove = (raw: RawClient["server.session"]) => (input: Sess
 
 const EndpointSessionFork = (raw: RawClient["server.session"]) => (input: SessionForkInput) =>
   preserveEffect<SessionForkOutput>()(
-    raw["session.fork"]({ params: { sessionID: input["sessionID"] }, payload: { boundary: input["boundary"] } }).pipe(
+    raw["session.fork"]({ params: { sessionID: input["sessionID"] }, payload: { before: input["before"] } }).pipe(
       Effect.mapError(mapClientError),
       Effect.map((value) => value.data),
     ),
@@ -969,25 +969,20 @@ const EndpointCredentialUpdate = (raw: RawClient["server.credential"]) => (input
   preserveEffect<CredentialUpdateOutput>()(
     raw["credential.update"]({
       params: { credentialID: input["credentialID"] },
-      query: { location: input["location"] },
       payload: { label: input["label"] },
     }).pipe(Effect.mapError(mapClientError)),
   )
 
 const EndpointCredentialActivate = (raw: RawClient["server.credential"]) => (input: CredentialActivateInput) =>
   preserveEffect<CredentialActivateOutput>()(
-    raw["credential.activate"]({
-      params: { credentialID: input["credentialID"] },
-      query: { location: input["location"] },
-    }).pipe(Effect.mapError(mapClientError)),
+    raw["credential.activate"]({ params: { credentialID: input["credentialID"] } }).pipe(
+      Effect.mapError(mapClientError),
+    ),
   )
 
 const EndpointCredentialRemove = (raw: RawClient["server.credential"]) => (input: CredentialRemoveInput) =>
   preserveEffect<CredentialRemoveOutput>()(
-    raw["credential.remove"]({
-      params: { credentialID: input["credentialID"] },
-      query: { location: input["location"] },
-    }).pipe(Effect.mapError(mapClientError)),
+    raw["credential.remove"]({ params: { credentialID: input["credentialID"] } }).pipe(Effect.mapError(mapClientError)),
   )
 
 const adaptGroupCredential = (raw: RawClient["server.credential"]) => ({

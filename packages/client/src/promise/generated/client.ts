@@ -517,7 +517,7 @@ export function make(options: ClientOptions) {
         request<{ readonly data: SessionStatsOutput }>(
           {
             method: "GET",
-            path: `/api/session/stats`,
+            path: `/api/experimental/session/stats`,
             query: {
               from: input?.["from"],
               to: input?.["to"],
@@ -613,7 +613,7 @@ export function make(options: ClientOptions) {
           {
             method: "POST",
             path: `/api/session/${encodeURIComponent(input.sessionID)}/fork`,
-            body: { boundary: input["boundary"] },
+            body: { before: input["before"] },
             successStatus: 200,
             declaredStatuses: [400, 401, 404],
             empty: false,
@@ -1129,7 +1129,7 @@ export function make(options: ClientOptions) {
               query: { location: input["location"] },
               body: { key: input["key"], answer: input["answer"], label: input["label"] },
               successStatus: 204,
-              declaredStatuses: [400, 401],
+              declaredStatuses: [400, 401, 404],
               empty: true,
             },
             requestOptions,
@@ -1156,7 +1156,7 @@ export function make(options: ClientOptions) {
               path: `/api/integration/${encodeURIComponent(input.integrationID)}/connect/oauth/${encodeURIComponent(input.attemptID)}`,
               query: { location: input["location"] },
               successStatus: 200,
-              declaredStatuses: [400, 401],
+              declaredStatuses: [400, 401, 404],
               empty: false,
             },
             requestOptions,
@@ -1169,7 +1169,7 @@ export function make(options: ClientOptions) {
               query: { location: input["location"] },
               body: { code: input["code"] },
               successStatus: 204,
-              declaredStatuses: [400, 401],
+              declaredStatuses: [400, 401, 404],
               empty: true,
             },
             requestOptions,
@@ -1196,7 +1196,7 @@ export function make(options: ClientOptions) {
               query: { location: input["location"] },
               body: { methodID: input["methodID"], label: input["label"] },
               successStatus: 200,
-              declaredStatuses: [400, 401],
+              declaredStatuses: [400, 401, 404],
               empty: false,
             },
             requestOptions,
@@ -1208,7 +1208,7 @@ export function make(options: ClientOptions) {
               path: `/api/integration/${encodeURIComponent(input.integrationID)}/connect/command/${encodeURIComponent(input.attemptID)}`,
               query: { location: input["location"] },
               successStatus: 200,
-              declaredStatuses: [400, 401],
+              declaredStatuses: [400, 401, 404],
               empty: false,
             },
             requestOptions,
@@ -1244,7 +1244,7 @@ export function make(options: ClientOptions) {
         request<McpAddOutput>(
           {
             method: "PUT",
-            path: `/api/mcp/${encodeURIComponent(input.server)}`,
+            path: `/api/experimental/mcp/${encodeURIComponent(input.server)}`,
             query: { location: input["location"] },
             body: { config: input["config"] },
             successStatus: 204,
@@ -1257,7 +1257,7 @@ export function make(options: ClientOptions) {
         request<McpRemoveOutput>(
           {
             method: "DELETE",
-            path: `/api/mcp/${encodeURIComponent(input.server)}`,
+            path: `/api/experimental/mcp/${encodeURIComponent(input.server)}`,
             query: { location: input["location"] },
             successStatus: 204,
             declaredStatuses: [400, 401, 404],
@@ -1269,7 +1269,7 @@ export function make(options: ClientOptions) {
         request<McpConnectOutput>(
           {
             method: "POST",
-            path: `/api/mcp/${encodeURIComponent(input.server)}/connect`,
+            path: `/api/experimental/mcp/${encodeURIComponent(input.server)}/connect`,
             query: { location: input["location"] },
             successStatus: 204,
             declaredStatuses: [400, 401, 404],
@@ -1281,7 +1281,7 @@ export function make(options: ClientOptions) {
         request<McpDisconnectOutput>(
           {
             method: "POST",
-            path: `/api/mcp/${encodeURIComponent(input.server)}/disconnect`,
+            path: `/api/experimental/mcp/${encodeURIComponent(input.server)}/disconnect`,
             query: { location: input["location"] },
             successStatus: 204,
             declaredStatuses: [400, 401, 404],
@@ -1310,7 +1310,6 @@ export function make(options: ClientOptions) {
           {
             method: "PATCH",
             path: `/api/credential/${encodeURIComponent(input.credentialID)}`,
-            query: { location: input["location"] },
             body: { label: input["label"] },
             successStatus: 204,
             declaredStatuses: [400, 401],
@@ -1323,7 +1322,6 @@ export function make(options: ClientOptions) {
           {
             method: "POST",
             path: `/api/credential/${encodeURIComponent(input.credentialID)}/activate`,
-            query: { location: input["location"] },
             successStatus: 204,
             declaredStatuses: [400, 401],
             empty: true,
@@ -1335,7 +1333,6 @@ export function make(options: ClientOptions) {
           {
             method: "DELETE",
             path: `/api/credential/${encodeURIComponent(input.credentialID)}`,
-            query: { location: input["location"] },
             successStatus: 204,
             declaredStatuses: [400, 401],
             empty: true,

@@ -217,7 +217,7 @@ export type SessionRemoveInput = { readonly sessionID: Session.ID }
 export type SessionRemoveOutput = void
 export type SessionRemoveOperation<E = never> = (input: SessionRemoveInput) => Effect.Effect<SessionRemoveOutput, E>
 
-export type SessionForkInput = { readonly sessionID: Session.ID; readonly boundary: Session.ForkRequestBoundary }
+export type SessionForkInput = { readonly sessionID: Session.ID; readonly before?: SessionMessage.ID | undefined }
 export type SessionForkOutput = Session.Info
 export type SessionForkOperation<E = never> = (input: SessionForkInput) => Effect.Effect<SessionForkOutput, E>
 
@@ -1641,29 +1641,19 @@ export interface McpApi<E = never> {
   readonly resource: { readonly catalog: McpResourceCatalogOperation<E> }
 }
 
-export type CredentialUpdateInput = {
-  readonly credentialID: Credential.ID
-  readonly location?: { readonly directory?: string | undefined } | undefined
-  readonly label: string
-}
+export type CredentialUpdateInput = { readonly credentialID: Credential.ID; readonly label: string }
 export type CredentialUpdateOutput = void
 export type CredentialUpdateOperation<E = never> = (
   input: CredentialUpdateInput,
 ) => Effect.Effect<CredentialUpdateOutput, E>
 
-export type CredentialActivateInput = {
-  readonly credentialID: Credential.ID
-  readonly location?: { readonly directory?: string | undefined } | undefined
-}
+export type CredentialActivateInput = { readonly credentialID: Credential.ID }
 export type CredentialActivateOutput = void
 export type CredentialActivateOperation<E = never> = (
   input: CredentialActivateInput,
 ) => Effect.Effect<CredentialActivateOutput, E>
 
-export type CredentialRemoveInput = {
-  readonly credentialID: Credential.ID
-  readonly location?: { readonly directory?: string | undefined } | undefined
-}
+export type CredentialRemoveInput = { readonly credentialID: Credential.ID }
 export type CredentialRemoveOutput = void
 export type CredentialRemoveOperation<E = never> = (
   input: CredentialRemoveInput,

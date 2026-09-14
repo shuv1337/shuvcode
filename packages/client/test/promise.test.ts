@@ -239,12 +239,10 @@ test("credential.activate uses the public HTTP contract", async () => {
     },
   })
 
-  await client.credential.activate({ credentialID: "cred_work", location: { directory: "/tmp/project" } })
+  await client.credential.activate({ credentialID: "cred_work" })
 
   expect(request?.method).toBe("POST")
-  expect(request?.url).toBe(
-    "http://localhost:3000/api/credential/cred_work/activate?location%5Bdirectory%5D=%2Ftmp%2Fproject",
-  )
+  expect(request?.url).toBe("http://localhost:3000/api/credential/cred_work/activate")
 })
 
 test("integration connections optionally submit a form answer", async () => {

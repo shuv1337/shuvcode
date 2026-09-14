@@ -931,10 +931,10 @@
         }
       }
     },
-    "/api/session/stats": {
+    "/api/experimental/session/stats": {
       "get": {
         "tags": ["session"],
-        "operationId": "session.stats",
+        "operationId": "experimental.session.stats",
         "parameters": [
           {
             "name": "from",
@@ -1519,7 +1519,7 @@
             }
           }
         },
-        "description": "Create a child session by copying projected history through or before a message boundary.",
+        "description": "Create a child session by copying projected history before a message. Omit before to copy the full history.",
         "summary": "Fork session",
         "requestBody": {
           "content": {
@@ -1527,11 +1527,18 @@
               "schema": {
                 "type": "object",
                 "properties": {
-                  "boundary": {
-                    "$ref": "#/components/schemas/Session.ForkRequestBoundary"
+                  "before": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "pattern": "^msg_"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
                   }
                 },
-                "required": ["boundary"],
                 "additionalProperties": false
               }
             }
@@ -5373,6 +5380,16 @@
                 }
               }
             }
+          },
+          "404": {
+            "description": "IntegrationNotFoundError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IntegrationNotFoundErrorEncoded"
+                }
+              }
+            }
           }
         },
         "description": "Run a key authentication method and store the resulting credential.",
@@ -5644,6 +5661,23 @@
                 }
               }
             }
+          },
+          "404": {
+            "description": "IntegrationNotFoundError | IntegrationAttemptNotFoundError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/IntegrationNotFoundErrorEncoded"
+                    },
+                    {
+                      "$ref": "#/components/schemas/IntegrationAttemptNotFoundErrorEncoded"
+                    }
+                  ]
+                }
+              }
+            }
           }
         },
         "description": "Poll the current status of an OAuth attempt.",
@@ -5813,6 +5847,23 @@
                 }
               }
             }
+          },
+          "404": {
+            "description": "IntegrationNotFoundError | IntegrationAttemptNotFoundError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/IntegrationNotFoundErrorEncoded"
+                    },
+                    {
+                      "$ref": "#/components/schemas/IntegrationAttemptNotFoundErrorEncoded"
+                    }
+                  ]
+                }
+              }
+            }
           }
         },
         "description": "Complete a code-based OAuth attempt and store the resulting credential.",
@@ -5931,6 +5982,23 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "IntegrationNotFoundError | IntegrationMethodNotFoundError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/IntegrationNotFoundErrorEncoded"
+                    },
+                    {
+                      "$ref": "#/components/schemas/IntegrationMethodNotFoundErrorEncoded"
+                    }
+                  ]
                 }
               }
             }
@@ -6057,6 +6125,23 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "IntegrationNotFoundError | IntegrationAttemptNotFoundError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/IntegrationNotFoundErrorEncoded"
+                    },
+                    {
+                      "$ref": "#/components/schemas/IntegrationAttemptNotFoundErrorEncoded"
+                    }
+                  ]
                 }
               }
             }
@@ -6232,10 +6317,10 @@
         "summary": "List MCP servers"
       }
     },
-    "/api/mcp/{server}": {
+    "/api/experimental/mcp/{server}": {
       "put": {
         "tags": ["mcp"],
-        "operationId": "mcp.add",
+        "operationId": "experimental.mcp.add",
         "parameters": [
           {
             "name": "server",
@@ -6331,7 +6416,7 @@
       },
       "delete": {
         "tags": ["mcp"],
-        "operationId": "mcp.remove",
+        "operationId": "experimental.mcp.remove",
         "parameters": [
           {
             "name": "server",
@@ -6412,10 +6497,10 @@
         "summary": "Remove MCP server"
       }
     },
-    "/api/mcp/{server}/connect": {
+    "/api/experimental/mcp/{server}/connect": {
       "post": {
         "tags": ["mcp"],
-        "operationId": "mcp.connect",
+        "operationId": "experimental.mcp.connect",
         "parameters": [
           {
             "name": "server",
@@ -6496,10 +6581,10 @@
         "summary": "Connect MCP server"
       }
     },
-    "/api/mcp/{server}/disconnect": {
+    "/api/experimental/mcp/{server}/disconnect": {
       "post": {
         "tags": ["mcp"],
-        "operationId": "mcp.disconnect",
+        "operationId": "experimental.mcp.disconnect",
         "parameters": [
           {
             "name": "server",
@@ -6675,36 +6760,6 @@
               "type": "string"
             },
             "required": true
-          },
-          {
-            "name": "location",
-            "in": "query",
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "object",
-                  "properties": {
-                    "directory": {
-                      "anyOf": [
-                        {
-                          "type": "string"
-                        },
-                        {
-                          "type": "null"
-                        }
-                      ]
-                    }
-                  },
-                  "additionalProperties": false
-                },
-                {
-                  "type": "null"
-                }
-              ]
-            },
-            "required": false,
-            "style": "deepObject",
-            "explode": true
           }
         ],
         "security": [],
@@ -6764,36 +6819,6 @@
               "type": "string"
             },
             "required": true
-          },
-          {
-            "name": "location",
-            "in": "query",
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "object",
-                  "properties": {
-                    "directory": {
-                      "anyOf": [
-                        {
-                          "type": "string"
-                        },
-                        {
-                          "type": "null"
-                        }
-                      ]
-                    }
-                  },
-                  "additionalProperties": false
-                },
-                {
-                  "type": "null"
-                }
-              ]
-            },
-            "required": false,
-            "style": "deepObject",
-            "explode": true
           }
         ],
         "security": [],
@@ -6838,36 +6863,6 @@
               "type": "string"
             },
             "required": true
-          },
-          {
-            "name": "location",
-            "in": "query",
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "object",
-                  "properties": {
-                    "directory": {
-                      "anyOf": [
-                        {
-                          "type": "string"
-                        },
-                        {
-                          "type": "null"
-                        }
-                      ]
-                    }
-                  },
-                  "additionalProperties": false
-                },
-                {
-                  "type": "null"
-                }
-              ]
-            },
-            "required": false,
-            "style": "deepObject",
-            "explode": true
           }
         ],
         "security": [],
@@ -15121,6 +15116,46 @@
         "required": ["id", "type", "label"],
         "additionalProperties": false
       },
+      "IntegrationAttemptNotFoundErrorEncoded": {
+        "type": "object",
+        "properties": {
+          "_tag": {
+            "type": "string",
+            "enum": ["IntegrationAttemptNotFoundError"]
+          },
+          "integrationID": {
+            "type": "string"
+          },
+          "attemptID": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          }
+        },
+        "required": ["_tag", "integrationID", "attemptID", "message"],
+        "additionalProperties": false
+      },
+      "IntegrationMethodNotFoundErrorEncoded": {
+        "type": "object",
+        "properties": {
+          "_tag": {
+            "type": "string",
+            "enum": ["IntegrationMethodNotFoundError"]
+          },
+          "integrationID": {
+            "type": "string"
+          },
+          "methodID": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          }
+        },
+        "required": ["_tag", "integrationID", "methodID", "message"],
+        "additionalProperties": false
+      },
       "IntegrationNotFoundErrorEncoded": {
         "type": "object",
         "properties": {
@@ -16956,36 +16991,6 @@
               }
             },
             "required": ["type", "messageID"],
-            "additionalProperties": false
-          }
-        ]
-      },
-      "Session.ForkRequestBoundary": {
-        "anyOf": [
-          {
-            "type": "object",
-            "properties": {
-              "type": {
-                "type": "string",
-                "enum": ["before"]
-              },
-              "messageID": {
-                "type": "string",
-                "pattern": "^msg_"
-              }
-            },
-            "required": ["type", "messageID"],
-            "additionalProperties": false
-          },
-          {
-            "type": "object",
-            "properties": {
-              "type": {
-                "type": "string",
-                "enum": ["through"]
-              }
-            },
-            "required": ["type"],
             "additionalProperties": false
           }
         ]

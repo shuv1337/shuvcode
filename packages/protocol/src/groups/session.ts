@@ -175,7 +175,7 @@ export const makeSessionGroup = <I extends HttpApiMiddleware.AnyId, S>(sessionLo
       ),
     )
     .add(
-      HttpApiEndpoint.get("session.stats", "/api/session/stats", {
+      HttpApiEndpoint.get("session.stats", "/api/experimental/session/stats", {
         query: Schema.Struct({
           from: Schema.NumberFromString.pipe(Schema.optional),
           to: Schema.NumberFromString.pipe(Schema.optional),
@@ -187,7 +187,7 @@ export const makeSessionGroup = <I extends HttpApiMiddleware.AnyId, S>(sessionLo
         error: InvalidRequestError,
       }).annotateMerge(
         OpenApi.annotations({
-          identifier: "session.stats",
+          identifier: "experimental.session.stats",
           summary: "Get session statistics",
           description: "Aggregate local session activity, usage, and tool reliability for a time range.",
         }),
@@ -285,7 +285,7 @@ export const makeSessionGroup = <I extends HttpApiMiddleware.AnyId, S>(sessionLo
     .add(
       HttpApiEndpoint.post("session.fork", "/api/session/:sessionID/fork", {
         params: { sessionID: Session.ID },
-        payload: Schema.Struct({ boundary: Session.ForkRequestBoundary }),
+        payload: Schema.Struct({ before: SessionMessage.ID.pipe(Schema.optional) }),
         success: Schema.Struct({ data: PublicSessionInfo }),
         error: [SessionNotFoundError, MessageNotFoundError, InvalidRequestError],
       })
@@ -294,7 +294,8 @@ export const makeSessionGroup = <I extends HttpApiMiddleware.AnyId, S>(sessionLo
           OpenApi.annotations({
             identifier: "session.fork",
             summary: "Fork session",
-            description: "Create a child session by copying projected history through or before a message boundary.",
+            description:
+              "Create a child session by copying projected history before a message. Omit before to copy the full history.",
           }),
         ),
     )

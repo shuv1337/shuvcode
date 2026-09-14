@@ -91,6 +91,26 @@ export class IntegrationNotFoundError extends Schema.TaggedError<IntegrationNotF
   { httpApiStatus: 404 },
 ) {}
 
+export class IntegrationAttemptNotFoundError extends Schema.TaggedError<IntegrationAttemptNotFoundError>()(
+  "IntegrationAttemptNotFoundError",
+  {
+    integrationID: Schema.String,
+    attemptID: Schema.String,
+    message: Schema.String,
+  },
+  { httpApiStatus: 404 },
+) {}
+
+export class IntegrationMethodNotFoundError extends Schema.TaggedError<IntegrationMethodNotFoundError>()(
+  "IntegrationMethodNotFoundError",
+  {
+    integrationID: Schema.String,
+    methodID: Schema.String,
+    message: Schema.String,
+  },
+  { httpApiStatus: 404 },
+) {}
+
 export class ProjectNotFoundError extends Schema.TaggedError<ProjectNotFoundError>()(
   "ProjectNotFoundError",
   {

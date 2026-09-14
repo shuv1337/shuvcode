@@ -120,17 +120,17 @@ Review endpoints in document order. For each endpoint, select one disposition an
 | [ ] 033 | `POST` | `/api/integration/{integrationID}/connect/command` | `integration.command.connect` |  |  |
 | [ ] 034 | `GET` | `/api/integration/{integrationID}/connect/command/{attemptID}` | `integration.command.status` |  |  |
 | [ ] 035 | `DELETE` | `/api/integration/{integrationID}/connect/command/{attemptID}` | `integration.command.cancel` |  |  |
-| [ ] 036 | `GET` | `/api/mcp` | `mcp.list` |  |  |
-| [ ] 037 | `PUT` | `/api/mcp/{server}` | `mcp.add` |  |  |
-| [ ] 038 | `DELETE` | `/api/mcp/{server}` | `mcp.remove` |  |  |
-| [ ] 039 | `POST` | `/api/mcp/{server}/connect` | `mcp.connect` |  |  |
-| [ ] 040 | `POST` | `/api/mcp/{server}/disconnect` | `mcp.disconnect` |  |  |
-| [ ] 041 | `GET` | `/api/mcp/resource` | `mcp.resource.catalog` |  |  |
-| [ ] 042 | `PATCH` | `/api/credential/{credentialID}` | `credential.update` |  |  |
-| [ ] 043 | `DELETE` | `/api/credential/{credentialID}` | `credential.remove` |  |  |
-| [ ] 044 | `POST` | `/api/credential/{credentialID}/activate` | `credential.activate` |  |  |
-| [ ] 045 | `GET` | `/api/websearch/provider` | `websearch.providers` |  |  |
-| [ ] 046 | `POST` | `/api/websearch` | `websearch.query` |  |  |
+| [x] 036 | `GET` | `/api/mcp` | `mcp.list` | Keep | MCP inventory and connection status retained. |
+| [x] 037 | `PUT` | `/api/experimental/mcp/{server}` | `experimental.mcp.add` | Experimental-only | Runtime-only MCP override; does not persist configuration. |
+| [x] 038 | `DELETE` | `/api/experimental/mcp/{server}` | `experimental.mcp.remove` | Experimental-only | Runtime removal override; missing server returns `404`. |
+| [x] 039 | `POST` | `/api/experimental/mcp/{server}/connect` | `experimental.mcp.connect` | Experimental-only | Runtime connection override retained outside the stable API. |
+| [x] 040 | `POST` | `/api/experimental/mcp/{server}/disconnect` | `experimental.mcp.disconnect` | Experimental-only | Runtime disconnection override retained outside the stable API. |
+| [ ] 041 | `GET` | `/api/mcp/resource` | `mcp.resource.catalog` |  | Deferred for later review. |
+| [x] 042 | `PATCH` | `/api/credential/{credentialID}` | `credential.update` | Change | Removed redundant location query; credentials and events are global. |
+| [x] 043 | `DELETE` | `/api/credential/{credentialID}` | `credential.remove` | Change | Removed redundant location query; credentials and events are global. |
+| [x] 044 | `POST` | `/api/credential/{credentialID}/activate` | `credential.activate` | Change | Removed redundant location query; credentials and events are global. |
+| [x] 045 | `GET` | `/api/websearch/provider` | `websearch.providers` | Keep | Provider availability remains location-scoped; singular resource path retained. |
+| [x] 046 | `POST` | `/api/websearch` | `websearch.query` | Keep | Unknown provider remains an invalid request; published time documented as Unix epoch milliseconds. |
 
 ## Group 4: Session lifecycle
 
@@ -138,13 +138,13 @@ Review endpoints in document order. For each endpoint, select one disposition an
 
 | Done | Method | Path | Operation ID | Decision | Notes |
 |---|---|---|---|---|---|
-| [ ] 047 | `GET` | `/api/session` | `session.list` |  |  |
-| [ ] 048 | `POST` | `/api/session` | `session.create` |  |  |
-| [ ] 049 | `GET` | `/api/session/stats` | `session.stats` |  |  |
-| [ ] 050 | `GET` | `/api/session/active` | `session.active` |  |  |
-| [ ] 051 | `GET` | `/api/session/{sessionID}` | `session.get` |  |  |
-| [ ] 052 | `DELETE` | `/api/session/{sessionID}` | `session.remove` |  |  |
-| [ ] 053 | `POST` | `/api/session/{sessionID}/fork` | `session.fork` |  |  |
+| [x] 047 | `GET` | `/api/session` | `session.list` | Keep | Existing filtering, ordering, and cursor contract retained for now. |
+| [x] 048 | `POST` | `/api/session` | `session.create` | Keep | Existing creation contract retained; model reference includes optional variant. |
+| [x] 049 | `GET` | `/api/experimental/session/stats` | `experimental.session.stats` | Experimental-only | Session analytics retained outside the stable API commitment. |
+| [x] 050 | `GET` | `/api/session/active` | `session.active` | Keep | Status record retained for future active-state expansion. |
+| [x] 051 | `GET` | `/api/session/{sessionID}` | `session.get` | Keep | Specific session read and typed `404` retained. |
+| [x] 052 | `DELETE` | `/api/session/{sessionID}` | `session.remove` | Keep | Session and child deletion with typed `404` retained. |
+| [x] 053 | `POST` | `/api/session/{sessionID}/fork` | `session.fork` | Change | Request now accepts optional branded `before` message ID; omission copies full history. |
 | [ ] 054 | `POST` | `/api/session/{sessionID}/agent` | `session.switchAgent` |  |  |
 | [ ] 055 | `POST` | `/api/session/{sessionID}/model` | `session.switchModel` |  |  |
 | [ ] 056 | `POST` | `/api/session/{sessionID}/rename` | `session.rename` |  |  |

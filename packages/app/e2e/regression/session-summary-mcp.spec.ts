@@ -62,7 +62,7 @@ test("every MCP row hit area toggles exactly once and keeps the submenu open", a
     await expect(submenu).toBeVisible()
     if (target === "keyboard") await expect(toggle).toBeFocused()
     expect(writes).toHaveLength(index + 1)
-    expect(writes[index]).toBe(`/api/mcp/figma/${enabled ? "connect" : "disconnect"}`)
+    expect(writes[index]).toBe(`/api/experimental/mcp/figma/${enabled ? "connect" : "disconnect"}`)
   }
 })
 
