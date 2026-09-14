@@ -8,6 +8,7 @@
   makeBinaryWrapper,
   models-dev,
   ripgrep,
+  wayland,
   installShellFiles,
   versionCheckHook,
   writableTmpDirAsHomeHook,
@@ -64,6 +65,7 @@ stdenvNoCC.mkDerivation (finalAttrs: {
 
     install -Dm755 dist/cli-*/bin/opencode $out/bin/opencode
 
+    # OpenTUI dlopens Wayland for clipboard images.
     wrapProgram $out/bin/opencode \
       --prefix PATH : ${
         lib.makeBinPath (
@@ -73,7 +75,9 @@ stdenvNoCC.mkDerivation (finalAttrs: {
           # bun runs sysctl to detect if running on rosetta2
           ++ lib.optional stdenvNoCC.hostPlatform.isDarwin sysctl
         )
-      }
+      } ${lib.optionalString stdenvNoCC.hostPlatform.isLinux ''
+        --prefix LD_LIBRARY_PATH : ${lib.makeLibraryPath [ wayland ]}
+      ''}
 
     ln -s opencode $out/bin/opencode2
 
