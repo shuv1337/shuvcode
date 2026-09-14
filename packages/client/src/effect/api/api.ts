@@ -1307,7 +1307,7 @@ export type SessionLogOutput =
   | EventLog.Synced
 export type SessionLogOperation<E = never> = (input: SessionLogInput) => Stream.Stream<SessionLogOutput, E>
 
-export type SessionInterruptInput = { readonly sessionID: Session.ID; readonly continue?: boolean | undefined }
+export type SessionInterruptInput = { readonly sessionID: Session.ID; readonly resume?: boolean | undefined }
 export type SessionInterruptOutput = { readonly interrupted: boolean }
 export type SessionInterruptOperation<E = never> = (
   input: SessionInterruptInput,

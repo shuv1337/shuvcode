@@ -307,7 +307,7 @@ export const make = Effect.fn("Session.make")(function* () {
       ),
   )
   const interrupt = Effect.fn("Session.interrupt")(
-    (sessionID: SessionSchema.ID, options?: { readonly continue?: boolean }) =>
+    (sessionID: SessionSchema.ID, options?: { readonly resume?: boolean }) =>
       Effect.uninterruptible(execution.interrupt(sessionID, options)),
   )
   const stage = Effect.fn("Session.revert.stage")(function* (

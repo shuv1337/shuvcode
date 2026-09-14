@@ -615,7 +615,7 @@ describe("Session-owned handles", () => {
       const joining = yield* Deferred.make<void>()
       const drains: SessionSchema.ID[] = []
       const resumes: SessionSchema.ID[] = []
-      const interrupts: Array<{ sessionID: SessionSchema.ID; options?: { readonly continue?: boolean } }> = []
+      const interrupts: Array<{ sessionID: SessionSchema.ID; options?: { readonly resume?: boolean } }> = []
       const coordinator = yield* SessionRunCoordinator.make<SessionSchema.ID, never>({
         drain: (id) =>
           Effect.sync(() => void drains.push(id)).pipe(
@@ -656,10 +656,10 @@ describe("Session-owned handles", () => {
       yield* fixture.sessions.forSession(sessionID).wait()
       expect(drains).toEqual([sessionID])
       expect(yield* coordinator.active).toEqual(new Set())
-      expect(yield* fixture.sessions.forSession(sessionID).interrupt({ continue: true })).toBe(false)
+      expect(yield* fixture.sessions.forSession(sessionID).interrupt({ resume: true })).toBe(false)
       expect(yield* fixture.sessions.forSession(sessionID).interrupt()).toBe(false)
       expect(interrupts).toEqual([
-        { sessionID, options: { continue: true } },
+        { sessionID, options: { resume: true } },
         { sessionID, options: undefined },
       ])
       expect(fixture.locations).toEqual([])

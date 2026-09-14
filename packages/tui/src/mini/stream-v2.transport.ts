@@ -1618,7 +1618,7 @@ export async function createSessionTransport(input: StreamInput): Promise<Sessio
     state.wait = active
     const interrupt = () => {
       active.interrupted = true
-      void sdk.session.interrupt({ sessionID: input.sessionID, continue: true }).catch(() => {})
+      void sdk.session.interrupt({ sessionID: input.sessionID, resume: true }).catch(() => {})
     }
     next.signal?.addEventListener("abort", interrupt, { once: true })
     try {
@@ -1864,7 +1864,7 @@ export async function createSessionTransport(input: StreamInput): Promise<Sessio
       // A failed request paints nothing, so the two-press gesture stays available for retry,
       // and a lifecycle event racing the ack wins via the epoch guard.
       const epoch = state.executionEpoch
-      await sdk.session.interrupt({ sessionID: input.sessionID, continue: true }).then(
+      await sdk.session.interrupt({ sessionID: input.sessionID, resume: true }).then(
         () => {
           if (state.executionEpoch === epoch) paintIdle(blockerStatus(state.view))
         },

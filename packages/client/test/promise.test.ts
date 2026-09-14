@@ -883,7 +883,7 @@ test("session methods use the public HTTP contract", async () => {
     ["POST", "http://localhost:3000/api/session/ses_test/generate"],
     ["POST", "http://localhost:3000/api/session/ses_test/synthetic"],
     ["POST", "http://localhost:3000/api/session/ses_test/compact"],
-    ["POST", "http://localhost:3000/api/session/ses_test/wait"],
+    ["POST", "http://localhost:3000/api/experimental/session/ses_test/wait"],
     ["GET", "http://localhost:3000/api/session/ses_test/context"],
     ["GET", "http://localhost:3000/api/experimental/session/ses_test/log?after=0"],
     ["POST", "http://localhost:3000/api/session/ses_test/interrupt?continue=true"],

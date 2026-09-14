@@ -767,7 +767,7 @@ export function make(options: ClientOptions) {
         request<SessionWaitOutput>(
           {
             method: "POST",
-            path: `/api/session/${encodeURIComponent(input.sessionID)}/wait`,
+            path: `/api/experimental/session/${encodeURIComponent(input.sessionID)}/wait`,
             successStatus: 204,
             declaredStatuses: [400, 401, 404, 503],
             empty: true,
@@ -946,7 +946,7 @@ export function make(options: ClientOptions) {
           {
             method: "POST",
             path: `/api/session/${encodeURIComponent(input.sessionID)}/interrupt`,
-            query: { continue: input["continue"] },
+            query: { resume: input["resume"] },
             successStatus: 200,
             declaredStatuses: [400, 401, 404],
             empty: false,

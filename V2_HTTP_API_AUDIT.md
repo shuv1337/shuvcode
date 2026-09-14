@@ -162,10 +162,10 @@ Review endpoints in document order. For each endpoint, select one disposition an
 | [x] 061 | `POST` | `/api/experimental/session/{sessionID}/skill` | `experimental.session.skill` | Experimental-only | Skill ID is now the `id` field; standalone activation remains experimental. |
 | [x] 062 | `POST` | `/api/session/{sessionID}/synthetic` | `session.synthetic` | Keep | Durable synthetic admission and delivery controls retained. |
 | [x] 063 | `POST` | `/api/session/{sessionID}/shell` | `session.shell` | Change | Caller ID is now the optimistic shell message ID; server derives its event ID. |
-| [ ] 064 | `POST` | `/api/session/{sessionID}/compact` | `session.compact` |  |  |
-| [ ] 065 | `POST` | `/api/session/{sessionID}/wait` | `session.wait` |  |  |
-| [ ] 066 | `POST` | `/api/session/{sessionID}/generate` | `session.generate` |  |  |
-| [ ] 067 | `POST` | `/api/session/{sessionID}/interrupt` | `session.interrupt` |  |  |
+| [x] 064 | `POST` | `/api/session/{sessionID}/compact` | `session.compact` | Keep | Durable compaction admission and delivery controls retained. |
+| [x] 065 | `POST` | `/api/experimental/session/{sessionID}/wait` | `experimental.session.wait` | Experimental-only | Race-free idle barrier retained outside the stable API. |
+| [x] 066 | `POST` | `/api/session/{sessionID}/generate` | `session.generate` | Keep | Transient generation from session context retained. |
+| [x] 067 | `POST` | `/api/session/{sessionID}/interrupt` | `session.interrupt` | Change | Renamed `continue` to `resume` across public and internal interruption APIs. |
 | [ ] 068 | `PUT` | `/api/session/{sessionID}/environment` | `session.environment` |  |  |
 | [ ] 069 | `POST` | `/api/session/{sessionID}/view` | `session.view` |  |  |
 
