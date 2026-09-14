@@ -440,3 +440,12 @@ ultimate source of truth. Upstream test262 files run verbatim from `test/test262
 - [x] Failures raised by the interpreter are `TypeError`s unless JavaScript names them otherwise (`RangeError`,
       `ReferenceError`, `SyntaxError`, `URIError`), so `e instanceof TypeError` and `e.constructor === TypeError`
       hold. Unsupported syntax reached at runtime is a `SyntaxError`; awaited tool failures stay plain `Error`.
+      Host errors escaping a built-in (`(1).toFixed(200)`) become the same-named program error at the call.
+      A failure raised inside a promise a built-in created (`Promise.all(1)`, `Promise.race([])`, a resolution cycle)
+      is located at the call that created the promise.
+- [x] One failure is one error object: every `catch`, rejection handler, and `allSettled` reason for the same
+      failure sees the identical value, so `a === b` holds after awaiting the same rejected promise twice.
+- [x] Rethrowing an interpreter failure keeps its diagnostic: `catch (e) { throw e }` still reports the original
+      kind and source location. Uncaught errors report as `name: message` whoever raised them, as
+      `Error.prototype.toString` would (`TypeError: Cannot read properties of null (reading 'foo').`,
+      `TypeError: bad input`); other thrown values report as `Uncaught: <value>`.
