@@ -1332,7 +1332,7 @@ export type SessionEnvironmentOperation<E = never> = (
   input: SessionEnvironmentInput,
 ) => Effect.Effect<SessionEnvironmentOutput, E>
 
-export type SessionViewInput = { readonly sessionID: Session.ID; readonly idle: number }
+export type SessionViewInput = { readonly sessionID: Session.ID; readonly idle: DateTime.Utc }
 export type SessionViewOutput = void
 export type SessionViewOperation<E = never> = (input: SessionViewInput) => Effect.Effect<SessionViewOutput, E>
 

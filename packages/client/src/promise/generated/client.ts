@@ -979,7 +979,7 @@ export function make(options: ClientOptions) {
         request<SessionEnvironmentOutput>(
           {
             method: "PUT",
-            path: `/api/session/${encodeURIComponent(input.sessionID)}/environment`,
+            path: `/api/experimental/session/${encodeURIComponent(input.sessionID)}/environment`,
             body: { variables: input["variables"] },
             successStatus: 204,
             declaredStatuses: [400, 401, 404],

@@ -5,7 +5,14 @@ import { Session } from "@opencode/schema/session"
 import { SessionStats } from "@opencode/schema/session-stats"
 import { InstructionEntry } from "@opencode/schema/instruction-entry"
 import { Project } from "@opencode/schema/project"
-import { AbsolutePath, NonNegativeInt, PositiveInt, RelativePath, statics } from "@opencode/schema/schema"
+import {
+  AbsolutePath,
+  DateTimeUtcFromMillis,
+  NonNegativeInt,
+  PositiveInt,
+  RelativePath,
+  statics,
+} from "@opencode/schema/schema"
 import { Event } from "@opencode/schema/event"
 import { Context, Effect, Encoding, Result, Schema, SchemaGetter, Struct } from "effect"
 import { HttpApiEndpoint, HttpApiGroup, HttpApiMiddleware, HttpApiSchema, OpenApi } from "effect/unstable/httpapi"
@@ -764,14 +771,14 @@ export const makeSessionGroup = <I extends HttpApiMiddleware.AnyId, S>(sessionLo
       ),
     )
     .add(
-      HttpApiEndpoint.put("session.environment", "/api/session/:sessionID/environment", {
+      HttpApiEndpoint.put("session.environment", "/api/experimental/session/:sessionID/environment", {
         params: { sessionID: Session.ID },
         payload: Schema.Struct({ variables: Schema.Record(Schema.String, Schema.String) }),
         success: HttpApiSchema.NoContent,
         error: SessionNotFoundError,
       }).annotateMerge(
         OpenApi.annotations({
-          identifier: "session.environment",
+          identifier: "experimental.session.environment",
           summary: "Set session environment",
           description: "Replace the process environment used by local shell commands for this session.",
         }),
@@ -780,7 +787,7 @@ export const makeSessionGroup = <I extends HttpApiMiddleware.AnyId, S>(sessionLo
     .add(
       HttpApiEndpoint.post("session.view", "/api/session/:sessionID/view", {
         params: { sessionID: Session.ID },
-        payload: Schema.Struct({ idle: NonNegativeInt }),
+        payload: Schema.Struct({ idle: DateTimeUtcFromMillis }),
         success: HttpApiSchema.NoContent,
         error: SessionNotFoundError,
       }).annotateMerge(

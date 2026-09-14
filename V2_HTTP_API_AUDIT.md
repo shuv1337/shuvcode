@@ -166,8 +166,8 @@ Review endpoints in document order. For each endpoint, select one disposition an
 | [x] 065 | `POST` | `/api/experimental/session/{sessionID}/wait` | `experimental.session.wait` | Experimental-only | Race-free idle barrier retained outside the stable API. |
 | [x] 066 | `POST` | `/api/session/{sessionID}/generate` | `session.generate` | Keep | Transient generation from session context retained. |
 | [x] 067 | `POST` | `/api/session/{sessionID}/interrupt` | `session.interrupt` | Change | Renamed `continue` to `resume` across public and internal interruption APIs. |
-| [ ] 068 | `PUT` | `/api/session/{sessionID}/environment` | `session.environment` |  |  |
-| [ ] 069 | `POST` | `/api/session/{sessionID}/view` | `session.view` |  |  |
+| [x] 068 | `PUT` | `/api/experimental/session/{sessionID}/environment` | `experimental.session.environment` | Experimental-only | Process-local environment replacement retained outside the stable API. |
+| [x] 069 | `POST` | `/api/session/{sessionID}/view` | `session.view` | Change | Idle watermark now uses the standard epoch-millisecond timestamp schema. |
 
 ## Group 6: Session history and recovery
 

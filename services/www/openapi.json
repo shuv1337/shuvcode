@@ -4222,10 +4222,10 @@
         "summary": "Get session message"
       }
     },
-    "/api/session/{sessionID}/environment": {
+    "/api/experimental/session/{sessionID}/environment": {
       "put": {
         "tags": ["session"],
-        "operationId": "session.environment",
+        "operationId": "experimental.session.environment",
         "parameters": [
           {
             "name": "sessionID",
@@ -4357,8 +4357,7 @@
                 "type": "object",
                 "properties": {
                   "idle": {
-                    "type": "integer",
-                    "minimum": 0
+                    "type": "number"
                   }
                 },
                 "required": ["idle"],
