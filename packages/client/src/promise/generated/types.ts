@@ -2502,6 +2502,14 @@ export type ProviderNotFoundError = {
 export const isProviderNotFoundError = (value: unknown): value is ProviderNotFoundError =>
   typeof value === "object" && value !== null && "_tag" in value && value["_tag"] === "ProviderNotFoundError"
 
+export type IntegrationNotFoundError = {
+  readonly _tag: "IntegrationNotFoundError"
+  readonly integrationID: string
+  readonly message: string
+}
+export const isIntegrationNotFoundError = (value: unknown): value is IntegrationNotFoundError =>
+  typeof value === "object" && value !== null && "_tag" in value && value["_tag"] === "IntegrationNotFoundError"
+
 export type McpServerNotFoundError = {
   readonly _tag: "McpServerNotFoundError"
   readonly server: string
@@ -4509,7 +4517,7 @@ export type IntegrationGetInput = {
   readonly location?: { readonly location?: { readonly directory?: string | undefined } | undefined }["location"]
 }
 
-export type IntegrationGetOutput = { location: LocationPublicRef; data: IntegrationInfo | null }
+export type IntegrationGetOutput = { location: LocationPublicRef; data: IntegrationInfo }
 
 export type IntegrationWellknownAddInput = {
   readonly location?: { readonly location?: { readonly directory?: string | undefined } | undefined }["location"]

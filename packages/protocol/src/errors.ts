@@ -82,6 +82,15 @@ export class ProviderNotFoundError extends Schema.TaggedError<ProviderNotFoundEr
   { httpApiStatus: 404 },
 ) {}
 
+export class IntegrationNotFoundError extends Schema.TaggedError<IntegrationNotFoundError>()(
+  "IntegrationNotFoundError",
+  {
+    integrationID: Schema.String,
+    message: Schema.String,
+  },
+  { httpApiStatus: 404 },
+) {}
+
 export class ProjectNotFoundError extends Schema.TaggedError<ProjectNotFoundError>()(
   "ProjectNotFoundError",
   {

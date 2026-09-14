@@ -268,7 +268,11 @@ export const make = Effect.fn("PluginHost.make")(function* (
     },
     integration: {
       list: () => response(integration.list()),
-      get: (input) => response(integration.get(Integration.ID.make(input.integrationID))),
+      get: Effect.fn(function* (input) {
+        const item = yield* integration.get(Integration.ID.make(input.integrationID))
+        if (!item) return yield* Effect.fail(new Error(`Integration not found: ${input.integrationID}`))
+        return yield* response(Effect.succeed(item))
+      }),
       connect: {
         key: (input) =>
           integration.connection.key({

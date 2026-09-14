@@ -5164,14 +5164,7 @@
                       "$ref": "#/components/schemas/Location.PublicRef"
                     },
                     "data": {
-                      "anyOf": [
-                        {
-                          "$ref": "#/components/schemas/Integration.Info"
-                        },
-                        {
-                          "type": "null"
-                        }
-                      ]
+                      "$ref": "#/components/schemas/Integration.Info"
                     }
                   },
                   "required": ["location", "data"],
@@ -5196,6 +5189,16 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "IntegrationNotFoundError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IntegrationNotFoundErrorEncoded"
                 }
               }
             }
@@ -15116,6 +15119,23 @@
           }
         },
         "required": ["id", "type", "label"],
+        "additionalProperties": false
+      },
+      "IntegrationNotFoundErrorEncoded": {
+        "type": "object",
+        "properties": {
+          "_tag": {
+            "type": "string",
+            "enum": ["IntegrationNotFoundError"]
+          },
+          "integrationID": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          }
+        },
+        "required": ["_tag", "integrationID", "message"],
         "additionalProperties": false
       },
       "InvalidCursorErrorEncoded": {

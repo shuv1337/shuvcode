@@ -109,8 +109,8 @@ Review endpoints in document order. For each endpoint, select one disposition an
 
 | Done | Method | Path | Operation ID | Decision | Notes |
 |---|---|---|---|---|---|
-| [ ] 025 | `GET` | `/api/integration` | `integration.list` |  |  |
-| [ ] 026 | `GET` | `/api/integration/{integrationID}` | `integration.get` |  |  |
+| [x] 025 | `GET` | `/api/integration` | `integration.list` | Keep | Full integration inventory is consumed by authentication and integration-selection clients. |
+| [x] 026 | `GET` | `/api/integration/{integrationID}` | `integration.get` | Change | Missing integration now returns typed `404` instead of optional data. |
 | [ ] 027 | `POST` | `/api/experimental/integration/wellknown` | `experimental.integration.wellknown.add` |  |  |
 | [ ] 028 | `POST` | `/api/integration/{integrationID}/connect/key` | `integration.connect.key` |  |  |
 | [ ] 029 | `POST` | `/api/integration/{integrationID}/connect/oauth` | `integration.oauth.connect` |  |  |

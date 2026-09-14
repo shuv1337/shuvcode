@@ -1465,10 +1465,7 @@ export type IntegrationGetInput = {
   readonly integrationID: Integration.ID
   readonly location?: { readonly directory?: string | undefined } | undefined
 }
-export type IntegrationGetOutput = {
-  readonly location: Location.PublicRef
-  readonly data: Integration.Info | undefined
-}
+export type IntegrationGetOutput = { readonly location: Location.PublicRef; readonly data: Integration.Info }
 export type IntegrationGetOperation<E = never> = (input: IntegrationGetInput) => Effect.Effect<IntegrationGetOutput, E>
 
 export type IntegrationWellknownAddInput = {
