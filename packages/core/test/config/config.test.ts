@@ -1165,6 +1165,7 @@ describe("Config", () => {
                       disabled: false,
                       codemode: false,
                       timeout: { catalog: 10000 },
+                      protocol: "legacy",
                     },
                     remote: {
                       type: "remote",
@@ -1174,6 +1175,7 @@ describe("Config", () => {
                       disabled: true,
                       codemode: false,
                       timeout: { startup: 15000 },
+                      protocol: "2026-07-28",
                     },
                   },
                 },
@@ -1248,6 +1250,7 @@ describe("Config", () => {
                   disabled: false,
                   codemode: false,
                   timeout: { catalog: 10000 },
+                  protocol: "legacy",
                 },
                 remote: {
                   type: "remote",
@@ -1257,6 +1260,7 @@ describe("Config", () => {
                   disabled: true,
                   codemode: false,
                   timeout: { startup: 15000 },
+                  protocol: "2026-07-28",
                 },
               },
             })
