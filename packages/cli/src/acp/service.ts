@@ -179,13 +179,13 @@ export function make(input: { readonly client: OpenCodeClient; readonly connecti
       capabilities.writeTextFile = params.clientCapabilities?.fs?.writeTextFile === true
       capabilities.childSessionUpdates = params.clientCapabilities?._meta?.[ChildSessionUpdatesCapability] === true
       const authMethod: AuthMethod = {
-        description: "Run `opencode auth login` in the terminal",
+        description: "Run `shuvcode auth login` in the terminal",
         name: "Login with opencode",
         id: AuthMethodID,
       }
       if (params.clientCapabilities?._meta?.["terminal-auth"] === true) {
         authMethod._meta = {
-          "terminal-auth": { command: "opencode", args: ["auth", "login"], label: "OpenCode Login" },
+          "terminal-auth": { command: "shuvcode", args: ["auth", "login"], label: "Shuvcode Login" },
         }
       }
       return {

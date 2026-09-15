@@ -39,6 +39,6 @@ export default Runtime.handler(
     if (Option.isSome(input.url)) return
     const hostname = new URL(endpoint.url).hostname
     if (!["localhost", "127.0.0.1", "[::1]"].includes(hostname)) return
-    process.stderr.write(`  Run \`opencode service set hostname 0.0.0.0\` to access the service remotely.${EOL}${EOL}`)
+    process.stderr.write(`  Run \`shuvcode service set hostname 0.0.0.0\` to access the service remotely.${EOL}${EOL}`)
   }),
 )

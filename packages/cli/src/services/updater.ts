@@ -1,13 +1,20 @@
 import { Global } from "@opencode/util/global"
 import { AppProcess } from "@opencode/util/process"
-import { OPENCODE_ARTIFACT, OPENCODE_CHANNEL, OPENCODE_LOCAL, OPENCODE_VERSION } from "../version"
+import { OPENCODE_CHANNEL, OPENCODE_LOCAL, OPENCODE_VERSION } from "../version"
 import { Context, Duration, Effect, FileSystem, Layer, Ref, Schedule } from "effect"
 import { ChildProcess } from "effect/unstable/process"
 import { parse, type ParseError } from "jsonc-parser"
 import path from "node:path"
 import { action, parseReleaseVersion, type Policy } from "./updater-action"
 
-export const methods = ["curl", "npm", "pnpm", "bun", "yarn"] as const
+declare const OPENCODE_CLI_NAME: string | undefined
+
+// The fork publishes its own npm packages, so the update target is fixed at build
+// time instead of resolved from an update service.
+const packageName =
+  typeof OPENCODE_CLI_NAME === "string" && OPENCODE_CLI_NAME === "shuvcode-node" ? OPENCODE_CLI_NAME : "shuvcode"
+
+export const methods = ["npm", "pnpm", "bun", "yarn"] as const
 export type Method = (typeof methods)[number]
 export type RunResult = { readonly type: "available" | "installed"; readonly version: string }
 export type CheckResult = RunResult | { readonly type: "unavailable"; readonly message: string }
@@ -60,7 +67,6 @@ const make = Effect.gen(function* () {
   const global = yield* Global.Service
   const appProcess = yield* AppProcess.Service
   const installedVersion = yield* Ref.make(OPENCODE_VERSION)
-  const channel = OPENCODE_CHANNEL.replace(/[^a-zA-Z0-9._-]/g, "-")
   const installedPackage = yield* Effect.gen(function* () {
     const executable = yield* fs.realPath(process.execPath)
     const directory = path.dirname(path.dirname(executable))
@@ -68,7 +74,7 @@ const make = Effect.gen(function* () {
       .readFileString(path.join(directory, "package.json"))
       .pipe(Effect.flatMap((text) => Effect.try(() => JSON.parse(text))))
     // Source invocations run inside Bun or Node, which may themselves be npm packages.
-    if (!/^@opencode(?:-ai)?\/cli(?:-node)?$/.test(manifest.name)) return
+    if (!/^shuvcode(?:-node)?$/.test(manifest.name)) return
     if (Object.values(manifest.bin ?? {}).some((bin) => path.resolve(directory, bin) === executable))
       return manifest.name
   }).pipe(Effect.orElseSucceed(() => undefined))
@@ -101,15 +107,7 @@ const make = Effect.gen(function* () {
   })
 
   const method = Effect.fnUntraced(function* () {
-    const binary = path.join(
-      global.home,
-      ".opencode",
-      "bin",
-      process.platform === "win32" ? "opencode.exe" : "opencode",
-    )
-    if (path.resolve(process.execPath) === path.resolve(binary)) return "curl"
     if (!installedPackage) return
-
     const checks: ReadonlyArray<{ method: Method; command: string[] }> = [
       { method: "npm", command: ["npm", "list", "-g", "--depth=0", installedPackage] },
       { method: "pnpm", command: ["pnpm", "list", "-g", "--depth=0", installedPackage] },
@@ -125,7 +123,7 @@ const make = Effect.gen(function* () {
   })
 
   const removal = (method: Method) => {
-    if (method === "curl" || !installedPackage) return undefined
+    if (!installedPackage) return undefined
     const commands = {
       npm: ["npm", "uninstall", "--global", installedPackage],
       pnpm: ["pnpm", "remove", "--global", installedPackage],
@@ -146,23 +144,21 @@ const make = Effect.gen(function* () {
   }
 
   const release = Effect.fnUntraced(function* () {
+    // The channel is an npm dist-tag on the fork's own package; there is no update service.
     const response = yield* Effect.tryPromise({
       try: (signal) =>
-        fetch(
-          `https://opencode.ai/update/api/${encodeURIComponent(channel)}/${encodeURIComponent(OPENCODE_ARTIFACT)}/npm?current=${encodeURIComponent(OPENCODE_VERSION)}`,
-          {
-            signal: AbortSignal.any([signal, AbortSignal.timeout(10_000)]),
-          },
-        ),
+        fetch(`https://registry.npmjs.org/${encodeURIComponent(packageName)}/${encodeURIComponent(OPENCODE_CHANNEL)}`, {
+          headers: { "User-Agent": `shuvcode/${OPENCODE_VERSION}` },
+          signal: AbortSignal.any([signal, AbortSignal.timeout(10_000)]),
+        }),
       catch: (cause) => new Error("Failed to check for updates", { cause }),
     })
     if (!response.ok) return yield* Effect.fail(new Error(`Update check failed with status ${response.status}`))
-    const data: { version: string; metadata?: { package?: string } } = yield* Effect.tryPromise({
+    const data: { version: string } = yield* Effect.tryPromise({
       try: () => response.json(),
       catch: (cause) => new Error("Failed to read update information", { cause }),
     })
-    if (!data.metadata?.package) return yield* Effect.fail(new Error("Update information did not include a package"))
-    return { package: data.metadata.package, version: data.version }
+    return { package: packageName, version: data.version }
   })
 
   const latest = () => release().pipe(Effect.map((data) => data.version))
@@ -180,18 +176,9 @@ const make = Effect.gen(function* () {
     if (installedPackage && packageName !== installedPackage && (method === "pnpm" || method === "yarn")) {
       return yield* Effect.fail(new Error(`Reinstall ${target} with ${method} to migrate from ${installedPackage}.`))
     }
-    const commands: Record<Exclude<Method, "bun" | "curl">, string[]> = {
+    const commands: Record<Exclude<Method, "bun">, string[]> = {
       // Keep the old package: uninstalling it can unlink the replacement command.
-      npm: [
-        "npm",
-        "install",
-        "--global",
-        ...((OPENCODE_ARTIFACT === "cli" && !installedPackage?.endsWith("/cli-node")) ||
-        (installedPackage && packageName !== installedPackage)
-          ? ["--force"]
-          : []),
-        target,
-      ],
+      npm: ["npm", "install", "--global", ...(installedPackage && packageName !== installedPackage ? ["--force"] : []), target],
       pnpm: ["pnpm", "add", "--global", `--allow-build=${packageName}`, target],
       yarn: ["yarn", "global", "add", target],
     }
@@ -202,17 +189,6 @@ const make = Effect.gen(function* () {
           yield* fs.makeDirectory(global.cache, { recursive: true })
           const cache = yield* temporaryDirectory("update-")
           return yield* exec(["bun", "install", "--global", "--trust", "--cache-dir", cache, target], "5 minutes")
-        }
-        if (method === "curl") {
-          yield* fs.makeDirectory(global.cache, { recursive: true })
-          const directory = yield* temporaryDirectory("update-")
-          const installer = path.join(directory, "install")
-          const download = yield* exec(
-            ["curl", "-fsSL", "-o", installer, "https://opencode.ai/v2/install"],
-            "5 minutes",
-          )
-          if (download.code !== 0) return download
-          return yield* exec(["bash", installer, "--version", version, "--no-modify-path"], "5 minutes")
         }
         return yield* exec(commands[method], "5 minutes")
       }),
@@ -247,7 +223,7 @@ const make = Effect.gen(function* () {
       yield* Effect.logInfo("update check done", { action: "up-to-date" })
       return undefined
     }
-    yield* Effect.logInfo("OpenCode update available", { current, latest: version, action: next })
+    yield* Effect.logInfo("Shuvcode update available", { current, latest: version, action: next })
     return { policy, version }
   })
 
@@ -260,7 +236,7 @@ const make = Effect.gen(function* () {
     const current = yield* Ref.get(installedVersion)
     yield* upgrade(detected, version)
     yield* Ref.set(installedVersion, version)
-    yield* Effect.logInfo("updated OpenCode", { from: current, to: version, method: detected })
+    yield* Effect.logInfo("updated Shuvcode", { from: current, to: version, method: detected })
     return true
   })
 
@@ -272,7 +248,7 @@ const make = Effect.gen(function* () {
     if (OPENCODE_LOCAL)
       return {
         type: "unavailable" as const,
-        message: "This build runs from a source checkout. Use an installed OpenCode release to check for updates.",
+        message: "This build runs from a source checkout. Use an installed Shuvcode release to check for updates.",
       }
     const version = yield* latest()
     if (!parseReleaseVersion(version)) return yield* Effect.fail(new Error(`Invalid version: ${version}`))

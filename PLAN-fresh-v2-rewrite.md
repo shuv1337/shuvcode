@@ -265,9 +265,43 @@ implementations against the new tree. Do not copy scarred whole files.
   Discord notify
 - `shuvcode/client` Promise facade; `package-smoke.ts` without the
   `SessionPolicy` assertion
-- Tests: metadata-binary, updater-install, publish-ownership, logo, version
+- Tests: updater-install, publish-ownership, launcher, logo, version
 
 Internal imports stay `@opencode/*`.
+
+**Done 2026-09-15 PDT.** Notes from the cut:
+
+- The fork's `metadata-binary` test was not ported: it asserts no native
+  extraction on `--version`, which bun 1.4.2 does once per content hash
+  (watchlist D1). The fast path itself is out of this cut.
+- Workspace bin is `bin/shuvcode.mjs`, a one-line shim over
+  `script/launcher.mjs`; published packages ship the launcher as
+  `bin/launcher.mjs`.
+- `packages/cli` self-imports moved to `shuvcode/vite-host` and
+  `shuvcode/run` (package self-reference follows the package name).
+- User-facing command hints (`shuvcode service set …`, `shuvcode models`,
+  exit splash resume line, ACP terminal-auth) follow the bin. Product
+  strings elsewhere ("OpenCode" in TUI copy) were left alone.
+- `uninstall` lost its curl-only branches (shell PATH cleanup for
+  `~/.opencode/bin`); `Updater.removal` stays for package managers.
+- `packages/script`: `resolveChannel` tolerates no git; `Script.version`
+  reads the base from `packages/cli/package.json`, computes
+  `nextForkVersion` from npm `shuvcode/latest`, and rejects an explicit
+  `OPENCODE_VERSION` on `latest` that is not `-shuv.N`.
+- Publish: `publish-ownership.ts` owns the repository guard (no root
+  `script/publish-plan.ts`); `package-smoke.ts` asserts `server.status`,
+  `session.list`, `event.subscribe` (the fork's `health` / `auth.status`
+  groups no longer exist). `release-assets.ts` / `preflight-publish.ts` not
+  ported; the GitHub release is created in `publish.yml`, prerelease iff
+  the dist-tag is not `latest`.
+- CI: four workflows only. `test.yml` excludes `@opencode/desktop` and
+  `@opencode/update` from turbo and drops the `services/www` docs check;
+  `typecheck.yml` skips the decision-14 trees. Runners are `ubuntu-latest`.
+- Pre-existing upstream test failures on `d0a902815d`, not touched:
+  `packages/client` (3: session HTTP contract, DateTime decode, import
+  boundaries), `packages/core/test/preload.test.ts` (`OPENCODE_TEST_HOME`
+  unset outside turbo), `packages/tui` app-lifecycle plugin-failure width
+  cases (4).
 
 ### L2 — Service and cutover
 

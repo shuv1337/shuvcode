@@ -25,7 +25,7 @@ describe("global", () => {
     })
 
     expect(result.exitCode, result.stderr.toString()).toBe(0)
-    directories.forEach((directory) => expect(fs.existsSync(path.join(directory, "opencode"))).toBe(false))
+    directories.forEach((directory) => expect(fs.existsSync(path.join(directory, "shuvcode"))).toBe(false))
     fs.rmSync(root, { recursive: true, force: true })
   })
 
@@ -77,15 +77,15 @@ describe("global", () => {
     })
 
     expect(result.exitCode, result.stderr.toString()).toBe(0)
-    expect(result.stdout.toString()).toBe(fs.realpathSync(path.join(directories[4], "opencode")))
+    expect(result.stdout.toString()).toBe(fs.realpathSync(path.join(directories[4], "shuvcode")))
     const created = [
-      path.join(directories[0], "opencode"),
-      path.join(directories[1], "opencode", "bin"),
-      path.join(directories[2], "opencode"),
-      path.join(directories[3], "opencode"),
-      path.join(directories[0], "opencode", "log"),
-      path.join(directories[0], "opencode", "repos"),
-      path.join(directories[4], "opencode"),
+      path.join(directories[0], "shuvcode"),
+      path.join(directories[1], "shuvcode", "bin"),
+      path.join(directories[2], "shuvcode"),
+      path.join(directories[3], "shuvcode"),
+      path.join(directories[0], "shuvcode", "log"),
+      path.join(directories[0], "shuvcode", "repos"),
+      path.join(directories[4], "shuvcode"),
     ]
     created.forEach((directory) => expect(fs.statSync(directory).isDirectory()).toBe(true))
     fs.rmSync(root, { recursive: true, force: true })

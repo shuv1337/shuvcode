@@ -6,6 +6,28 @@
 - Default new branches and worktrees to `v2`, or `origin/v2` when the local `v2` ref is unavailable, and default pull requests to target `v2`. Use another base or target branch when the requester explicitly instructs it.
 - Local `main` ref may not exist; use `v2` or `origin/v2` for diffs.
 
+## Shuvcode Fork
+
+This tree is the Shuvcode fork of upstream OpenCode V2, rebuilt from a pinned
+upstream commit. `PLAN-fresh-v2-rewrite.md` is the map; do not undo these
+identity facts when merging or refactoring:
+
+- Package and binary are `shuvcode` (`packages/cli/package.json`); there is no
+  `opencode` or `opencode2` bin. Internal imports stay `@opencode/*`.
+- Versions are always `<upstream base>-shuv.<n>` (`packages/script/src/version.ts`).
+  Never publish a bare upstream version under `shuvcode`.
+- `Global.app` is `shuvcode`: XDG roots are `~/.config/shuvcode`,
+  `~/.local/share/shuvcode`, `~/.local/state/shuvcode`, `~/.cache/shuvcode`.
+  File names inside them (`opencode.json`, `opencode.db`, project `.opencode/`)
+  are formats, not identity, and stay as upstream.
+- Default service port is `0x1337` (`0x1338` for the `local` channel).
+- Updates come from npm dist-tags on `shuvcode` / `shuvcode-node`; there is no
+  curl installer and no `opencode.ai` update service.
+- Publishing is guarded to `Latitudes-Dev/shuvcode` and CLI packages only
+  (`packages/cli/script/publish.ts`); OpenCode infra trees (`packages/console`,
+  `packages/web`, `services/*`, enterprise, stats, desktop) stay in the repo but
+  are outside fork CI and publish.
+
 ## Live V2 TUI Testing
 
 - Run `bun run dev:live` from a development worktree to test its TUI against the currently elected `opencode` background server and live sessions.

@@ -151,7 +151,7 @@ function listen(options: { readonly hostname: string; readonly port: Option.Opti
     bind(options.hostname, port).pipe(
       Effect.catch((error) => (port < 65_535 && addressInUse(error) ? next(port + 1) : Effect.fail(error))),
     )
-  return next(4096)
+  return next(0x1337)
 }
 
 function bind(hostname: string, port: number) {
@@ -232,7 +232,7 @@ function unavailable(status: Status.State) {
       {
         code: "service_failed",
         message: "The background service could not start.",
-        action: "Run `opencode service restart` after checking the service logs.",
+        action: "Run `shuvcode service restart` after checking the service logs.",
       },
       { status: 503 },
     )

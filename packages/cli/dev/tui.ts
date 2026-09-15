@@ -118,7 +118,7 @@ export const run: Run = Effect.fn("Tui.vite")(function* (input: Parameters<Run>[
                 "@opentui/core",
                 "@opentui/core/testing",
                 "effect",
-                "@opencode/cli/vite-host",
+                "shuvcode/vite-host",
                 "@opencode/client",
                 "@opencode/client/effect/service",
                 "@opencode/client/promise",

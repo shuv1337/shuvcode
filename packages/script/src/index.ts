@@ -1,6 +1,7 @@
 import { $ } from "bun"
 import semver from "semver"
 import path from "path"
+import { nextForkVersion, parseForkVersion, resolveChannel } from "./version.js"
 
 const rootPkgPath = path.resolve(import.meta.dir, "../../../package.json")
 const rootPkg = await Bun.file(rootPkgPath).json()
@@ -23,29 +24,36 @@ const env = {
   OPENCODE_VERSION: process.env["OPENCODE_VERSION"],
   OPENCODE_RELEASE: process.env["OPENCODE_RELEASE"],
 }
-const CHANNEL = await (async () => {
-  if (env.OPENCODE_CHANNEL) return env.OPENCODE_CHANNEL
-  if (env.OPENCODE_BUMP) return "latest"
-  if (env.OPENCODE_VERSION && !env.OPENCODE_VERSION.startsWith("0.0.0-")) return "latest"
-  return await $`git branch --show-current`.text().then((x) => x.trim())
-})()
+const CHANNEL = await resolveChannel({
+  channel: env.OPENCODE_CHANNEL,
+  bump: env.OPENCODE_BUMP,
+  version: env.OPENCODE_VERSION,
+  branch: () => $`git branch --show-current`.quiet().nothrow().text(),
+})
 const IS_PREVIEW = CHANNEL !== "latest"
 
+// The CLI manifest records the upstream base this tree was cut from as `<base>-shuv.<n>`.
+const cliPkg = await Bun.file(path.resolve(import.meta.dir, "../../cli/package.json")).json()
+const forkPackage = "shuvcode"
+
 const VERSION = await (async () => {
-  if (env.OPENCODE_VERSION) return env.OPENCODE_VERSION
+  if (env.OPENCODE_VERSION) {
+    if (!IS_PREVIEW && !parseForkVersion(env.OPENCODE_VERSION))
+      throw new Error(`Release versions must be <upstream>-shuv.<n>, got ${env.OPENCODE_VERSION}`)
+    return env.OPENCODE_VERSION
+  }
   if (IS_PREVIEW) return `0.0.0-${CHANNEL}-${previewBuildNumber()}`
-  const version = await fetch("https://registry.npmjs.org/@opencode%2fcli/latest")
-    .then((res) => {
-      if (!res.ok) throw new Error(res.statusText)
-      return res.json()
-    })
-    .then((data: any) => data.version)
-  if (semver.lt(version, "2.0.0")) return "2.0.0"
-  const [major, minor, patch] = version.split(".").map((x: string) => Number(x) || 0)
-  const t = env.OPENCODE_BUMP?.toLowerCase()
-  if (t === "major") return `${major + 1}.0.0`
-  if (t === "minor") return `${major}.${minor + 1}.0`
-  return `${major}.${minor}.${patch + 1}`
+  const base = parseForkVersion(cliPkg.version)?.base
+  if (!base) throw new Error(`packages/cli/package.json version must be <upstream>-shuv.<n>, got ${cliPkg.version}`)
+  const published = await fetch(`https://registry.npmjs.org/${forkPackage}/latest`).then(async (res) => {
+    if (res.status === 404) return undefined
+    if (!res.ok) throw new Error(res.statusText)
+    const data: unknown = await res.json()
+    if (typeof data !== "object" || data === null || !("version" in data) || typeof data.version !== "string")
+      throw new Error(`Unexpected npm registry response for ${forkPackage}`)
+    return data.version
+  })
+  return nextForkVersion({ base, published })
 })()
 
 function previewBuildNumber() {
@@ -83,4 +91,4 @@ export const Script = {
     return team
   },
 }
-console.log(`opencode script`, JSON.stringify(Script, null, 2))
+console.log(`shuvcode script`, JSON.stringify(Script, null, 2))

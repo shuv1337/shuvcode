@@ -1,0 +1,53 @@
+name: typecheck
+
+on:
+  push:
+    branches:
+      - v2
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  typecheck:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      - name: Setup Bun
+        uses: ./.github/actions/setup-bun
+        with:
+          bun-version: "1.4.2"
+          install-flags: --frozen-lockfile
+
+      - name: Typecheck each package
+        run: |
+          bun -e '
+          const glob = new Bun.Glob("**/package.json")
+          // OpenCode infra trees stay in the repo but are outside fork CI (plan decision 14).
+          const ignored = ["packages/console/", "packages/web/", "packages/enterprise/", "packages/stats/", "packages/desktop/", "services/"]
+          const dirs = []
+          for await (const file of glob.scan(".")) {
+            if (file === "package.json" || file.includes("node_modules") || file.split("/").includes("dist")) continue
+            if (ignored.some((prefix) => file.startsWith(prefix))) continue
+            const pkg = await Bun.file(file).json()
+            if (pkg.scripts?.typecheck) dirs.push(file.replace(/\/package.json$/, ""))
+          }
+          dirs.sort()
+          if (dirs.length === 0) throw new Error("no packages with a typecheck script")
+          let failed = false
+          for (const dir of dirs) {
+            console.log(`::group::${dir}`)
+            const proc = Bun.spawn(["bun", "typecheck"], { cwd: dir, stdio: ["ignore", "inherit", "inherit"] })
+            if ((await proc.exited) !== 0) failed = true
+            console.log("::endgroup::")
+          }
+          if (failed) process.exit(1)
+          '

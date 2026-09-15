@@ -37,7 +37,7 @@ const stats: SessionStatsInfo = {
 describe("stats rendering", () => {
   test("keeps the default card shareable", () => {
     const output = renderStats(stats, options())
-    expect(output).toContain("opencode stats · 2026 so far · all projects")
+    expect(output).toContain("shuvcode stats · 2026 so far · all projects")
     expect(output).toContain("activity")
     expect(output).toMatch(/Mo .*(?:\r?\n){2}Tu/)
     expect(output).toMatch(/Su .*(?:\r?\n){2}   less/)
@@ -70,7 +70,7 @@ describe("stats rendering", () => {
     expect(output).toContain("tool")
     expect(output).toContain("calls")
     expect(output).toContain("cached input        32.3%")
-    expect(output).not.toContain("opencode stats")
+    expect(output).not.toContain("shuvcode stats")
     expect(output).not.toContain("activity")
   })
 

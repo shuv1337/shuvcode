@@ -1,14 +1,61 @@
 name: notify-discord
 
+# Invoked by publish.yml after a successful cut, or dispatched by hand for a
+# backfill. Do not use on.release: GITHUB_TOKEN publish events do not start
+# other workflows, so that trigger never fires for our manual release path.
+
 on:
-  release:
-    types: [released] # fires when a draft release is published
+  workflow_call:
+    inputs:
+      version:
+        description: "Released version (e.g. 2.0.3-shuv.1)"
+        required: true
+        type: string
+    secrets:
+      DISCORD_RELEASE_WEBHOOK_URL:
+        required: false
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Released version (e.g. 2.0.3-shuv.1)"
+        required: true
+        type: string
+
+permissions:
+  contents: read
 
 jobs:
   notify:
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: ubuntu-latest
     steps:
-      - name: Send nicely-formatted embed to Discord
-        uses: SethCohen/github-releases-to-discord@24d166886aee4646d448c8a389ff9e1ebcab3682 # v1.20.0
-        with:
-          webhook_url: ${{ secrets.DISCORD_WEBHOOK }}
+      - name: Post release to Discord
+        env:
+          DISCORD_RELEASE_WEBHOOK_URL: ${{ secrets.DISCORD_RELEASE_WEBHOOK_URL }}
+          VERSION: ${{ inputs.version }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          if [ -z "${DISCORD_RELEASE_WEBHOOK_URL:-}" ]; then
+            echo "DISCORD_RELEASE_WEBHOOK_URL unset; skipping Discord notify"
+            exit 0
+          fi
+          TAG="$VERSION"
+          case "$TAG" in
+            v*) ;;
+            *) TAG="v$TAG" ;;
+          esac
+          SEMVER="${TAG#v}"
+          CONTENT="$(printf '%s\n%s\n%s\n%s' \
+            "**shuvcode ${TAG}** is out" \
+            "npm: https://www.npmjs.com/package/shuvcode/v/${SEMVER}" \
+            "tag: https://github.com/${REPO}/tree/${TAG}" \
+            "release: https://github.com/${REPO}/releases/tag/${TAG}")"
+          PAYLOAD="$(CONTENT="$CONTENT" python3 -c 'import json, os; print(json.dumps({"content": os.environ["CONTENT"]}))')"
+          code="$(curl -sS -o /tmp/discord-notify-body -w "%{http_code}" \
+            -H "Content-Type: application/json" \
+            -d "$PAYLOAD" \
+            "$DISCORD_RELEASE_WEBHOOK_URL" || true)"
+          if [ "$code" != "204" ] && [ "$code" != "200" ]; then
+            echo "Discord announce failed (non-fatal): HTTP ${code}"
+            exit 0
+          fi

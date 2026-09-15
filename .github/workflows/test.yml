@@ -3,15 +3,14 @@ name: test
 on:
   push:
     branches:
-      - dev
       - v2
   pull_request:
   workflow_dispatch:
 
 concurrency:
-  # Keep every run on dev so cancelled checks do not pollute the default branch
+  # Keep every run on v2 so cancelled checks do not pollute the default branch
   # commit history. PRs and other branches still share a group and cancel stale runs.
-  group: ${{ case(github.ref == 'refs/heads/dev', format('{0}-{1}', github.workflow, github.run_id), format('{0}-{1}', github.workflow, github.event.pull_request.number || github.ref)) }}
+  group: ${{ case(github.ref == 'refs/heads/v2', format('{0}-{1}', github.workflow, github.run_id), format('{0}-{1}', github.workflow, github.event.pull_request.number || github.ref)) }}
   cancel-in-progress: true
 
 permissions:
@@ -24,7 +23,7 @@ env:
 jobs:
   affected:
     name: affected packages
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: ubuntu-latest
     outputs:
       app: ${{ steps.packages.outputs.app }}
     steps:
@@ -37,7 +36,7 @@ jobs:
       - name: Setup Bun
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
-          bun-version-file: package.json
+          bun-version: "1.4.2"
 
       - name: Find affected packages
         id: packages
@@ -53,16 +52,8 @@ jobs:
           bun -e 'const result = await Bun.file("affected.json").json(); console.log(`app=${result.packages.count > 0}`)' >> "$GITHUB_OUTPUT"
 
   unit:
-    name: unit (${{ matrix.settings.name }})
-    strategy:
-      fail-fast: false
-      matrix:
-        settings:
-          - name: linux
-            host: blacksmith-4vcpu-ubuntu-2404
-          - name: windows
-            host: blacksmith-4vcpu-windows-2025
-    runs-on: ${{ matrix.settings.host }}
+    name: unit
+    runs-on: ubuntu-latest
     defaults:
       run:
         shell: bash
@@ -80,22 +71,22 @@ jobs:
 
       - name: Setup Bun
         uses: ./.github/actions/setup-bun
+        with:
+          bun-version: "1.4.2"
+          install-flags: --frozen-lockfile
 
       - name: Test Effect simplification rules
-        if: runner.os == 'Linux'
         run: bun run test:effect-simplification-rules
 
       - name: Check Effect simplifications
-        if: runner.os == 'Linux'
         run: bun run lint:effect-simplifications
 
       - name: Configure git identity
         run: |
-          git config --global user.email "bot@opencode.ai"
-          git config --global user.name "opencode"
+          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git config --global user.name "github-actions[bot]"
 
       - name: Install ffmpeg
-        if: runner.os == 'Linux'
         run: |
           sudo apt-get update
           sudo apt-get install --yes ffmpeg
@@ -112,23 +103,21 @@ jobs:
       - name: Run unit tests
         timeout-minutes: 20
         run: |
+          # OpenCode infra trees stay in the repo but are outside fork CI (plan decision 14).
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            GITHUB_ACTIONS=false bun turbo test
+            GITHUB_ACTIONS=false bun turbo test --filter='!@opencode/desktop' --filter='!@opencode/update'
             exit 0
           fi
-          GITHUB_ACTIONS=false bun turbo test --affected
+          GITHUB_ACTIONS=false bun turbo test --affected --filter='!@opencode/desktop' --filter='!@opencode/update'
         env:
-          OPENCODE_EXPERIMENTAL_DISABLE_FILEWATCHER: ${{ runner.os == 'Windows' && 'true' || 'false' }}
           TURBO_SCM_BASE: ${{ github.event_name == 'pull_request' && format('{0}^1', github.sha) || github.event.before }}
           TURBO_SCM_HEAD: ${{ github.sha }}
 
       - name: Verify published codemode package
-        if: runner.os == 'Linux'
         working-directory: packages/codemode
         run: bun run script/publish.ts --dry-run
 
       - name: Verify packed workerd SDK
-        if: runner.os == 'Linux'
         timeout-minutes: 15
         run: |
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
@@ -144,8 +133,6 @@ jobs:
         if: always()
         timeout-minutes: 10
         working-directory: packages/cli
-        env:
-          NODE_OPTIONS: ${{ runner.os == 'Windows' && '--max-old-space-size=4096' || '' }}
         run: |
           bun run script/build.ts --single --skip-install
           bun run script/service-smoke.ts
@@ -160,34 +147,18 @@ jobs:
         if: always()
         timeout-minutes: 15
         working-directory: packages/cli
-        env:
-          NODE_OPTIONS: ${{ runner.os == 'Windows' && '--max-old-space-size=4096' || '' }}
         run: |
           bun run script/build-node.ts --single --skip-install --outdir=dist/node
           bun run script/service-smoke.ts --node
 
       - name: Check generated client
-        if: runner.os == 'Linux'
         working-directory: packages/client
         run: bun run check:generated
 
-      - name: Check generated documentation
-        if: runner.os == 'Linux'
-        working-directory: services/www
-        run: bun run check:generated
-
   e2e:
-    name: e2e (${{ matrix.settings.name }})
+    name: e2e
     needs: affected
-    strategy:
-      fail-fast: false
-      matrix:
-        settings:
-          - name: linux
-            host: blacksmith-4vcpu-ubuntu-2404
-          - name: windows
-            host: blacksmith-4vcpu-windows-2025
-    runs-on: ${{ matrix.settings.host }}
+    runs-on: ubuntu-latest
     env:
       E2E_ENABLED: ${{ needs.affected.outputs.app == 'true' && github.ref_name != 'v2' && github.head_ref != 'v2' }}
       PLAYWRIGHT_BROWSERS_PATH: ${{ github.workspace }}/.playwright-browsers
@@ -211,6 +182,9 @@ jobs:
       - name: Setup Bun
         if: env.E2E_ENABLED == 'true'
         uses: ./.github/actions/setup-bun
+        with:
+          bun-version: "1.4.2"
+          install-flags: --frozen-lockfile
 
       - name: Read Playwright version
         if: env.E2E_ENABLED == 'true'
@@ -228,7 +202,7 @@ jobs:
           key: ${{ runner.os }}-${{ runner.arch }}-playwright-${{ steps.playwright-version.outputs.version }}-chromium
 
       - name: Install Playwright system dependencies
-        if: env.E2E_ENABLED == 'true' && runner.os == 'Linux'
+        if: env.E2E_ENABLED == 'true'
         working-directory: packages/app
         run: bunx playwright install-deps chromium
 
@@ -254,7 +228,7 @@ jobs:
         if: always() && env.E2E_ENABLED == 'true'
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          name: playwright-${{ matrix.settings.name }}-${{ github.run_attempt }}
+          name: playwright-linux-${{ github.run_attempt }}
           if-no-files-found: ignore
           retention-days: 7
           path: |

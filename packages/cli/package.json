@@ -1,12 +1,11 @@
 {
   "$schema": "https://json.schemastore.org/package.json",
-  "name": "@opencode/cli",
-  "version": "2.0.3",
+  "name": "shuvcode",
+  "version": "2.0.3-shuv.1",
   "type": "module",
   "license": "MIT",
   "bin": {
-    "opencode": "./bin/opencode.cjs",
-    "opencode2": "./bin/opencode2.cjs"
+    "shuvcode": "./bin/shuvcode.mjs"
   },
   "files": [
     "bin"
