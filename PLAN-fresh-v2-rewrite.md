@@ -373,6 +373,14 @@ Nothing else.
 
 ### L6 — Bundled provider plugins
 
+**Live-test readiness blocker (2026-09-15 PDT):** the required Claude Pro/Max
+and Antigravity integrations below remain absent from the rewrite checkout.
+The shutdown-first live suite stopped before service shutdown or credential
+access. Complete these existing tasks plus the reviewed auth-only import and
+refresh-token safety gate in `PLAN-live-test-v2-rewrite.md` Setup 3a before
+rerunning. Evidence: `PLAN-live-test-v2-rewrite-results.md`. API-key tests do
+not substitute for the required imported subscription/OAuth coverage.
+
 **Antigravity:** port `packages/antigravity-plugin` to `@opencode/plugin`
 **and** to the `ctx.provider` / `ctx.model` editors (`CatalogEditor` is
 gone). One-line `ProviderPlugins` adapter.
