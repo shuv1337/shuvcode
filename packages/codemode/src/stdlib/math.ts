@@ -1,8 +1,9 @@
 import { Effect } from "effect"
 import { constants, type Method, methods } from "../interpreter/native.js"
 import { typeError } from "../interpreter/model.js"
-import { ProgramObject } from "../interpreter/objects.js"
-import { preserveConsumerError, type Runner } from "../interpreter/runner.js"
+import { Obj } from "../interpreter/objects.js"
+import { preserveConsumerError } from "../interpreter/callback.js"
+import type { Interpreter } from "../interpreter/interpreter.js"
 
 // Bun exposes ES2026 Math.sumPrecise before TypeScript's standard library types.
 declare global {
@@ -40,9 +41,9 @@ const variadic = (name: string, op: (...values: Array<number>) => number): Metho
     ),
 ]
 
-export const mathGlobal = <R>(runner: Runner<R>) => {
-  const protos = runner.prototypes
-  const math = new ProgramObject(protos.Object)
+export const mathGlobal = <R>(ctx: Interpreter<R>) => {
+  const builtins = ctx.builtins
+  const math = new Obj(builtins.Object)
   constants(math, {
     PI: Math.PI,
     E: Math.E,
@@ -53,7 +54,7 @@ export const mathGlobal = <R>(runner: Runner<R>) => {
     SQRT2: Math.SQRT2,
     SQRT1_2: Math.SQRT1_2,
   })
-  methods(protos, math, [
+  methods(builtins, math, [
     ["random", 0, () => Math.random()],
     variadic("max", Math.max),
     variadic("min", Math.min),
@@ -95,7 +96,7 @@ export const mathGlobal = <R>(runner: Runner<R>) => {
       1,
       (_, args) =>
         Effect.gen(function* () {
-          const cursor = yield* runner.syncIterator(args[0])
+          const cursor = yield* ctx.iterate(args[0])
           if (cursor === undefined) {
             throw typeError("Math.sumPrecise expects a synchronous iterable.")
           }

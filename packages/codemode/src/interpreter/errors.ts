@@ -2,21 +2,12 @@ import { Effect } from "effect"
 import type { Diagnostic } from "../codemode.js"
 import { ToolError } from "../tool-error.js"
 import { toData, ToolRuntimeError } from "../data.js"
-import { type AstNode, formatLocation, PendingThrow, ProgramThrow, sourceLocation, typeError } from "./model.js"
+import { type AstNode, formatLocation, PendingThrow, Throw, sourceLocation, typeError } from "./model.js"
 import { containsRuntimeReference } from "./references.js"
 import { createErrorValue, type ErrorType, isErrorType } from "./intrinsics.js"
 import { constructor, methods, prototypeFrom, receiver } from "./native.js"
-import {
-  type Callable,
-  define,
-  get,
-  hidden,
-  type NativeFunction,
-  ProgramArray,
-  ProgramError,
-  ProgramObject,
-} from "./objects.js"
-import { type Runner } from "./runner.js"
+import { type Callable, define, get, hidden, type Native, Arr, ErrorObj, Obj } from "./objects.js"
+import type { Interpreter } from "./interpreter.js"
 import { coerceToString } from "../stdlib/value.js"
 
 export const normalizeError = (error: unknown): Diagnostic => {
@@ -41,9 +32,9 @@ export const normalizeError = (error: unknown): Diagnostic => {
     return { kind: "ToolFailure", message: error.message }
   }
 
-  if (error instanceof ProgramThrow) {
+  if (error instanceof Throw) {
     const value = error.value
-    if (value instanceof ProgramError) {
+    if (value instanceof ErrorObj) {
       return value.host ? normalizeError(value.host) : { kind: "ExecutionFailure", message: errorToString(value) }
     }
     let message: string
@@ -98,22 +89,22 @@ export const locate = (error: unknown, node?: AstNode): unknown => {
 }
 
 /** The program value a handler receives for a failure; one failure always yields the same value. */
-export const materialize = <R>(runner: Runner<R>, thrown: unknown): unknown => {
-  if (thrown instanceof ProgramThrow) return thrown.value
-  const prototypes = runner.prototypes
+export const materialize = <R>(ctx: Interpreter<R>, thrown: unknown): unknown => {
+  if (thrown instanceof Throw) return thrown.value
+  const builtins = ctx.builtins
   if (thrown instanceof PendingThrow) {
     if (thrown.value === undefined) {
-      thrown.value = createErrorValue(prototypes[thrown.type], thrown.message)
+      thrown.value = createErrorValue(builtins[thrown.type], thrown.message)
       thrown.value.host = thrown
     }
     return thrown.value
   }
   const type = thrown instanceof Error && isErrorType(thrown.name) ? thrown.name : "Error"
-  return createErrorValue(prototypes[type], normalizeError(thrown).message)
+  return createErrorValue(builtins[type], normalizeError(thrown).message)
 }
 
 /** Error.prototype.toString: `name: message`, omitting whichever side is empty. */
-const errorToString = (self: ProgramObject): string => {
+const errorToString = (self: Obj): string => {
   const name = get(self, "name")
   const message = get(self, "message")
   const shownName = name === undefined ? "Error" : coerceToString(name)
@@ -124,53 +115,53 @@ const errorToString = (self: ProgramObject): string => {
 }
 
 export const createAggregateErrorValue = <R>(
-  runner: Runner<R>,
+  ctx: Interpreter<R>,
   errors: Array<unknown>,
   message: string,
-  proto: ProgramObject = runner.prototypes.AggregateError,
+  proto: Obj = ctx.builtins.AggregateError,
 ) => {
   const value = createErrorValue(proto, message)
-  define(value, "errors", new ProgramArray(runner.prototypes.Array, errors), { ...hidden })
+  define(value, "errors", new Arr(ctx.builtins.Array, errors), { ...hidden })
   return value
 }
 
 const constructAggregateErrorValue = <R>(
-  runner: Runner<R>,
+  ctx: Interpreter<R>,
   args: Array<unknown>,
-  proto: ProgramObject,
-): Effect.Effect<ProgramError, unknown, R> =>
+  proto: Obj,
+): Effect.Effect<ErrorObj, unknown, R> =>
   Effect.gen(function* () {
-    const cursor = yield* runner.syncIterator(args[0])
+    const cursor = yield* ctx.iterate(args[0])
     if (cursor === undefined) throw typeError("new AggregateError(...) expects a synchronous iterable of errors.")
     const errors: Array<unknown> = []
     while (true) {
       const step = yield* cursor.next
       if (step.done) {
-        return createAggregateErrorValue(runner, errors, args[1] === undefined ? "" : coerceToString(args[1]), proto)
+        return createAggregateErrorValue(ctx, errors, args[1] === undefined ? "" : coerceToString(args[1]), proto)
       }
       errors.push(step.value)
     }
   })
 
 /** An error constructor such as `Error` or `TypeError`; callable with or without `new`, like JS. */
-export const errorGlobal = <R>(type: ErrorType, runner: Runner<R>) => {
-  const protos = runner.prototypes
-  const prototype = protos[type]
+export const errorGlobal = <R>(type: ErrorType, ctx: Interpreter<R>) => {
+  const builtins = ctx.builtins
+  const prototype = builtins[type]
   const construct = (args: Array<unknown>, newTarget: Callable) => {
     const proto = prototypeFrom(newTarget, prototype)
     return type === "AggregateError"
-      ? constructAggregateErrorValue(runner, args, proto)
+      ? constructAggregateErrorValue(ctx, args, proto)
       : Effect.sync(() => createErrorValue(proto, args[0] === undefined ? undefined : coerceToString(args[0])))
   }
-  const ctor: NativeFunction<R> = constructor<R>(protos, prototype, {
+  const ctor: Native<R> = constructor<R>(builtins, prototype, {
     name: type,
     length: type === "AggregateError" ? 2 : 1,
     call: (_, args) => construct(args, ctor),
     construct,
   })
   if (type === "Error") {
-    methods(protos, prototype, [
-      ["toString", 0, (thisValue) => errorToString(receiver(ProgramObject, thisValue, "Error.prototype.toString"))],
+    methods(builtins, prototype, [
+      ["toString", 0, (thisValue) => errorToString(receiver(Obj, thisValue, "Error.prototype.toString"))],
     ])
   }
   return ctor

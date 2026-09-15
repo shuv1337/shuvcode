@@ -3,9 +3,10 @@ import { toProgram } from "../data.js"
 import { constructor, type Method, methods } from "../interpreter/native.js"
 import { checkArrayLength, checkStringLength } from "../interpreter/limits.js"
 import { invalidData, rangeError, typeError } from "../interpreter/model.js"
-import { ProgramArray, ProgramPromise, ProgramRegExp, record } from "../interpreter/objects.js"
+import { Arr, PromiseObj, RegExpObj, record } from "../interpreter/objects.js"
 import { containsOpaqueReference, typeofValue } from "../interpreter/references.js"
-import { applyCollectionCallback, isSupportedCallback, type Runner } from "../interpreter/runner.js"
+import { applyCollectionCallback, isSupportedCallback } from "../interpreter/callback.js"
+import type { Interpreter } from "../interpreter/interpreter.js"
 import { matchToValue, toHostRegex } from "./regexp.js"
 import { coerceToNumber, coerceToString, coercion } from "./value.js"
 
@@ -26,13 +27,13 @@ const replaceAllNeedsGlobal = (pattern: RegExp) => {
 }
 
 const replaceWithCallback = <R>(
-  runner: Runner<R>,
+  ctx: Interpreter<R>,
   value: string,
   name: "replace" | "replaceAll",
   args: Array<unknown>,
 ): Effect.Effect<unknown, unknown, R> => {
-  const protos = runner.prototypes
-  const apply = applyCollectionCallback(runner, args[1], `String.${name}`)
+  const builtins = ctx.builtins
+  const apply = applyCollectionCallback(ctx, args[1], `String.${name}`)
   const matches: Array<{ readonly match: string; readonly offset: number; readonly args: Array<unknown> }> = []
   const collect = (...callbackArgs: Array<unknown>): string => {
     const match = callbackArgs[0]
@@ -42,13 +43,13 @@ const replaceWithCallback = <R>(
     if (typeof match !== "string" || typeof offset !== "number") {
       throw typeError(`String.${name} produced an invalid replacement match.`)
     }
-    if (hasGroups) callbackArgs[callbackArgs.length - 1] = record(protos.Object, groups as Record<string, unknown>)
+    if (hasGroups) callbackArgs[callbackArgs.length - 1] = record(builtins.Object, groups as Record<string, unknown>)
     matches.push({ match, offset, args: callbackArgs })
     return match
   }
 
   const pattern = args[0]
-  if (pattern instanceof ProgramRegExp) {
+  if (pattern instanceof RegExpObj) {
     if (name === "replaceAll") replaceAllNeedsGlobal(pattern.regex)
     if (name === "replace") value.replace(pattern.regex, collect)
     else value.replaceAll(pattern.regex, collect)
@@ -65,9 +66,9 @@ const replaceWithCallback = <R>(
       const replacement = yield* apply(match.args)
       output.push(
         value.slice(end, match.offset),
-        replacement instanceof ProgramPromise
+        replacement instanceof PromiseObj
           ? "[object Promise]"
-          : coerceToString(toProgram(protos, replacement, `String.${name} replacer result`)),
+          : coerceToString(toProgram(builtins, replacement, `String.${name} replacer result`)),
       )
       end = match.offset + match.match.length
     }
@@ -76,12 +77,12 @@ const replaceWithCallback = <R>(
   })
 }
 
-export const stringGlobal = <R>(runner: Runner<R>) => {
-  const protos = runner.prototypes
-  const string = constructor<R>(protos, protos.String, {
+export const stringGlobal = <R>(ctx: Interpreter<R>) => {
+  const builtins = ctx.builtins
+  const string = constructor<R>(builtins, builtins.String, {
     name: "String",
     length: 1,
-    call: coercion(runner, "String").call,
+    call: coercion(ctx, "String").call,
   })
   const codeUnits = (name: string, op: (...codes: Array<number>) => string): Method => [
     name,
@@ -96,7 +97,7 @@ export const stringGlobal = <R>(runner: Runner<R>) => {
         }),
       ),
   ]
-  methods(protos, string, [
+  methods(builtins, string, [
     codeUnits("fromCharCode", String.fromCharCode),
     codeUnits("fromCodePoint", String.fromCodePoint),
   ])
@@ -118,7 +119,7 @@ export const stringGlobal = <R>(runner: Runner<R>) => {
   const optStr = (name: string, args: Array<unknown>, index: number): string | undefined =>
     args[index] === undefined ? undefined : str(name, args, index)
   const rejectRegex = (name: string, args: Array<unknown>): void => {
-    if (args[0] instanceof ProgramRegExp) {
+    if (args[0] instanceof RegExpObj) {
       throw typeError(
         `String.${name} cannot take a regular expression; use regex.test(string) or String.search instead.`,
       )
@@ -131,13 +132,13 @@ export const stringGlobal = <R>(runner: Runner<R>) => {
   ]
   const replace = (name: "replace" | "replaceAll") =>
     simple(name, 2, (value, args) => {
-      if (isSupportedCallback(args[1])) return replaceWithCallback(runner, value, name, args)
+      if (isSupportedCallback(args[1])) return replaceWithCallback(ctx, value, name, args)
       if (typeofValue(args[1]) === "function") {
         throw typeError(
           `String.${name} cannot use this callable as a replacer; wrap it in an arrow function, e.g. (match) => tools.ns.tool(match).`,
         )
       }
-      if (args[0] instanceof ProgramRegExp) {
+      if (args[0] instanceof RegExpObj) {
         const pattern = args[0].regex
         const replacement = str(name, args, 1)
         if (name === "replaceAll") replaceAllNeedsGlobal(pattern)
@@ -147,7 +148,7 @@ export const stringGlobal = <R>(runner: Runner<R>) => {
       return value.replaceAll(str(name, args, 0), str(name, args, 1))
     })
 
-  methods(protos, protos.String, [
+  methods(builtins, builtins.String, [
     simple("toString", 0, (value) => value),
     simple("valueOf", 0, (value) => value),
     simple("toLowerCase", 0, (value) => value.toLowerCase()),
@@ -170,7 +171,7 @@ export const stringGlobal = <R>(runner: Runner<R>) => {
       }
     }),
     simple("split", 2, (value, args) => {
-      const wrap = (parts: Array<string>) => new ProgramArray(protos.Array, parts)
+      const wrap = (parts: Array<string>) => new Arr(builtins.Array, parts)
       // Native: an undefined separator returns the whole string, not a split on "undefined",
       // unless the limit truncates to zero.
       const requestedLimit = optNum("split", args, 1)
@@ -178,7 +179,7 @@ export const stringGlobal = <R>(runner: Runner<R>) => {
         return wrap(requestedLimit !== undefined && requestedLimit >>> 0 === 0 ? [] : [value])
       }
       const parts =
-        args[0] instanceof ProgramRegExp
+        args[0] instanceof RegExpObj
           ? value.split(args[0].regex, requestedLimit)
           : value.split(str("split", args, 0), requestedLimit === undefined ? undefined : requestedLimit >>> 0)
       checkArrayLength(parts.length)
@@ -208,8 +209,8 @@ export const stringGlobal = <R>(runner: Runner<R>) => {
       const matched = value.match(pattern)
       if (matched === null) return null
       // Preserve the own `index` and `groups` properties on non-global matches.
-      if (pattern.global) return toProgram(protos, matched, "String.match result")
-      return matchToValue(protos, matched)
+      if (pattern.global) return toProgram(builtins, matched, "String.match result")
+      return matchToValue(builtins, matched)
     }),
     simple("matchAll", 1, (value, args) => {
       const pattern = toHostRegex(args[0], "matchAll", "g")
@@ -221,9 +222,9 @@ export const stringGlobal = <R>(runner: Runner<R>) => {
       const matches: Array<unknown> = []
       for (const match of value.matchAll(pattern)) {
         checkArrayLength(matches.length + 1)
-        matches.push(matchToValue(protos, match))
+        matches.push(matchToValue(builtins, match))
       }
-      return new ProgramArray(protos.Array, matches)
+      return new Arr(builtins.Array, matches)
     }),
     simple("search", 1, (value, args) => value.search(toHostRegex(args[0], "search"))),
     simple("repeat", 1, (value, args) => {
