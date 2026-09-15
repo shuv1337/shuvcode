@@ -15250,6 +15250,9 @@
           },
           "redirect_uri": {
             "type": "string"
+          },
+          "auth_server_metadata_url": {
+            "type": "string"
           }
         },
         "additionalProperties": false
@@ -15548,6 +15551,9 @@
             "type": "boolean"
           },
           "requireAssistantAfterTool": {
+            "type": "boolean"
+          },
+          "supportsPromptCacheKey": {
             "type": "boolean"
           }
         },

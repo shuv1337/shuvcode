@@ -2012,6 +2012,7 @@ export type ConfigEntry =
                         scope?: string
                         callback_port?: number
                         redirect_uri?: string
+                        auth_server_metadata_url?: string
                       }
                     | false
                   disabled?: boolean
@@ -4667,6 +4668,7 @@ export type McpAddInput = {
                 readonly scope?: string
                 readonly callback_port?: number
                 readonly redirect_uri?: string
+                readonly auth_server_metadata_url?: string
               }
             | false
           readonly disabled?: boolean
