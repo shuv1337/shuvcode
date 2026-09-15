@@ -697,7 +697,7 @@ export function createData(config: CreateDataInput) {
         })
         return
       }
-      case "session.permissions.updated":
+      case "session.permissions":
         if (store.session.info[event.data.sessionID])
           setStore("session", "info", event.data.sessionID, "permissions", event.data.permissions)
         return

@@ -1888,11 +1888,11 @@ export type AgentInfo = {
   permissions: PermissionRuleset
 }
 
-export type SessionPermissionsUpdated = {
+export type SessionPermissions = {
   id: string
   created: number
   metadata?: { [x: string]: any }
-  type: "session.permissions.updated"
+  type: "session.permissions"
   durable: { aggregateID: string; seq: number; version: 1 }
   location?: LocationRef
   data: { sessionID: string; permissions: PermissionRuleset }
@@ -2272,7 +2272,7 @@ export type SessionEventDurable =
   | SessionModelSelected
   | SessionMoved
   | SessionRenamed
-  | SessionPermissionsUpdated
+  | SessionPermissions
   | SessionViewed
   | SessionDeleted
   | SessionForked
@@ -2333,7 +2333,7 @@ export type V2Event =
   | SessionModelSelected
   | SessionMoved
   | SessionRenamed
-  | SessionPermissionsUpdated
+  | SessionPermissions
   | SessionViewed
   | SessionUsageUpdated
   | SessionDeleted

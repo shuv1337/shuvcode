@@ -147,7 +147,7 @@ Review endpoints in document order. For each endpoint, select one disposition an
 | [x] 053 | `POST` | `/api/session/{sessionID}/fork` | `session.fork` | Change | Request now accepts optional branded `before` message ID; omission copies full history. |
 | [x] 054 | `POST` | `/api/session/{sessionID}/agent` | `session.switchAgent` | Keep | Subsequent-execution agent selection retained. |
 | [x] 055 | `POST` | `/api/session/{sessionID}/model` | `session.switchModel` | Keep | Subsequent-execution model and optional variant selection retained. |
-| [x] 056 | `PATCH` | `/api/session/{sessionID}` | `session.update` | Change | General session patch now updates optional title and permissions. |
+| [x] 056 | `PATCH` | `/api/session/{sessionID}` | `session.update` | Change | General session patch updates title and permissions; rules emit `session.permissions`. |
 | [x] 057 | `POST` | `/api/session/{sessionID}/move` | `session.move` | Change | Removed inaccurate local-change transfer claim; delivery behavior retained. |
 | [x] 058 | `POST` | `/api/session/{sessionID}/background` | `session.background` | Keep | Backgroundable foreground tools transition to background observation; idle requests remain no-ops. |
 
