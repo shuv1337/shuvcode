@@ -320,6 +320,37 @@ Internal imports stay `@opencode/*`.
 - Rewrite `docs/shared-service.md` for portable service + pair + XDG; drop
   `deploy/`, `docs/design/service-lifecycle.md`
 
+**Rehearsed 2026-09-15 PDT on a throwaway exe.dev VM** (Ubuntu 24.04, Node
+24, no bun, no systemd unit), with the packed `shuvcode` + `shuvcode-linux-x64`
+tarballs from this tree installed via `npm install -g --offline`:
+
+- Launcher install works; `shuvcode --version` → `2.0.3-shuv.1`.
+- `service set hostname/port` + `service start` registers under
+  `~/.local/state/shuvcode/service.json`, DB at
+  `~/.local/share/shuvcode/opencode.db`, config at
+  `~/.config/shuvcode/service.json` (0600, holds the password); server
+  survives the SSH session ending.
+- `shuvcode pair --url https://<vm>.exe.xyz` prints upstream's URL /
+  `opencode` / password / QR block. Through the proxy: `/api/status` 200
+  with auth, 401 without; web root 200 (`--skip-web-ui` builds serve 404 —
+  use the full build for anything user-facing).
+- Terminals: **`shuvcode service restart` shuts persistent terminals down by
+  design** (`handlers/service/restart.ts` calls `shutdownPersistentPty`
+  first). The automatic version-mismatch replacement is the path that
+  preserves them: with a running terminal, installing `2.0.3-shuv.2` and
+  launching the TUI replaced the server (pid 1923 → 2100) while the
+  `opencode-pty daemon` sidecar (reparented to init) and its child kept
+  their pids and the terminal stayed listed as `running`. This is the
+  behaviour `KillMode=process` provided; no unit needed.
+- `service stop` stops server and sidecar.
+- Not rehearsable on the VM: the live-host precondition checks, systemd
+  unit removal, and `tailscale serve` re-point. **Gap to decide:** with no
+  unit, nothing starts the server at boot; a remote-only host needs
+  `shuvcode service start` after a reboot (or a one-line `@reboot`
+  entry), which is not the fork's old `manager: "systemd"`.
+- `docs/shared-service.md` written from the rehearsal. `deploy/` and
+  `docs/design/service-lifecycle.md` do not exist on this tree.
+
 ### L3 — DB convert and relocate
 
 Backup, convert clone, verify against a scratch XDG root, relocate, swap.
