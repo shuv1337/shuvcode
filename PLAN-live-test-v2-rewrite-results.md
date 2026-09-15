@@ -81,7 +81,64 @@ attempt.
 Test totals: **0 PASS, 0 runtime FAIL, 7 BLOCKED, 1 UNVERIFIED**. Separately,
 readiness is BLOCKED. These totals are not a successful live-test run.
 
-Next prerequisite: implement/review the existing L6 Claude/Antigravity tasks
-and a scoped auth-only importer, resolve refresh-token ownership safety, then
-rerun readiness and the complete shutdown-first live suite. Do not remove
-required provider coverage to turn this result into a pass.
+At this attempt, the next prerequisite was implementing/reviewing L6 and the
+scoped importer. That implementation is now complete as documented below.
+The historical live-test statuses above remain unchanged: they are not passes.
+
+## Implementation follow-up — offline only, 2026-09-15 PDT
+
+- Both subscription plugins are bundled/enabled by default in Bun and Node
+  Shuvcode builds; artifact verification enforces their presence.
+- Auth-only importer: `packages/core/script/import-test-auth.ts`, with explicit
+  source/new target/window, dry-run, account preservation, private publication,
+  secret-safe diagnostics, and no OAuth refresh capability.
+- Core refresh resolution coalesces concurrent refreshes; imported access-only
+  credentials fail before refresh inside the five-minute safety window.
+- 170 focused tests passed: Core/importer/host regressions 90, Claude 21,
+  Antigravity 56, artifact guards 3. `bun run check` passed.
+- Built a Linux x64 Bun artifact with web UI at
+  `/tmp/shuvcode-subscription-build.hGGkoc/bun/shuvcode-linux-x64/bin/shuvcode`.
+  SHA-256: `0bdec97a93e0a107ea4d767fbbbe6b94094017052782e8a6567fcb44dbc8923d`.
+- Built the Node bundle at `packages/cli/dist-node/opencode.mjs`.
+  SHA-256: `6532161ad85638bc4417961c243b96afbb09d6f135d5bcfad007938cbd7a5f43`.
+  Both passed bundled-provider verification and isolated version smoke checks.
+  Node was validated as a bundle, not a new SEA installer on every platform.
+- Packaging smoke checks used a private HOME/XDG wrapper at
+  `/tmp/shuvcode-subscription-build.hGGkoc/run-isolated`. No server was started.
+- No live credentials were accessed/imported and no provider requests were
+  made. Existing old service remained active at PID 22514; no shutdown,
+  installation, publish, or tailnet remapping was performed.
+
+Next: rerun readiness and the complete shutdown-first suite with the commands
+now in Setup 3a. Source token lifetime/availability and live subscription billing
+are still unverified. Do not treat offline implementation checks as the live run.
+
+## Authorized global cutover — 2026-09-15 14:56 PDT
+
+The user subsequently authorized replacing the global install/service and chose
+migration of existing sessions/auth rather than a fresh database. This supersedes
+the earlier test-only prohibition on installation for this operation; it does not
+turn the unexecuted provider tests above into passes.
+
+- Stopped both identified old servers. Preserved the old binary, launchers,
+  configuration, and a WAL-safe database backup before conversion.
+- Converted a private clone into the new Shuvcode data root, retaining 1,025
+  sessions, 35,632 session messages, 86,886 events, and all 9 credentials.
+- Removed obsolete fork schema/journal entries, cleared legacy permissions and
+  execution claims, and quarantined two background recovery records. Original
+  data remains intact. Pending inbox work remains available on explicit resume.
+- SQLite integrity/foreign-key checks, preserved counts/IDs, and opening the
+  clone with the new runtime Database layer passed.
+- Installed the verified Linux x64 artifact above as `2.0.3-shuv.1`; retained
+  the existing enabled service and its address. Authenticated status, web root,
+  and session list returned 200; unauthenticated API access returned 401.
+- A real TUI reached the connected prompt. Both bundled OAuth methods and all
+  saved credentials are visible. No prompts or model requests were submitted.
+- Removed the obsolete goal-plugin config entry. Four MCP servers connected;
+  Executor returned Unauthorized. On the user's subsequent request, removed its
+  static Authorization header and static-auth URL parameter, enabled OAuth,
+  and verified it now reports `needs_auth`, ready for the user's login.
+- Private rollback material and conversion details are under
+  `~/.local/state/shuvcode/deployments/20260915-145008-PDT/`.
+  Do not restart the old credential owner blindly after new OAuth refreshes.
+

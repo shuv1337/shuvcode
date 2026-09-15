@@ -172,7 +172,7 @@ The new binary does not understand fork journal IDs and reads
 2. Convert a clone; open it with the new binary against a scratch XDG root;
    then relocate.
 3. Converter must:
-   - Keep `session_v2` live. **Drop or empty any leftover V1 `session`
+   - Keep `session_v2` live. **Drop any leftover V1 `session`
      table**; `V1Migration` (`v1-migration.bun.ts:1061`) triggers on its
      existence, deletes `event` rows, and re-imports.
    - Drop `form_request`, `permission_request`, `session_dynamic_tool`,
@@ -362,8 +362,11 @@ Upstream SessionRestart. No policy / dynamic-tool / receipt protocol.
 
 ### L5 — Remaining Core
 
-Port OAuth refresh `KeyedMutex` single-flight in
-`packages/core/src/integration.ts`.
+**Implemented 2026-09-15 PDT:** OAuth refresh `KeyedMutex` single-flight in
+`packages/core/src/integration.ts`, shared across Location instances. It rereads
+credentials under the lock; offline tests cover same-credential coalescing,
+independent credentials, failure and cancellation. Access-only test imports
+fail locally within five minutes of expiry and cannot refresh.
 
 Admitted by the L0 gate (watchlist B2): bound `WellKnown.inspect` /
 `resolve` with a 10s `Effect.timeout` in `packages/core/src/wellknown.ts`.
@@ -373,13 +376,31 @@ Nothing else.
 
 ### L6 — Bundled provider plugins
 
-**Live-test readiness blocker (2026-09-15 PDT):** the required Claude Pro/Max
-and Antigravity integrations below remain absent from the rewrite checkout.
-The shutdown-first live suite stopped before service shutdown or credential
-access. Complete these existing tasks plus the reviewed auth-only import and
-refresh-token safety gate in `PLAN-live-test-v2-rewrite.md` Setup 3a before
-rerunning. Evidence: `PLAN-live-test-v2-rewrite-results.md`. API-key tests do
-not substitute for the required imported subscription/OAuth coverage.
+**Implemented and offline-validated 2026-09-15 PDT:** Claude Pro/Max and
+Antigravity now ship in `packages/claude-plugin` and `packages/antigravity-plugin`,
+registered in Core `ProviderPlugins` and enabled by default in every Bun/Node
+Shuvcode build. Neither requires a separate install or config entry. Build
+verification rejects an artifact missing either implementation. The workerd
+adapter excludes Node-only callback code; it is not a Shuvcode CLI install.
+
+`packages/core/script/import-test-auth.ts` provides a scoped, offline auth-only
+import into a fresh private root, retaining account selection and no sessions.
+OAuth imports contain no refresh-token capability and use the enforced
+access-only marker; existing Claude setup tokens are supported. See the adjacent
+Markdown usage guide and the executable commands in the live plan Setup 3a.
+
+Validation: 170 focused offline tests passed (Core 90, Claude 21, Antigravity 56,
+CLI artifact guards 3); root `bun run check` passed. Linux x64 Bun binary and
+Node bundle builds passed the bundled-provider verifier and version smoke
+checks. Review findings fixed: expired Google auth retains login registration,
+explicit Gemini tool restrictions survive wrapping, and OAuth cancellation
+reaches network operations. No public Protocol/HttpApi changed.
+
+This clears the missing-implementation blocker recorded in
+`PLAN-live-test-v2-rewrite-results.md`; it does not establish live auth validity,
+remote subscription billing, refresh ownership, or full L6/watchlist completion.
+The old service remains untouched. Run the revised shutdown-first suite for
+real coverage; ordinary API-key tests are not substitutes.
 
 **Antigravity:** port `packages/antigravity-plugin` to `@opencode/plugin`
 **and** to the `ctx.provider` / `ctx.model` editors (`CatalogEditor` is
