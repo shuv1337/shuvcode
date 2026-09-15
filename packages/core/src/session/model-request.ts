@@ -316,12 +316,9 @@ export const layer = Layer.effect(
               return HttpClientResponse.fromWeb(sent, after.response)
             }).pipe(Effect.mapError((cause) => (cause instanceof Error ? cause : new Error(String(cause)))))
         : undefined
-      // HTTP hooks must observe every request, so they keep the provider on HTTP.
-      const webSocket =
-        input.webSocket === "session" &&
-        !hasHttpHooks &&
-        model.capabilities.responsesWebsockets === true &&
-        model.websocket
+      // HTTP hooks must observe every request, so they keep the provider on HTTP. The route decides
+      // whether it actually has a WebSocket channel and falls back to HTTP otherwise.
+      const webSocket = input.webSocket === "session" && !hasHttpHooks && model.transport === "websocket"
 
       return {
         event: shaped,
