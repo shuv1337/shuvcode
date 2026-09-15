@@ -1,3 +1,5 @@
+import { ClaudePlugin } from "@shuvcode/claude-plugin"
+import { GoogleAntigravityPlugin } from "#antigravity-plugin"
 import { AmazonBedrockPlugin } from "./provider/amazon-bedrock.js"
 import { AzurePlugin } from "./provider/azure.js"
 import { CerebrasPlugin } from "./provider/cerebras.js"
@@ -33,6 +35,8 @@ import type { PluginInternal } from "./internal.js"
 
 export const ProviderPlugins: PluginInternal.InternalPlugin[] = [
   AmazonBedrockPlugin,
+  ClaudePlugin,
+  GoogleAntigravityPlugin,
   AzurePlugin,
   CerebrasPlugin,
   CloudflareAIGatewayPlugin,

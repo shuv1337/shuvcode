@@ -52,6 +52,21 @@
         "typescript": "catalog:",
       },
     },
+    "packages/antigravity-plugin": {
+      "name": "@shuvcode/antigravity-plugin",
+      "version": "2.0.3-shuv.1",
+      "dependencies": {
+        "@opencode/plugin": "workspace:*",
+        "effect": "catalog:",
+      },
+      "devDependencies": {
+        "@tsconfig/bun": "catalog:",
+        "@types/bun": "catalog:",
+        "@types/node": "catalog:",
+        "@typescript/native-preview": "catalog:",
+        "typescript": "catalog:",
+      },
+    },
     "packages/app": {
       "name": "@opencode/app",
       "version": "2.0.3",
@@ -109,6 +124,21 @@
         "vite": "8.2.2",
         "vite-plugin-pwa": "1.3.0",
         "vite-plugin-solid": "2.11.14",
+      },
+    },
+    "packages/claude-plugin": {
+      "name": "@shuvcode/claude-plugin",
+      "version": "2.0.3-shuv.1",
+      "dependencies": {
+        "@opencode/plugin": "workspace:*",
+        "@opencode/schema": "workspace:*",
+        "effect": "catalog:",
+      },
+      "devDependencies": {
+        "@tsconfig/bun": "catalog:",
+        "@types/bun": "catalog:",
+        "@typescript/native-preview": "catalog:",
+        "typescript": "catalog:",
       },
     },
     "packages/cli": {
@@ -361,6 +391,8 @@
         "@opencode/schema": "workspace:*",
         "@opencode/util": "workspace:*",
         "@parcel/watcher": "2.5.1",
+        "@shuvcode/antigravity-plugin": "workspace:*",
+        "@shuvcode/claude-plugin": "workspace:*",
         "@silvia-odwyer/photon-node": "0.3.4",
         "@standard-schema/spec": "catalog:",
         "bun-pty": "0.4.8",
@@ -2809,6 +2841,10 @@
     "@shikijs/types": ["@shikijs/types@4.4.3", "", { "dependencies": { "@shikijs/vscode-textmate": "^10.0.2", "@types/hast": "^3.0.5" } }, "sha512-UEJxmRR++MAGR6hugn0vgVS2W/6lWAts84FFSrnlH9sP0LNol7E5+NQ792pH8liWUhyMyjhTgSUH3k7iD7tc5g=="],
 
     "@shikijs/vscode-textmate": ["@shikijs/vscode-textmate@10.0.2", "", {}, "sha512-83yeghZ2xxin3Nj8z1NMd/NCuca+gsYXswywDy5bHvwlWL8tpTQmzGeUuHd9FC3E/SBEMvzJRwWEOz5gGes9Qg=="],
+
+    "@shuvcode/antigravity-plugin": ["@shuvcode/antigravity-plugin@workspace:packages/antigravity-plugin"],
+
+    "@shuvcode/claude-plugin": ["@shuvcode/claude-plugin@workspace:packages/claude-plugin"],
 
     "@sigstore/bundle": ["@sigstore/bundle@4.0.0", "", { "dependencies": { "@sigstore/protobuf-specs": "^0.5.0" } }, "sha512-NwCl5Y0V6Di0NexvkTqdoVfmjTaQwoLM236r89KEojGmq/jMls8S+zb7yOwAPdXvbwfKDlP+lmXgAL4vKSQT+A=="],
 

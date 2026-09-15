@@ -30,6 +30,11 @@
     "./*": "./src/*.ts"
   },
   "imports": {
+    "#antigravity-plugin": {
+      "types": "./src/plugin/provider/google-antigravity.workerd.ts",
+      "workerd": "./src/plugin/provider/google-antigravity.workerd.ts",
+      "default": "@shuvcode/antigravity-plugin"
+    },
     "#sqlite": {
       "workerd": "./src/database/sqlite.workerd.ts",
       "bun": "./src/database/sqlite.bun.ts",
@@ -119,6 +124,8 @@
     "@opencode/schema": "workspace:*",
     "@opencode/util": "workspace:*",
     "@parcel/watcher": "2.5.1",
+    "@shuvcode/antigravity-plugin": "workspace:*",
+    "@shuvcode/claude-plugin": "workspace:*",
     "@silvia-odwyer/photon-node": "0.3.4",
     "@standard-schema/spec": "catalog:",
     "bun-pty": "0.4.8",

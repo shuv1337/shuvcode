@@ -25,6 +25,10 @@ import { IntegrationConnection } from "./integration/connection.js"
 import { AppProcess } from "@opencode/util/process"
 import { ChildProcess } from "effect/unstable/process"
 import { Form } from "./form.js"
+import { KeyedMutex } from "./effect/keyed-mutex.js"
+
+// Credentials are global; different Locations must not rotate the same token concurrently.
+const refreshLocks = KeyedMutex.makeUnsafe<Credential.ID>()
 
 export const ID = Integration.ID
 export type ID = Integration.ID
@@ -677,19 +681,31 @@ const layer = Layer.effect(
             const key = process.env[connection.name]
             return key ? Credential.Key.make({ type: "key", key }) : undefined
           }
-          const credential = yield* credentials.get(connection.id)
-          if (!credential) return undefined
-          if (credential.value.type === "key") return credential.value
-          const implementation = state
-            .get()
-            .integrations.get(credential.integrationID)
-            ?.implementations.get(credential.value.methodID)
-          if (!implementation?.refresh) return credential.value
-          const now = yield* Clock.currentTimeMillis
-          if (credential.value.expires > now + Duration.toMillis(Duration.minutes(5))) return credential.value
-          const value = yield* authorize(implementation.refresh(credential.value))
-          yield* credentials.update(credential.id, { value })
-          return value
+          return yield* refreshLocks.withLock(connection.id)(
+            Effect.gen(function* () {
+              // Read under the lock so waiters use the replacement persisted by its owner.
+              const credential = yield* credentials.get(connection.id)
+              if (!credential || credential.value.type === "key") return credential?.value
+              const now = yield* Clock.currentTimeMillis
+              const fresh = credential.value.expires > now + Duration.toMillis(Duration.minutes(5))
+              if (credential.value.metadata?.shuvcodeAuthImport === "access-only") {
+                if (fresh) return credential.value
+                return yield* new AuthorizationError({
+                  cause: new Error(
+                    "Imported access token is near expiry; refresh is disabled. Import valid auth before continuing.",
+                  ),
+                })
+              }
+              const implementation = state
+                .get()
+                .integrations.get(credential.integrationID)
+                ?.implementations.get(credential.value.methodID)
+              if (!implementation?.refresh || fresh) return credential.value
+              const value = yield* authorize(implementation.refresh(credential.value))
+              yield* credentials.update(credential.id, { value })
+              return value
+            }),
+          )
         }),
         key: Effect.fn("Integration.connection.key")(function* (input) {
           const method = state
@@ -725,8 +741,7 @@ const layer = Layer.effect(
         connect: connectOAuth,
         status: Effect.fn("Integration.oauth.status")(function* (input) {
           const attempt = (yield* SynchronizedRef.get(attempts)).get(input.attemptID)
-          if (!attempt || attempt.integrationID !== input.integrationID)
-            return yield* new AttemptNotFoundError(input)
+          if (!attempt || attempt.integrationID !== input.integrationID) return yield* new AttemptNotFoundError(input)
           if (attempt.status === "failed") {
             return { status: attempt.status, message: attempt.message ?? "Authorization failed", time: attempt.time }
           }
@@ -771,8 +786,7 @@ const layer = Layer.effect(
         connect: connectCommand,
         status: Effect.fn("Integration.command.status")(function* (input) {
           const attempt = (yield* SynchronizedRef.get(commandAttempts)).get(input.attemptID)
-          if (!attempt || attempt.integrationID !== input.integrationID)
-            return yield* new AttemptNotFoundError(input)
+          if (!attempt || attempt.integrationID !== input.integrationID) return yield* new AttemptNotFoundError(input)
           if (attempt.status === "pending") {
             return {
               status: attempt.status,

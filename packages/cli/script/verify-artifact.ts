@@ -19,12 +19,23 @@ const forbidden = [
   "skia.linux-",
   "skia.win32-",
 ]
-const overlap = Math.max(...forbidden.map((value) => value.length)) - 1
+const bundledProviders = [
+  "shuvcode.provider.claude",
+  "claude-pro-max",
+  "opencode.provider.google-antigravity",
+  "google-ai-pro",
+]
+const overlap = Math.max(...[...forbidden, ...bundledProviders].map((value) => value.length)) - 1
 
 export async function verifyArtifact(target: string) {
   const files = await artifactFiles(target)
   if (files.length === 0) throw new Error(`Artifact contains no published files: ${target}`)
-  for (const file of files) await scan(file)
+  const found = new Set<string>()
+  for (const file of files) {
+    for (const marker of await scan(file)) found.add(marker)
+  }
+  const missing = bundledProviders.filter((marker) => !found.has(marker))
+  if (missing.length > 0) throw new Error(`Artifact is missing bundled subscription providers: ${missing.join(", ")}`)
 }
 
 export function verifySimulationGraph(inputs: Iterable<string>) {
@@ -46,12 +57,16 @@ async function artifactFiles(target: string): Promise<string[]> {
 }
 
 async function scan(file: string) {
+  const found = new Set<string>()
   let trailing = ""
   const reader = Bun.file(file).stream().getReader()
   while (true) {
     const chunk = await reader.read()
-    if (chunk.done) return
+    if (chunk.done) return found
     const text = trailing + Buffer.from(chunk.value).toString("latin1")
+    for (const marker of bundledProviders) {
+      if (text.includes(marker)) found.add(marker)
+    }
     const leaked = forbidden.find((marker) => text.includes(marker))
     if (leaked) throw new Error(`Artifact file ${file} contains forbidden simulation payload: ${leaked}`)
     trailing = text.slice(-overlap)
