@@ -29,6 +29,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Post release to Discord
+        continue-on-error: true
         env:
           DISCORD_RELEASE_WEBHOOK_URL: ${{ secrets.DISCORD_RELEASE_WEBHOOK_URL }}
           VERSION: ${{ inputs.version }}

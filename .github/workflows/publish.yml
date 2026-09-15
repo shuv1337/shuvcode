@@ -198,7 +198,6 @@ jobs:
   notify-discord:
     needs: publish
     if: success() && github.repository == 'Latitudes-Dev/shuvcode'
-    continue-on-error: true
     uses: ./.github/workflows/notify-discord.yml
     with:
       version: ${{ inputs.version }}
