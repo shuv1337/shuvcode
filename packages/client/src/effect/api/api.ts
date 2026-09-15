@@ -233,9 +233,13 @@ export type SessionSwitchModelOperation<E = never> = (
   input: SessionSwitchModelInput,
 ) => Effect.Effect<SessionSwitchModelOutput, E>
 
-export type SessionRenameInput = { readonly sessionID: Session.ID; readonly title: string }
-export type SessionRenameOutput = void
-export type SessionRenameOperation<E = never> = (input: SessionRenameInput) => Effect.Effect<SessionRenameOutput, E>
+export type SessionUpdateInput = {
+  readonly sessionID: Session.ID
+  readonly title?: string | undefined
+  readonly permissions?: Permission.Ruleset | undefined
+}
+export type SessionUpdateOutput = void
+export type SessionUpdateOperation<E = never> = (input: SessionUpdateInput) => Effect.Effect<SessionUpdateOutput, E>
 
 export type SessionMoveInput = {
   readonly sessionID: Session.ID
@@ -1386,7 +1390,7 @@ export interface SessionApi<E = never> {
   readonly fork: SessionForkOperation<E>
   readonly switchAgent: SessionSwitchAgentOperation<E>
   readonly switchModel: SessionSwitchModelOperation<E>
-  readonly rename: SessionRenameOperation<E>
+  readonly update: SessionUpdateOperation<E>
   readonly move: SessionMoveOperation<E>
   readonly prompt: SessionPromptOperation<E>
   readonly command: SessionCommandOperation<E>
@@ -1789,12 +1793,6 @@ export type PermissionReplyOperation<E = never> = (
   input: PermissionReplyInput,
 ) => Effect.Effect<PermissionReplyOutput, E>
 
-export type PermissionRulesInput = { readonly sessionID: Session.ID; readonly permissions: Permission.Ruleset }
-export type PermissionRulesOutput = void
-export type PermissionRulesOperation<E = never> = (
-  input: PermissionRulesInput,
-) => Effect.Effect<PermissionRulesOutput, E>
-
 export interface PermissionApi<E = never> {
   readonly request: { readonly list: PermissionRequestListOperation<E> }
   readonly saved: { readonly list: PermissionSavedListOperation<E>; readonly remove: PermissionSavedRemoveOperation<E> }
@@ -1802,7 +1800,6 @@ export interface PermissionApi<E = never> {
   readonly list: PermissionListOperation<E>
   readonly get: PermissionGetOperation<E>
   readonly reply: PermissionReplyOperation<E>
-  readonly rules: PermissionRulesOperation<E>
 }
 
 export type FileListInput = {

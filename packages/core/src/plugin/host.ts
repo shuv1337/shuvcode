@@ -415,7 +415,6 @@ export const make = Effect.fn("PluginHost.make")(function* (
                 : Effect.fail(new Error(`Permission request not found: ${input.requestID}`)),
             ),
           ),
-      rules: sessions.setPermissions,
     },
     plugin: {
       list: () => response(plugin.list()),
@@ -532,7 +531,12 @@ export const make = Effect.fn("PluginHost.make")(function* (
       prompt: sessions.prompt,
       generate: (input) => sessions.generate(input).pipe(Effect.map((text) => ({ text }))),
       command: (input) => sessions.command({ ...input, command: input.name }),
-      rename: sessions.rename,
+      update: Effect.fn(function* (input) {
+        yield* sessions.get(input.sessionID)
+        if (input.title !== undefined) yield* sessions.rename({ sessionID: input.sessionID, title: input.title })
+        if (input.permissions !== undefined)
+          yield* sessions.setPermissions({ sessionID: input.sessionID, permissions: input.permissions })
+      }),
       move: sessions.move,
       synthetic: sessions.synthetic,
       interrupt: (input) =>

@@ -147,7 +147,7 @@ Review endpoints in document order. For each endpoint, select one disposition an
 | [x] 053 | `POST` | `/api/session/{sessionID}/fork` | `session.fork` | Change | Request now accepts optional branded `before` message ID; omission copies full history. |
 | [x] 054 | `POST` | `/api/session/{sessionID}/agent` | `session.switchAgent` | Keep | Subsequent-execution agent selection retained. |
 | [x] 055 | `POST` | `/api/session/{sessionID}/model` | `session.switchModel` | Keep | Subsequent-execution model and optional variant selection retained. |
-| [x] 056 | `PATCH` | `/api/session/{sessionID}` | `session.rename` | Change | Title-only rename now uses the session resource path. |
+| [x] 056 | `PATCH` | `/api/session/{sessionID}` | `session.update` | Change | General session patch now updates optional title and permissions. |
 | [x] 057 | `POST` | `/api/session/{sessionID}/move` | `session.move` | Change | Removed inaccurate local-change transfer claim; delivery behavior retained. |
 | [x] 058 | `POST` | `/api/session/{sessionID}/background` | `session.background` | Keep | Backgroundable foreground tools transition to background observation; idle requests remain no-ops. |
 
@@ -213,7 +213,7 @@ Review endpoints in document order. For each endpoint, select one disposition an
 | [x] 098 | `GET` | `/api/session/{sessionID}/permission` | `session.permission.list` | Keep | Pending session permission list retained. |
 | [x] 099 | `GET` | `/api/session/{sessionID}/permission/{requestID}` | `session.permission.get` | Keep | Specific pending permission read with ownership validation retained. |
 | [x] 100 | `POST` | `/api/session/{sessionID}/permission/{requestID}/reply` | `session.permission.reply` | Change | Renamed request field from `reply` to `decision`. |
-| [ ] 101 | `PUT` | `/api/session/{sessionID}/permission/rules` | `session.permission.rules` |  |  |
+| [x] 101 | — | — | — | Remove | Permission rules are updated through `session.update`. |
 
 ## Group 8: Filesystem, worktrees, and VCS
 

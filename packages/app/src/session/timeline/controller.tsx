@@ -149,7 +149,7 @@ export function createTimelineController(input: { session: TimelineSessionSource
     if (!next || next === (titleLabel() ?? "")) return true
     setPending("rename", true)
     const success = await serverSDK.api.session
-      .rename({ sessionID: id, title: next })
+      .update({ sessionID: id, title: next })
       .then(() => true)
       .catch((error) => {
         showToast({ title: language.t("common.requestFailed"), description: errorMessage(error) })

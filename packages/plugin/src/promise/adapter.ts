@@ -439,7 +439,6 @@ export function fromPromise(plugin: Plugin) {
             list: adaptApiMethod(PermissionEndpoints["session.permission.list"], host.permission.list),
             get: adaptApiMethod(PermissionEndpoints["session.permission.get"], host.permission.get),
             reply: adaptApiMethod(PermissionEndpoints["session.permission.reply"], host.permission.reply),
-            rules: adaptApiMethod(PermissionEndpoints["session.permission.rules"], host.permission.rules),
           },
           plugin: {
             list: adaptApiMethod(PluginEndpoints["plugin.list"], host.plugin.list),
@@ -581,7 +580,7 @@ export function fromPromise(plugin: Plugin) {
             command: adaptApiMethod(SessionEndpoints["session.command"], host.session.command),
             synthetic: adaptApiMethod(SessionEndpoints["session.synthetic"], host.session.synthetic),
             interrupt: adaptApiMethod(SessionEndpoints["session.interrupt"], host.session.interrupt),
-            rename: adaptApiMethod(SessionEndpoints["session.rename"], host.session.rename),
+            update: adaptApiMethod(SessionEndpoints["session.update"], host.session.update),
             move: adaptApiMethod(SessionEndpoints["session.move"], host.session.move),
             wait: adaptApiMethod(SessionEndpoints["session.wait"], host.session.wait),
             context: adaptApiMethod(SessionEndpoints["session.context"], host.session.context),

@@ -1438,7 +1438,7 @@
       },
       "patch": {
         "tags": ["session"],
-        "operationId": "session.rename",
+        "operationId": "session.update",
         "parameters": [
           {
             "name": "sessionID",
@@ -1493,8 +1493,8 @@
             }
           }
         },
-        "description": "Update the session title.",
-        "summary": "Rename session",
+        "description": "Update mutable session properties.",
+        "summary": "Update session",
         "requestBody": {
           "content": {
             "application/json": {
@@ -1502,10 +1502,26 @@
                 "type": "object",
                 "properties": {
                   "title": {
-                    "type": "string"
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "permissions": {
+                    "anyOf": [
+                      {
+                        "$ref": "#/components/schemas/Permission.Ruleset"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
                   }
                 },
-                "required": ["title"],
                 "additionalProperties": false
               }
             }
@@ -8067,85 +8083,6 @@
                   }
                 },
                 "required": ["decision"],
-                "additionalProperties": false
-              }
-            }
-          },
-          "required": true
-        }
-      }
-    },
-    "/api/session/{sessionID}/permission/rules": {
-      "put": {
-        "tags": ["permission"],
-        "operationId": "session.permission.rules",
-        "parameters": [
-          {
-            "name": "sessionID",
-            "in": "path",
-            "schema": {
-              "type": "string",
-              "pattern": "^ses"
-            },
-            "required": true
-          }
-        ],
-        "security": [],
-        "responses": {
-          "204": {
-            "description": "<No Content>"
-          },
-          "400": {
-            "description": "InvalidRequestError",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/InvalidRequestErrorEncoded"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "UnauthorizedError",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "SessionNotFoundError",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "anyOf": [
-                    {
-                      "$ref": "#/components/schemas/SessionNotFoundErrorEncoded"
-                    },
-                    {
-                      "$ref": "#/components/schemas/SessionNotFoundErrorEncoded"
-                    }
-                  ]
-                }
-              }
-            }
-          }
-        },
-        "description": "Replace the session-scoped permission rules. Rules are evaluated after the agent's rules, and the last matching rule wins.",
-        "summary": "Replace session permission rules",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "properties": {
-                  "permissions": {
-                    "$ref": "#/components/schemas/Permission.Ruleset"
-                  }
-                },
-                "required": ["permissions"],
                 "additionalProperties": false
               }
             }

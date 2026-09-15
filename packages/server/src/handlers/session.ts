@@ -253,16 +253,23 @@ export const SessionHandler = HttpApiBuilder.group(Api, "server.session", (handl
         }),
       )
       .handle(
-        "session.rename",
+        "session.update",
         Effect.fn(function* (ctx) {
-          if (ctx.payload.title) {
-            yield* session
-              .rename({ sessionID: ctx.params.sessionID, title: ctx.payload.title })
-              .pipe(Effect.catchTag("Session.NotFoundError", missingSession))
-            return HttpApiSchema.NoContent.make()
+          yield* session.get(ctx.params.sessionID).pipe(Effect.catchTag("Session.NotFoundError", missingSession))
+          if (ctx.payload.title !== undefined) {
+            if (ctx.payload.title) {
+              yield* session
+                .rename({ sessionID: ctx.params.sessionID, title: ctx.payload.title })
+                .pipe(Effect.catchTag("Session.NotFoundError", missingSession))
+            } else {
+              const title = yield* SessionTitle.Service
+              yield* title.generate(ctx.params.sessionID)
+            }
           }
-          const title = yield* SessionTitle.Service
-          yield* title.generate(ctx.params.sessionID)
+          if (ctx.payload.permissions !== undefined)
+            yield* session
+              .setPermissions({ sessionID: ctx.params.sessionID, permissions: ctx.payload.permissions })
+              .pipe(Effect.catchTag("Session.NotFoundError", missingSession))
           return HttpApiSchema.NoContent.make()
         }),
       )

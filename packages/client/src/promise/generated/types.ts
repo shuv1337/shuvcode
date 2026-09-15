@@ -3903,12 +3903,23 @@ export type SessionSwitchModelInput = {
 
 export type SessionSwitchModelOutput = void
 
-export type SessionRenameInput = {
+export type SessionUpdateInput = {
   readonly sessionID: { readonly sessionID: string }["sessionID"]
-  readonly title: { readonly title: string }["title"]
+  readonly title?: {
+    readonly title?: string | undefined
+    readonly permissions?:
+      | ReadonlyArray<{ readonly action: string; readonly resource: string; readonly effect: "allow" | "deny" | "ask" }>
+      | undefined
+  }["title"]
+  readonly permissions?: {
+    readonly title?: string | undefined
+    readonly permissions?:
+      | ReadonlyArray<{ readonly action: string; readonly resource: string; readonly effect: "allow" | "deny" | "ask" }>
+      | undefined
+  }["permissions"]
 }
 
-export type SessionRenameOutput = void
+export type SessionUpdateOutput = void
 
 export type SessionMoveInput = {
   readonly sessionID: { readonly sessionID: string }["sessionID"]
@@ -5720,19 +5731,6 @@ export type PermissionReplyInput = {
 }
 
 export type PermissionReplyOutput = void
-
-export type PermissionRulesInput = {
-  readonly sessionID: { readonly sessionID: string }["sessionID"]
-  readonly permissions: {
-    readonly permissions: ReadonlyArray<{
-      readonly action: string
-      readonly resource: string
-      readonly effect: "allow" | "deny" | "ask"
-    }>
-  }["permissions"]
-}
-
-export type PermissionRulesOutput = void
 
 export type FileReadInput = {
   readonly location?: { readonly location?: { readonly directory?: string | undefined } | undefined }["location"]

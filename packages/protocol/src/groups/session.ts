@@ -355,18 +355,21 @@ export const makeSessionGroup = <
         ),
     )
     .add(
-      HttpApiEndpoint.patch("session.rename", "/api/session/:sessionID", {
+      HttpApiEndpoint.patch("session.update", "/api/session/:sessionID", {
         params: { sessionID: Session.ID },
-        payload: Schema.Struct({ title: Schema.String }),
+        payload: Schema.Struct({
+          title: Schema.String.pipe(Schema.optional),
+          permissions: Permission.Ruleset.pipe(Schema.optional),
+        }),
         success: HttpApiSchema.NoContent,
         error: SessionNotFoundError,
       })
         .middleware(sessionLocationMiddleware)
         .annotateMerge(
           OpenApi.annotations({
-            identifier: "session.rename",
-            summary: "Rename session",
-            description: "Update the session title.",
+            identifier: "session.update",
+            summary: "Update session",
+            description: "Update mutable session properties.",
           }),
         ),
     )

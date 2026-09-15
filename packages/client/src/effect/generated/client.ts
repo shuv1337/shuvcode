@@ -39,8 +39,8 @@ import type {
   SessionSwitchAgentOutput,
   SessionSwitchModelInput,
   SessionSwitchModelOutput,
-  SessionRenameInput,
-  SessionRenameOutput,
+  SessionUpdateInput,
+  SessionUpdateOutput,
   SessionMoveInput,
   SessionMoveOutput,
   SessionPromptInput,
@@ -174,8 +174,6 @@ import type {
   PermissionGetOutput,
   PermissionReplyInput,
   PermissionReplyOutput,
-  PermissionRulesInput,
-  PermissionRulesOutput,
   FileListInput,
   FileListOutput,
   FileFindInput,
@@ -446,11 +444,12 @@ const EndpointSessionSwitchModel = (raw: RawClient["server.session"]) => (input:
     ),
   )
 
-const EndpointSessionRename = (raw: RawClient["server.session"]) => (input: SessionRenameInput) =>
-  preserveEffect<SessionRenameOutput>()(
-    raw["session.rename"]({ params: { sessionID: input["sessionID"] }, payload: { title: input["title"] } }).pipe(
-      Effect.mapError(mapClientError),
-    ),
+const EndpointSessionUpdate = (raw: RawClient["server.session"]) => (input: SessionUpdateInput) =>
+  preserveEffect<SessionUpdateOutput>()(
+    raw["session.update"]({
+      params: { sessionID: input["sessionID"] },
+      payload: { title: input["title"], permissions: input["permissions"] },
+    }).pipe(Effect.mapError(mapClientError)),
   )
 
 const EndpointSessionMove = (raw: RawClient["server.session"]) => (input: SessionMoveInput) =>
@@ -745,7 +744,7 @@ const adaptGroupSession = (raw: RawClient["server.session"]) => ({
   fork: EndpointSessionFork(raw),
   switchAgent: EndpointSessionSwitchAgent(raw),
   switchModel: EndpointSessionSwitchModel(raw),
-  rename: EndpointSessionRename(raw),
+  update: EndpointSessionUpdate(raw),
   move: EndpointSessionMove(raw),
   prompt: EndpointSessionPrompt(raw),
   command: EndpointSessionCommand(raw),
@@ -1112,14 +1111,6 @@ const EndpointPermissionReply = (raw: RawClient["server.permission"]) => (input:
     }).pipe(Effect.mapError(mapClientError)),
   )
 
-const EndpointPermissionRules = (raw: RawClient["server.permission"]) => (input: PermissionRulesInput) =>
-  preserveEffect<PermissionRulesOutput>()(
-    raw["session.permission.rules"]({
-      params: { sessionID: input["sessionID"] },
-      payload: { permissions: input["permissions"] },
-    }).pipe(Effect.mapError(mapClientError)),
-  )
-
 const adaptGroupPermission = (raw: RawClient["server.permission"]) => ({
   request: { list: EndpointPermissionRequestList(raw) },
   saved: { list: EndpointPermissionSavedList(raw), remove: EndpointPermissionSavedRemove(raw) },
@@ -1127,7 +1118,6 @@ const adaptGroupPermission = (raw: RawClient["server.permission"]) => ({
   list: EndpointPermissionList(raw),
   get: EndpointPermissionGet(raw),
   reply: EndpointPermissionReply(raw),
-  rules: EndpointPermissionRules(raw),
 })
 
 const EndpointFileList = (raw: RawClient["server.fs"]) => (input?: FileListInput) =>

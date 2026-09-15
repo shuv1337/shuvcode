@@ -33,8 +33,8 @@ import type {
   SessionSwitchAgentOutput,
   SessionSwitchModelInput,
   SessionSwitchModelOutput,
-  SessionRenameInput,
-  SessionRenameOutput,
+  SessionUpdateInput,
+  SessionUpdateOutput,
   SessionMoveInput,
   SessionMoveOutput,
   SessionPromptInput,
@@ -168,8 +168,6 @@ import type {
   PermissionGetOutput,
   PermissionReplyInput,
   PermissionReplyOutput,
-  PermissionRulesInput,
-  PermissionRulesOutput,
   FileReadInput,
   FileReadOutput,
   FileListInput,
@@ -640,12 +638,12 @@ export function make(options: ClientOptions) {
           },
           requestOptions,
         ),
-      rename: (input: SessionRenameInput, requestOptions?: RequestOptions) =>
-        request<SessionRenameOutput>(
+      update: (input: SessionUpdateInput, requestOptions?: RequestOptions) =>
+        request<SessionUpdateOutput>(
           {
             method: "PATCH",
             path: `/api/session/${encodeURIComponent(input.sessionID)}`,
-            body: { title: input["title"] },
+            body: { title: input["title"], permissions: input["permissions"] },
             successStatus: 204,
             declaredStatuses: [400, 401, 404],
             empty: true,
@@ -1513,18 +1511,6 @@ export function make(options: ClientOptions) {
             method: "POST",
             path: `/api/session/${encodeURIComponent(input.sessionID)}/permission/${encodeURIComponent(input.requestID)}/reply`,
             body: { decision: input["decision"], message: input["message"] },
-            successStatus: 204,
-            declaredStatuses: [400, 401, 404],
-            empty: true,
-          },
-          requestOptions,
-        ),
-      rules: (input: PermissionRulesInput, requestOptions?: RequestOptions) =>
-        request<PermissionRulesOutput>(
-          {
-            method: "PUT",
-            path: `/api/session/${encodeURIComponent(input.sessionID)}/permission/rules`,
-            body: { permissions: input["permissions"] },
             successStatus: 204,
             declaredStatuses: [400, 401, 404],
             empty: true,

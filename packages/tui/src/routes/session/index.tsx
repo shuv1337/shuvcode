@@ -821,7 +821,7 @@ export function Session(props: {
         const title = input.trim()
         void (
           title
-            ? client.api.session.rename({ sessionID: route.sessionID, title })
+            ? client.api.session.update({ sessionID: route.sessionID, title })
             : data.session.title.generate(route.sessionID)
         ).catch((error) => toast.error(error))
       },
