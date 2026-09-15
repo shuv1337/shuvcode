@@ -240,9 +240,10 @@ implementations against the new tree. Do not copy scarred whole files.
 - **Watchlist gate run 2026-09-15 PDT** (results in the watchlist):
   B1/B3/B4/C1/A6 pass and are closed; B2 failed and is now an L5 item;
   A1–A5, C2, B7 re-run in L6 once bundled plugins provide native
-  credentials; D1 re-runs in L8 on the built artifact.
-- Toolchain: `bun ≥ 1.4.2` for `script/build.ts` and `bun run check`
-  (host has 1.3.14; install side by side, do not replace the host bun)
+  credentials; D1 passed on the compiled binary under bun 1.4.2.
+- Toolchain: `bun ≥ 1.4.2` (host upgraded to 1.4.2). Build and publish
+  scripts must not depend on `git branch --show-current`; the jj workspace
+  has no `.git`, so set `OPENCODE_CHANNEL` explicitly.
 - Fork CI: `publish.yml`, `test.yml` (Linux only until a Windows runner is
   proven), `typecheck.yml` (per-package, per AGENTS.md),
   `notify-discord.yml` as `workflow_call` (GitHub does not fire
@@ -275,8 +276,9 @@ Internal imports stay `@opencode/*`.
   per `PLAN-SHUVBOT-OPENCODE-V2.md`); goal-plugin entry removed from config
 - Cutover: `systemctl --user disable --now shuvcode.service`, remove the
   unit and drop-ins, then `shuvcode service set`:
-  `hostname <tailscale-ip>`, `port 0x1337`, `env BUN_TMPDIR
-  ~/.cache/bun-compile-tmp` (keep `bun-compile-tmp-cleanup.timer`)
+  `hostname <tailscale-ip>`, `port 0x1337`. `BUN_TMPDIR` is optional
+  under bun 1.4.2 (watchlist D1); keep `bun-compile-tmp-cleanup.timer`
+  only if tmpfs pressure returns
 - Pairing across the tailnet: `shuvcode pair --url
   https://<host>.<tailnet>.ts.net:<port>` after re-pointing `tailscale serve`
 - Verify `shuvcode service restart` keeps detached PTY terminals with the
@@ -344,7 +346,7 @@ Package-local, never from repo root:
 - Identity / publish / service tests
 - Plugin tests in scope, including Claude parity (body/header, SSE restore,
   cancel, refresh, configured `baseURL`)
-- Watchlist re-runs: A1–A5, C2, B7 after L6; D1 on the compiled binary
+- Watchlist re-runs: A1–A5, C2, B7 after L6
 - `bun typecheck` in `core`, `cli`, `tui`, `server`, `client`
 - `packages/cli/script/package-smoke.ts` on a built `shuvcode` artifact
 - `bun run dev:live` only after L2, against a **non-elected** convert clone

@@ -30,11 +30,14 @@ Scratch XDG root (`/tmp/opencode/gate-xdg`), OpenRouter key only, dev-mode
 | B3 | **pass → closed** | `--continue` reopened the session; `session_v2` count stayed 1 |
 | B4 | **pass → closed** | two broken MCP servers (`local` bad command, `remote` dead port); catalog loaded at 3.5s, footer `2 MCP failed` |
 | C1 | **pass → closed** | patch `Update File: link.txt` + `Move to:` on a symlink: link removed, real file kept (`file-access.ts:100` resolves lexically now) |
-| D1 | **deferred to L8** | compiled build needs `bun@^1.4.2` (`packages/script/src/index.ts:17`); host has 1.3.14 |
+| D1 | **pass → closed** | host bun upgraded to 1.4.2; single-target compiled binary run 13× (`--version`/`--help`) leaves one content-hashed 6.0 MB `.bun-1000-<hash>.so`, reused, not one per call. `BUN_TMPDIR` drop-in is optional now |
 | D3 | **carry as notes into L1** | not checkable without the new publish workflow |
 
 Toolchain finding for L0: the tree requires bun ≥ 1.4.2 for `script/build.ts`
-and likely `bun run check`; dev-mode TUI runs on 1.3.14. Dev-mode server
+(host upgraded to 1.4.2 during the gate). `script/build.ts` also shells out
+to `git branch --show-current`; a non-colocated jj workspace has no `.git`,
+so set `OPENCODE_CHANNEL` explicitly (D3's detached-HEAD case in a new
+form). Dev-mode server
 spawn from a project directory needs a `bunfig.toml` preload
 (`@opentui/solid/preload`) reachable from that cwd; `dev:live` avoids this.
 
