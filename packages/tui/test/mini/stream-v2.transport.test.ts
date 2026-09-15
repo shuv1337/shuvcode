@@ -174,8 +174,8 @@ function sdk(input: {
     }),
   )
   spyOn(client.permission, "list").mockImplementation((request) => ok(input.permissions?.[request.sessionID] ?? []))
-  spyOn(client.form, "list").mockImplementation((request) => ok(input.forms?.[request.sessionID] ?? []))
-  spyOn(client.form.request, "list").mockImplementation(() =>
+  spyOn(client.session.form, "list").mockImplementation((request) => ok(input.forms?.[request.sessionID] ?? []))
+  spyOn(client.form, "list").mockImplementation(() =>
     ok({
       location: {
         directory: input.globalLocation?.directory ?? "/tmp",

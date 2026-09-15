@@ -117,7 +117,7 @@ export const makePermissionGroup = <
       HttpApiEndpoint.post("session.permission.reply", "/api/session/:sessionID/permission/:requestID/reply", {
         params: { sessionID: Session.ID, requestID: Permission.ID },
         payload: Schema.Struct({
-          reply: Permission.Reply,
+          decision: Permission.Reply,
           message: Schema.String.pipe(Schema.optional),
         }),
         success: HttpApiSchema.NoContent,

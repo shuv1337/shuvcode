@@ -166,7 +166,7 @@ Review endpoints in document order. For each endpoint, select one disposition an
 | [x] 065 | `POST` | `/api/experimental/session/{sessionID}/wait` | `experimental.session.wait` | Experimental-only | Race-free idle barrier retained outside the stable API. |
 | [x] 066 | `POST` | `/api/session/{sessionID}/generate` | `session.generate` | Keep | Transient generation from session context retained. |
 | [x] 067 | `POST` | `/api/session/{sessionID}/interrupt` | `session.interrupt` | Change | Renamed `continue` to `resume` across public and internal interruption APIs. |
-| [x] 068 | `PUT` | `/api/experimental/session/{sessionID}/environment` | `experimental.session.environment` | Experimental-only | Process-local environment replacement retained outside the stable API. |
+| [x] 068 | `PUT` | `/api/session/{sessionID}/environment` | `session.environment` | Keep | Process-local environment replacement retained in the stable API. |
 | [x] 069 | `POST` | `/api/session/{sessionID}/view` | `session.view` | Change | Idle watermark now uses the standard epoch-millisecond timestamp schema. |
 
 ## Group 6: Session history and recovery
@@ -196,23 +196,23 @@ Review endpoints in document order. For each endpoint, select one disposition an
 | Done | Method | Path | Operation ID | Decision | Notes |
 |---|---|---|---|---|---|
 | [x] 083 | `GET` | `/api/session/{sessionID}/inbox` | `session.inbox.list` | Change | Inbox timestamps now use the standard nested `time.created` shape. |
-| [ ] 084 | `DELETE` | `/api/session/{sessionID}/inbox/{inboxID}` | `session.inbox.cancel` |  |  |
-| [ ] 085 | `POST` | `/api/session/{sessionID}/inbox/{inboxID}/steer` | `session.inbox.steer` |  |  |
-| [ ] 086 | `POST` | `/api/session/{sessionID}/inbox/{inboxID}/queue` | `session.inbox.queue` |  |  |
-| [ ] 087 | `GET` | `/api/form/request` | `form.request.list` |  |  |
-| [ ] 088 | `GET` | `/api/session/{sessionID}/form` | `session.form.list` |  |  |
-| [ ] 089 | `POST` | `/api/session/{sessionID}/form` | `session.form.create` |  |  |
-| [ ] 090 | `GET` | `/api/session/{sessionID}/form/{formID}` | `session.form.get` |  |  |
-| [ ] 091 | `GET` | `/api/session/{sessionID}/form/{formID}/state` | `session.form.state` |  |  |
-| [ ] 092 | `POST` | `/api/session/{sessionID}/form/{formID}/reply` | `session.form.reply` |  |  |
-| [ ] 093 | `POST` | `/api/session/{sessionID}/form/{formID}/cancel` | `session.form.cancel` |  |  |
-| [ ] 094 | `GET` | `/api/permission/request` | `permission.request.list` |  |  |
-| [ ] 095 | `GET` | `/api/permission/saved` | `permission.saved.list` |  |  |
-| [ ] 096 | `DELETE` | `/api/permission/saved/{id}` | `permission.saved.remove` |  |  |
-| [ ] 097 | `POST` | `/api/session/{sessionID}/permission` | `session.permission.create` |  |  |
-| [ ] 098 | `GET` | `/api/session/{sessionID}/permission` | `session.permission.list` |  |  |
-| [ ] 099 | `GET` | `/api/session/{sessionID}/permission/{requestID}` | `session.permission.get` |  |  |
-| [ ] 100 | `POST` | `/api/session/{sessionID}/permission/{requestID}/reply` | `session.permission.reply` |  |  |
+| [x] 084 | `DELETE` | `/api/session/{sessionID}/inbox/{inboxID}` | `session.inbox.cancel` | Change | Cancellation is idempotent and returns `204` when the session exists. |
+| [x] 085 | `PATCH` | `/api/session/{sessionID}/inbox/{inboxID}` | `session.inbox.update` | Change | Consolidated delivery mutation with `delivery: "steer" | "queue"`. |
+| [x] 086 | — | — | — | Remove | Replaced by `session.inbox.update`. |
+| [x] 087 | `GET` | `/api/form` | `form.list` | Change | Removed redundant `request` path and operation namespace. |
+| [x] 088 | `GET` | `/api/session/{sessionID}/form` | `session.form.list` | Keep | Pending session form list retained with temporary MCP sentinel compatibility. |
+| [x] 089 | `POST` | `/api/session/{sessionID}/form` | `session.form.create` | Keep | External form creation and temporary MCP sentinel ownership retained. |
+| [x] 090 | `GET` | `/api/session/{sessionID}/form/{formID}` | `session.form.get` | Change | Form definition and lifecycle state are now returned together. |
+| [x] 091 | — | — | — | Remove | State is included by `session.form.get`. |
+| [x] 092 | `POST` | `/api/session/{sessionID}/form/{formID}/reply` | `session.form.reply` | Keep | One-shot validated form reply retained. |
+| [x] 093 | `DELETE` | `/api/session/{sessionID}/form/{formID}` | `session.form.cancel` | Change | Form cancellation now deletes the pending form resource. |
+| [x] 094 | `GET` | `/api/permission/request` | `permission.request.list` | Keep | Pending-request namespace retained alongside saved permissions. |
+| [x] 095 | `GET` | `/api/permission/saved` | `permission.saved.list` | Change | Added persisted creation and update timestamps under `time`. |
+| [x] 096 | `DELETE` | `/api/permission/saved/{id}` | `permission.saved.remove` | Keep | Idempotent saved-permission deletion retained. |
+| [x] 097 | `POST` | `/api/session/{sessionID}/permission` | `session.permission.create` | Keep | Non-blocking permission evaluation and pending-request creation retained. |
+| [x] 098 | `GET` | `/api/session/{sessionID}/permission` | `session.permission.list` | Keep | Pending session permission list retained. |
+| [x] 099 | `GET` | `/api/session/{sessionID}/permission/{requestID}` | `session.permission.get` | Keep | Specific pending permission read with ownership validation retained. |
+| [x] 100 | `POST` | `/api/session/{sessionID}/permission/{requestID}/reply` | `session.permission.reply` | Change | Renamed request field from `reply` to `decision`. |
 | [ ] 101 | `PUT` | `/api/session/{sessionID}/permission/rules` | `session.permission.rules` |  |  |
 
 ## Group 8: Filesystem, worktrees, and VCS

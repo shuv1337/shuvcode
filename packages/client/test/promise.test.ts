@@ -546,13 +546,13 @@ test("session.inbox mutations use the public HTTP contract", async () => {
   })
 
   await client.session.inbox.cancel({ sessionID: "ses_test", inboxID: "msg_cancel" })
-  await client.session.inbox.steer({ sessionID: "ses_test", inboxID: "msg_steer" })
-  await client.session.inbox.queue({ sessionID: "ses_test", inboxID: "msg_queue" })
+  await client.session.inbox.update({ sessionID: "ses_test", inboxID: "msg_steer", delivery: "steer" })
+  await client.session.inbox.update({ sessionID: "ses_test", inboxID: "msg_queue", delivery: "queue" })
 
   expect(requests).toEqual([
     { method: "DELETE", url: "http://localhost:3000/api/session/ses_test/inbox/msg_cancel" },
-    { method: "POST", url: "http://localhost:3000/api/session/ses_test/inbox/msg_steer/steer" },
-    { method: "POST", url: "http://localhost:3000/api/session/ses_test/inbox/msg_queue/queue" },
+    { method: "PATCH", url: "http://localhost:3000/api/session/ses_test/inbox/msg_steer" },
+    { method: "PATCH", url: "http://localhost:3000/api/session/ses_test/inbox/msg_queue" },
   ])
 })
 
