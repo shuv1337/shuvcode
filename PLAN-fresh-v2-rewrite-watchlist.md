@@ -13,6 +13,31 @@ Status legend, as of `upstream/v2` `d0a902815d` (2026-09-15 PDT):
 
 Each entry: symptom, original evidence, fork fix, upstream state, check.
 
+## Gate run 2026-09-15 PDT on `d0a902815d`
+
+Scratch XDG root (`/tmp/opencode/gate-xdg`), OpenRouter key only, dev-mode
+`bun run dev` (bun 1.3.14). Provider-native checks need the L6 plugins
+(only a `sk-ant-oat` setup-token and Antigravity OAuth exist on this host).
+
+| Item | Result | Evidence |
+|---|---|---|
+| A1, A2, A3, A4, A5, C2, B7 | **deferred to L6** | need bundled Claude / Antigravity / Codex plugins for native-protocol credentials |
+| A6 | **pass → closed** | upstream `provider/openai.ts:292` already caps ChatGPT `limit.context 400_000 / input 272_000` |
+| A7, B5, B6, D2, D4 | **closed by rule** | no cheap check / no consumer; not re-opened |
+| A8 | decide with Codex plugin | not a bug |
+| B1 | **pass → closed** | cold start, no server: home at 3.6s, model in footer at 4.1s |
+| B2 | **FAIL → plan item (L5)** | `WellKnown.inspect` against an accept-and-never-respond origin still pending at 15s. Host has no wellknown sources configured, so it cannot bite today; the timeout is a guard, not a fix for a live incident |
+| B3 | **pass → closed** | `--continue` reopened the session; `session_v2` count stayed 1 |
+| B4 | **pass → closed** | two broken MCP servers (`local` bad command, `remote` dead port); catalog loaded at 3.5s, footer `2 MCP failed` |
+| C1 | **pass → closed** | patch `Update File: link.txt` + `Move to:` on a symlink: link removed, real file kept (`file-access.ts:100` resolves lexically now) |
+| D1 | **deferred to L8** | compiled build needs `bun@^1.4.2` (`packages/script/src/index.ts:17`); host has 1.3.14 |
+| D3 | **carry as notes into L1** | not checkable without the new publish workflow |
+
+Toolchain finding for L0: the tree requires bun ≥ 1.4.2 for `script/build.ts`
+and likely `bun run check`; dev-mode TUI runs on 1.3.14. Dev-mode server
+spawn from a project directory needs a `bunfig.toml` preload
+(`@opentui/solid/preload`) reachable from that cwd; `dev:live` avoids this.
+
 ## A. Provider / model requests
 
 ### A1. Max-step guardrail sent as assistant prefill

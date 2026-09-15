@@ -237,8 +237,12 @@ implementations against the new tree. Do not copy scarred whole files.
 - `jj workspace add` on pinned `upstream/v2`
 - Leave the current workspace and live service untouched
 - Keep unused upstream packages and root workspaces
-- **Run the watchlist gate (decision 17). Append failing items to this map
-  before L1.**
+- **Watchlist gate run 2026-09-15 PDT** (results in the watchlist):
+  B1/B3/B4/C1/A6 pass and are closed; B2 failed and is now an L5 item;
+  A1–A5, C2, B7 re-run in L6 once bundled plugins provide native
+  credentials; D1 re-runs in L8 on the built artifact.
+- Toolchain: `bun ≥ 1.4.2` for `script/build.ts` and `bun run check`
+  (host has 1.3.14; install side by side, do not replace the host bun)
 - Fork CI: `publish.yml`, `test.yml` (Linux only until a Windows runner is
   proven), `typecheck.yml` (per-package, per AGENTS.md),
   `notify-discord.yml` as `workflow_call` (GitHub does not fire
@@ -292,8 +296,13 @@ Upstream SessionRestart. No policy / dynamic-tool / receipt protocol.
 ### L5 — Remaining Core
 
 Port OAuth refresh `KeyedMutex` single-flight in
-`packages/core/src/integration.ts`. Plus any Core item admitted by the L0
-gate. Nothing else.
+`packages/core/src/integration.ts`.
+
+Admitted by the L0 gate (watchlist B2): bound `WellKnown.inspect` /
+`resolve` with a 10s `Effect.timeout` in `packages/core/src/wellknown.ts`.
+No `BootPhase` telemetry.
+
+Nothing else.
 
 ### L6 — Bundled provider plugins
 
@@ -335,6 +344,7 @@ Package-local, never from repo root:
 - Identity / publish / service tests
 - Plugin tests in scope, including Claude parity (body/header, SSE restore,
   cancel, refresh, configured `baseURL`)
+- Watchlist re-runs: A1–A5, C2, B7 after L6; D1 on the compiled binary
 - `bun typecheck` in `core`, `cli`, `tui`, `server`, `client`
 - `packages/cli/script/package-smoke.ts` on a built `shuvcode` artifact
 - `bun run dev:live` only after L2, against a **non-elected** convert clone
