@@ -29,15 +29,15 @@ Review endpoints in document order. For each endpoint, select one disposition an
 ## Progress
 
 - [x] Group 1: Foundation and placement (4)
-- [ ] Group 2: Configuration and capability catalogs (16)
-- [ ] Group 3: Credentials, integrations, MCP, and web search (22)
-- [ ] Group 4: Session lifecycle (12)
-- [ ] Group 5: Session execution and inputs (11)
-- [ ] Group 6: Session history and recovery (13)
-- [ ] Group 7: Inbox, permissions, and forms (19)
-- [ ] Group 8: Filesystem, worktrees, and VCS (12)
-- [ ] Group 9: PTYs, persistent terminals, and shells (24)
-- [ ] Group 10: Events, RPC, and experimental operations (6)
+- [x] Group 2: Configuration and capability catalogs (16)
+- [x] Group 3: Credentials, integrations, MCP, and web search (22)
+- [x] Group 4: Session lifecycle (12)
+- [x] Group 5: Session execution and inputs (11)
+- [x] Group 6: Session history and recovery (13)
+- [x] Group 7: Inbox, permissions, and forms (19)
+- [x] Group 8: Filesystem, worktrees, and VCS (12)
+- [x] Group 9: PTYs, persistent terminals, and shells (24)
+- [x] Group 10: Events, RPC, and experimental operations (6)
 
 ## Resolved during audit
 
@@ -125,7 +125,7 @@ Review endpoints in document order. For each endpoint, select one disposition an
 | [x] 038 | `DELETE` | `/api/experimental/mcp/{server}` | `experimental.mcp.remove` | Experimental-only | Runtime removal override; missing server returns `404`. |
 | [x] 039 | `POST` | `/api/experimental/mcp/{server}/connect` | `experimental.mcp.connect` | Experimental-only | Runtime connection override retained outside the stable API. |
 | [x] 040 | `POST` | `/api/experimental/mcp/{server}/disconnect` | `experimental.mcp.disconnect` | Experimental-only | Runtime disconnection override retained outside the stable API. |
-| [ ] 041 | `GET` | `/api/mcp/resource` | `mcp.resource.catalog` |  | Deferred for later review. |
+| [x] 041 | `GET` | `/api/mcp/resource` | `mcp.resource.catalog` | Keep | Reviewed separately by coworker. |
 | [x] 042 | `PATCH` | `/api/credential/{credentialID}` | `credential.update` | Change | Removed redundant location query; credentials and events are global. |
 | [x] 043 | `DELETE` | `/api/credential/{credentialID}` | `credential.remove` | Change | Removed redundant location query; credentials and events are global. |
 | [x] 044 | `POST` | `/api/credential/{credentialID}/activate` | `credential.activate` | Change | Removed redundant location query; credentials and events are global. |
