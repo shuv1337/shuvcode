@@ -111,7 +111,7 @@ Review endpoints in document order. For each endpoint, select one disposition an
 |---|---|---|---|---|---|
 | [x] 025 | `GET` | `/api/integration` | `integration.list` | Keep | Full integration inventory is consumed by authentication and integration-selection clients. |
 | [x] 026 | `GET` | `/api/integration/{integrationID}` | `integration.get` | Change | Missing integration now returns typed `404` instead of optional data. |
-| [x] | `POST` | `/api/experimental/integration/wellknown` | `experimental.integration.wellknown.add` | Experimental-only | Retained outside the stable API commitment. |
+| [x] 027 | `POST` | `/api/experimental/integration/wellknown` | `experimental.integration.wellknown.add` | Experimental-only | Retained outside the stable API commitment. |
 | [ ] 028 | `POST` | `/api/integration/{integrationID}/connect/key` | `integration.connect.key` |  |  |
 | [ ] 029 | `POST` | `/api/integration/{integrationID}/connect/oauth` | `integration.oauth.connect` |  |  |
 | [ ] 030 | `GET` | `/api/integration/{integrationID}/connect/oauth/{attemptID}` | `integration.oauth.status` |  |  |
@@ -185,7 +185,7 @@ Review endpoints in document order. For each endpoint, select one disposition an
 | [x] 077 | `GET` | `/api/experimental/session/{sessionID}/instructions/entries` | `experimental.session.instructions.entry.list` | Experimental-only | API-managed durable context entries retained outside the stable API. |
 | [x] 078 | `PUT` | `/api/experimental/session/{sessionID}/instructions/entries/{key}` | `experimental.session.instructions.entry.put` | Experimental-only | API-managed durable context entries retained outside the stable API. |
 | [x] 079 | `DELETE` | `/api/experimental/session/{sessionID}/instructions/entries/{key}` | `experimental.session.instructions.entry.remove` | Experimental-only | API-managed durable context entries retained outside the stable API. |
-| [x] | `GET` | `/api/experimental/session/{sessionID}/log` | `session.log` | Experimental-only | Retained outside the stable API commitment. |
+| [x] 080 | `GET` | `/api/experimental/session/{sessionID}/log` | `session.log` | Experimental-only | Retained outside the stable API commitment. |
 | [x] 081 | `GET` | `/api/session/{sessionID}/message/{messageID}` | `session.message.get` | Change | Normalized specific-message operation ID. |
 | [x] 082 | `GET` | `/api/session/{sessionID}/message` | `session.message.list` | Change | Normalized session-scoped message-list operation ID. |
 
@@ -221,18 +221,18 @@ Review endpoints in document order. For each endpoint, select one disposition an
 
 | Done | Method | Path | Operation ID | Decision | Notes |
 |---|---|---|---|---|---|
-| [ ] 102 | `GET` | `/api/fs/read/*` | `fs.read` |  |  |
-| [ ] 103 | `GET` | `/api/fs/list` | `fs.list` |  |  |
-| [ ] 104 | `GET` | `/api/fs/find` | `fs.find` |  |  |
-| [ ] 105 | `GET` | `/api/worktree` | `worktree.list` |  |  |
-| [ ] 106 | `POST` | `/api/worktree` | `worktree.create` |  |  |
-| [ ] 107 | `DELETE` | `/api/worktree` | `worktree.remove` |  |  |
-| [ ] 108 | `POST` | `/api/worktree/refresh` | `worktree.refresh` |  |  |
-| [ ] 109 | `GET` | `/api/vcs` | `vcs.get` |  |  |
-| [ ] 110 | `GET` | `/api/vcs/base` | `vcs.base` |  |  |
-| [ ] 111 | `GET` | `/api/vcs/status` | `vcs.status` |  |  |
-| [ ] 112 | `GET` | `/api/vcs/branches` | `vcs.branches` |  |  |
-| [ ] 113 | `GET` | `/api/vcs/diff` | `vcs.diff` |  |  |
+| [x] 102 | `GET` | `/api/fs/read/*` | `fs.read` | Keep | Relative wildcard file reads and raw byte responses retained. |
+| [x] 103 | `GET` | `/api/fs/list` | `fs.list` | Keep | Existing path scope and minimal entry metadata retained. |
+| [x] 104 | `GET` | `/api/fs/find` | `fs.find` | Keep | Existing ranked filesystem search retained. |
+| [x] 105 | `GET` | `/api/worktree` | `worktree.list` | Keep | Reviewed separately by coworker. |
+| [x] 106 | `POST` | `/api/worktree` | `worktree.create` | Keep | Reviewed separately by coworker. |
+| [x] 107 | `DELETE` | `/api/worktree` | `worktree.remove` | Keep | Reviewed separately by coworker. |
+| [x] 108 | `POST` | `/api/worktree/refresh` | `worktree.refresh` | Keep | Reviewed separately by coworker. |
+| [x] 109 | `GET` | `/api/vcs` | `vcs.get` | Change | Preserved branch nesting and added selected VCS provider ID. |
+| [x] 110 | `GET` | `/api/vcs/base` | `vcs.base` | Keep | Review-base inference and nullable unavailable state retained. |
+| [x] 111 | `GET` | `/api/vcs/status` | `vcs.status` | Keep | Existing working-copy status shape retained for now. |
+| [x] 112 | `GET` | `/api/vcs/branch` | `vcs.branch.list` | Change | Singular collection path and normalized operation ID. |
+| [x] 113 | `GET` | `/api/vcs/diff` | `vcs.diff` | Keep | Existing working, branch, and committed comparison modes retained. |
 
 ## Group 9: PTYs, persistent terminals, and shells
 
@@ -240,30 +240,30 @@ Review endpoints in document order. For each endpoint, select one disposition an
 
 | Done | Method | Path | Operation ID | Decision | Notes |
 |---|---|---|---|---|---|
-| [ ] 114 | `GET` | `/api/pty` | `pty.list` |  |  |
-| [ ] 115 | `POST` | `/api/pty` | `pty.create` |  |  |
-| [ ] 116 | `GET` | `/api/pty/{ptyID}` | `pty.get` |  |  |
-| [ ] 117 | `PUT` | `/api/pty/{ptyID}` | `pty.update` |  |  |
-| [ ] 118 | `DELETE` | `/api/pty/{ptyID}` | `pty.remove` |  |  |
-| [ ] 119 | `POST` | `/api/pty/{ptyID}/connect-token` | `pty.connect.token` |  |  |
-| [ ] 120 | `GET` | `/api/pty/{ptyID}/connect` | `pty.connect` |  |  |
-| [x] | `GET` | `/api/experimental/session/{sessionID}/terminal/read` | `server.experimental.persistentPty.read` | Experimental-only | Retained outside the stable API commitment. |
-| [x] | `GET` | `/api/experimental/session/{sessionID}/terminal` | `server.experimental.persistentPty.list` | Experimental-only | Retained outside the stable API commitment. |
-| [x] | `POST` | `/api/experimental/session/{sessionID}/terminal` | `server.experimental.persistentPty.create` | Experimental-only | Retained outside the stable API commitment. |
-| [x] | `POST` | `/api/experimental/persistent-pty/shutdown` | `server.experimental.persistentPty.shutdown` | Experimental-only | Retained outside the stable API commitment. |
-| [x] | `POST` | `/api/experimental/persistent-pty/handoff` | `server.experimental.persistentPty.handoff` | Experimental-only | Retained outside the stable API commitment. |
-| [x] | `GET` | `/api/experimental/persistent-pty/{ptyID}` | `server.experimental.persistentPty.get` | Experimental-only | Retained outside the stable API commitment. |
-| [x] | `PUT` | `/api/experimental/persistent-pty/{ptyID}` | `server.experimental.persistentPty.update` | Experimental-only | Retained outside the stable API commitment. |
-| [x] | `DELETE` | `/api/experimental/persistent-pty/{ptyID}` | `server.experimental.persistentPty.remove` | Experimental-only | Retained outside the stable API commitment. |
-| [x] | `GET` | `/api/experimental/persistent-pty/{ptyID}/snapshot` | `server.experimental.persistentPty.snapshot` | Experimental-only | Retained outside the stable API commitment. |
-| [x] | `POST` | `/api/experimental/persistent-pty/{ptyID}/connect-token` | `server.experimental.persistentPty.connectToken` | Experimental-only | Retained outside the stable API commitment. |
-| [x] | `GET` | `/api/experimental/persistent-pty/{ptyID}/connect` | `persistentPty.connect` | Experimental-only | Retained outside the stable API commitment. |
-| [ ] 132 | `GET` | `/api/shell` | `shell.list` |  |  |
-| [ ] 133 | `POST` | `/api/shell` | `shell.create` |  |  |
-| [ ] 134 | `GET` | `/api/shell/{id}` | `shell.get` |  |  |
-| [ ] 135 | `DELETE` | `/api/shell/{id}` | `shell.remove` |  |  |
-| [ ] 136 | `PATCH` | `/api/shell/{id}/timeout` | `shell.timeout` |  |  |
-| [ ] 137 | `GET` | `/api/shell/{id}/output` | `shell.output` |  |  |
+| [x] 114 | `GET` | `/api/pty` | `pty.list` | Keep | PTY endpoints reviewed together and retained. |
+| [x] 115 | `POST` | `/api/pty` | `pty.create` | Keep | PTY endpoints reviewed together and retained. |
+| [x] 116 | `GET` | `/api/pty/{ptyID}` | `pty.get` | Keep | PTY endpoints reviewed together and retained. |
+| [x] 117 | `PUT` | `/api/pty/{ptyID}` | `pty.update` | Keep | PTY endpoints reviewed together and retained. |
+| [x] 118 | `DELETE` | `/api/pty/{ptyID}` | `pty.remove` | Keep | PTY endpoints reviewed together and retained. |
+| [x] 119 | `POST` | `/api/pty/{ptyID}/connect-token` | `pty.connect.token` | Keep | PTY endpoints reviewed together and retained. |
+| [x] 120 | `GET` | `/api/pty/{ptyID}/connect` | `pty.connect` | Keep | PTY endpoints reviewed together and retained. |
+| [x] 121 | `GET` | `/api/experimental/session/{sessionID}/terminal/read` | `server.experimental.persistentPty.read` | Experimental-only | Retained outside the stable API commitment. |
+| [x] 122 | `GET` | `/api/experimental/session/{sessionID}/terminal` | `server.experimental.persistentPty.list` | Experimental-only | Retained outside the stable API commitment. |
+| [x] 123 | `POST` | `/api/experimental/session/{sessionID}/terminal` | `server.experimental.persistentPty.create` | Experimental-only | Retained outside the stable API commitment. |
+| [x] 124 | `POST` | `/api/experimental/persistent-pty/shutdown` | `server.experimental.persistentPty.shutdown` | Experimental-only | Retained outside the stable API commitment. |
+| [x] 125 | `POST` | `/api/experimental/persistent-pty/handoff` | `server.experimental.persistentPty.handoff` | Experimental-only | Retained outside the stable API commitment. |
+| [x] 126 | `GET` | `/api/experimental/persistent-pty/{ptyID}` | `server.experimental.persistentPty.get` | Experimental-only | Retained outside the stable API commitment. |
+| [x] 127 | `PUT` | `/api/experimental/persistent-pty/{ptyID}` | `server.experimental.persistentPty.update` | Experimental-only | Retained outside the stable API commitment. |
+| [x] 128 | `DELETE` | `/api/experimental/persistent-pty/{ptyID}` | `server.experimental.persistentPty.remove` | Experimental-only | Retained outside the stable API commitment. |
+| [x] 129 | `GET` | `/api/experimental/persistent-pty/{ptyID}/snapshot` | `server.experimental.persistentPty.snapshot` | Experimental-only | Retained outside the stable API commitment. |
+| [x] 130 | `POST` | `/api/experimental/persistent-pty/{ptyID}/connect-token` | `server.experimental.persistentPty.connectToken` | Experimental-only | Retained outside the stable API commitment. |
+| [x] 131 | `GET` | `/api/experimental/persistent-pty/{ptyID}/connect` | `persistentPty.connect` | Experimental-only | Retained outside the stable API commitment. |
+| [x] 132 | `GET` | `/api/shell` | `shell.list` | Change | Stable shell inventory retained; numeric timestamps documented as epoch milliseconds. |
+| [x] 133 | `POST` | `/api/shell` | `shell.create` | Change | Timeout is optional and defaults to zero; caller metadata retained. |
+| [x] 134 | `GET` | `/api/shell/{id}` | `shell.get` | Keep | Specific running or retained shell read retained. |
+| [x] 135 | `DELETE` | `/api/shell/{id}` | `shell.remove` | Change | Shell deletion is idempotent and returns `204` when already absent. |
+| [x] 136 | — | — | — | Remove | Timeout mutation remains an internal Core shell operation. |
+| [x] 137 | `GET` | `/api/shell/{id}/output` | `shell.output` | Keep | Existing byte-cursor text output paging retained. |
 
 ## Group 10: Events, RPC, and experimental operations
 
@@ -276,4 +276,4 @@ Review endpoints in document order. For each endpoint, select one disposition an
 | [ ] 140 | `GET` | `/api/event` | `event.subscribe` |  |  |
 | [ ] 141 | `GET` | `/api/debug/location` | `debug.location.list` |  |  |
 | [ ] 142 | `DELETE` | `/api/debug/location` | `debug.location.evict` |  |  |
-| [x] | `GET` | `/api/experimental/migration/v1` | `experimental.migration.v1.status` | Experimental-only | Retained outside the stable API commitment. |
+| [x] 143 | `GET` | `/api/experimental/migration/v1` | `experimental.migration.v1.status` | Experimental-only | Retained outside the stable API commitment. |
