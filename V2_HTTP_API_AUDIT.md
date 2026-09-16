@@ -100,7 +100,7 @@ Review endpoints in document order. For each endpoint, select one disposition an
 | [x] 021 | `GET` | `/api/config` | `config.get` | Keep | Compatibility entries removed; response now contains only documents and OpenCode directories. |
 | [x] 022 | `GET` | `/api/config/preferences` | `config.preferences` | Remove | Redundant special projection of global config. |
 | [x] 023 | `PATCH` | `/api/config/preferences` | `config.updatePreferences` | Remove | Redundant field-specific config mutation API. |
-| [ ] 024 | `GET` | `/api/config/shell` | `config.shells` |  |  |
+| [x] 024 | `GET` | `/api/config/shell` | `config.shells` | Keep | Required by the server Terminal shell setting. |
 | [x] 024a | `PATCH` | `/api/experimental/config` | `experimental.config.update` | Change | Experimental global config mutation; initially accepts only `shell`. |
 
 ## Group 3: Credentials, integrations, MCP, and web search
@@ -112,14 +112,14 @@ Review endpoints in document order. For each endpoint, select one disposition an
 | [x] 025 | `GET` | `/api/integration` | `integration.list` | Keep | Full integration inventory is consumed by authentication and integration-selection clients. |
 | [x] 026 | `GET` | `/api/integration/{integrationID}` | `integration.get` | Change | Missing integration now returns typed `404` instead of optional data. |
 | [x] 027 | `POST` | `/api/experimental/integration/wellknown` | `experimental.integration.wellknown.add` | Experimental-only | Retained outside the stable API commitment. |
-| [ ] 028 | `POST` | `/api/integration/{integrationID}/connect/key` | `integration.connect.key` |  |  |
-| [ ] 029 | `POST` | `/api/integration/{integrationID}/connect/oauth` | `integration.oauth.connect` |  |  |
-| [ ] 030 | `GET` | `/api/integration/{integrationID}/connect/oauth/{attemptID}` | `integration.oauth.status` |  |  |
-| [ ] 031 | `DELETE` | `/api/integration/{integrationID}/connect/oauth/{attemptID}` | `integration.oauth.cancel` |  |  |
-| [ ] 032 | `POST` | `/api/integration/{integrationID}/connect/oauth/{attemptID}/complete` | `integration.oauth.complete` |  |  |
-| [ ] 033 | `POST` | `/api/integration/{integrationID}/connect/command` | `integration.command.connect` |  |  |
-| [ ] 034 | `GET` | `/api/integration/{integrationID}/connect/command/{attemptID}` | `integration.command.status` |  |  |
-| [ ] 035 | `DELETE` | `/api/integration/{integrationID}/connect/command/{attemptID}` | `integration.command.cancel` |  |  |
+| [x] 028 | `POST` | `/api/integration/{integrationID}/connect/key` | `integration.connect.key` | Change | Missing integration returns typed `404`; key form answers retained. |
+| [x] 029 | `POST` | `/api/integration/{integrationID}/connect/oauth` | `integration.oauth.connect` | Keep | OAuth connection start contract retained. |
+| [x] 030 | `GET` | `/api/integration/{integrationID}/connect/oauth/{attemptID}` | `integration.oauth.status` | Change | Missing integration or OAuth attempt returns typed `404`. |
+| [x] 031 | `DELETE` | `/api/integration/{integrationID}/connect/oauth/{attemptID}` | `integration.oauth.cancel` | Keep | Idempotent cancellation remains a no-op for unavailable or terminal attempts. |
+| [x] 032 | `POST` | `/api/integration/{integrationID}/connect/oauth/{attemptID}/complete` | `integration.oauth.complete` | Change | Missing integration or OAuth attempt returns typed `404`; code remains mode-dependent. |
+| [x] 033 | `POST` | `/api/integration/{integrationID}/connect/command` | `integration.command.connect` | Change | Missing integration or command method returns typed `404`. |
+| [x] 034 | `GET` | `/api/integration/{integrationID}/connect/command/{attemptID}` | `integration.command.status` | Change | Missing integration or command attempt returns typed `404`. |
+| [x] 035 | `DELETE` | `/api/integration/{integrationID}/connect/command/{attemptID}` | `integration.command.cancel` | Keep | Idempotent cancellation remains a no-op for unavailable or terminal attempts. |
 | [x] 036 | `GET` | `/api/mcp` | `mcp.list` | Keep | MCP inventory and connection status retained. |
 | [x] 037 | `PUT` | `/api/experimental/mcp/{server}` | `experimental.mcp.add` | Experimental-only | Runtime-only MCP override; does not persist configuration. |
 | [x] 038 | `DELETE` | `/api/experimental/mcp/{server}` | `experimental.mcp.remove` | Experimental-only | Runtime removal override; missing server returns `404`. |
@@ -271,9 +271,9 @@ Review endpoints in document order. For each endpoint, select one disposition an
 
 | Done | Method | Path | Operation ID | Decision | Notes |
 |---|---|---|---|---|---|
-| [ ] 138 | `POST` | `/api/generate` | `generate.text` |  |  |
-| [ ] 139 | `POST` | `/api/rpc/{rpcID}/{method}` | `rpc.call` |  |  |
-| [ ] 140 | `GET` | `/api/event` | `event.subscribe` |  |  |
-| [ ] 141 | `GET` | `/api/debug/location` | `debug.location.list` |  |  |
-| [ ] 142 | `DELETE` | `/api/debug/location` | `debug.location.evict` |  |  |
+| [x] 138 | `POST` | `/api/experimental/generate` | `experimental.generate.text` | Experimental-only | Stateless generation retained alongside session generation. |
+| [x] 139 | `POST` | `/api/rpc/{rpcID}/{method}` | `rpc.call` | Keep | Generic typed-error plugin RPC transport retained. |
+| [x] 140 | `GET` | `/api/event` | `event.subscribe` | Keep | Unified native and dynamic plugin event stream retained. |
+| [x] 141 | `GET` | `/api/debug/location` | `debug.location.list` | Keep | Loaded-location debug inventory retained. |
+| [x] 142 | `DELETE` | `/api/debug/location` | `debug.location.evict` | Keep | Idempotent loaded-location eviction retained. |
 | [x] 143 | `GET` | `/api/experimental/migration/v1` | `experimental.migration.v1.status` | Experimental-only | Retained outside the stable API commitment. |

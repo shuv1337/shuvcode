@@ -5114,10 +5114,10 @@
         "summary": "Get default model"
       }
     },
-    "/api/generate": {
+    "/api/experimental/generate": {
       "post": {
         "tags": ["generate"],
-        "operationId": "generate.text",
+        "operationId": "experimental.generate.text",
         "parameters": [],
         "security": [],
         "responses": {
