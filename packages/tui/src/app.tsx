@@ -1004,6 +1004,22 @@ function App(props: { pair?: DialogPairCredentials }) {
           ]
         : []),
       {
+        name: "location.reload",
+        title: "Reload locations",
+        slash: { name: "reload" },
+        run: async () => {
+          dialog.clear()
+          toast.show({ variant: "info", message: "Reloading all locations…", duration: 30000 })
+          await client.api.location
+            .reload()
+            .then(() => {
+              toast.show({ variant: "success", message: "Locations reloaded" })
+            })
+            .catch(toast.error)
+        },
+        category: "System",
+      },
+      {
         name: "opencode.debug",
         title: "View debug info",
         slash: { name: "debug" },

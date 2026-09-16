@@ -592,6 +592,12 @@ export function createData(config: CreateDataInput) {
 
   function handleEvent(event: OpenCodeEvent) {
     switch (event.type) {
+      case "location.shutdown": {
+        if (!event.location) return
+        result.location.invalidate(event.location)
+        refresh(() => result.location.sync(event.location))
+        return
+      }
       case "server.connected": {
         const updates = new Map<string, DataSessionStatus | undefined>()
         activeUpdates = updates

@@ -54,8 +54,12 @@ export type LocationGetInput = { readonly location?: { readonly directory?: stri
 export type LocationGetOutput = Location.PublicInfo
 export type LocationGetOperation<E = never> = (input?: LocationGetInput) => Effect.Effect<LocationGetOutput, E>
 
+export type LocationReloadOutput = void
+export type LocationReloadOperation<E = never> = () => Effect.Effect<LocationReloadOutput, E>
+
 export interface LocationApi<E = never> {
   readonly get: LocationGetOperation<E>
+  readonly reload: LocationReloadOperation<E>
 }
 
 export type AgentListInput = { readonly location?: { readonly directory?: string | undefined } | undefined }

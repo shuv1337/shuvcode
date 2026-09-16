@@ -2,6 +2,7 @@ import type {
   ServerStatusOutput,
   LocationGetInput,
   LocationGetOutput,
+  LocationReloadOutput,
   AgentListInput,
   AgentListOutput,
   AgentGetInput,
@@ -413,6 +414,17 @@ export function make(options: ClientOptions) {
             successStatus: 200,
             declaredStatuses: [400, 401],
             empty: false,
+          },
+          requestOptions,
+        ),
+      reload: (requestOptions?: RequestOptions) =>
+        request<LocationReloadOutput>(
+          {
+            method: "POST",
+            path: `/api/location/reload`,
+            successStatus: 204,
+            declaredStatuses: [400, 401, 503],
+            empty: true,
           },
           requestOptions,
         ),
