@@ -1,9 +1,16 @@
 import { Schema } from "effect"
 import { migrateV1, resolveThemeDocument, ThemeDocument, themeDecodeError } from "@opencode/theme/tui"
 import { resolveThemeColors } from "./resolve"
-import { DEFAULT_THEMES, type Theme, type ThemeV1Json } from "./v1"
+import { DEFAULT_THEME_NAME, DEFAULT_THEMES, type Theme, type ThemeV1Json } from "./v1"
 
-export { DEFAULT_THEMES, generateSyntax, selectedForeground, type Theme, type ThemeV1Json } from "./v1"
+export {
+  DEFAULT_THEME_NAME,
+  DEFAULT_THEMES,
+  generateSyntax,
+  selectedForeground,
+  type Theme,
+  type ThemeV1Json,
+} from "./v1"
 export { resolveThemeDocument, type ThemeDocument }
 
 export type ThemeDocumentSource = Record<string, unknown>
@@ -24,7 +31,7 @@ function listThemes(): Record<string, ThemeDocumentSource> {
   }
   return {
     ...themes,
-    system: systemTheme ?? themes.system ?? themes.opencode,
+    system: systemTheme ?? themes.system ?? themes[DEFAULT_THEME_NAME],
   }
 }
 

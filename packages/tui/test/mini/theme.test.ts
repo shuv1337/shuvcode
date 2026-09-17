@@ -9,7 +9,7 @@ import {
   resolveRunTheme,
   type RunTheme,
 } from "../../src/mini/theme"
-import { DEFAULT_THEMES, parseTheme } from "../../src/theme"
+import { DEFAULT_THEME_NAME, DEFAULT_THEMES, parseTheme } from "../../src/theme"
 import { generateSystem } from "../../src/theme/system"
 import { tmpdir } from "../fixture/fixture"
 
@@ -136,7 +136,7 @@ test.each(["light", "dark"] as const)("uses shared %s defaults and named built-i
   const colors = terminalColors({}, mode)
   for (const name of [undefined, "opencode", "tokyonight"] as const) {
     const theme = await resolveRunTheme(renderer({ colors }), { name, mode })
-    const expected = resolveThemeDocument(parseTheme(DEFAULT_THEMES[name ?? "opencode"]), mode)
+    const expected = resolveThemeDocument(parseTheme(DEFAULT_THEMES[name ?? DEFAULT_THEME_NAME]), mode)
     try {
       expectFooter(theme, expected)
       expect(rgba(theme.background).toInts()).toEqual(RGBA.fromHex(colors.defaultBackground!).toInts())
@@ -218,7 +218,7 @@ test.each(["light", "dark"] as const)(
 test.each(["light", "dark"] as const)(
   "falls back to shared %s defaults for unknown or invalid themes",
   async (mode) => {
-    const expected = resolveThemeDocument(parseTheme(DEFAULT_THEMES.opencode), mode)
+    const expected = resolveThemeDocument(parseTheme(DEFAULT_THEMES[DEFAULT_THEME_NAME]), mode)
     for (const source of [
       { version: 2, [mode]: { categorical: [] } },
       { version: 2, [mode]: { text: { default: "$missing" } } },
@@ -245,7 +245,10 @@ test.each(["light", "dark"] as const)("resolves dark-only Aura on an automatic %
   })
   const theme = await resolveRunTheme(renderer({ colors }), { name: "aura" })
   try {
-    expectFooter(theme, resolveThemeDocument(parseTheme(DEFAULT_THEMES[mode === "light" ? "opencode" : "aura"]), mode))
+    expectFooter(
+      theme,
+      resolveThemeDocument(parseTheme(DEFAULT_THEMES[mode === "light" ? DEFAULT_THEME_NAME : "aura"]), mode),
+    )
     expect(rgba(theme.background).toInts()).toEqual(RGBA.fromHex(colors.defaultBackground!).toInts())
   } finally {
     theme.block.syntax?.destroy()
@@ -265,7 +268,7 @@ test.each(["light", "dark"] as const)(
       try {
         expectFooter(
           theme,
-          resolveThemeDocument(parseTheme(requested === mode ? source : DEFAULT_THEMES.opencode), requested),
+          resolveThemeDocument(parseTheme(requested === mode ? source : DEFAULT_THEMES[DEFAULT_THEME_NAME]), requested),
         )
       } finally {
         theme.block.syntax?.destroy()
@@ -275,7 +278,8 @@ test.each(["light", "dark"] as const)(
 )
 
 test.each(["light", "dark"] as const)("handles unavailable palettes in %s mode", async (mode) => {
-  const expected = resolveThemeDocument(parseTheme(DEFAULT_THEMES.opencode), mode)
+  const fallbackExpected = resolveThemeDocument(parseTheme(DEFAULT_THEMES[DEFAULT_THEME_NAME]), mode)
+  const opencode = resolveThemeDocument(parseTheme(DEFAULT_THEMES.opencode), mode)
   for (const input of [
     { fail: true },
     { colors: emptyColors },
@@ -284,11 +288,11 @@ test.each(["light", "dark"] as const)("handles unavailable palettes in %s mode",
   ]) {
     const fallback = await resolveRunTheme(renderer(input), { name: "system", mode })
     expect(fallback).toBe(mode === "light" ? RUN_THEME_FALLBACK_LIGHT : RUN_THEME_FALLBACK)
-    expectFooter(fallback, expected)
+    expectFooter(fallback, fallbackExpected)
   }
   const theme = await resolveRunTheme(renderer({ fail: true }), { name: "opencode", mode })
   try {
-    expectFooter(theme, expected)
+    expectFooter(theme, opencode)
   } finally {
     theme.block.syntax?.destroy()
   }
@@ -311,7 +315,7 @@ test("uses refreshed background brightness rather than stale mode or ANSI slot z
 })
 
 test.each(["light", "dark"] as const)("follows physical %s mode over opposite configuration", async (mode) => {
-  const expected = resolveThemeDocument(parseTheme(DEFAULT_THEMES.opencode), mode)
+  const expected = resolveThemeDocument(parseTheme(DEFAULT_THEMES[DEFAULT_THEME_NAME]), mode)
   for (const fail of [false, true]) {
     const theme = await resolveRunTheme(renderer({ colors: terminalColors({}, mode), themeMode: mode, fail }), {
       mode: mode === "light" ? "dark" : "light",

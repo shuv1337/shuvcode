@@ -36,6 +36,8 @@ import zenburn from "./assets/zenburn.json" with { type: "json" }
 
 export type { ColorValue, HexColor, RefName, Theme, ThemeColor, ThemeV1Json, Variant } from "@opencode/theme/tui/v1"
 
+export const DEFAULT_THEME_NAME = "nightowl"
+
 export const DEFAULT_THEMES: Record<string, ThemeV1Json> = {
   aura,
   ayu,

@@ -1,6 +1,13 @@
 import { RGBA, SyntaxStyle, type CliRenderer, type ColorInput, type TerminalColors } from "@opentui/core"
 import { generateSyntax, resolveThemeDocument, themeModes, type ResolvedTheme } from "@opencode/theme/tui"
-import { allThemes, DEFAULT_THEMES, isThemeSource, parseTheme, type ThemeDocumentSource } from "../theme"
+import {
+  allThemes,
+  DEFAULT_THEME_NAME,
+  DEFAULT_THEMES,
+  isThemeSource,
+  parseTheme,
+  type ThemeDocumentSource,
+} from "../theme"
 import { ansiToRgba } from "../theme/color"
 import { discoverThemes } from "../theme/discovery"
 import { generateSystem, terminalMode } from "../theme/system"
@@ -194,12 +201,12 @@ function map(
 }
 
 export const RUN_THEME_FALLBACK = map(
-  resolveThemeDocument(parseTheme(DEFAULT_THEMES.opencode), "dark"),
+  resolveThemeDocument(parseTheme(DEFAULT_THEMES[DEFAULT_THEME_NAME]), "dark"),
   ansiPalette,
   "dark",
 )
 export const RUN_THEME_FALLBACK_LIGHT = map(
-  resolveThemeDocument(parseTheme(DEFAULT_THEMES.opencode), "light"),
+  resolveThemeDocument(parseTheme(DEFAULT_THEMES[DEFAULT_THEME_NAME]), "light"),
   ansiPalette,
   "light",
 )
@@ -284,7 +291,7 @@ export async function resolveRunTheme(
     renderer.themeMode ??
     (colors && terminalMode(colors)) ??
     (config?.mode === "light" ? "light" : "dark")
-  const name = config?.name ?? "opencode"
+  const name = config?.name ?? DEFAULT_THEME_NAME
   if (name === "system" && !colors) {
     return mode === "light" ? RUN_THEME_FALLBACK_LIGHT : RUN_THEME_FALLBACK
   }
@@ -296,7 +303,7 @@ export async function resolveRunTheme(
       if (themeModes(document).includes(mode)) return resolveThemeDocument(document, mode)
     })
     .catch(() => undefined)
-  const theme = resolved ?? resolveThemeDocument(parseTheme(DEFAULT_THEMES.opencode), mode)
+  const theme = resolved ?? resolveThemeDocument(parseTheme(DEFAULT_THEMES[DEFAULT_THEME_NAME]), mode)
   const indexed = colors
     ? ansiPalette.map((color, index) => (colors.palette[index] ? RGBA.fromIndex(index, colors.palette[index]!) : color))
     : ansiPalette
@@ -316,6 +323,6 @@ async function themeSource(
   const custom = await discoverThemes(
     configDirectories(process.env.OPENCODE_CONFIG_DIR ?? Global.Path.config, process.cwd()),
   )
-  const source = custom[name] ?? allThemes()[name] ?? DEFAULT_THEMES.opencode
-  return isThemeSource(source) ? source : DEFAULT_THEMES.opencode
+  const source = custom[name] ?? allThemes()[name] ?? DEFAULT_THEMES[DEFAULT_THEME_NAME]
+  return isThemeSource(source) ? source : DEFAULT_THEMES[DEFAULT_THEME_NAME]
 }

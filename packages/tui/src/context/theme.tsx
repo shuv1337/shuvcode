@@ -8,6 +8,7 @@ import {
   type ContextName,
 } from "@opencode/theme/tui"
 import {
+  DEFAULT_THEME_NAME,
   DEFAULT_THEMES,
   addTheme,
   allThemes,
@@ -130,7 +131,7 @@ type ThemeContextValue = {
 const [store, setStore] = createStore<State>({
   mode: "dark",
   lock: undefined,
-  active: "opencode",
+  active: DEFAULT_THEME_NAME,
   ready: false,
 })
 const [themeSources, setThemeSources] = createSignal(allThemes())
@@ -152,7 +153,7 @@ const themeContext = createSimpleContext({
         const mode = lock ?? renderer.themeMode ?? props.mode
         draft.mode = mode
         draft.lock = lock
-        draft.active = config.theme?.name ?? "opencode"
+        draft.active = config.theme?.name ?? DEFAULT_THEME_NAME
         draft.ready = false
       }),
     )
@@ -179,7 +180,7 @@ const themeContext = createSimpleContext({
         .then((themes) => {
           setCustomThemes(themes)
         })
-        .catch(() => setStore("active", "opencode"))
+        .catch(() => setStore("active", DEFAULT_THEME_NAME))
     }
 
     onMount(() => {
@@ -307,14 +308,14 @@ const themeContext = createSimpleContext({
     const initStarted = performance.now()
     const selected = createMemo(() => {
       const sources = themeSources()
-      const name = sources[store.active] ? store.active : "opencode"
+      const name = sources[store.active] ? store.active : DEFAULT_THEME_NAME
       try {
         return loadTheme(sources[name], name, store.mode)
       } catch (error) {
-        if (name === "opencode") throw error
+        if (name === DEFAULT_THEME_NAME) throw error
         themeErrors.emit(name, error)
-        setStore("active", "opencode")
-        return loadTheme(sources.opencode, "opencode", store.mode)
+        setStore("active", DEFAULT_THEME_NAME)
+        return loadTheme(sources[DEFAULT_THEME_NAME], DEFAULT_THEME_NAME, store.mode)
       }
     })
     const modes = () => selected().modes
