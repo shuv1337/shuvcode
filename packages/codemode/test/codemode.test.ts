@@ -711,8 +711,8 @@ describe("CodeMode public contract", () => {
 
     const stringResult = await Effect.runPromise(runtime.execute(`return search("order")`))
     expect(stringResult.ok).toBe(true)
-    if (stringResult.ok) {
-      expect(stringResult.value).toStrictEqual(result.ok ? result.value : undefined)
+    if (stringResult.ok && result.ok) {
+      expect(stringResult.value).toStrictEqual(result.value)
     }
   })
 
