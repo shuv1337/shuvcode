@@ -1,5 +1,11 @@
 import { describe, expect, test } from "bun:test"
-import { displayCharAt, displaySlice, mentionTriggerIndex, slashTriggerIndex } from "../../src/prompt/display"
+import {
+  displayCharAt,
+  displaySlice,
+  mentionTriggerIndex,
+  promptTriggerIndex,
+  slashTriggerIndex,
+} from "../../src/prompt/display"
 
 describe("prompt display", () => {
   test("uses display-width offsets for mentions", () => {
@@ -29,6 +35,13 @@ describe("prompt display", () => {
     expect(mentionTriggerIndex("hello@")).toBeUndefined()
     expect(mentionTriggerIndex("foo@bar.com")).toBeUndefined()
     expect(mentionTriggerIndex("中文 @src file")).toBeUndefined()
+  })
+
+  test("finds plugin triggers at token boundaries", () => {
+    expect(promptTriggerIndex("$", "$")).toBe(0)
+    expect(promptTriggerIndex("use $skill", "$")).toBe(4)
+    expect(promptTriggerIndex("use$skill", "$")).toBeUndefined()
+    expect(promptTriggerIndex("$skill extra", "$")).toBeUndefined()
   })
 
   test("finds slash attachments at token boundaries", () => {

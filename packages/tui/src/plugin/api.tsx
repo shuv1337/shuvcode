@@ -1,6 +1,15 @@
 import { PluginContextProvider } from "@opencode/plugin/tui"
 import type { JSX } from "solid-js"
-import type { Context, Dialog, Page, SlotClaim, SlotMap, SlotPath, Toast } from "@opencode/plugin/tui/context"
+import type {
+  Context,
+  Dialog,
+  Page,
+  PromptAutocompleteProvider,
+  SlotClaim,
+  SlotMap,
+  SlotPath,
+  Toast,
+} from "@opencode/plugin/tui/context"
 import type { Placement, PlacementKind } from "./structure"
 import { infoStringToFiletype, type MarkdownCodeBlockRenderer } from "@opentui/core"
 import { useRenderer } from "@opentui/solid"
@@ -37,15 +46,30 @@ export type RegisteredSlot = {
 
 const placements = ["prepend", "append", "before", "after", "replace"] as const satisfies readonly PlacementKind[]
 
+// The prompt owns these: "@" mentions files, agents, and references, and "/" runs commands.
+const RESERVED_PROMPT_TRIGGERS = new Set(["@", "/"])
+
+/** Rejects an unusable prompt autocomplete trigger. Returns the reason, or undefined when usable. */
+export function promptTriggerError(trigger: string, taken: (trigger: string) => boolean) {
+  if (trigger.length !== 1 || /\s/.test(trigger))
+    return "Prompt autocomplete trigger must be one non-whitespace character"
+  if (RESERVED_PROMPT_TRIGGERS.has(trigger)) return `Prompt autocomplete trigger is reserved by the prompt: ${trigger}`
+  // Exclusivity spans every plugin: two providers on one trigger would merge their options
+  // silently and resolve the cursor by load order.
+  if (taken(trigger)) return `Prompt autocomplete trigger already registered: ${trigger}`
+}
+
 // The provider's registration store, narrowed to what a plugin context needs:
 // route/slot registration lands there, but ordering and lifecycle stay owned
 // by the provider.
 export type Registry = {
-  has(kind: "routes" | "slots" | "markdown", name: string): boolean
+  has(kind: "routes" | "slots" | "markdown" | "autocomplete", name: string): boolean
+  taken(kind: "autocomplete", name: string): boolean
   set(kind: "routes", name: string, page: Page): void
   set(kind: "slots", name: string, claim: RegisteredSlot): void
   set(kind: "markdown", name: string, render: MarkdownCodeBlockRenderer): void
-  remove(kind: "routes" | "slots" | "markdown", name: string): void
+  set(kind: "autocomplete", name: string, provider: PromptAutocompleteProvider): void
+  remove(kind: "routes" | "slots" | "markdown" | "autocomplete", name: string): void
   active(): boolean
 }
 
@@ -99,8 +123,8 @@ export function createPluginContext(input: {
     },
   }
   // Unregistering after deactivation is a no-op: deactivate already resets
-  // the registration's routes and slots wholesale.
-  const registration = (kind: "routes" | "slots" | "markdown", name: string) => {
+  // the registration's routes, slots, markdown, and autocomplete wholesale.
+  const registration = (kind: "routes" | "slots" | "markdown" | "autocomplete", name: string) => {
     let registered = true
     const unregister = () => {
       if (!registered) return
@@ -227,6 +251,18 @@ export function createPluginContext(input: {
           if (!target || !host.sessionTabs.tabs().some((tab) => tab.sessionID === target)) return false
           host.sessionTabs.close(target)
           return true
+        },
+      },
+      prompt: {
+        autocomplete: {
+          register(provider) {
+            const error = promptTriggerError(provider.trigger, (trigger) =>
+              input.registry.taken("autocomplete", trigger),
+            )
+            if (error) throw new Error(error)
+            input.registry.set("autocomplete", provider.trigger, provider)
+            return registration("autocomplete", provider.trigger)
+          },
         },
       },
       slot(value: SlotClaim) {

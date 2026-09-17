@@ -37,9 +37,9 @@ export function displayCharAt(value: string, offset: number) {
   }
 }
 
-export function mentionTriggerIndex(value: string, offset = promptOffsetWidth(value)) {
+export function promptTriggerIndex(value: string, trigger: string, offset = promptOffsetWidth(value)) {
   const text = displaySlice(value, 0, offset)
-  const index = text.lastIndexOf("@")
+  const index = text.lastIndexOf(trigger)
   if (index === -1) return
 
   const before = index === 0 ? undefined : text[index - 1]
@@ -48,6 +48,9 @@ export function mentionTriggerIndex(value: string, offset = promptOffsetWidth(va
     return promptOffsetWidth(text.slice(0, index))
   }
 }
+
+export const mentionTriggerIndex = (value: string, offset = promptOffsetWidth(value)) =>
+  promptTriggerIndex(value, "@", offset)
 
 export function slashTriggerIndex(value: string, offset = promptOffsetWidth(value)) {
   const text = displaySlice(value, 0, offset)
