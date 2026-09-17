@@ -20,6 +20,7 @@ function fixture(
   } = () => ({}),
   name = "shuvcode",
   failCleanup = false,
+  manifest: Updater.Manifest = { name, bin: { shuvcode: "bin/shuvcode" } },
 ) {
   return Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem
@@ -27,10 +28,7 @@ function fixture(
     const root = yield* fs.makeTempDirectoryScoped({ prefix: "opencode-updater-" })
     const executable = path.join(root, "package", "bin", "shuvcode")
     yield* fs.makeDirectory(path.dirname(executable), { recursive: true })
-    yield* fs.writeFileString(
-      path.join(root, "package", "package.json"),
-      JSON.stringify({ name, bin: { shuvcode: "bin/shuvcode" } }),
-    )
+    yield* fs.writeFileString(path.join(root, "package", "package.json"), JSON.stringify(manifest))
     // The updater uses global fetch; scope this replacement to each install test.
     yield* Effect.acquireRelease(
       Effect.sync(() =>
@@ -199,6 +197,51 @@ it.live("install failures expose stderr and process errors do not report success
       ])
     }),
   )
+})
+
+it.live("method detection maps the launched platform package back to the fork package", () =>
+  Effect.gen(function* () {
+    // launcher.mjs spawns node_modules/shuvcode-<platform>-<arch>/bin/shuvcode, so the
+    // manifest next to the running binary is the platform package without a bin field.
+    const test = yield* fixture(
+      (command) => ({ stdout: Buffer.from(command.command === "npm" ? "shuvcode@2.3.4" : "") }),
+      "shuvcode",
+      false,
+      { name: "shuvcode-darwin-arm64" },
+    )
+    expect(yield* test.updater.method()).toBe("npm")
+    expect(test.commands[0]).toEqual(["npm", "list", "-g", "--depth=0", "shuvcode"])
+    expect(test.updater.removal("npm")?.command).toEqual(["npm", "uninstall", "--global", "shuvcode"])
+  }),
+)
+
+it.live("method detection ignores unrelated packages next to the binary", () =>
+  Effect.gen(function* () {
+    const test = yield* fixture(() => ({ stdout: Buffer.from("shuvcode@2.3.4") }), "shuvcode", false, {
+      name: "bun",
+      bin: { bun: "bin/bun" },
+    })
+    expect(yield* test.updater.method()).toBeUndefined()
+    expect(test.commands).toEqual([])
+  }),
+)
+
+test("installedPackageName resolves wrapper and platform package layouts", () => {
+  const bin = path.join(path.sep, "prefix", "lib", "node_modules", "pkg", "bin", "shuvcode")
+  expect(Updater.installedPackageName(bin, { name: "shuvcode", bin: { shuvcode: "./bin/shuvcode" } })).toBe("shuvcode")
+  expect(
+    Updater.installedPackageName(bin, { name: "shuvcode", bin: { shuvcode: "./bin/launcher.mjs" } }),
+  ).toBeUndefined()
+  expect(Updater.installedPackageName(bin, { name: "shuvcode-darwin-arm64" })).toBe("shuvcode")
+  expect(Updater.installedPackageName(bin, { name: "shuvcode-linux-x64-baseline-musl" })).toBe("shuvcode")
+  expect(Updater.installedPackageName(bin, { name: "shuvcode-node-windows-x64" })).toBe("shuvcode-node")
+  expect(Updater.installedPackageName(bin, { name: "shuvcode-darwin-arm64-extra" })).toBeUndefined()
+  expect(Updater.installedPackageName(bin, { name: "bun", bin: { bun: "bin/shuvcode" } })).toBeUndefined()
+  expect(
+    Updater.installedPackageName(path.join(path.sep, "cache", "shuvcode-darwin-arm64", "shuvcode"), {
+      name: "shuvcode-darwin-arm64",
+    }),
+  ).toBeUndefined()
 })
 
 it.live("method detection tolerates unavailable package managers", () =>

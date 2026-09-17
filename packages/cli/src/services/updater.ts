@@ -26,9 +26,9 @@ export interface Interface {
   readonly method: () => Effect.Effect<Method | undefined>
   readonly latest: () => Effect.Effect<string, Error>
   readonly upgrade: (method: Method, version: string) => Effect.Effect<void, Error>
-  readonly removal: (method: Method) =>
-    | { readonly command: ReadonlyArray<string>; readonly run: Effect.Effect<void, Error> }
-    | undefined
+  readonly removal: (
+    method: Method,
+  ) => { readonly command: ReadonlyArray<string>; readonly run: Effect.Effect<void, Error> } | undefined
 }
 
 export const pollUpdates = Effect.fnUntraced(function* (input: {
@@ -44,6 +44,30 @@ export const pollUpdates = Effect.fnUntraced(function* (input: {
 })
 
 export class Service extends Context.Service<Service, Interface>()("@opencode/cli/Updater") {}
+
+export interface Manifest {
+  readonly name: string
+  readonly bin?: Record<string, string>
+}
+
+// Released packages ship launcher.mjs as the wrapper bin, which spawns the compiled
+// binary from shuvcode[-node]-<platform>-<arch>[-baseline][-musl]/bin. The running
+// process therefore lives inside the platform package, while the package manager
+// only knows about the wrapper package that pulled it in.
+const platformPackage = /^(shuvcode(?:-node)?)-(?:darwin|linux|windows)-(?:x64|arm64|arm)(?:-baseline)?(?:-musl)?$/
+
+export function installedPackageName(executable: string, manifest: Manifest): string | undefined {
+  const directory = path.dirname(path.dirname(executable))
+  if (/^shuvcode(?:-node)?$/.test(manifest.name)) {
+    if (Object.values(manifest.bin ?? {}).some((bin) => path.resolve(directory, bin) === executable))
+      return manifest.name
+    return
+  }
+  const match = platformPackage.exec(manifest.name)
+  if (!match) return
+  if (path.basename(path.dirname(executable)) !== "bin") return
+  return match[1]
+}
 
 export function decodePolicy(text: string): Policy | undefined {
   // The CLI only projects this host-level preference instead of initializing
@@ -70,13 +94,11 @@ const make = Effect.gen(function* () {
   const installedPackage = yield* Effect.gen(function* () {
     const executable = yield* fs.realPath(process.execPath)
     const directory = path.dirname(path.dirname(executable))
-    const manifest: { name: string; bin?: Record<string, string> } = yield* fs
+    const manifest: Manifest = yield* fs
       .readFileString(path.join(directory, "package.json"))
       .pipe(Effect.flatMap((text) => Effect.try(() => JSON.parse(text))))
     // Source invocations run inside Bun or Node, which may themselves be npm packages.
-    if (!/^shuvcode(?:-node)?$/.test(manifest.name)) return
-    if (Object.values(manifest.bin ?? {}).some((bin) => path.resolve(directory, bin) === executable))
-      return manifest.name
+    return installedPackageName(executable, manifest)
   }).pipe(Effect.orElseSucceed(() => undefined))
 
   const readPolicy = Effect.fnUntraced(function* () {
@@ -178,7 +200,13 @@ const make = Effect.gen(function* () {
     }
     const commands: Record<Exclude<Method, "bun">, string[]> = {
       // Keep the old package: uninstalling it can unlink the replacement command.
-      npm: ["npm", "install", "--global", ...(installedPackage && packageName !== installedPackage ? ["--force"] : []), target],
+      npm: [
+        "npm",
+        "install",
+        "--global",
+        ...(installedPackage && packageName !== installedPackage ? ["--force"] : []),
+        target,
+      ],
       pnpm: ["pnpm", "add", "--global", `--allow-build=${packageName}`, target],
       yarn: ["yarn", "global", "add", target],
     }
