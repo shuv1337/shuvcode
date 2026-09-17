@@ -488,6 +488,12 @@ const Root = Spec.make(typeof OPENCODE_CLI_NAME === "string" ? OPENCODE_CLI_NAME
         }),
       ],
     }),
+    Spec.make("reload", {
+      description: "Reload configuration",
+      params: {
+        ...ServerParams,
+      },
+    }),
     Spec.make("pair", {
       description: "Show server pairing information",
       params: {
