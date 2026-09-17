@@ -46,10 +46,13 @@ project-local CLI configuration. Set `OPENCODE_CLI_CONFIG_CONTENT` to merge
 inline JSON over the global settings. Most preferences can also be changed from
 the TUI by pressing `Ctrl+P` and selecting **Open settings**.
 
-Fetch the full [CLI configuration guide](https://opencode.ai/v2/docs/cli/config)
-before editing `cli.json`. It covers terminal-only settings such as themes,
-keybindings, terminal plugins, scrolling, attention alerts, diff presentation,
-and terminal integration. Do not put these settings in `opencode.json(c)`.
+### [Settings](https://opencode.ai/v2/docs/cli/config)
+
+Fetch the full [CLI settings reference](https://opencode.ai/v2/docs/cli/config)
+before editing `cli.json`. It documents every terminal-only setting, accepted
+values, and examples, including themes, input, sessions, tabs, diffs, alerts,
+Mini, keybindings, terminal plugins, and debugging. Do not put these settings
+in `opencode.json(c)`.
 
 ### [Keybinds](https://opencode.ai/v2/docs/cli/keybinds)
 
@@ -93,7 +96,7 @@ Common configuration fields include `model`, `default_agent`, `permissions`,
 `references`, `formatter`, and `lsp`.
 
 This configuration is distinct from `cli.json`. Use the
-[CLI configuration guide](https://opencode.ai/v2/docs/cli/config) for terminal
+[CLI settings reference](https://opencode.ai/v2/docs/cli/config) for terminal
 preferences, especially themes and keybindings.
 
 Do not guess field names or shapes. Fetch the V2 configuration guide and its

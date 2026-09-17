@@ -69,7 +69,7 @@ export const docsSections: DocsSection[] = [
         items: [
           { title: "Intro", slug: "cli" },
           { title: "TUI", slug: "cli/tui" },
-          { title: "Config", slug: "cli/config" },
+          { title: "Settings", slug: "cli/config" },
           { title: "Web", slug: "cli/web" },
           { title: "Providers", slug: "cli/providers" },
           { title: "Commands", slug: "cli/commands" },
