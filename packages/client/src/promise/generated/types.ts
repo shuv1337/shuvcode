@@ -1,6 +1,6 @@
 export type JsonValue = null | boolean | number | string | Array<JsonValue> | { [key: string]: JsonValue }
 
-export type ServerStatus = { version: string; pid: number; urls: Array<string> }
+export type ServerInfo = { version: string; pid: number; urls: Array<string>; paths: { tmp: string } }
 
 export type LocationPublicInfo = { directory: string; project: { id: string; directory: string; canonical: string } }
 
@@ -2655,7 +2655,7 @@ export type WorktreeError = {
 export const isWorktreeError = (value: unknown): value is WorktreeError =>
   typeof value === "object" && value !== null && "name" in value && value["name"] === "WorktreeError"
 
-export type ServerStatusOutput = ServerStatus
+export type ServerInfoOutput = ServerInfo
 
 export type LocationGetInput = {
   readonly location?: { readonly location?: { readonly directory?: string | undefined } | undefined }["location"]

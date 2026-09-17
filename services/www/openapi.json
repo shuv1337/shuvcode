@@ -6,19 +6,19 @@
     "description": "Experimental HttpApi surface for selected instance routes."
   },
   "paths": {
-    "/api/status": {
+    "/api/info": {
       "get": {
         "tags": ["server"],
-        "operationId": "server.status",
+        "operationId": "server.info",
         "parameters": [],
         "security": [],
         "responses": {
           "200": {
-            "description": "ServerStatus",
+            "description": "ServerInfo",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ServerStatus"
+                  "$ref": "#/components/schemas/ServerInfo"
                 }
               }
             }
@@ -44,8 +44,8 @@
             }
           }
         },
-        "description": "Return the server identity, connection URLs, and readiness status.",
-        "summary": "Get server status"
+        "description": "Return the server identity, connection URLs, paths, and readiness status.",
+        "summary": "Get server info"
       }
     },
     "/api/location": {
@@ -119,6 +119,51 @@
         },
         "description": "Resolve the requested location or the server default location.",
         "summary": "Get location"
+      }
+    },
+    "/api/location/reload": {
+      "post": {
+        "tags": ["location"],
+        "operationId": "location.reload",
+        "parameters": [],
+        "security": [],
+        "responses": {
+          "204": {
+            "description": "<No Content>"
+          },
+          "400": {
+            "description": "InvalidRequestError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvalidRequestErrorEncoded"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UnauthorizedError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "ServiceUnavailableError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ServiceUnavailableErrorEncoded"
+                }
+              }
+            }
+          }
+        },
+        "description": "Shut down and rebuild every loaded location. Pending permissions and forms are cancelled; running sessions continue with fresh services at the next step boundary. Emits location.shutdown for client recovery and responds once all replacement builds settle.",
+        "summary": "Reload locations"
       }
     },
     "/api/agent": {
@@ -16554,7 +16599,7 @@
         "required": ["_tag", "type", "message"],
         "additionalProperties": false
       },
-      "ServerStatus": {
+      "ServerInfo": {
         "type": "object",
         "properties": {
           "version": {
@@ -16569,9 +16614,19 @@
             "items": {
               "type": "string"
             }
+          },
+          "paths": {
+            "type": "object",
+            "properties": {
+              "tmp": {
+                "type": "string"
+              }
+            },
+            "required": ["tmp"],
+            "additionalProperties": false
           }
         },
-        "required": ["version", "pid", "urls"],
+        "required": ["version", "pid", "urls", "paths"],
         "additionalProperties": false
       },
       "ServiceUnavailableErrorEncoded": {

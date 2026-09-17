@@ -5,7 +5,7 @@ import { HttpClientError } from "effect/unstable/http"
 import { HttpApiClient } from "effect/unstable/httpapi"
 import { ClientApi } from "../../contract"
 import type {
-  ServerStatusOutput,
+  ServerInfoOutput,
   LocationGetInput,
   LocationGetOutput,
   LocationReloadOutput,
@@ -278,10 +278,10 @@ const preserveStream =
   <E, R>(stream: Stream.Stream<A, E, R>) =>
     stream
 
-const EndpointServerStatus = (raw: RawClient["server.server"]) => () =>
-  preserveEffect<ServerStatusOutput>()(raw["server.status"]({}).pipe(Effect.mapError(mapClientError)))
+const EndpointServerInfo = (raw: RawClient["server.server"]) => () =>
+  preserveEffect<ServerInfoOutput>()(raw["server.info"]({}).pipe(Effect.mapError(mapClientError)))
 
-const adaptGroupServer = (raw: RawClient["server.server"]) => ({ status: EndpointServerStatus(raw) })
+const adaptGroupServer = (raw: RawClient["server.server"]) => ({ info: EndpointServerInfo(raw) })
 
 const EndpointLocationGet = (raw: RawClient["server.location"]) => (input?: LocationGetInput) =>
   preserveEffect<LocationGetOutput>()(

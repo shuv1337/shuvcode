@@ -272,7 +272,7 @@ function authServer(fetch: (request: Request, url: URL) => Response | Promise<Re
     fetch(request) {
       const url = new URL(request.url)
       requests?.push(url.pathname)
-      if (url.pathname === "/api/status") return status()
+      if (url.pathname === "/api/info") return status()
       if (url.pathname === "/api/model/default") return Response.json(located(null))
       return fetch(request, url)
     },
@@ -280,7 +280,7 @@ function authServer(fetch: (request: Request, url: URL) => Response | Promise<Re
 }
 
 function status() {
-  return Response.json({ version: OPENCODE_VERSION, pid: process.pid, urls: [] })
+  return Response.json({ version: OPENCODE_VERSION, pid: process.pid, urls: [], paths: { tmp: "/tmp/opencode" } })
 }
 
 function located<T>(data: T) {
