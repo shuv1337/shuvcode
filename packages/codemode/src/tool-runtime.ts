@@ -67,12 +67,13 @@ export type ToolDescription = {
 const defaultSearchLimit = 10
 const PositiveInt = Schema.Int.check(Schema.isGreaterThan(0))
 const NonNegativeInt = Schema.Int.check(Schema.isGreaterThanOrEqualTo(0))
-const SearchInput = Schema.Struct({
+const SearchInputStruct = Schema.Struct({
   query: Schema.optionalKey(Schema.String),
   namespace: Schema.optionalKey(Schema.String),
   limit: Schema.optionalKey(PositiveInt),
   offset: Schema.optionalKey(NonNegativeInt),
 })
+const SearchInput = Schema.Union([SearchInputStruct, Schema.String])
 const SearchItem = Schema.Struct({
   path: Schema.String,
   description: Schema.String,
@@ -185,7 +186,12 @@ const makeSearchTool = (searchIndex: ReadonlyArray<SearchEntry>): Tool => ({
   output: SearchOutput,
   execute: (input) =>
     Effect.sync(() => {
-      const request = input as typeof SearchInput.Type
+      const request: typeof SearchInputStruct.Type =
+        typeof input === "string"
+          ? { query: input }
+          : input === undefined || input === null
+            ? {}
+            : (input as typeof SearchInputStruct.Type)
       const query = request.query ?? ""
       const offset = request.offset ?? 0
       const scoped =

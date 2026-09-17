@@ -708,6 +708,12 @@ describe("CodeMode public contract", () => {
         next: null,
       })
     }
+
+    const stringResult = await Effect.runPromise(runtime.execute(`return search("order")`))
+    expect(stringResult.ok).toBe(true)
+    if (stringResult.ok) {
+      expect(stringResult.value).toStrictEqual(result.ok ? result.value : undefined)
+    }
   })
 
   test("renders equivalent catalogs identically regardless of tool insertion order", () => {

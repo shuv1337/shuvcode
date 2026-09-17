@@ -61,8 +61,8 @@ export type Inventory = {
 const description = [
   "Run JavaScript in a confined Code Mode runtime to orchestrate tool calls and compose their results.",
   "Imports, direct filesystem access, and timers are unavailable. Do not use `fetch`; all external access goes through `tools`.",
-  "Within `{ code }`, the only callable tools are those explicitly listed in the Code Mode catalog instructions or returned by the `search` function. Inside `{ code }`, ignore tools shown outside the Code Mode catalog. They are not available in the Code Mode runtime.",
-  'Call tools through `tools` using only exact paths and signatures from the catalog. Do not infer or normalize tool names; preserve bracket notation such as `tools.<namespace>["tool-name"](input)`.',
+  "Direct tools (such as tools.read, tools.shell, tools.edit, tools.write, tools.glob, tools.grep) and catalog tools (under tools.<namespace>.<tool>) are callable within `{ code }`.",
+  'Call tools through `tools` using exact paths: direct tools are at `tools.<name>(input)` (e.g. `tools.read({path: ...})`, `tools.shell({command: ...})`); catalog tools use their namespace (e.g. `tools.<namespace>["tool-name"](input)`).',
   "Prefer an explicit `return`; if omitted, the final top-level expression becomes the result.",
   "Await every call whose completion matters; pending calls are interrupted when execution ends. Run independent calls concurrently with `Promise.all`.",
 ].join("\n")
