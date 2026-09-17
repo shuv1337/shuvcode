@@ -208,7 +208,6 @@ export const dict = {
   "dialog.provider.opencode.note": "Kurirani modeli uključujući Claude, GPT, Gemini i druge",
   "dialog.provider.opencode.tagline": "Pouzdani optimizovani modeli",
   "dialog.provider.opencodeGo.tagline": "Povoljna pretplata za sve",
-  "dialog.provider.anthropic.note": "Direktan pristup Claude modelima, uključujući Pro i Max",
   "dialog.provider.copilot.note": "AI modeli za pomoć pri kodiranju putem GitHub Copilot",
   "dialog.provider.openai.note": "GPT modeli za brze, sposobne opšte AI zadatke",
   "dialog.provider.google.note": "Gemini modeli za brze, strukturirane odgovore",
@@ -229,7 +228,6 @@ export const dict = {
   "dialog.provider.viewAll": "Prikaži više provajdera",
 
   "provider.connect.title": "Poveži {{provider}}",
-  "provider.connect.title.anthropicProMax": "Prijavi se putem Claude Pro/Max",
   "provider.connect.selectMethod": "Odaberi način prijave za {{provider}}.",
   "provider.connect.method.apiKey": "API ključ",
   "provider.connect.method.browser": "Preglednik",

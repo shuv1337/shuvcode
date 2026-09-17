@@ -212,7 +212,6 @@ export const dict = {
   "dialog.provider.opencode.note": "Claude, GPT, Gemini ve daha fazlasını içeren seçilmiş modeller",
   "dialog.provider.opencode.tagline": "Güvenilir, optimize edilmiş modeller",
   "dialog.provider.opencodeGo.tagline": "Herkes için düşük maliyetli abonelik",
-  "dialog.provider.anthropic.note": "Pro ve Max dahil Claude modellerine doğrudan erişim",
   "dialog.provider.copilot.note": "GitHub Copilot üzerinden kodlama yardımı için yapay zekâ modelleri",
   "dialog.provider.openai.note": "Hızlı ve yetenekli genel yapay zekâ görevleri için GPT modelleri",
   "dialog.provider.google.note": "Hızlı ve yapılandırılmış yanıtlar için Gemini modelleri",
@@ -233,7 +232,6 @@ export const dict = {
   "dialog.provider.viewAll": "Daha fazla sağlayıcı göster",
 
   "provider.connect.title": "{{provider}} bağla",
-  "provider.connect.title.anthropicProMax": "Claude Pro/Max ile giriş yap",
   "provider.connect.selectMethod": "{{provider}} için giriş yöntemini seçin.",
   "provider.connect.method.apiKey": "API anahtarı",
   "provider.connect.method.browser": "Tarayıcı",

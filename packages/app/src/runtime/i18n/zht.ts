@@ -210,7 +210,6 @@ export const dict = {
   "dialog.provider.opencode.note": "精選模型，包含 Claude、GPT、Gemini 等等",
   "dialog.provider.opencode.tagline": "經過最佳化的可靠模型",
   "dialog.provider.opencodeGo.tagline": "適合所有人的低成本訂閱",
-  "dialog.provider.anthropic.note": "直接存取 Claude 模型，包括 Pro 和 Max",
   "dialog.provider.openai.note": "適合快速且功能強大的通用 AI 工作之 GPT 模型",
   "dialog.provider.copilot.note": "透過 GitHub Copilot 使用程式設計輔助 AI 模型",
   "dialog.provider.google.note": "Gemini 模型，提供快速且結構化的回應",
@@ -231,7 +230,6 @@ export const dict = {
   "dialog.provider.viewAll": "查看更多提供者",
 
   "provider.connect.title": "連線 {{provider}}",
-  "provider.connect.title.anthropicProMax": "使用 Claude Pro/Max 登入",
   "provider.connect.selectMethod": "選擇 {{provider}} 的登入方式。",
   "provider.connect.method.apiKey": "API 金鑰",
   "provider.connect.method.browser": "瀏覽器",

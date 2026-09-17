@@ -208,7 +208,6 @@ export const dict = {
   "dialog.provider.opencode.note": "Selección de modelos como Claude, GPT, Gemini y otros",
   "dialog.provider.opencode.tagline": "Modelos optimizados y fiables",
   "dialog.provider.opencodeGo.tagline": "Suscripción económica para todos",
-  "dialog.provider.anthropic.note": "Acceso directo a modelos Claude, incluidos Pro y Max",
   "dialog.provider.copilot.note": "Modelos de IA para asistencia de codificación a través de GitHub Copilot",
   "dialog.provider.openai.note": "Modelos GPT para tareas de IA generales rápidas y capaces",
   "dialog.provider.google.note": "Modelos Gemini para respuestas rápidas y estructuradas",
@@ -229,7 +228,6 @@ export const dict = {
   "dialog.provider.viewAll": "Ver más proveedores",
 
   "provider.connect.title": "Conectar {{provider}}",
-  "provider.connect.title.anthropicProMax": "Iniciar sesión con Claude Pro/Max",
   "provider.connect.selectMethod": "Seleccionar método de inicio de sesión para {{provider}}.",
   "provider.connect.method.apiKey": "Clave API",
   "provider.connect.method.browser": "Navegador",
