@@ -54,7 +54,7 @@ export const makeLocationGroup = <LocationId extends HttpApiMiddleware.AnyId, Lo
       }).annotateMerge(
         OpenApi.annotations({
           identifier: "location.reload",
-          summary: "Reload locations",
+          summary: "Reload configuration",
           description:
             "Shut down and rebuild every loaded location. Pending permissions and forms are cancelled; running sessions continue with fresh services at the next step boundary. Emits location.shutdown for client recovery and responds once all replacement builds settle.",
         }),
