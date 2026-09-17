@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json.schemastore.org/package.json",
+  "name": "@shuvcode/quota-plugin",
+  "version": "2.0.3-shuv.1",
+  "private": true,
+  "type": "module",
+  "license": "MIT",
+  "description": "Subscription quota plugin for OpenCode V2. Exposes ChatGPT/Codex, Claude, xAI, and Google AI Pro rate-limit windows over RPC for the TUI sidebar.",
+  "exports": {
+    ".": "./src/index.ts",
+    "./rpc": "./src/rpc.ts",
+    "./*": "./src/*.ts"
+  },
+  "scripts": {
+    "test": "bun test --only-failures",
+    "typecheck": "tsgo --noEmit"
+  },
+  "dependencies": {
+    "@opencode/plugin": "workspace:*",
+    "@opencode/schema": "workspace:*",
+    "effect": "catalog:"
+  },
+  "devDependencies": {
+    "@tsconfig/bun": "catalog:",
+    "@types/bun": "catalog:",
+    "@typescript/native-preview": "catalog:",
+    "typescript": "catalog:"
+  }
+}

@@ -1,4 +1,5 @@
 import { ClaudePlugin } from "@shuvcode/claude-plugin"
+import { QuotaPlugin } from "@shuvcode/quota-plugin"
 import { GoogleAntigravityPlugin } from "#antigravity-plugin"
 import { AmazonBedrockPlugin } from "./provider/amazon-bedrock.js"
 import { AzurePlugin } from "./provider/azure.js"
@@ -67,4 +68,6 @@ export const ProviderPlugins: PluginInternal.InternalPlugin[] = [
   XAIPlugin,
   ZenmuxPlugin,
   DynamicProviderPlugin,
+  // Reads the active subscription connections registered above; order it last.
+  QuotaPlugin,
 ]

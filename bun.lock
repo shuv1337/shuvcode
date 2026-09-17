@@ -393,6 +393,7 @@
         "@parcel/watcher": "2.5.1",
         "@shuvcode/antigravity-plugin": "workspace:*",
         "@shuvcode/claude-plugin": "workspace:*",
+        "@shuvcode/quota-plugin": "workspace:*",
         "@silvia-odwyer/photon-node": "0.3.4",
         "@standard-schema/spec": "catalog:",
         "bun-pty": "0.4.8",
@@ -688,6 +689,21 @@
         "typescript": "catalog:",
       },
     },
+    "packages/quota-plugin": {
+      "name": "@shuvcode/quota-plugin",
+      "version": "2.0.3-shuv.1",
+      "dependencies": {
+        "@opencode/plugin": "workspace:*",
+        "@opencode/schema": "workspace:*",
+        "effect": "catalog:",
+      },
+      "devDependencies": {
+        "@tsconfig/bun": "catalog:",
+        "@types/bun": "catalog:",
+        "@typescript/native-preview": "catalog:",
+        "typescript": "catalog:",
+      },
+    },
     "packages/schema": {
       "name": "@opencode/schema",
       "version": "2.0.3",
@@ -941,6 +957,7 @@
         "@opentui/core": "catalog:",
         "@opentui/keymap": "catalog:",
         "@opentui/solid": "catalog:",
+        "@shuvcode/quota-plugin": "workspace:*",
         "@solid-primitives/event-bus": "1.1.2",
         "effect": "catalog:",
         "fuzzysort": "catalog:",
@@ -2845,6 +2862,8 @@
     "@shuvcode/antigravity-plugin": ["@shuvcode/antigravity-plugin@workspace:packages/antigravity-plugin"],
 
     "@shuvcode/claude-plugin": ["@shuvcode/claude-plugin@workspace:packages/claude-plugin"],
+
+    "@shuvcode/quota-plugin": ["@shuvcode/quota-plugin@workspace:packages/quota-plugin"],
 
     "@sigstore/bundle": ["@sigstore/bundle@4.0.0", "", { "dependencies": { "@sigstore/protobuf-specs": "^0.5.0" } }, "sha512-NwCl5Y0V6Di0NexvkTqdoVfmjTaQwoLM236r89KEojGmq/jMls8S+zb7yOwAPdXvbwfKDlP+lmXgAL4vKSQT+A=="],
 

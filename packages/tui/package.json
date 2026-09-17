@@ -80,6 +80,7 @@
     "@opencode/core": "workspace:*",
     "@opencode/latex": "workspace:*",
     "@opencode/merman": "workspace:*",
+    "@shuvcode/quota-plugin": "workspace:*",
     "@opencode/plugin": "workspace:*",
     "@opencode/schema": "workspace:*",
     "@opencode/simulation": "workspace:*",
