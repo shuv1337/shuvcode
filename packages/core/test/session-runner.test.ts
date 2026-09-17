@@ -4132,6 +4132,7 @@ describe("SessionRunnerLLM", () => {
       assistantMessageID,
       agent: Agent.ID.make("build"),
       model: { id: ID.make("fake-model"), providerID: Provider.ID.make("fake") },
+      started: 0,
     })
     yield* s.bus.publish(SessionEvent.Tool.Input.Started, {
       sessionID,
@@ -4178,6 +4179,7 @@ describe("SessionRunnerLLM", () => {
       assistantMessageID,
       agent: Agent.ID.make("build"),
       model: { id: ID.make("fake-model"), providerID: Provider.ID.make("fake") },
+      started: 0,
     })
     yield* s.bus.publish(SessionEvent.Tool.Input.Started, {
       sessionID,
@@ -4243,6 +4245,7 @@ describe("SessionRunnerLLM", () => {
       assistantMessageID,
       agent: Agent.ID.make("build"),
       model: { id: ID.make("fake-model"), providerID: Provider.ID.make("fake") },
+      started: 0,
     })
     yield* s.bus.publish(SessionEvent.Tool.Input.Started, {
       sessionID,
@@ -4290,6 +4293,7 @@ describe("SessionRunnerLLM", () => {
       assistantMessageID,
       agent: Agent.ID.make("build"),
       model: { id: ID.make("fake-model"), providerID: Provider.ID.make("fake") },
+      started: 0,
     })
     yield* s.bus.publish(SessionEvent.Tool.Input.Started, {
       sessionID,

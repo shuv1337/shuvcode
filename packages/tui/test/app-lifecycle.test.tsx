@@ -1632,7 +1632,7 @@ test.each([44, 100])(
       created: 3,
       type: "session.step.started",
       durable: { aggregateID: session.id, seq: 2, version: 1 },
-      data: { sessionID: session.id, assistantMessageID: "msg_countdown", agent: "build", model },
+      data: { sessionID: session.id, assistantMessageID: "msg_countdown", agent: "build", model, started: 3 },
     })
     await setup.waitForFrame((frame) => !frame.includes("Retrying") && !frame.includes("Retry due"))
 
