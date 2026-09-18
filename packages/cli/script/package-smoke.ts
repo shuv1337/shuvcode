@@ -53,7 +53,7 @@ export async function smokeDistribution(distribution: ForkDistribution) {
     const module = await import(path.join(installed, client.import))
     const api = module.OpenCode.make({ baseUrl: "http://127.0.0.1" })
     for (const [group, method] of [
-      ["server", "status"],
+      ["server", "info"],
       ["session", "list"],
       ["event", "subscribe"],
     ] as const) {

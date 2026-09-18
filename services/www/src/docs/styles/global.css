@@ -32,8 +32,8 @@
 
 :root {
   color-scheme: dark;
-  --background: #000;
-  --foreground: #ededed;
+  --background: #000000;
+  --foreground: #efefef;
   --muted: #929292;
   --border: #303030;
   --surface: #101010;
@@ -78,7 +78,7 @@ body {
   color: var(--foreground);
   font-family: "OpenTUI Mono", monospace;
   font-size: 0.875rem;
-  line-height: 1.5;
+  line-height: 1.8em;
 }
 
 button,
@@ -1000,6 +1000,48 @@ main {
   background: var(--surface);
   color: var(--muted);
   font-size: 0.75rem;
+}
+
+.docs-code-tabs {
+  margin-bottom: 1.5rem;
+  border: 1px solid var(--border);
+}
+
+.docs-code-tabs-list {
+  display: flex;
+  border-bottom: 1px solid var(--border);
+  flex-wrap: wrap;
+}
+
+.docs-code-tabs-list button {
+  margin-bottom: -1px;
+  padding: 0.5rem 0.875rem;
+  flex-shrink: 0;
+  cursor: pointer;
+  border: 0;
+  border-bottom: 1px solid transparent;
+  background: transparent;
+  color: var(--muted);
+  font-size: 0.75rem;
+}
+
+.docs-code-tabs-list button:hover,
+.docs-code-tabs-list button[aria-selected="true"] {
+  color: var(--foreground);
+}
+
+.docs-code-tabs-list button[aria-selected="true"] {
+  border-bottom-color: var(--foreground);
+}
+
+.docs-code-tabs-list button:focus-visible {
+  outline: 1px solid var(--foreground);
+  outline-offset: -3px;
+}
+
+.docs-code-tabs .docs-code-block pre {
+  margin: 0;
+  border: 0;
 }
 
 .prose h1 button {

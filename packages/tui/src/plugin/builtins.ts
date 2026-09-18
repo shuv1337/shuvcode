@@ -1,4 +1,5 @@
 import HomeFooter from "../feature-plugins/home/footer"
+import PromptBtw from "../feature-plugins/prompt/btw"
 import PromptFooter from "../feature-plugins/prompt/footer"
 import SkillDollar from "../feature-plugins/prompt/skill-dollar"
 import SidebarContext from "../feature-plugins/sidebar/context"
@@ -16,6 +17,7 @@ import Merman from "@opencode/merman/plugin"
 export const builtins = [
   HomeFooter,
   PromptFooter,
+  PromptBtw,
   SkillDollar,
   // Prepends to sidebar.content, so it renders above Context/MCP regardless of list order.
   SidebarQuota,

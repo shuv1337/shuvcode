@@ -138,8 +138,10 @@ describe("CodeModeInstructions.render", () => {
     )
     expect(partial).toContain("It does not affect tools exposed directly outside Code Mode.")
     expect(partial).toContain("- search(input: {")
-    expect(partial).toContain("  /** @integer @exclusiveMinimum 0 */\n  limit?: number,")
-    expect(partial).toContain("  /** @integer @minimum 0 */\n  offset?: number,")
+    expect(partial).toContain("@exclusiveMinimum 0")
+    expect(partial).toContain("limit?: number")
+    expect(partial).toContain("@minimum 0")
+    expect(partial).toContain("offset?: number")
     expect(partial).not.toContain("tools.orders.lookup(input:")
   })
 

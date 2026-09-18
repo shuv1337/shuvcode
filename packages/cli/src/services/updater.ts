@@ -1,7 +1,7 @@
 import { Global } from "@opencode/util/global"
 import { AppProcess } from "@opencode/util/process"
 import { OPENCODE_CHANNEL, OPENCODE_LOCAL, OPENCODE_VERSION } from "../version"
-import { Context, Duration, Effect, FileSystem, Layer, Ref, Schedule } from "effect"
+import { Context, Duration, Effect, FileSystem, Layer, Ref } from "effect"
 import { ChildProcess } from "effect/unstable/process"
 import { parse, type ParseError } from "jsonc-parser"
 import path from "node:path"
@@ -20,7 +20,7 @@ export type RunResult = { readonly type: "available" | "installed"; readonly ver
 export type CheckResult = RunResult | { readonly type: "unavailable"; readonly message: string }
 
 export interface Interface {
-  readonly run: () => Effect.Effect<RunResult | undefined>
+  readonly run: (onInstall?: (version: string) => void) => Effect.Effect<RunResult | undefined>
   readonly check: () => Effect.Effect<CheckResult | undefined, Error>
   readonly apply: (version: string) => Effect.Effect<void, Error>
   readonly method: () => Effect.Effect<Method | undefined>
@@ -30,18 +30,6 @@ export interface Interface {
     method: Method,
   ) => { readonly command: ReadonlyArray<string>; readonly run: Effect.Effect<void, Error> } | undefined
 }
-
-export const pollUpdates = Effect.fnUntraced(function* (input: {
-  readonly check: Effect.Effect<unknown>
-  readonly initialDelay?: Duration.Input
-  readonly interval?: Duration.Input
-}) {
-  const interval = input.interval ?? "10 minutes"
-  return yield* input.check.pipe(
-    Effect.repeat(Schedule.spaced(interval)),
-    Effect.delay(input.initialDelay ?? "1 minute"),
-  )
-})
 
 export class Service extends Context.Service<Service, Interface>()("@opencode/cli/Updater") {}
 
@@ -291,10 +279,11 @@ const make = Effect.gen(function* () {
   })
 
   const run = Effect.fn("cli.updater.run")(
-    function* () {
+    function* (onInstall: (version: string) => void = () => {}) {
       const result = yield* inspect()
       if (!result) return undefined
       if (result.policy === "notify") return { type: "available" as const, version: result.version }
+      onInstall(result.version)
       if (!(yield* install(result.version))) return yield* Effect.fail(new Error("Installation method not found"))
       return { type: "installed" as const, version: result.version }
     },

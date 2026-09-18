@@ -34,17 +34,22 @@ import type {
   SessionMessageAssistantTool,
   SessionMessageUser,
   SessionInfo,
+  ModelInfo,
 } from "@opencode/client"
 import { useLocal } from "../../context/local"
 import { Locale } from "../../util/locale"
 import { FilePath } from "../../ui/file-path"
 import {
   canonicalToolName,
+  executeCalls,
+  executeCallSummary,
   finiteNumber,
   primitiveInputSummary,
   toolDisplayContent,
   toolDisplayMetadata,
+  type ExecuteCall,
 } from "../../util/tool-display"
+import { DialogExecute } from "./dialog-execute"
 import { RetryProvider } from "../../component/retry-provider"
 import { useRenderer, useTerminalDimensions, type JSX } from "@opentui/solid"
 import { useClient } from "../../context/client"
@@ -244,7 +249,7 @@ export function Session(props: {
       void data.session.permission
         .reply({
           sessionID: request.sessionID,
-          reply: "once",
+          decision: "once",
           requestID: request.id,
         })
         .catch((error) => {
@@ -545,9 +550,9 @@ export function Session(props: {
     const result = await runPendingAction(inboxID, async () => {
       const request =
         action === "steer"
-          ? client.api.session.inbox.steer({ sessionID: route.sessionID, inboxID })
+          ? client.api.session.inbox.update({ sessionID: route.sessionID, inboxID, delivery: "steer" })
           : action === "queue"
-            ? client.api.session.inbox.queue({ sessionID: route.sessionID, inboxID })
+            ? client.api.session.inbox.update({ sessionID: route.sessionID, inboxID, delivery: "queue" })
             : client.api.session.inbox.cancel({ sessionID: route.sessionID, inboxID })
       const error = await request.then(
         () => undefined,
@@ -821,7 +826,7 @@ export function Session(props: {
         const title = input.trim()
         void (
           title
-            ? client.api.session.rename({ sessionID: route.sessionID, title })
+            ? client.api.session.update({ sessionID: route.sessionID, title })
             : data.session.title.generate(route.sessionID)
         ).catch((error) => toast.error(error))
       },
@@ -1287,7 +1292,7 @@ export function Session(props: {
                   paddingLeft: 1,
                   visible: showScrollbar(),
                   trackOptions: {
-                    backgroundColor: theme.raise(theme.background.surface.offset),
+                    backgroundColor: theme.raise(theme.background.raised.base),
                     foregroundColor: theme.border.default,
                   },
                 }}
@@ -1831,7 +1836,7 @@ function SessionReasoningGroupView(props: {
                         <box
                           border={["left"]}
                           customBorderChars={SplitBorder.customBorderChars}
-                          borderColor={theme.raise(theme.background.surface.offset)}
+                          borderColor={theme.raise(theme.background.raised.base)}
                           paddingLeft={1}
                         >
                           <code
@@ -2011,9 +2016,13 @@ function SessionSwitchMessageV2(props: { message: SessionMessageInfo }) {
 function SessionNoticeMessageV2(props: { message: SessionMessageInfo }) {
   const ctx = use()
   const theme = useTheme()
+  const renderer = useRenderer()
+  const { navigate } = useRoute()
+  const [hover, setHover] = createSignal(false)
   const metadata = () => (props.message.type === "synthetic" ? props.message.metadata : undefined)
   const source = () => stringValue(metadata()?.source)
   const completion = () => source() === "subagent" || source() === "shell"
+  const childID = () => (source() === "subagent" ? stringValue(metadata()?.childID) : undefined)
   const state = () => stringValue(metadata()?.state)
   const actor = () => (source() === "shell" ? "Shell" : Locale.titlecase(stringValue(metadata()?.agent) ?? "Subagent"))
   const text = () => {
@@ -2032,6 +2041,7 @@ function SessionNoticeMessageV2(props: { message: SessionMessageInfo }) {
   const color = () => {
     if (state() === "error") return theme.text.feedback.error.default
     if (state() === "cancelled") return theme.text.feedback.warning.default
+    if (hover() && childID()) return theme.text.default
     return theme.text.feedback.info.default
   }
   return (
@@ -2043,7 +2053,16 @@ function SessionNoticeMessageV2(props: { message: SessionMessageInfo }) {
         </InlineToolRow>
       }
     >
-      <box marginLeft={3}>
+      <box
+        marginLeft={3}
+        onMouseOver={() => childID() && setHover(true)}
+        onMouseOut={() => setHover(false)}
+        onMouseUp={() => {
+          if (renderer.getSelection()?.getSelectedText()) return
+          const id = childID()
+          if (id) navigate({ type: "session", sessionID: id })
+        }}
+      >
         <text wrapMode="none">
           <span style={{ fg: color() }}>{heading()}</span>
           <span style={{ fg: theme.text.subdued }}>{suffix()}</span>
@@ -2782,6 +2801,7 @@ function BlockToolContent(props: BlockToolProps & { borderColor: RGBA }) {
   return (
     <box
       border={["left"]}
+      flexShrink={0}
       paddingTop={1}
       paddingBottom={1}
       paddingLeft={2}
@@ -2965,7 +2985,7 @@ function ShellDisplay(props: {
     return stripAnsi(props.output?.trim() ?? "")
   })
   const maxLines = 10
-  const maxChars = createMemo(() => maxLines * Math.max(20, ctx.width - 6))
+  const maxChars = createMemo(() => maxLines * Math.max(20, ctx.width - 6 - (isRunning() ? 2 : 0)))
   const prefix = createMemo(() => (workdir() && workdir() !== "." ? `cd ${workdir()} && ` : ""))
   const input = createMemo(() => (props.command ? `${isRunning() ? "" : "$ "}${prefix()}${props.command}` : ""))
   const collapsed = createMemo(() => collapseShellOutput(input(), output(), maxLines, maxChars()))
@@ -2991,8 +3011,30 @@ function ShellDisplay(props: {
             )
           }
         >
-          <Show when={isRunning()} fallback={<text fg={theme.text.default}>{limitedInput()}</text>}>
-            <Spinner color={color()}>{limitedInput()}</Spinner>
+          <Show
+            when={isRunning()}
+            fallback={
+              <text
+                fg={theme.text.default}
+                wrapMode={expanded() ? "word" : "char"}
+                maxHeight={expanded() ? undefined : 2}
+              >
+                {limitedInput()}
+              </text>
+            }
+          >
+            <box flexDirection="row" gap={1}>
+              <Spinner color={color()} />
+              <text
+                fg={color()}
+                wrapMode={expanded() ? "word" : "char"}
+                maxHeight={expanded() ? undefined : 2}
+                flexGrow={1}
+                minWidth={0}
+              >
+                {limitedInput()}
+              </text>
+            </box>
           </Show>
           <Show when={limitedOutput()}>
             <text fg={theme.text.subdued}>{limitedOutput()}</text>
@@ -3141,6 +3183,7 @@ function Subagent(props: ToolProps) {
   const sessionID = createMemo(() => stringValue(props.metadata.sessionID) ?? stringValue(props.metadata.sessionId))
   const description = createMemo(() => stringValue(props.input.description))
   const continuation = createMemo(() => Boolean(stringValue(props.input.sessionID)))
+  const model = createMemo(() => subagentModelLabel(stringValue(props.input.model), data.location.model.list()))
   const isRunning = createMemo(() => {
     const id = sessionID()
     return props.part.state.status === "running" || Boolean(id && data.session.status(id) === "running")
@@ -3164,11 +3207,22 @@ function Subagent(props: ToolProps) {
         ) : undefined
       }
     >
-      {continuation()
-        ? `Continue subagent — ${description() ?? "Subagent"}`
-        : `${Locale.titlecase(stringValue(props.input.agent) ?? stringValue(props.input.subagent_type) ?? "General")} Subagent — ${description() ?? "Subagent"}`}
+      {`${continuation() ? "Continue subagent" : `${Locale.titlecase(stringValue(props.input.agent) ?? stringValue(props.input.subagent_type) ?? "General")} Subagent`} — ${description() ?? "Subagent"}${model() ? ` · ${model()}` : ""}`}
     </InlineTool>
   )
+}
+
+export function subagentModelLabel(
+  value: string | undefined,
+  models: readonly Pick<ModelInfo, "providerID" | "id" | "name">[] | undefined,
+) {
+  if (!value) return
+  const [reference, variant] = value.split("#")
+  const separator = reference.indexOf("/")
+  const providerID = separator === -1 ? "" : reference.slice(0, separator)
+  const modelID = separator === -1 ? reference : reference.slice(separator + 1)
+  const name = models?.find((item) => item.providerID === providerID && item.id === modelID)?.name
+  return `${name ?? reference}${variant ? ` (${variant})` : ""}`
 }
 
 export function isBackgroundSubagent(
@@ -3178,23 +3232,7 @@ export function isBackgroundSubagent(
   return status === "completed" && metadata.status === "running"
 }
 
-type ExecuteCall = { tool: string; status: "running" | "completed" | "error"; input?: Record<string, unknown> }
-
-function executeCalls(value: unknown): ExecuteCall[] {
-  if (!Array.isArray(value)) return []
-  return value.flatMap((call) => {
-    const item = recordValue(call)
-    const tool = stringValue(item?.tool)
-    const status = stringValue(item?.status)
-    if (!tool || !status || !["running", "completed", "error"].includes(status)) return []
-    return [{ tool, status: status as ExecuteCall["status"], input: recordValue(item?.input) }]
-  })
-}
-
-export function executeCallSummary(call: ExecuteCall) {
-  const args = primitiveInputSummary(call.input ?? {}).replace(/\s+/g, " ")
-  return `${call.tool}${args ? ` ${args}` : ""}`
-}
+export { executeCallSummary }
 
 function ExecuteCallView(props: { call: Accessor<ExecuteCall> }) {
   const theme = useTheme()
@@ -3252,6 +3290,7 @@ function ExecuteCallView(props: { call: Accessor<ExecuteCall> }) {
 function Execute(props: ToolProps) {
   const ctx = use()
   const theme = useTheme()
+  const dialog = useDialog()
   const isLoading = createMemo(() => props.part.state.status === "streaming" || props.part.state.status === "running")
   const calls = createMemo(() => executeCalls(props.metadata.toolCalls))
   const output = createMemo(() => stripAnsi(props.output?.trim() ?? ""))
@@ -3268,6 +3307,7 @@ function Execute(props: ToolProps) {
         pending="execute"
         complete={true}
         part={props.part}
+        onClick={() => dialog.replace(() => <DialogExecute part={props.part} />)}
       >
         execute
       </InlineTool>
