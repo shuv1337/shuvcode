@@ -1,7 +1,7 @@
 import { Plugin } from "@opencode/plugin/tui"
 import { TextAttributes, type ScrollBoxRenderable } from "@opentui/core"
-import { useKeyboard, useTerminalDimensions } from "@opentui/solid"
-import { createMemo, createSignal, Show } from "solid-js"
+import { useKeyboard } from "@opentui/solid"
+import { createSignal, Show } from "solid-js"
 import { Spinner } from "../../component/spinner"
 import { useConfig } from "../../config"
 import { useClipboard } from "../../context/clipboard"
@@ -90,8 +90,6 @@ function Answer(props: { question: string; answer: string }) {
   const overlay = useTheme("overlay")
   const syntax = useThemes().currentSyntax
   const config = useConfig().data
-  const dimensions = useTerminalDimensions()
-  const maxHeight = createMemo(() => Math.max(3, Math.floor(dimensions().height / 2)))
   const [copied, setCopied] = createSignal(false)
   let scroll: ScrollBoxRenderable | undefined
 
@@ -111,8 +109,8 @@ function Answer(props: { question: string; answer: string }) {
     if (!scroll) return
     if (event.name === "up") return scroll.scrollBy(-1)
     if (event.name === "down") return scroll.scrollBy(1)
-    if (event.name === "pageup") return scroll.scrollBy(-maxHeight())
-    if (event.name === "pagedown") return scroll.scrollBy(maxHeight())
+    if (event.name === "pageup") return scroll.scrollBy(-20)
+    if (event.name === "pagedown") return scroll.scrollBy(20)
     if (event.name === "home") return scroll.scrollTo(0)
     if (event.name === "end") return scroll.scrollTo(scroll.scrollHeight)
   })
@@ -128,13 +126,15 @@ function Answer(props: { question: string; answer: string }) {
             esc
           </text>
         </box>
-        <text fg={theme.text.subdued} wrapMode="word">
-          {props.question}
-        </text>
+        <box paddingTop={1}>
+          <text fg={theme.text.subdued} wrapMode="word">
+            {props.question}
+          </text>
+        </box>
       </box>
       <scrollbox
         ref={(element: ScrollBoxRenderable) => (scroll = element)}
-        maxHeight={maxHeight()}
+        maxHeight={20}
         backgroundColor={overlay.background.default}
         scrollbarOptions={{ visible: false }}
         scrollAcceleration={getScrollAcceleration(config)}
