@@ -1,0 +1,154 @@
+import { Plugin } from "@opencode/plugin/tui"
+import type { SessionInfo } from "@opencode/client"
+import { createMemo, For, Show } from "solid-js"
+import { displayLabel } from "@opencode/util/session-title-fallback"
+import { Locale } from "../../util/locale"
+
+type Collapsed = { root: boolean }
+
+export function SidebarSubagents(props: { context: Plugin.Context; sessionID: string }) {
+  const theme = props.context.theme
+  const [collapsed, setCollapsed] = props.context.storage.store<Collapsed>("collapsed", {
+    initial: { root: false },
+  })
+  const children = createMemo(() =>
+    props.context.data.session
+      .list()
+      .filter((session) => session.parentID === props.sessionID)
+      .toSorted((a, b) => a.time.created - b.time.created),
+  )
+  const groups = createMemo(() => {
+    const map = new Map<string, SessionInfo[]>()
+    children().forEach((session) => {
+      const agent = label(session).agent
+      const group = map.get(agent)
+      if (!group) {
+        map.set(agent, [session])
+        return
+      }
+      group.push(session)
+    })
+    return [...map.entries()]
+  })
+  const running = createMemo(
+    () => children().filter((session) => props.context.data.session.status(session.id) === "running").length,
+  )
+  const open = () => !collapsed.root
+  const summary = createMemo(() => (running() > 0 ? `(${running()} running)` : `(${children().length})`))
+
+  return (
+    <Show when={children().length > 0}>
+      <box>
+        <box
+          flexDirection="row"
+          gap={1}
+          minWidth={0}
+          onMouseDown={() => void setCollapsed((draft) => void (draft.root = !draft.root))}
+        >
+          <text fg={theme.text.default} flexShrink={0}>
+            {open() ? "▼" : "▶"}
+          </text>
+          <text fg={theme.text.default} wrapMode="none" truncate flexGrow={1} flexShrink={1} minWidth={0}>
+            <b>Subagents</b>
+            <Show when={!open()}>
+              <span style={{ fg: theme.text.subdued }}> {summary()}</span>
+            </Show>
+          </text>
+        </box>
+        <Show when={open()}>
+          <For each={groups()}>
+            {(group) => (
+              <box>
+                <box flexDirection="row" gap={1} minWidth={0}>
+                  <text
+                    flexShrink={0}
+                    fg={
+                      group[1].some((session) => props.context.data.session.status(session.id) === "running")
+                        ? theme.text.status.running
+                        : theme.text.default
+                    }
+                  >
+                    •
+                  </text>
+                  <text fg={theme.text.default} wrapMode="none" truncate flexGrow={1} flexShrink={1} minWidth={0}>
+                    <b>{group[0]}</b>
+                  </text>
+                </box>
+                <For each={group[1]}>
+                  {(session) => {
+                    const status = props.context.data.session.status(session.id)
+                    return (
+                      <box
+                        flexDirection="row"
+                        gap={1}
+                        paddingLeft={2}
+                        minWidth={0}
+                        onMouseUp={() => props.context.ui.router.navigate({ type: "session", sessionID: session.id })}
+                      >
+                        <text flexShrink={0} fg={glyphColor(theme, session, status)}>
+                          {glyph(session, status)}
+                        </text>
+                        <text
+                          fg={status === "running" ? theme.text.default : theme.text.subdued}
+                          wrapMode="none"
+                          truncate
+                          flexGrow={1}
+                          flexShrink={1}
+                          minWidth={0}
+                        >
+                          {label(session).description}
+                        </text>
+                      </box>
+                    )
+                  }}
+                </For>
+              </box>
+            )}
+          </For>
+        </Show>
+      </box>
+    </Show>
+  )
+}
+
+export default Plugin.define({
+  id: "opencode.sidebar.subagents",
+  setup(context) {
+    context.ui.slot({
+      append: "sidebar.content",
+      render: (props) => <SidebarSubagents context={context} sessionID={props.sessionID} />,
+    })
+  },
+})
+
+function label(session: SessionInfo) {
+  const title = displayLabel(session)
+  const match = title.match(/@(\w+) subagent/)
+  if (session.agent) {
+    return {
+      agent: Locale.titlecase(session.agent),
+      description: match ? title.replace(match[0], "").trim() || title : title,
+    }
+  }
+  if (match) {
+    return {
+      agent: Locale.titlecase(match[1]),
+      description: title.replace(match[0], "").trim() || title,
+    }
+  }
+  return { agent: "Subagent", description: title }
+}
+
+function glyph(session: SessionInfo, status: "idle" | "running") {
+  if (status === "running") return "●"
+  if (session.outcome === "failed") return "✗"
+  if (session.outcome === "interrupted") return "○"
+  return "✓"
+}
+
+function glyphColor(theme: Plugin.Context["theme"], session: SessionInfo, status: "idle" | "running") {
+  if (status === "running") return theme.text.status.running
+  if (session.outcome === "failed") return theme.text.feedback.error.default
+  if (session.outcome === "interrupted") return theme.text.feedback.warning.default
+  return theme.text.subdued
+}

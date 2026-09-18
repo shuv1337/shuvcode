@@ -6,6 +6,7 @@ import SidebarContext from "../feature-plugins/sidebar/context"
 import SidebarFooter from "../feature-plugins/sidebar/footer"
 import SidebarMcp from "../feature-plugins/sidebar/mcp"
 import SidebarQuota from "../feature-plugins/sidebar/quota"
+import SidebarSubagents from "../feature-plugins/sidebar/subagents"
 import DiffViewer from "../feature-plugins/system/diff-viewer"
 import Notifications from "../feature-plugins/system/notifications"
 import Plugins from "../feature-plugins/system/plugins"
@@ -22,6 +23,7 @@ export const builtins = [
   // Prepends to sidebar.content, so it renders above Context/MCP regardless of list order.
   SidebarQuota,
   SidebarContext,
+  SidebarSubagents,
   SidebarMcp,
   SidebarFooter,
   Notifications,
