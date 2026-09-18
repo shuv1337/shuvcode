@@ -118,9 +118,9 @@ export interface Resolved {
   /** Catalog token limits used by Core for context management. */
   readonly limit: Info["limit"]
   /** Model policy overrides the provider policy; omitted means local compaction. */
-  readonly compaction?: Info["compaction"]
+  readonly compaction?: Provider.Compaction
   /** Model transport overrides the provider transport; omitted means HTTP. */
-  readonly transport?: Info["transport"]
+  readonly transport?: Provider.Transport
 }
 
 export interface Interface {
@@ -178,7 +178,11 @@ export const fromCatalogModel = (
     Effect.flatMap((resolved) => validateProviderVariables(model, resolved)),
     Effect.flatMap((resolved) => {
       // Reject provider compaction policies up front so the misconfiguration surfaces before any step runs.
-      if (model.compaction?.mode !== "provider" || resolved.route.compact?.trigger || resolved.route.compact?.endpoint)
+      if (
+        model.settings?.compaction?.type !== "native" ||
+        resolved.route.compact?.trigger ||
+        resolved.route.compact?.endpoint
+      )
         return Effect.succeed(resolved)
       return Effect.fail(
         new UnsupportedCompactionError({ providerID: model.providerID, modelID: model.id, route: resolved.route.id }),
@@ -377,8 +381,8 @@ export const layer = Layer.effect(
         capabilities: selected.capabilities,
         cost: selected.cost,
         limit: selected.limit,
-        compaction: selected.compaction,
-        transport: selected.transport,
+        compaction: runtimeInfo.settings?.compaction,
+        transport: runtimeInfo.settings?.transport,
       }
     })
     return Service.of({

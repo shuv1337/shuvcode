@@ -110,9 +110,6 @@ export const Info = Schema.Struct({
   name: Schema.String,
   compatibility: Compatibility.pipe(optional),
   package: Provider.Package.pipe(optional),
-  compaction: Provider.Compaction.pipe(optional),
-  /** Session transport; omitted inherits the provider transport, then defaults to HTTP. */
-  transport: Provider.Transport.pipe(optional),
   ...Provider.Overlays,
   capabilities: Capabilities,
   variants: Schema.Array(Variant),

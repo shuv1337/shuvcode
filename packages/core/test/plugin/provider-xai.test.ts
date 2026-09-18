@@ -84,7 +84,7 @@ describe("XAIPlugin", () => {
       yield* addPlugin()
 
       const model = yield* models.get(providerID, Model.ID.make("grok-4.6"))
-      expect(model?.transport).toBe("websocket")
+      expect(model?.settings?.transport).toBe("websocket")
     }),
   )
 })

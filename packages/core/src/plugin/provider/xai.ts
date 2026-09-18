@@ -98,7 +98,9 @@ export const XAIPlugin = define({
     yield* ctx.model.transform((models) => {
       for (const model of models.list(providerID)) {
         models.update(providerID, model.id, (draft) => {
-          draft.transport = models.provider.get(providerID)?.provider.transport ?? "websocket"
+          draft.settings = Provider.mergeOverlay(draft.settings, {
+            transport: models.provider.get(providerID)?.provider.settings?.transport ?? "websocket",
+          })
         })
       }
     })

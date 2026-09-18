@@ -270,7 +270,9 @@ export const OpenAIPlugin = define({
         // ChatGPT-plan tokens only authorize codex-eligible models, and the
         // subscription covers usage, so hide the rest and zero the cost.
         models.update(model.providerID, model.id, (draft) => {
-          draft.transport = models.provider.get(model.providerID)?.provider.transport ?? "websocket"
+          draft.settings = Provider.mergeOverlay(draft.settings, {
+            transport: models.provider.get(model.providerID)?.provider.settings?.transport ?? "websocket",
+          })
           if (!chatgpt) return
           if (Schema.is(Schema.Struct({ mode: Schema.Literal("pro") }))(draft.body?.reasoning)) {
             draft.enabled = false

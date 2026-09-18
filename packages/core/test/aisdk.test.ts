@@ -155,14 +155,18 @@ it.effect("projects request settings, headers, and body overlays", () =>
   Effect.gen(function* () {
     const aisdk = yield* AISDK.Service
     let body: unknown
+    let options: Record<string, unknown> | undefined
     yield* aisdk.hook.sdk((event) => {
       body = event.options.body
+      options = event.options
       event.sdk = { languageModel: () => ({ provider: event.model.providerID }) }
     })
 
     const input = model("@ai-sdk/google", {
       apiKey: "secret",
       thinkingConfig: { thinkingBudget: 1024 },
+      compaction: { type: "native" },
+      transport: "websocket",
     })
     const resolved = yield* aisdk.model({
       ...input,
@@ -185,6 +189,8 @@ it.effect("projects request settings, headers, and body overlays", () =>
     })
     expect(prepared.body.headers).toEqual({ "x-test": "header" })
     expect(body).toEqual({ safety_setting: "strict" })
+    expect(options).not.toHaveProperty("compaction")
+    expect(options).not.toHaveProperty("transport")
   }),
 )
 

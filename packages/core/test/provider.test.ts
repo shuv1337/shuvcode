@@ -28,8 +28,16 @@ describe("Provider", () => {
     }
   })
 
-  test("passes flat settings to native packages without opencode transport keys", () => {
-    expect(Provider.nativeSettings({ apiKey: "secret", reasoningEffort: "high", chunkTimeout: 1000 })).toEqual({
+  test("passes flat settings to native packages without Core settings", () => {
+    expect(
+      Provider.nativeSettings({
+        apiKey: "secret",
+        reasoningEffort: "high",
+        chunkTimeout: 1000,
+        compaction: { type: "native" },
+        transport: "websocket",
+      }),
+    ).toEqual({
       apiKey: "secret",
       reasoningEffort: "high",
     })

@@ -168,7 +168,9 @@ export const AzurePlugin = define({
                 resolveResourceName(draft.settings, resourceName) ?? resourceName,
               )
             if (responsesWebSocketCapable(item.provider, draft))
-              draft.transport = item.provider.transport ?? "websocket"
+              draft.settings = Provider.mergeOverlay(draft.settings, {
+                transport: item.provider.settings?.transport ?? "websocket",
+              })
           })
         }
       }

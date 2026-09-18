@@ -736,7 +736,7 @@ export const layer = Layer.effect(
     const compact = Effect.fn("SessionCompaction.compact")(function* (input: AutoInput): Effect.fn.Return<Outcome> {
       const request = { ...input, reason: "auto" as const }
       if (input.overflow) return yield* recoverLocally(request)
-      if (input.context.model.compaction?.mode !== "provider") return yield* execute(request)
+      if (input.context.model.compaction?.type !== "native") return yield* execute(request)
       return yield* executeProvider(request)
     })
     const required = (input: RequiredInput) => {
@@ -759,12 +759,7 @@ export const layer = Layer.effect(
         limit.input === undefined ? Number.POSITIVE_INFINITY : limit.input - config.buffer,
         context - Math.max(output, config.buffer),
       )
-      const policy = input.resolved.compaction
-      const threshold =
-        policy?.mode === "provider" && policy.threshold !== undefined
-          ? Math.min(policy.threshold, promptCeiling)
-          : promptCeiling
-      return estimateTokens(input) >= threshold
+      return estimateTokens(input) >= promptCeiling
     }
     const compactManual = Effect.fn("SessionCompaction.compactManual")(function* (input: ManualInput) {
       if (findTailStart(input.messages, state.get().tokens) === undefined)
@@ -792,7 +787,7 @@ export const layer = Layer.effect(
               inputID: input.inputID,
               started: input.started,
             }
-            return context.model.compaction?.mode === "provider" ? executeProvider(request) : execute(request)
+            return context.model.compaction?.type === "native" ? executeProvider(request) : execute(request)
           },
         }),
       )

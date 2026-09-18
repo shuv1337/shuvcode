@@ -164,7 +164,7 @@ const setup = Effect.fnUntraced(function* (options: { endpoint?: boolean; plugin
       capabilities: { tools: true, input: ["text", "image"], output: ["text"] },
       cost: [],
       limit: { context: 200_000, output: 32_000 },
-      compaction: { mode: "provider" },
+      compaction: { type: "native" },
     },
   )
   const sessionID = SessionSchema.ID.create()

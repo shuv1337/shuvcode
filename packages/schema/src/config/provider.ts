@@ -6,10 +6,21 @@ import { Capabilities, Compatibility, Family, ID, VariantID } from "../model.js"
 import { Provider } from "../provider.js"
 import { optional } from "../schema.js"
 
+export const Settings = Schema.StructWithRest(
+  Schema.Struct({
+    timeout: Schema.Union([Schema.Finite, Schema.Literal(false)]).pipe(optional),
+    chunkTimeout: Schema.Finite.pipe(optional),
+    compaction: Provider.Compaction.pipe(optional),
+    transport: Provider.Transport.pipe(optional),
+  }),
+  [Schema.Record(Schema.String, Schema.UndefinedOr(Schema.Json))],
+).annotate({ identifier: "Config.Provider.Settings" })
+export type Settings = typeof Settings.Type
+
 const JsonRecord = Schema.Record(Schema.String, Schema.Json)
 
 export const Overlays = {
-  settings: JsonRecord.pipe(optional),
+  settings: Settings.pipe(optional),
   headers: Schema.Record(Schema.String, Schema.String).pipe(optional),
   body: JsonRecord.pipe(optional),
 }
@@ -41,10 +52,6 @@ class Limit extends Schema.Class<Limit>("Config.Model.Limit")({
 }) {}
 
 class Model extends Schema.Class<Model>("Config.Model")({
-  compaction: Provider.Compaction.pipe(optional),
-  transport: Provider.Transport.pipe(optional).annotate({
-    description: "Session transport for this model. Defaults to the provider transport.",
-  }),
   modelID: ID.pipe(optional),
   family: Family.pipe(optional),
   name: Schema.String.pipe(optional),
@@ -62,11 +69,6 @@ class Model extends Schema.Class<Model>("Config.Model")({
 }) {}
 
 export class Info extends Schema.Class<Info>("Config.Provider")({
-  compaction: Provider.Compaction.pipe(optional),
-  transport: Provider.Transport.pipe(optional).annotate({
-    description:
-      "Session transport for this provider's models. Defaults to the built-in policy; \"websocket\" on a route without a WebSocket channel warns and falls back to HTTP.",
-  }),
   canonical: Provider.ID.pipe(optional),
   name: Schema.String.pipe(optional),
   env: Schema.String.pipe(Schema.Array, optional),

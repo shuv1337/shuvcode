@@ -128,6 +128,8 @@ function prepareOptions(model: Info, pkg: string) {
   const customFetch = options.fetch
   const chunkTimeout = options.chunkTimeout
   delete options.chunkTimeout
+  delete options.compaction
+  delete options.transport
   options.fetch = async (input: Parameters<typeof fetch>[0], init?: RequestInit) => {
     const opts = { ...(init ?? {}) }
     const signals = [
@@ -388,7 +390,10 @@ function requestSettings(settings: Readonly<Record<string, unknown>> | undefined
   if (settings === undefined) return undefined
   const result = Object.fromEntries(
     Object.entries(settings).filter(
-      ([key]) => !["apiKey", "authToken", "baseURL", "chunkTimeout", "fetch", "timeout"].includes(key),
+      ([key]) =>
+        !["apiKey", "authToken", "baseURL", "chunkTimeout", "compaction", "fetch", "timeout", "transport"].includes(
+          key,
+        ),
     ),
   )
   return Object.keys(result).length === 0 ? undefined : result

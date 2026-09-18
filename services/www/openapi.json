@@ -13161,7 +13161,7 @@
                   "properties": {
                     "action": {
                       "type": "string",
-                      "enum": ["provider.use"]
+                      "enum": ["provider.use", "permission"]
                     },
                     "resource": {
                       "type": "string"
@@ -13254,12 +13254,6 @@
       "Config.ModelEncoded": {
         "type": "object",
         "properties": {
-          "compaction": {
-            "$ref": "#/components/schemas/Provider.Compaction"
-          },
-          "transport": {
-            "$ref": "#/components/schemas/Provider.Transport"
-          },
           "modelID": {
             "type": "string"
           },
@@ -13276,7 +13270,7 @@
             "type": "string"
           },
           "settings": {
-            "type": "object"
+            "$ref": "#/components/schemas/Config.Provider.Settings"
           },
           "headers": {
             "type": "object",
@@ -13299,7 +13293,7 @@
                   "type": "string"
                 },
                 "settings": {
-                  "type": "object"
+                  "$ref": "#/components/schemas/Config.Provider.Settings"
                 },
                 "headers": {
                   "type": "object",
@@ -13379,15 +13373,47 @@
         "required": ["package"],
         "additionalProperties": false
       },
-      "Config.ProviderEncoded": {
+      "Config.Provider.Settings": {
         "type": "object",
         "properties": {
+          "timeout": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "boolean",
+                "enum": [false]
+              }
+            ]
+          },
+          "chunkTimeout": {
+            "type": "number"
+          },
           "compaction": {
             "$ref": "#/components/schemas/Provider.Compaction"
           },
           "transport": {
             "$ref": "#/components/schemas/Provider.Transport"
-          },
+          }
+        },
+        "allOf": [
+          {
+            "type": "object",
+            "additionalProperties": {
+              "anyOf": [
+                {},
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          }
+        ]
+      },
+      "Config.ProviderEncoded": {
+        "type": "object",
+        "properties": {
           "canonical": {
             "type": "string"
           },
@@ -13404,7 +13430,7 @@
             "type": "string"
           },
           "settings": {
-            "type": "object"
+            "$ref": "#/components/schemas/Config.Provider.Settings"
           },
           "headers": {
             "type": "object",
@@ -15481,14 +15507,8 @@
           "package": {
             "type": "string"
           },
-          "compaction": {
-            "$ref": "#/components/schemas/Provider.Compaction"
-          },
-          "transport": {
-            "$ref": "#/components/schemas/Provider.Transport"
-          },
           "settings": {
-            "type": "object"
+            "$ref": "#/components/schemas/Provider.Settings"
           },
           "headers": {
             "type": "object",
@@ -15601,7 +15621,7 @@
             "type": "string"
           },
           "settings": {
-            "type": "object"
+            "$ref": "#/components/schemas/Provider.Settings"
           },
           "headers": {
             "type": "object",
@@ -16418,27 +16438,23 @@
           {
             "type": "object",
             "properties": {
-              "mode": {
+              "type": {
                 "type": "string",
-                "enum": ["local"]
+                "enum": ["summary"]
               }
             },
-            "required": ["mode"],
+            "required": ["type"],
             "additionalProperties": false
           },
           {
             "type": "object",
             "properties": {
-              "mode": {
+              "type": {
                 "type": "string",
-                "enum": ["provider"]
-              },
-              "threshold": {
-                "type": "integer",
-                "exclusiveMinimum": 0
+                "enum": ["native"]
               }
             },
-            "required": ["mode"],
+            "required": ["type"],
             "additionalProperties": false
           }
         ]
@@ -16465,14 +16481,8 @@
           "package": {
             "type": "string"
           },
-          "compaction": {
-            "$ref": "#/components/schemas/Provider.Compaction"
-          },
-          "transport": {
-            "$ref": "#/components/schemas/Provider.Transport"
-          },
           "settings": {
-            "type": "object"
+            "$ref": "#/components/schemas/Provider.Settings"
           },
           "headers": {
             "type": "object",
@@ -16507,7 +16517,35 @@
         "additionalProperties": false
       },
       "Provider.Settings": {
-        "type": "object"
+        "type": "object",
+        "properties": {
+          "timeout": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "boolean",
+                "enum": [false]
+              }
+            ]
+          },
+          "chunkTimeout": {
+            "type": "number"
+          },
+          "compaction": {
+            "$ref": "#/components/schemas/Provider.Compaction"
+          },
+          "transport": {
+            "$ref": "#/components/schemas/Provider.Transport"
+          }
+        },
+        "allOf": [
+          {
+            "type": "object",
+            "additionalProperties": {}
+          }
+        ]
       },
       "Provider.Transport": {
         "type": "string",
