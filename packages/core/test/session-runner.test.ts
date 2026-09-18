@@ -56,6 +56,7 @@ import { Plugin } from "@opencode/core/plugin"
 import { PluginHooks } from "@opencode/core/plugin/hooks"
 import { OptimizePlugin } from "@opencode/core/plugin/optimize"
 import { IdentityPlugin } from "@opencode/core/plugin/identity"
+import { NativeCompactionPlugin } from "@opencode/core/plugin/compaction"
 import { QuestionTool } from "@opencode/core/tool/plugin/question"
 import { Agent } from "@opencode/core/agent"
 import { Config } from "@opencode/core/config"
@@ -470,6 +471,7 @@ const layer = Layer.unwrap(
         Config.node,
         Snapshot.node,
         SessionCompaction.node,
+        LayerNodePlatform.llmClient,
         SessionRunnerLLM.node,
         SessionExecution.node,
         Session.node,
@@ -523,6 +525,7 @@ const setup = Effect.gen(function* () {
     discard: true,
   })
   yield* IdentityPlugin.Plugin.effect(pluginHost)
+  yield* NativeCompactionPlugin.Plugin.effect(pluginHost)
   yield* agents.transform((editor) =>
     editor.update(Agent.ID.make("build"), (agent) => {
       agent.mode = "primary"
