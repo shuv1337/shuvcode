@@ -2787,6 +2787,7 @@ function BlockToolContent(props: BlockToolProps & { borderColor: RGBA }) {
   return (
     <box
       border={["left"]}
+      flexShrink={0}
       paddingTop={1}
       paddingBottom={1}
       paddingLeft={2}
