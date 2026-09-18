@@ -140,13 +140,30 @@ export const Toast = Object.assign(ToastRoot, {
 let toastV2Id = 0
 
 export const toaster = {
-  show(render: (props: { toastId: number }) => JSX.Element, options?: { duration?: number; persistent?: boolean }) {
+  show(
+    render: (props: { toastId: number }) => JSX.Element,
+    options?: {
+      duration?: number
+      persistent?: boolean
+      /** Reactive value the toast's height depends on; sonner re-measures when it changes. */
+      resize?: () => unknown
+    },
+  ) {
     const toastId = --toastV2Id
     toast.custom((id) => render({ toastId: Number(id) }), {
       id: toastId,
       className: "toast-v2",
       duration: options?.persistent ? Number.POSITIVE_INFINITY : options?.duration,
       unstyled: true,
+      // Sonner only re-measures on title/description changes, so a function-valued description is
+      // the hook for a custom toast whose height depends on reactive state. It renders nothing;
+      // toast.css collapses the empty description element.
+      description: options?.resize
+        ? (): JSX.Element => {
+            options.resize?.()
+            return undefined
+          }
+        : undefined,
     })
     return toastId
   },

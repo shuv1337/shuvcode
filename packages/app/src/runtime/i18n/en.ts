@@ -366,6 +366,9 @@ export const dict = {
   "prompt.action.stop": "Stop",
 
   "prompt.toast.attachmentDuplicate.title": "This file has already been uploaded",
+  "prompt.toast.uploading.percent": "{{percent}}%",
+  "prompt.toast.uploading.cancel": "Cancel upload",
+  "prompt.toast.uploadFailed.title": "Upload failed",
   "prompt.toast.modelAgentRequired.title": "Select an agent and model",
   "prompt.toast.modelAgentRequired.description": "Choose an agent and model before sending a prompt.",
   "prompt.toast.worktreeCreateFailed.title": "Failed to create worktree",

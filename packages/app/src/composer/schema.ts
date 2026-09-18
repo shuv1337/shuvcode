@@ -94,7 +94,24 @@ export const ImageAttachmentPart = Schema.Struct({
 )
 export type ImageAttachmentPart = typeof ImageAttachmentPart.Type
 
-export const ContentPart = Schema.Union([TextPart, FileAttachmentPart, AgentPart, SkillPart, ImageAttachmentPart])
+// A file the model receives as a path on the server: its bytes never enter the draft store.
+export const PathAttachmentPart = Persistence.struct({
+  type: Schema.Literal("path"),
+  id: Schema.String,
+  filename: Schema.String,
+  mime: Schema.String,
+  path: Schema.String,
+})
+export type PathAttachmentPart = typeof PathAttachmentPart.Type
+
+export const ContentPart = Schema.Union([
+  TextPart,
+  FileAttachmentPart,
+  AgentPart,
+  SkillPart,
+  ImageAttachmentPart,
+  PathAttachmentPart,
+])
 export type ContentPart = typeof ContentPart.Type
 export const Prompt = Persistence.array(ContentPart)
 export type Prompt = typeof Prompt.Type

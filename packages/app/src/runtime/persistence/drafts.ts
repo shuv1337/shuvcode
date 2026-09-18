@@ -421,17 +421,9 @@ function referenced(json: string) {
   return ids
 }
 
-async function blobData(blob: BlobReference) {
-  const kept = retained.get(aliases.get(blob.id) ?? blob.id)
-  return kept ? kept.blob : await fetch(blob.url).then((response) => response.blob())
-}
-
-export async function blobBytes(blob: BlobReference) {
-  return new Uint8Array(await (await blobData(blob)).arrayBuffer())
-}
-
 export async function blobDataUrl(blob: BlobReference, mime: string) {
-  const data = await blobData(blob)
+  const kept = retained.get(aliases.get(blob.id) ?? blob.id)
+  const data = kept ? kept.blob : await fetch(blob.url).then((response) => response.blob())
   return new Promise<string>((resolve, reject) => {
     const reader = new FileReader()
     reader.addEventListener("error", () => reject(reader.error))

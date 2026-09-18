@@ -17,12 +17,12 @@ import { showToast } from "@/shell/notifications/toast"
 import { formatServerError } from "@/runtime/server/errors"
 import { Skill } from "@opencode/schema/skill"
 import type { ComposerAdapter, ComposerControls, ComposerQueue } from "./adapter"
-import type { ImageAttachmentPart } from "./state"
+import { isAttachment } from "./prompt-parts"
 import type { PromptHistoryComment } from "./history/entry"
 import { createComposerHistory } from "./history/store"
 import { composerPlaceholder } from "./placeholder"
 import { createComposerSubmit } from "./submit"
-import { useAttachmentDestination } from "./attachments/deliver"
+import { useAttachmentDestination } from "./attachments/destination"
 
 export type ComposerModel = ComposerEditorModel & {
   readonly model: ComposerControls["model"]
@@ -73,7 +73,7 @@ export function createComposerModel(adapter: ComposerAdapter, options?: { queue?
     }, [])
   })
   const attachments = createMemo(() =>
-    prompt.current().filter((part): part is ImageAttachmentPart => part.type === "image"),
+    prompt.current().filter(isAttachment),
   )
   const commentCount = createMemo(() => {
     if (mode() === "shell") return 0
@@ -266,7 +266,6 @@ export function createComposerModel(adapter: ComposerAdapter, options?: { queue?
     resetHistory: () => controller.resetHistory(),
     setMode: (next) => controller.dispatch({ type: next === "shell" ? "mode.shell" : "mode.normal" }),
     closePopover: () => controller.dispatch({ type: "popover.close" }),
-    destination: useAttachmentDestination(adapter.controls),
     delivery: (alternate) => {
       const queue = options?.queue
       if (!queue) return "steer"
@@ -321,8 +320,10 @@ export function createComposerModel(adapter: ComposerAdapter, options?: { queue?
     onContextRemove(item) {
       if (item?.commentID) comments.remove(item.path, item.commentID)
     },
-    openAttachment: (attachment) =>
-      dialog.show(() => createComponent(ImagePreview, { src: attachment.blob.url, alt: attachment.filename })),
+    openAttachment: (attachment) => {
+      if (attachment.type !== "image") return
+      dialog.show(() => createComponent(ImagePreview, { src: attachment.blob.url, alt: attachment.filename }))
+    },
     openContext(key) {
       const item = controller.contextItem(key)
       if (item) openComment(item, adapter.controls(), layout, files, comments)
@@ -340,8 +341,15 @@ export function createComposerModel(adapter: ComposerAdapter, options?: { queue?
     attachments: {
       picker: platform.openAttachmentPickerDialog,
       directory: () => sdk().directory,
+      destination: useAttachmentDestination(adapter.controls),
       isDialogActive: () => !!dialog.active,
       duplicate: () => showToast({ title: language.t("prompt.toast.attachmentDuplicate.title") }),
+      onUploadError: (error) =>
+        showToast({
+          variant: "error",
+          title: language.t("prompt.toast.uploadFailed.title"),
+          description: composerErrorMessage(language, error),
+        }),
       onError: (error) =>
         showToast({
           variant: "error",

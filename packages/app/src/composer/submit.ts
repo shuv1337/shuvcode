@@ -8,7 +8,8 @@ import type { ComposerAdapter, ComposerDelivery, ComposerSelection, ComposerSess
 import { createComposerSubmission } from "./submission-state"
 import { buildPromptRequest } from "./request"
 import { setCursorPosition } from "./editor/dom"
-import { deliverAttachments, type AttachmentDestination } from "./attachments/deliver"
+import { blobDataUrl } from "@/runtime/persistence/drafts"
+import { isAttachment } from "./prompt-parts"
 import type { ModelSelection } from "@/providers/models/selection"
 
 const submitting = new WeakSet<object>()
@@ -34,7 +35,6 @@ type ComposerSubmitInput = {
   resetHistory: () => void
   setMode: (mode: "normal" | "shell") => void
   closePopover: () => void
-  destination: () => AttachmentDestination
   delivery?: (alternate: boolean) => ComposerDelivery
   notify: {
     missingSelection: () => void
@@ -87,16 +87,10 @@ export function createComposerSubmit(input: ComposerSubmitInput) {
         const optimisticBusy = !input.adapter.working()
         if (optimisticBusy && input.adapter.kind === "new-session")
           session.data.session.setStatus(session.id, "running")
-        const sending = sendPrompt(
-          session,
-          value,
-          input.destination(),
-          input.adapter.controls().model.selection.trackSessionCommit,
-          () => {
-            if (optimisticBusy && input.adapter.kind === "active-session")
-              session.data.session.setStatus(session.id, "running")
-          },
-        ).then(
+        const sending = sendPrompt(session, value, input.adapter.controls().model.selection.trackSessionCommit, () => {
+          if (optimisticBusy && input.adapter.kind === "active-session")
+            session.data.session.setStatus(session.id, "running")
+        }).then(
           () => ({ ok: true as const }),
           (error) => ({ ok: false as const, error }),
         )
@@ -129,13 +123,9 @@ export function createComposerSubmit(input: ComposerSubmitInput) {
 
       if (command) {
         clearSubmission(input, submission)
-        void sendCommand(
-          session,
-          value,
-          command,
-          input.destination(),
-          input.adapter.controls().model.selection.trackSessionCommit,
-        ).catch((error) => failSubmission(input, session, "command", error, restore, value.id))
+        void sendCommand(session, value, command, input.adapter.controls().model.selection.trackSessionCommit).catch(
+          (error) => failSubmission(input, session, "command", error, restore, value.id),
+        )
         return
       }
     } finally {
@@ -162,6 +152,9 @@ function handoffMessage(value: ComposerSubmission): SessionMessageUser {
     })),
     metadata: {
       displayText: value.text,
+      attachments: value.prompt.flatMap((part) =>
+        part.type === "path" ? [{ name: part.filename, mime: part.mime, path: part.path }] : [],
+      ),
       comments: value.context.flatMap((item) =>
         item.comment?.trim()
           ? [
@@ -196,7 +189,7 @@ function readSubmission(
   if (mode === "shell" && !text.trim()) return
   const images = prompt.filter((part): part is ImageAttachmentPart => part.type === "image")
   const comments = context.filter((item) => !!item.comment?.trim()).length
-  if (!text.trim() && images.length === 0 && comments === 0) return
+  if (!text.trim() && !prompt.some(isAttachment) && comments === 0) return
 
   const controls = input.adapter.controls()
   const model = controls.model.selection.current()
@@ -304,10 +297,9 @@ async function sendCommand(
   session: ComposerSession,
   value: ComposerSubmission,
   command: { command: string; arguments: string },
-  destination: AttachmentDestination,
   track?: ModelSelection["trackSessionCommit"],
 ) {
-  const request = await buildSubmissionRequest(session, value, destination)
+  const request = await buildSubmissionRequest(session, value)
   // Like queued prompts, queued commands must not apply the composer's selection to active work.
   if (value.delivery === "steer") await applySelection(session, value.selection, track)
   await session.api.command({
@@ -346,11 +338,10 @@ async function applySelection(
 async function sendPrompt(
   session: ComposerSession,
   value: ComposerSubmission,
-  destination: AttachmentDestination,
   track: ModelSelection["trackSessionCommit"] | undefined,
   onAdmit: () => void,
 ) {
-  const request = await buildSubmissionRequest(session, value, destination)
+  const request = await buildSubmissionRequest(session, value)
   // Switching agent or model reconfigures the session immediately, and with it
   // the remainder of a running turn. A steer targets that turn, so its
   // selection applies now; a queued follow-up must not reconfigure the turn it
@@ -384,15 +375,14 @@ async function sendPrompt(
   await sending
 }
 
-async function buildSubmissionRequest(
-  session: ComposerSession,
-  value: ComposerSubmission,
-  destination: AttachmentDestination,
-) {
+async function buildSubmissionRequest(session: ComposerSession, value: ComposerSubmission) {
+  const images = await Promise.all(
+    value.images.map(async (attachment) => ({ ...attachment, dataUrl: await blobDataUrl(attachment.blob, attachment.mime) })),
+  )
   return buildPromptRequest({
     prompt: value.prompt,
     context: value.context,
-    attachments: await deliverAttachments(value.images, destination),
+    images,
     text: value.text,
     sessionDirectory: session.directory,
   })

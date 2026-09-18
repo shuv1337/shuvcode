@@ -1,6 +1,6 @@
 import type { Prompt } from "@/composer/state"
 import type { SelectedLineRange } from "@/workspaces/files/model"
-import { clonePrompt } from "../prompt-parts"
+import { clonePrompt, isAttachment } from "../prompt-parts"
 import type { PromptHistoryComment, PromptHistoryEntry } from "../schema"
 
 export type { PromptHistoryComment, PromptHistoryEntry } from "../schema"
@@ -35,9 +35,9 @@ export function prependHistoryEntry(
     .map((part) => ("content" in part ? part.content : ""))
     .join("")
     .trim()
-  const hasImages = prompt.some((part) => part.type === "image")
+  const hasAttachments = prompt.some(isAttachment)
   const hasComments = comments.some((comment) => !!comment.comment.trim())
-  if (!text && !hasImages && !hasComments) return entries
+  if (!text && !hasAttachments && !hasComments) return entries
 
   const entry = {
     prompt: clonePrompt(prompt),
@@ -86,7 +86,7 @@ function isPromptEqual(entryA: PromptHistoryStoredEntry, entryB: PromptHistorySt
     if (partA.type === "skill") {
       if (partB.type !== "skill" || partA.id !== partB.id || partA.name !== partB.name) return false
     }
-    if (partA.type === "image" && partA.id !== (partB.type === "image" ? partB.id : "")) return false
+    if (isAttachment(partA) && partA.id !== (isAttachment(partB) ? partB.id : "")) return false
   }
   if (entryA.comments.length !== entryB.comments.length) return false
   for (let i = 0; i < entryA.comments.length; i++) {

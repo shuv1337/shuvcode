@@ -5,6 +5,7 @@ import { ResizeHandle } from "@opencode/ui/resize-handle"
 import { Titlebar, type TitlebarUpdate } from "@/shell/titlebar/titlebar"
 import { usePlatform } from "@/runtime/platform/platform"
 import { ToastRegion } from "@/shell/notifications/toast"
+import { UploadToastHost } from "@/composer/attachments/uploads"
 import { TitlebarRightProvider } from "@/shell/titlebar/right-slot"
 import { useSettingsSurface } from "@/settings/surface"
 import { useSettings } from "@/settings/model"
@@ -111,6 +112,7 @@ export default function Layout(props: ParentProps) {
           </Suspense>
         </Show>
         <ToastRegion />
+        <UploadToastHost />
       </div>
     </TitlebarRightProvider>
   )
