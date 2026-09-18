@@ -52,14 +52,14 @@ export function createComposerAttachments(
   // Uploads this composer started; they finish (or fail) even if the composer unmounts.
   const [pending, setPending] = createStore<{ ids: string[] }>({ ids: [] })
 
-  // A file the model reads natively travels inline with the prompt, so its bytes live in the draft
-  // store. Anything else reaches the model as a path on the server and never enters the store:
-  // hashing and copying a large archive through it is what used to freeze the window.
+  // Media the model reads natively travels inline with the prompt, so its bytes live in the draft
+  // store. Everything else, including text, reaches the model as a path on the server that its
+  // tools open; those bytes never enter the store, and never get base64-encoded into the request.
   const add = async (file: File, target = capture(), clipboard = false) => {
     if (!target) return false
     const mime = await attachmentMime(file)
     const destination = input.destination()
-    if (native(mime, destination.input)) return addInline(file, mime, target, clipboard)
+    if (native(mime, destination.input) && file.size <= MAX_INLINE_BYTES) return addInline(file, mime, target, clipboard)
     const sourcePath = input.getPathForFile?.(file) || undefined
     if (destination.local && sourcePath) return addPath(target, { filename: file.name, mime, path: sourcePath })
     void stage(file, mime, target, destination)
@@ -213,9 +213,11 @@ export function createComposerAttachments(
 
 const imageMimes = new Set(["image/png", "image/jpeg", "image/gif", "image/webp"])
 
-// Mirrors the attachment kinds the server forwards to the model as message content.
+// The server rejects inline attachments above this size, so larger media takes the path route.
+const MAX_INLINE_BYTES = 20 * 1024 * 1024
+
+// Mirrors the media the server forwards to the model as message content.
 function native(mime: string, input: AttachmentDestination["input"]) {
-  if (mime === "text/plain") return true
   if (imageMimes.has(mime)) return input.image
   if (mime === "application/pdf") return input.pdf
   return false
@@ -238,8 +240,8 @@ const textMimes = new Set([
   "application/yaml",
 ])
 
-// Text-like files normalize to text/plain so the server inlines their content; every other
-// file keeps a binary type and is delivered to the model by path or as native media.
+// Text-like files normalize to text/plain so the chip labels them as text; every other file keeps
+// a binary type. Delivery is decided separately: native media inline, everything else by path.
 async function attachmentMime(file: File) {
   const type = file.type.split(";", 1)[0]?.trim().toLowerCase() ?? ""
   if (imageMimes.has(type) || type === "application/pdf") return type
