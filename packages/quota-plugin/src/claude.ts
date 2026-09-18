@@ -63,7 +63,10 @@ function limitWindow(raw: unknown): Window | undefined {
     if (scoped) {
       const label = humanizePlan(scoped)
       const weekly = group === "weekly" || kind.startsWith("weekly")
-      return { id: `model:${label.toLowerCase()}:${weekly ? "weekly" : group || kind || "scoped"}`, label: weekly ? `${label} weekly` : label }
+      return {
+        id: `model:${label.toLowerCase()}:${weekly ? "weekly" : group || kind || "scoped"}`,
+        label: weekly ? `${label} weekly` : label,
+      }
     }
     if (group === "session" || kind === "session") return { id: "session", label: "5h" }
     if (kind === "weekly_all" || (group === "weekly" && !value.scope)) return { id: "weekly", label: "Weekly" }
@@ -101,10 +104,42 @@ export function normalize(raw: unknown): Window[] {
   return windows
 }
 
-export function plan(token: Token) {
-  const raw = string(token.metadata?.subscriptionType) ?? string(token.metadata?.rateLimitTier)
+function labelPlan(raw: string | undefined) {
   if (!raw) return undefined
-  return plans[raw.toLowerCase()] ?? humanizePlan(raw)
+  const key = raw.toLowerCase()
+  if (plans[key]) return plans[key]
+  const stripped = key.replace(/^default_/, "")
+  if (plans[stripped]) return plans[stripped]
+  const maxNx = key.match(/(?:claude[_-]?)?max[_-]?(\d+)x$/)
+  if (maxNx) return `Max ${maxNx[1]}x`
+  if (/(?:claude[_-]?)?pro$/.test(key)) return "Pro"
+  return humanizePlan(raw)
+}
+
+/** Usage payload SKU. `rate_limit_tier` includes 5x/20x; `subscription_type` is coarse. */
+export function planFromUsage(raw: unknown) {
+  const root = record(raw)
+  if (!root) return undefined
+  const usage = record(root.usage) ?? root
+  return labelPlan(
+    string(usage.rate_limit_tier) ??
+      string(usage.rateLimitTier) ??
+      string(root.rate_limit_tier) ??
+      string(root.rateLimitTier) ??
+      string(usage.subscription_type) ??
+      string(usage.subscriptionType) ??
+      string(root.subscription_type) ??
+      string(root.subscriptionType),
+  )
+}
+
+export function plan(token: Token) {
+  return labelPlan(
+    string(token.metadata?.rateLimitTier) ??
+      string(token.metadata?.rate_limit_tier) ??
+      string(token.metadata?.subscriptionType) ??
+      string(token.metadata?.subscription_type),
+  )
 }
 
 export function account(token: Token) {
@@ -128,7 +163,14 @@ export async function fetchQuota(token: Token, options: FetchOptions = {}): Prom
   if (!response.ok) return response
   const windows = normalize(response.body)
   if (!windows.length) return { ok: false, error: "Quota unavailable" }
-  const tier = plan(token)
+  const usagePlan = planFromUsage(response.body)
+  const tokenPlan = plan(token)
+  // Usage is source of truth, but subscription_type is often coarse Max/Pro
+  // while rate_limit_tier / credential metadata carry the Nx SKU.
+  const labeled =
+    usagePlan && tokenPlan && /^(Pro|Max)$/.test(usagePlan) && /\d+x$/i.test(tokenPlan)
+      ? tokenPlan
+      : (usagePlan ?? tokenPlan)
   const label = account(token)
-  return { ok: true, windows, ...(tier ? { plan: tier } : {}), ...(label ? { account: label } : {}) }
+  return { ok: true, windows, ...(labeled ? { plan: labeled } : {}), ...(label ? { account: label } : {}) }
 }

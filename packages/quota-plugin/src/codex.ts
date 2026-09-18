@@ -1,7 +1,7 @@
 export * as Codex from "./codex.js"
 
 import type { Window } from "./rpc.js"
-import { clampPercent, humanizePlan, isRecord, json, number, record, string, time } from "./shared.js"
+import { clampPercent, humanizePlan, isRecord, json, jwtPayload, number, record, string, time } from "./shared.js"
 import type { FetchOptions, Result, Token } from "./shared.js"
 
 export const id = "codex"
@@ -58,10 +58,27 @@ export function normalize(raw: unknown): { windows: Window[]; plan?: string } | 
     seen.add(item.id)
     windows.push(item)
   }
-  const planType = string(usage.plan_type) ?? string(root.plan_type)
-  const plan = planType ? (plans[planType.toLowerCase()] ?? humanizePlan(planType)) : undefined
-  if (!windows.length && !plan) return undefined
-  return { windows, ...(plan ? { plan } : {}) }
+  const labeled = labelPlan(string(usage.plan_type) ?? string(root.plan_type))
+  if (!windows.length && !labeled) return undefined
+  return { windows, ...(labeled ? { plan: labeled } : {}) }
+}
+
+function labelPlan(raw: string | undefined) {
+  if (!raw) return undefined
+  return plans[raw.toLowerCase()] ?? humanizePlan(raw)
+}
+
+/** JWT / metadata SKU. Usage `plan_type` wins in fetchQuota except when this is the Nx variant. */
+export function plan(token: Token) {
+  const payload = jwtPayload(token.access)
+  const auth = record(payload?.["https://api.openai.com/auth"])
+  return labelPlan(
+    string(auth?.chatgpt_plan_type) ??
+      string(payload?.chatgpt_plan_type) ??
+      string(token.metadata?.chatgpt_plan_type) ??
+      string(token.metadata?.planType) ??
+      string(token.metadata?.plan_type),
+  )
 }
 
 export function account(token: Token) {
@@ -88,5 +105,15 @@ export async function fetchQuota(token: Token, options: FetchOptions = {}): Prom
   if (!normalized || !normalized.windows.length) return { ok: false, error: "Quota unavailable" }
   const email = isRecord(response.body) ? string(response.body.email) : undefined
   const label = email ?? account(token)
-  return { ok: true, windows: normalized.windows, ...(normalized.plan ? { plan: normalized.plan } : {}), ...(label ? { account: label } : {}) }
+  const tokenPlan = plan(token)
+  // Usage is source of truth, but ChatGPT's usage plan_type is often coarse "pro"
+  // while the JWT SKU is "prolite" (Pro 20x). Prefer that Nx SKU like Google/xAI.
+  const labeled =
+    normalized.plan === "Pro" && tokenPlan && /\d+x$/i.test(tokenPlan) ? tokenPlan : (normalized.plan ?? tokenPlan)
+  return {
+    ok: true,
+    windows: normalized.windows,
+    ...(labeled ? { plan: labeled } : {}),
+    ...(label ? { account: label } : {}),
+  }
 }

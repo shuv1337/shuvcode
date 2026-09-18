@@ -12,7 +12,12 @@ describe("Codex.normalize", () => {
       email: "user@example.test",
       plan_type: "prolite",
       rate_limit: {
-        primary_window: { used_percent: 93, limit_window_seconds: 604_800, reset_after_seconds: 12_345, reset_at: RESET },
+        primary_window: {
+          used_percent: 93,
+          limit_window_seconds: 604_800,
+          reset_after_seconds: 12_345,
+          reset_at: RESET,
+        },
         secondary_window: null,
       },
     })
@@ -58,6 +63,63 @@ describe("Codex.normalize", () => {
     expect(Codex.normalize(null)).toBeUndefined()
     expect(Codex.normalize("nope")).toBeUndefined()
     expect(Codex.normalize({})).toBeUndefined()
+  })
+})
+
+describe("Codex.plan", () => {
+  const jwt = (payload: Record<string, unknown>) => `h.${Buffer.from(JSON.stringify(payload)).toString("base64url")}.s`
+
+  test("maps the JWT ChatGPT SKU, including prolite as Pro 20x", () => {
+    expect(Codex.plan({ access: jwt({ "https://api.openai.com/auth": { chatgpt_plan_type: "prolite" } }) })).toBe(
+      "Pro 20x",
+    )
+    expect(Codex.plan({ access: jwt({ chatgpt_plan_type: "plus" }) })).toBe("Plus")
+    expect(Codex.plan({ access: "x", metadata: { planType: "pro" } })).toBe("Pro")
+    expect(Codex.plan({ access: "x" })).toBeUndefined()
+  })
+})
+
+describe("Codex.fetchQuota plan", () => {
+  const jwt = (payload: Record<string, unknown>) => `h.${Buffer.from(JSON.stringify(payload)).toString("base64url")}.s`
+  const stub = (body: unknown) =>
+    (async () => new Response(JSON.stringify(body), { status: 200 })) as unknown as typeof fetch
+
+  test("prefers the Pro 20x SKU when usage is coarse Pro and the JWT is prolite", async () => {
+    const result = await Codex.fetchQuota(
+      { access: jwt({ "https://api.openai.com/auth": { chatgpt_plan_type: "prolite" } }) },
+      {
+        fetch: stub({
+          rate_limit: { primary_window: { remaining_percent: 40, limit_window_seconds: 18_000 } },
+          plan_type: "pro",
+        }),
+      },
+    )
+    expect(result).toMatchObject({ ok: true, plan: "Pro 20x" })
+  })
+
+  test("keeps usage Plus over a JWT Pro 20x SKU", async () => {
+    const result = await Codex.fetchQuota(
+      { access: jwt({ chatgpt_plan_type: "prolite" }) },
+      {
+        fetch: stub({
+          rate_limit: { primary_window: { remaining_percent: 40, limit_window_seconds: 18_000 } },
+          plan_type: "plus",
+        }),
+      },
+    )
+    expect(result).toMatchObject({ ok: true, plan: "Plus" })
+  })
+
+  test("falls back to the JWT SKU when usage omits plan_type", async () => {
+    const result = await Codex.fetchQuota(
+      { access: jwt({ chatgpt_plan_type: "prolite" }) },
+      {
+        fetch: stub({
+          rate_limit: { primary_window: { remaining_percent: 40, limit_window_seconds: 18_000 } },
+        }),
+      },
+    )
+    expect(result).toMatchObject({ ok: true, plan: "Pro 20x" })
   })
 })
 
@@ -111,11 +173,63 @@ describe("Claude.normalize", () => {
 })
 
 describe("Claude.plan", () => {
-  test("maps subscription types and falls back to humanized", () => {
+  test("prefers the rate-limit SKU over coarse subscriptionType", () => {
+    expect(
+      Claude.plan({
+        access: "x",
+        metadata: { subscriptionType: "max", rateLimitTier: "default_claude_max_20x" },
+      }),
+    ).toBe("Max 20x")
     expect(Claude.plan({ access: "x", metadata: { subscriptionType: "default_claude_max_20x" } })).toBe("Max 20x")
     expect(Claude.plan({ access: "x", metadata: { rateLimitTier: "pro" } })).toBe("Pro")
     expect(Claude.plan({ access: "x", metadata: { subscriptionType: "team_plus" } })).toBe("Team Plus")
     expect(Claude.plan({ access: "x" })).toBeUndefined()
+  })
+})
+
+describe("Claude.planFromUsage", () => {
+  test("reads rate_limit_tier before coarse subscription_type", () => {
+    expect(Claude.planFromUsage({ five_hour: { utilization: 10 }, rate_limit_tier: "default_claude_max_20x" })).toBe(
+      "Max 20x",
+    )
+    expect(
+      Claude.planFromUsage({
+        usage: { subscription_type: "max", rate_limit_tier: "claude_max_5x" },
+      }),
+    ).toBe("Max 5x")
+    expect(Claude.planFromUsage({ subscriptionType: "pro" })).toBe("Pro")
+    expect(Claude.planFromUsage({ five_hour: { utilization: 10 } })).toBeUndefined()
+  })
+})
+
+describe("Claude.fetchQuota plan", () => {
+  const stub = (body: unknown) =>
+    (async () => new Response(JSON.stringify(body), { status: 200 })) as unknown as typeof fetch
+
+  test("uses the usage rate_limit_tier SKU", async () => {
+    const result = await Claude.fetchQuota(
+      { access: "x" },
+      {
+        fetch: stub({
+          five_hour: { utilization: 10 },
+          rate_limit_tier: "default_claude_max_20x",
+        }),
+      },
+    )
+    expect(result).toMatchObject({ ok: true, plan: "Max 20x" })
+  })
+
+  test("upgrades coarse usage Max with a credential Nx SKU", async () => {
+    const result = await Claude.fetchQuota(
+      { access: "x", metadata: { rateLimitTier: "claude_max_20x" } },
+      {
+        fetch: stub({
+          five_hour: { utilization: 10 },
+          subscription_type: "max",
+        }),
+      },
+    )
+    expect(result).toMatchObject({ ok: true, plan: "Max 20x" })
   })
 })
 
@@ -139,19 +253,27 @@ describe("XAI.normalize", () => {
     expect(matched).toEqual([{ id: "weekly", label: "Weekly", remaining: 100, resetsAt: Date.parse(period.end) }])
 
     const mismatched = XAI.normalize({
-      config: { billingPeriodStart: "2026-09-01T00:00:00Z", billingPeriodEnd: "2026-09-08T00:00:00Z", currentPeriod: period },
+      config: {
+        billingPeriodStart: "2026-09-01T00:00:00Z",
+        billingPeriodEnd: "2026-09-08T00:00:00Z",
+        currentPeriod: period,
+      },
     })
     expect(mismatched).toEqual([])
   })
 
   test("monthly/daily/unknown period types and billingPeriodEnd fallback", () => {
-    expect(XAI.normalize({ config: { creditUsagePercent: 5, periodType: "USAGE_PERIOD_TYPE_MONTHLY", billingPeriodEnd: period.end } })).toEqual([
-      { id: "monthly", label: "Monthly", remaining: 95, resetsAt: Date.parse(period.end) },
-    ])
+    expect(
+      XAI.normalize({
+        config: { creditUsagePercent: 5, periodType: "USAGE_PERIOD_TYPE_MONTHLY", billingPeriodEnd: period.end },
+      }),
+    ).toEqual([{ id: "monthly", label: "Monthly", remaining: 95, resetsAt: Date.parse(period.end) }])
     expect(XAI.normalize({ config: { creditUsagePercent: 5, periodType: "USAGE_PERIOD_TYPE_DAILY" } })).toEqual([
       { id: "daily", label: "Daily", remaining: 95 },
     ])
-    expect(XAI.normalize({ config: { creditUsagePercent: 120 } })).toEqual([{ id: "credits", label: "Credits", remaining: 0 }])
+    expect(XAI.normalize({ config: { creditUsagePercent: 120 } })).toEqual([
+      { id: "credits", label: "Credits", remaining: 0 },
+    ])
   })
 
   test("returns empty without config", () => {
@@ -217,7 +339,9 @@ describe("Google.normalize", () => {
       ],
     })
     expect(result?.plan).toBe("G1 Mystery Tier")
-    expect(result?.windows).toEqual([{ id: "grp-x:b1", label: "Models 1 Daily", remaining: 25, resetsAt: Date.parse(reset) }])
+    expect(result?.windows).toEqual([
+      { id: "grp-x:b1", label: "Models 1 Daily", remaining: 25, resetsAt: Date.parse(reset) },
+    ])
   })
 
   test("returns undefined without usable buckets", () => {
