@@ -2,10 +2,10 @@ import { createStore, unwrap } from "solid-js/store"
 import { createEffect, createMemo, createSignal, For, onCleanup, onMount, Show } from "solid-js"
 import { usePaste, useRenderer, useTerminalDimensions } from "@opentui/solid"
 import {
-  CliRenderEvents,
   decodePasteBytes,
   stripAnsiSequences,
   TextAttributes,
+  type BoxRenderable,
   type ScrollBoxRenderable,
   type TextareaRenderable,
 } from "@opentui/core"
@@ -75,8 +75,7 @@ export function FormPrompt(props: { form: FormWithLocation }) {
   drafts.delete(props.form.id)
 
   const [tabHover, setTabHover] = createSignal<number | "confirm" | null>(null)
-  const [reviewHeight, setReviewHeight] = createSignal(1)
-  const [reviewScrollable, setReviewScrollable] = createSignal(false)
+  const [reviewContentHeight, setReviewContentHeight] = createSignal(0)
   const [store, setStore] = createStore<FormDraft>(
     draft ?? {
       tab: 0,
@@ -92,7 +91,6 @@ export function FormPrompt(props: { form: FormWithLocation }) {
   let textarea: TextareaRenderable | undefined
   const [inputTarget, setInputTarget] = createSignal<TextareaRenderable>()
   let review: ScrollBoxRenderable | undefined
-  let measureReview: (() => void) | undefined
 
   const message = createMemo(() => {
     const value = props.form.metadata?.["message"]
@@ -141,6 +139,7 @@ export function FormPrompt(props: { form: FormWithLocation }) {
     return current?.type === "external" ? current : undefined
   })
   const confirm = createMemo(() => !single() && store.tab >= fields().length)
+  const reviewMaxHeight = createMemo(() => Math.max(3, dimensions().height - 14))
   const configuredRows = createMemo(() => {
     const current = answerField()
     return current ? formRows(current) : []
@@ -211,32 +210,7 @@ export function FormPrompt(props: { form: FormWithLocation }) {
     return "confirm"
   })
 
-  createEffect(() => {
-    if (measureReview) renderer.off(CliRenderEvents.FRAME, measureReview)
-    if (!confirm()) {
-      measureReview = undefined
-      review = undefined
-      setReviewScrollable(false)
-      return
-    }
-    const limit = Math.max(3, dimensions().height - 14)
-    const initial = Math.min(Math.max(1, fields().length), limit)
-    Object.values(store.answers)
-    setReviewHeight(initial)
-    setReviewScrollable(false)
-    measureReview = () => {
-      measureReview = undefined
-      const content = review?.scrollHeight ?? initial
-      const height = Math.min(Math.max(1, content), limit)
-      setReviewHeight(height)
-      setReviewScrollable(content > height)
-    }
-    renderer.once(CliRenderEvents.FRAME, measureReview)
-    renderer.requestRender()
-  })
-
   onCleanup(() => {
-    if (measureReview) renderer.off(CliRenderEvents.FRAME, measureReview)
     // A reply or cancel removes the form from data before this unmount runs, so a
     // form still listed here is only hidden by navigation and worth restoring.
     const pending = data.session.form
@@ -1102,56 +1076,63 @@ export function FormPrompt(props: { form: FormWithLocation }) {
 
         <Show when={confirm()}>
           <scrollbox
-            height={reviewHeight()}
+            maxHeight={reviewMaxHeight()}
+            contentOptions={{ minHeight: 0 }}
             scrollbarOptions={{ visible: false }}
             ref={(r: ScrollBoxRenderable) => (review = r)}
           >
-            <For each={fields()}>
-              {(item) => {
-                if (item.type === "external") {
-                  const acknowledged = () => store.answers[item.key] === true
+            <box
+              onSizeChange={function (this: BoxRenderable) {
+                setReviewContentHeight(this.height)
+              }}
+            >
+              <For each={fields()}>
+                {(item) => {
+                  if (item.type === "external") {
+                    const acknowledged = () => store.answers[item.key] === true
+                    return (
+                      <box paddingLeft={1}>
+                        <text>
+                          <span style={{ fg: theme.text.subdued }}>{truncate(formLabel(item), 40)}:</span>{" "}
+                          <span
+                            style={{
+                              fg: acknowledged()
+                                ? theme.text.feedback.success.default
+                                : theme.text.feedback.error.default,
+                            }}
+                          >
+                            {acknowledged() ? "Acknowledged" : "(acknowledgement required)"}
+                          </span>
+                        </text>
+                      </box>
+                    )
+                  }
+                  const value = () => formDisplayValue(item, store.answers[item.key], "(none)")
+                  const answered = () => store.answers[item.key] !== undefined
+                  const missing = () => !answered() && item.required === true
+                  const invalid = () => formValidateValue(item, store.answers[item.key])
                   return (
                     <box paddingLeft={1}>
                       <text>
                         <span style={{ fg: theme.text.subdued }}>{truncate(formLabel(item), 40)}:</span>{" "}
                         <span
                           style={{
-                            fg: acknowledged()
-                              ? theme.text.feedback.success.default
-                              : theme.text.feedback.error.default,
+                            fg:
+                              invalid() || missing()
+                                ? theme.text.feedback.error.default
+                                : answered()
+                                  ? theme.text.default
+                                  : theme.text.subdued,
                           }}
                         >
-                          {acknowledged() ? "Acknowledged" : "(acknowledgement required)"}
+                          {invalid() ?? (answered() ? value() : missing() ? "(required)" : "(not answered)")}
                         </span>
                       </text>
                     </box>
                   )
-                }
-                const value = () => formDisplayValue(item, store.answers[item.key], "(none)")
-                const answered = () => store.answers[item.key] !== undefined
-                const missing = () => !answered() && item.required === true
-                const invalid = () => formValidateValue(item, store.answers[item.key])
-                return (
-                  <box paddingLeft={1}>
-                    <text>
-                      <span style={{ fg: theme.text.subdued }}>{truncate(formLabel(item), 40)}:</span>{" "}
-                      <span
-                        style={{
-                          fg:
-                            invalid() || missing()
-                              ? theme.text.feedback.error.default
-                              : answered()
-                                ? theme.text.default
-                                : theme.text.subdued,
-                        }}
-                      >
-                        {invalid() ?? (answered() ? value() : missing() ? "(required)" : "(not answered)")}
-                      </span>
-                    </text>
-                  </box>
-                )
-              }}
-            </For>
+                }}
+              </For>
+            </box>
           </scrollbox>
         </Show>
       </box>
@@ -1175,7 +1156,7 @@ export function FormPrompt(props: { form: FormWithLocation }) {
               {"↑↓"} <span style={{ fg: theme.text.subdued }}>select</span>
             </text>
           </Show>
-          <Show when={confirm() && reviewScrollable()}>
+          <Show when={confirm() && reviewContentHeight() > reviewMaxHeight()}>
             <text fg={theme.text.default}>
               {"↑↓"} <span style={{ fg: theme.text.subdued }}>scroll</span>
             </text>
