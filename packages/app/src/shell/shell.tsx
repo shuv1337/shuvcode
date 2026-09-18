@@ -11,6 +11,8 @@ import { useSettingsSurface } from "@/settings/surface"
 import { useSettings } from "@/settings/model"
 import { SshAuthentication } from "@/servers/ssh/authentication"
 import { useUpdaterInstall } from "@/shell/updates/download"
+import { useCommand } from "@/shell/commands/command"
+import { useLanguage } from "@/runtime/i18n/language"
 
 const DebugBar = lazy(() => import("@/shell/debug/debug-bar").then((module) => ({ default: module.DebugBar })))
 
@@ -19,6 +21,8 @@ export default function Layout(props: ParentProps) {
   const settings = useSettingsSurface()
   const preferences = useSettings()
   const installUpdate = useUpdaterInstall()
+  const command = useCommand()
+  const language = useLanguage()
   const mobile = createMediaQuery("(max-width: 767px)")
   const [state, setState] = createStore({
     debugTools: false,
@@ -35,14 +39,21 @@ export default function Layout(props: ParentProps) {
     install: installUpdate,
   }
   // A plain object avoids the compiler's conditional-prop memo, which leaks when read from event handlers.
-  const debugTools = import.meta.env.DEV
-    ? {
-        get visible() {
-          return state.debugTools
-        },
-        toggle: () => setState("debugTools", (value) => !value),
-      }
-    : undefined
+  const debugTools = {
+    get visible() {
+      return state.debugTools
+    },
+    toggle: () => setState("debugTools", (value) => !value),
+  }
+
+  command.register("debug-bar", () => [
+    {
+      id: "debugBar.toggle",
+      title: language.t("command.debugBar.toggle"),
+      category: language.t("command.category.view"),
+      onSelect: debugTools.toggle,
+    },
+  ])
 
   return (
     <TitlebarRightProvider>
@@ -106,9 +117,9 @@ export default function Layout(props: ParentProps) {
             </SshAuthentication>
           </main>
         </div>
-        <Show when={import.meta.env.DEV && state.debugTools}>
+        <Show when={state.debugTools}>
           <Suspense>
-            <DebugBar inline />
+            <DebugBar diagnostics={import.meta.env.DEV} inline />
           </Suspense>
         </Show>
         <ToastRegion />
