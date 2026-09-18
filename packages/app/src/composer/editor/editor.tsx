@@ -1,9 +1,10 @@
-import { createEffect, createMemo, createSignal, For, onCleanup, onMount, Show, type JSX } from "solid-js"
+import { createEffect, createMemo, createResource, createSignal, For, onCleanup, onMount, Show, type JSX } from "solid-js"
 import { createStore } from "solid-js/store"
 import { FileIcon } from "@opencode/ui/file-icon"
 import { Icon } from "@opencode/ui/icon"
 import { IconButton } from "@opencode/ui/icon-button"
 import { createAnimatedPresence } from "@/runtime/animated-presence"
+import { resolveBlobUrl } from "@/runtime/persistence/drafts"
 import { ProviderIcon } from "@opencode/ui/provider-icon"
 import { useI18n } from "@opencode/ui/context/i18n"
 import { Button } from "@opencode/ui/button"
@@ -545,17 +546,21 @@ export function ComposerAttachments(props: {
                       </AttachmentCard>
                     }
                   >
-                    {(image) => (
-                      <>
-                    <img
-                      src={image().blob.url}
-                      alt={attachment.filename}
-                      class="w-[58px] h-[46px] rounded-[6px] object-cover"
-                      onClick={() => props.onAttachmentClick?.(attachment)}
-                    />
-                    <div class="absolute inset-0 rounded-[6px] shadow-[inset_0_0_0_0.5px_var(--v2-border-border-base)] pointer-events-none" />
-                      </>
-                    )}
+                    {(image) => {
+                      // Restored drafts and history carry image ids only; bytes load when shown.
+                      const [url] = createResource(() => image().blob, resolveBlobUrl)
+                      return (
+                        <>
+                          <img
+                            src={url() ?? ""}
+                            alt={attachment.filename}
+                            class="w-[58px] h-[46px] rounded-[6px] object-cover"
+                            onClick={() => props.onAttachmentClick?.(attachment)}
+                          />
+                          <div class="absolute inset-0 rounded-[6px] shadow-[inset_0_0_0_0.5px_var(--v2-border-border-base)] pointer-events-none" />
+                        </>
+                      )
+                    }}
                   </Show>
                 </Tooltip>
                 <button

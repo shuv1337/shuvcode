@@ -8,7 +8,7 @@ import type { ComposerAdapter, ComposerDelivery, ComposerSelection, ComposerSess
 import { createComposerSubmission } from "./submission-state"
 import { buildPromptRequest } from "./request"
 import { setCursorPosition } from "./editor/dom"
-import { blobDataUrl } from "@/runtime/persistence/drafts"
+import { blobDataUrl, resolveBlobUrl } from "@/runtime/persistence/drafts"
 import { isAttachment } from "./prompt-parts"
 import type { ModelSelection } from "@/providers/models/selection"
 
@@ -59,12 +59,22 @@ export function createComposerSubmit(input: ComposerSubmitInput) {
         selection: item.selection ? { ...item.selection } : undefined,
       })),
     })
-    const value = readSubmission(input, submission.prompt, submission.context, options?.alternate ?? false)
-    if (!value) {
+    const read = readSubmission(input, submission.prompt, submission.context, options?.alternate ?? false)
+    if (!read) {
       if (input.adapter.working() && input.adapter.kind === "active-session") void input.adapter.interrupt()
       return
     }
     if (submitting.has(input.adapter.state)) return
+    // Images restored from a draft or history carry ids only; the optimistic message shows their URLs.
+    const value = {
+      ...read,
+      images: await Promise.all(
+        read.images.map(async (image) => ({
+          ...image,
+          blob: { ...image.blob, url: (await resolveBlobUrl(image.blob)) ?? image.blob.url },
+        })),
+      ),
+    }
     submitting.add(input.adapter.state)
     const comments = input.comments.capture()
     // Capture command intent before starting a session in a worktree whose catalog has not loaded.
