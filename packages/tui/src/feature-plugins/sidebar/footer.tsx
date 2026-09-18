@@ -20,22 +20,31 @@ function View(props: { context: Plugin.Context; sessionID: string }) {
     return branch ? `${value}:${branch}` : value
   })
   return (
-    <Show when={directory()}>
-      {(value) => (
-        <box
-          id="sidebar.footer.location"
-          onMouseOver={actions.onMouseOver}
-          onMouseOut={actions.onMouseOut}
-          onMouseUp={actions.onMouseUp}
-        >
-          <FilePath
-            value={value()}
-            maxWidth={38}
-            fg={actions.hovered() ? props.context.theme.text.default : props.context.theme.text.subdued}
-          />
-        </box>
-      )}
-    </Show>
+    <box gap={1}>
+      <Show when={directory()}>
+        {(value) => (
+          <box
+            id="sidebar.footer.location"
+            onMouseOver={actions.onMouseOver}
+            onMouseOut={actions.onMouseOut}
+            onMouseUp={actions.onMouseUp}
+          >
+            <FilePath
+              value={value()}
+              maxWidth={38}
+              fg={actions.hovered() ? props.context.theme.text.default : props.context.theme.text.subdued}
+            />
+          </box>
+        )}
+      </Show>
+      <text id="sidebar.footer.version" fg={props.context.theme.text.subdued} wrapMode="none" truncate>
+        <b>shuv</b>
+        <span style={{ fg: props.context.theme.text.default }}>
+          <b>code</b>
+        </span>{" "}
+        {props.context.app.version}
+      </text>
+    </box>
   )
 }
 
