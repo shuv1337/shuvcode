@@ -1292,7 +1292,7 @@ export function Session(props: {
                   paddingLeft: 1,
                   visible: showScrollbar(),
                   trackOptions: {
-                    backgroundColor: theme.raise(theme.background.surface.offset),
+                    backgroundColor: theme.raise(theme.background.raised.base),
                     foregroundColor: theme.border.default,
                   },
                 }}
@@ -1836,7 +1836,7 @@ function SessionReasoningGroupView(props: {
                         <box
                           border={["left"]}
                           customBorderChars={SplitBorder.customBorderChars}
-                          borderColor={theme.raise(theme.background.surface.offset)}
+                          borderColor={theme.raise(theme.background.raised.base)}
                           paddingLeft={1}
                         >
                           <code
