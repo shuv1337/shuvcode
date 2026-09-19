@@ -1,16 +1,21 @@
 import { Global } from "@opencode/util/global"
 import { AppProcess } from "@opencode/util/process"
 import { OPENCODE_ARTIFACT, OPENCODE_CHANNEL, OPENCODE_LOCAL, OPENCODE_VERSION } from "../version"
-import { Context, Duration, Effect, FileSystem, Layer, Ref } from "effect"
+import { Context, Duration, Effect, FileSystem, Layer, Option, Ref, Schema } from "effect"
 import { ChildProcess } from "effect/unstable/process"
 import { parse, type ParseError } from "jsonc-parser"
 import path from "node:path"
 import { action, parseReleaseVersion, type Policy } from "./updater-action"
 
-export const methods = ["curl", "npm", "pnpm", "bun", "yarn", "brew"] as const
+export const methods = ["curl", "npm", "pnpm", "bun", "yarn", "vp", "brew"] as const
+
 export type Method = (typeof methods)[number]
 export type RunResult = { readonly type: "available" | "installed"; readonly version: string }
 export type CheckResult = RunResult | { readonly type: "unavailable"; readonly message: string }
+
+const decodeVpPackages = Schema.decodeUnknownOption(
+  Schema.fromJsonString(Schema.Array(Schema.Struct({ name: Schema.String }))),
+)
 
 export interface Interface {
   readonly run: (onInstall?: (version: string) => void) => Effect.Effect<RunResult | undefined>
@@ -110,13 +115,20 @@ const make = Effect.gen(function* () {
       { method: "pnpm", command: ["pnpm", "list", "-g", "--depth=0", installedPackage] },
       { method: "bun", command: ["bun", "pm", "ls", "-g"] },
       { method: "yarn", command: ["yarn", "global", "list"] },
+      { method: "vp", command: ["vp", "list", "-g", "--json", installedPackage] },
     ]
     const results = yield* Effect.forEach(
       checks,
       (check) => exec(check.command).pipe(Effect.map((result) => ({ check, result }))),
       { concurrency: "unbounded" },
     )
-    return results.find((result) => result.result.stdout.includes(installedPackage))?.check.method
+    return results.find((result) => {
+      if (result.check.method !== "vp") return result.result.stdout.includes(installedPackage)
+      // Vite+ repeats the filter in its successful no-match message, so substring detection would be a false positive.
+      return Option.exists(decodeVpPackages(result.result.stdout), (packages) =>
+        packages.some((item) => item.name === installedPackage),
+      )
+    })?.check.method
   })
 
   const removal = (method: Method) => {
@@ -126,6 +138,7 @@ const make = Effect.gen(function* () {
       pnpm: ["pnpm", "remove", "--global", installedPackage],
       bun: ["bun", "remove", "--global", installedPackage],
       yarn: ["yarn", "global", "remove", installedPackage],
+      vp: ["vp", "uninstall", "-g", installedPackage],
     }
     const command = commands[method]
     return {
@@ -194,6 +207,10 @@ const make = Effect.gen(function* () {
       ],
       pnpm: ["pnpm", "add", "--global", `--allow-build=${packageName}`, target],
       yarn: ["yarn", "global", "add", target],
+      vp:
+        installedPackage && packageName !== installedPackage
+          ? ["vp", "install", "-g", "--force", target]
+          : ["vp", "update", "-g", target],
     }
     const result = yield* Effect.scoped(
       Effect.gen(function* () {
