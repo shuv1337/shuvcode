@@ -142,6 +142,14 @@ console.log(`service: ${service}, runs: ${runs} (+${warmup} warm-up), cdp ${cdpP
 if (service === "warm") await warmService()
 
 const samples: Sample[] = []
+// A launch that never produces a renderer would otherwise leave an instance behind that every later
+// launch hands off to through the single-instance lock.
+process.on("uncaughtException", async (error) => {
+  console.error(error)
+  await killApp()
+  await stopService()
+  process.exit(1)
+})
 for (let run = 1 - warmup; run <= runs; run++) {
   for (const build of builds) {
     const sample = await launch(build, run)
@@ -516,11 +524,18 @@ function mainLog() {
   const dirs = existsSync(paths.logs) ? readdirSync(paths.logs).sort().reverse() : []
   const dir = dirs.map((d) => join(paths.logs, d)).find((d) => existsSync(join(d, "main.log")))
   const timeline: [number, string, string][] = []
+  let windowShownAt: number | undefined
   for (const name of dir ? readdirSync(dir).filter((f) => f.endsWith(".log")) : []) {
-    for (const line of readFileSync(join(dir!, name), "utf8").split(/\r?\n/)) {
+    const text = readFileSync(join(dir!, name), "utf8")
+    // electron-log wraps long objects onto continuation lines; read them as part of the entry.
+    for (const entry of text.split(/\r?\n(?=\[\d{4}-)/)) {
+      const line = entry.split(/\r?\n/)[0]
       const m = line.match(/^\[(\d{4}-\d\d-\d\d \d\d:\d\d:\d\d\.\d{3})\]\s+\[\w+\]\s+(?:\([\w-]+\)\s+)?(.*)$/)
       if (!m) continue
       const message = m[2].replace(/\s*\{.*$/, "").trim()
+      // A window shown before the logger existed reports when it was shown; the line itself is later.
+      const shown = /main window visible/.test(message) ? entry.match(/shownAt: (\d+)/)?.[1] : undefined
+      if (shown) windowShownAt = Number(shown)
       timeline.push([new Date(m[1].replace(" ", "T")).getTime(), name.replace(/\.log$/, ""), message])
     }
   }
@@ -533,7 +548,7 @@ function mainLog() {
     versionDone: at(/v2 CLI command completed/),
     serviceStarting: at(/v2 CLI background service starting/),
     serviceReady: at(/background service ready/),
-    windowVisible: at(/main window visible/),
+    windowVisible: windowShownAt ?? at(/main window visible/),
   }
 }
 
@@ -592,8 +607,12 @@ function bundledCli(exe: string) {
 async function warmService() {
   await stopService()
   const clis = builds.map((build) => bundledCli(build.exe))
-  if (new Set(clis.map((cli) => statSync(cli).size)).size > 1)
-    console.warn("warning: the compared builds bundle different CLIs; the desktop will restart the service on the mismatch")
+  const identity = (cli: string) => {
+    const version = join(dirname(cli), "opencode-cli.version")
+    return existsSync(version) ? readFileSync(version, "utf8").trim() : String(statSync(cli).size)
+  }
+  if (new Set(clis.map(identity)).size > 1)
+    throw new Error("The compared builds bundle different CLIs; the desktop would restart the service on the mismatch")
   serviceProcess = spawn(clis[0], ["serve", "--service"], { env, detached: true, stdio: "ignore" })
   serviceProcess.unref()
   const deadline = Date.now() + 60_000
