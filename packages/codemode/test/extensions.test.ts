@@ -128,6 +128,34 @@ describe("values are converted at the boundary, never shared", () => {
     expect([...(held[0] as Set<{ z: number }>)][0]).toEqual({ z: 1 })
   })
 
+  test("Headers cross as copies in both directions", async () => {
+    const stored = new Headers({ "X-A": "1" })
+    const target = CodeMode.make({
+      extensions: [
+        Extension.make({
+          name: "http",
+          globals: {
+            headers: () => stored,
+            keep: (value: Headers) => {
+              held.push(value)
+              return value
+            },
+          },
+        }),
+      ],
+    })
+    held.length = 0
+    expect(
+      await value(
+        `const h = headers(); h.set("x-a", "2"); const back = keep(h); back.set("x-a", "3"); return [h instanceof Headers, h.get("x-a"), back === h, back.get("x-a"), [...back]]`,
+        target,
+      ),
+    ).toEqual([true, "2", false, "3", [["x-a", "3"]]])
+    expect(stored.get("x-a")).toBe("1")
+    expect(held[0]).toBeInstanceOf(Headers)
+    expect((held[0] as Headers).get("x-a")).toBe("2")
+  })
+
   test("bytes cross as copies in both directions; ArrayBuffer comes in as Uint8Array", async () => {
     const stored = new Uint8Array([1, 2, 3])
     const target = CodeMode.make({

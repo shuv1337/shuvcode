@@ -27,6 +27,7 @@ import {
   SetObj,
   URLObj,
   URLSearchParamsObj,
+  HeadersObj,
 } from "./objects.js"
 import { describeValue } from "./references.js"
 
@@ -52,6 +53,7 @@ export const extensionGlobals = <R>(
     if (value instanceof RegExpObj) return new RegExp(value.regex.source, value.regex.flags)
     if (value instanceof URLObj) return new URL(value.url.href)
     if (value instanceof URLSearchParamsObj) return new URLSearchParams(value.params)
+    if (value instanceof HeadersObj) return new Headers(value.headers)
     const next = (item: unknown) => toHost(item, label, depth + 1, seen)
     if (value instanceof MapObj) return new Map([...value.map].map(([key, item]) => [next(key), next(item)]))
     if (value instanceof SetObj) return new Set([...value.set].map(next))
@@ -125,6 +127,7 @@ export const extensionGlobals = <R>(
       if (value instanceof URLSearchParams) {
         return new URLSearchParamsObj(builtins.URLSearchParams, new URLSearchParams(value))
       }
+      if (value instanceof Headers) return new HeadersObj(builtins.Headers, new Headers(value))
       if (value instanceof Map) {
         const wrapped = new MapObj(builtins.Map)
         for (const [key, item] of value) wrapped.map.set(next(key, label), next(item, label))
