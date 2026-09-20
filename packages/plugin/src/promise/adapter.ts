@@ -250,12 +250,13 @@ export function fromPromise(plugin: Plugin) {
 
         const promiseExecutor =
           (execute: Tool.Info["execute"]): Info["execute"] =>
-          (input, context) =>
-            run(
+          (input, tool) =>
+            Effect.runPromiseWith(context)(
               execute(input, {
-                ...context,
-                progress: (update) => Effect.promise(() => context.progress(update)),
+                ...tool,
+                progress: (update) => Effect.promise(() => tool.progress(update)),
               }),
+              { signal: tool.signal },
             )
 
         const adaptApiMethod = <PromiseMethod>(
@@ -612,9 +613,10 @@ function attempt<A>(evaluate: (signal: AbortSignal) => PromiseLike<A>) {
 type RuntimeSchema = Schema.Codec<unknown, unknown>
 
 const executePromiseTool = (tool: Info, input: any, context: Tool.Context) =>
-  Effect.promise(() =>
+  Effect.promise((signal) =>
     tool.execute(input, {
       ...context,
-      progress: (update) => Effect.runPromise(context.progress(update)),
+      signal,
+      progress: (update) => Effect.runPromise(context.progress(update), { signal }),
     }),
   )

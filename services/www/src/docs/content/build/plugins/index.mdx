@@ -927,6 +927,16 @@ const registration = await ctx.tool.transform((editor) => {
 })
 ```
 
+Promise tool executors receive `tool.signal`. Pass it to cancellable work such as `fetch` so stopping the Session also
+stops the underlying operation.
+
+```ts
+execute: async ({ url }, tool) => {
+  const response = await fetch(url, { signal: tool.signal })
+  return { content: await response.text() }
+}
+```
+
 Call `reload()` after changing source data captured by the callback. Reload replays the active transforms without
 changing their order; it does not rerun plugin setup.
 
