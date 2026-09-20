@@ -22,6 +22,16 @@ describe("source syntax", () => {
 })
 
 describe("error identity", () => {
+  test("Error.isError is true for every Error value and nothing else", async () => {
+    expect(
+      await value(`
+        const caught = (() => { try { null.foo } catch (error) { return error } })()
+        return [Error.isError(new Error("x")), Error.isError(new RangeError("x")), Error.isError(caught),
+          Error.isError({ name: "Error", message: "x" }), Error.isError("Error"), Error.isError(null)]
+      `),
+    ).toEqual([true, true, true, false, false, false])
+  })
+
   test("awaiting the same rejected promise twice yields the same error object", async () => {
     expect(
       await value(`

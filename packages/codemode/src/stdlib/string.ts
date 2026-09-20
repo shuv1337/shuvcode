@@ -150,6 +150,8 @@ export const stringGlobal = <R>(ctx: Interpreter<R>) => {
     simple("valueOf", 0, (value) => value),
     simple("toLowerCase", 0, (value) => value.toLowerCase()),
     simple("toUpperCase", 0, (value) => value.toUpperCase()),
+    simple("toLocaleLowerCase", 0, (value) => value.toLowerCase()),
+    simple("toLocaleUpperCase", 0, (value) => value.toUpperCase()),
     simple("trim", 0, (value) => value.trim()),
     simple("trimStart", 0, (value) => value.trimStart()),
     simple("trimLeft", 0, (value) => value.trimStart()),

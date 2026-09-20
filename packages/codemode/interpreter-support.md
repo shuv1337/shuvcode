@@ -180,7 +180,8 @@ ultimate source of truth. Upstream test262 files run verbatim from `test/test262
       on any other value throws a catchable `TypeError` naming the callee: other built-in functions such as `Number`
       say `new` is unsupported and point at the plain call, user-defined functions report the constructor gap below,
       and non-callable values are not constructors. Error constructors take the ES2022 options object, so
-      `new Error(message, { cause })` installs a non-enumerable `cause` when the option is present.
+      `new Error(message, { cause })` installs a non-enumerable `cause` when the option is present. `Error.isError`
+      is true for every Error value.
 - [x] Arithmetic operators: `+`, `-`, `*`, `/`, `%`, and `**`.
 - [x] Equality and ordering: `==`, `!=`, `===`, `!==`, `<`, `<=`, `>`, and `>=`.
 - [x] Bitwise operators: `&`, `|`, `^`, `~`, `<<`, `>>`, and `>>>`.
@@ -270,8 +271,8 @@ ultimate source of truth. Upstream test262 files run verbatim from `test/test262
 - [x] `Object.is` for supported data values.
 - [x] `Object.groupBy` over finite collections and custom synchronous iterators/generators, with string-key coercion
       and plain-object results.
-- [x] `Object.prototype` methods on values: `toString` (`"[object Array]"`), `toLocaleString`, `valueOf`,
-      `hasOwnProperty`, `isPrototypeOf`, and `propertyIsEnumerable`.
+- [x] `Object.prototype` methods on values: `toString` (`"[object Array]"`), `toLocaleString` (calls the value's
+      `toString`, as in JS), `valueOf`, `hasOwnProperty`, `isPrototypeOf`, and `propertyIsEnumerable`.
 
 ## Arrays
 
@@ -285,7 +286,8 @@ ultimate source of truth. Upstream test262 files run verbatim from `test/test262
       `lastIndexOf`.
 - [x] Aggregation: `reduce` and `reduceRight`.
 - [x] Ordering: `sort`, `toSorted`, `reverse`, and `toReversed`.
-- [x] Access/copying: `at`, `slice`, `concat`, `flat`, `with`, and `join`.
+- [x] Access/copying: `at`, `slice`, `concat`, `flat`, `with`, `join`, and `toLocaleString` (each element's
+      `toLocaleString`, holes and nullish elements as empty strings).
 - [x] Mutation: `push`, `pop`, `shift`, `unshift`, `splice`, `fill`, and `copyWithin`.
 - [x] `keys`, `values`, `entries`, and `[Symbol.iterator]` (the same function as `values`) return live iterator objects
       with `next()` and `[Symbol.iterator]`, as in JS. Iterator objects are opaque references: they print as
@@ -308,7 +310,8 @@ ultimate source of truth. Upstream test262 files run verbatim from `test/test262
 
 ## Strings
 
-- [x] Case/normalization: `toLowerCase`, `toUpperCase`, `normalize`.
+- [x] Case/normalization: `toLowerCase`, `toUpperCase`, `normalize`, and the `toLocaleLowerCase`/`toLocaleUpperCase`
+      aliases, which ignore their locale argument and apply the default Unicode casing.
 - [x] Trimming: `trim`, `trimStart`, and `trimEnd`, plus the Annex B `trimLeft` and `trimRight` aliases.
 - [x] Searching/tests: `includes`, `startsWith`, `endsWith`, `indexOf`, `lastIndexOf`, and `search`.
 - [x] Slicing/access: `slice`, `substring`, Annex B `substr`, `at`, `charAt`, `charCodeAt`, and `codePointAt`.
@@ -332,7 +335,8 @@ ultimate source of truth. Upstream test262 files run verbatim from `test/test262
 - [x] Coercion functions: `Number`, `parseInt`, and `parseFloat`.
 - [x] Number predicates/parsers: `Number.isInteger`, `Number.isFinite`, `Number.isNaN`, `Number.isSafeInteger`,
       `Number.parseInt`, and `Number.parseFloat`.
-- [x] Number formatting: `toFixed`, `toPrecision`, `toExponential`, `toString`, and `valueOf`.
+- [x] Number formatting: `toFixed`, `toPrecision`, `toExponential`, `toString`, `valueOf`, and `toLocaleString`, which
+      always formats as `en-US` (`"1,234.5"`) so output does not depend on the host.
 - [x] Number constants: `MAX_SAFE_INTEGER`, `MIN_SAFE_INTEGER`, `MAX_VALUE`, `MIN_VALUE`, `EPSILON`, `NaN`,
       `POSITIVE_INFINITY`, and `NEGATIVE_INFINITY`.
 - [x] Math constants: `PI`, `E`, `LN2`, `LN10`, `LOG2E`, `LOG10E`, `SQRT2`, and `SQRT1_2`.
@@ -379,6 +383,8 @@ ultimate source of truth. Upstream test262 files run verbatim from `test/test262
       `TimeClip` behavior.
 - [x] `Date.prototype.toUTCString` and its `toGMTString` alias.
 - [x] `toDateString` and `toTimeString` in the host's local timezone.
+- [x] `toLocaleString`, `toLocaleDateString`, and `toLocaleTimeString` always format as `en-US` in UTC
+      (`"1/1/1970, 12:00:00 AM"`) so output does not depend on the host.
 - [x] Native one-argument Date coercion for supported values, including booleans, null, arrays, and plain objects.
 - [ ] Date setters and multi-argument construction coerce object arguments through `valueOf`/`toString` and surface
       their throws.
@@ -404,7 +410,7 @@ ultimate source of truth. Upstream test262 files run verbatim from `test/test262
 
 - [x] Static `Map.groupBy` over finite collections and custom synchronous iterators/generators, preserving key identity.
 - [x] `new Map()` from synchronous iterables of entries.
-- [x] Map `get`, `set`, `has`, `delete`, `clear`, `size`, and `forEach`.
+- [x] Map `get`, `set`, `has`, `delete`, `clear`, `size`, `forEach`, `getOrInsert`, and `getOrInsertComputed`.
 - [x] `new Set()` from synchronous iterables.
 - [x] Set `add`, `has`, `delete`, `clear`, `size`, and `forEach`.
 - [x] Live `keys`, `values`, `entries`, and `[Symbol.iterator]` iterators for Map and Set; a Set-like operand's `keys()`

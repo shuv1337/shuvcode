@@ -29,7 +29,7 @@ import {
   set,
 } from "../interpreter/objects.js"
 import { containsOpaqueReference, describeValue, rejectCircularInsertion } from "../interpreter/references.js"
-import { preserveConsumerError } from "../interpreter/callback.js"
+import { invoke, preserveConsumerError } from "../interpreter/callback.js"
 import type { Interpreter } from "../interpreter/interpreter.js"
 import { ToolReference } from "../tool-runtime.js"
 import { groupBy } from "./collections.js"
@@ -196,7 +196,7 @@ export const objectGlobal = <R>(ctx: Interpreter<R>) => {
         true,
     ],
     ["toString", 0, (thisValue) => `[object ${classTag(thisValue)}]`],
-    ["toLocaleString", 0, (thisValue) => `[object ${classTag(thisValue)}]`],
+    ["toLocaleString", 0, (thisValue) => invoke(ctx, thisValue, "toString", "Object.prototype.toLocaleString")],
     [
       "valueOf",
       0,

@@ -52,6 +52,14 @@ export const createErrorValue = (prototype: Obj, message: string | undefined): E
   return value
 }
 
+/** The prototype a primitive reads its methods from without being boxed; none for null, undefined, and symbols. */
+export const primitivePrototype = (builtins: Builtins, value: unknown): Obj | undefined => {
+  if (typeof value === "string") return builtins.String
+  if (typeof value === "number") return builtins.Number
+  if (typeof value === "boolean") return builtins.Boolean
+  return undefined
+}
+
 export const createBuiltins = (): Builtins => {
   const object = new Obj(null)
   // Function.prototype is itself callable and returns undefined.

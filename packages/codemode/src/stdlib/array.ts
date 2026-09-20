@@ -4,7 +4,7 @@ import { checkArrayLength, checkStringLength, MAX_ARRAY_LENGTH } from "../interp
 import { invalidData, IteratorSymbol, rangeError, typeError } from "../interpreter/model.js"
 import { define, get, hidden, Arr, GeneratorObj, IteratorObj, Obj } from "../interpreter/objects.js"
 import { describeValue, rejectCircularInsertion } from "../interpreter/references.js"
-import { applyCollectionCallback, preserveConsumerError } from "../interpreter/callback.js"
+import { applyCollectionCallback, invoke, preserveConsumerError } from "../interpreter/callback.js"
 import type { Interpreter } from "../interpreter/interpreter.js"
 import { compareText } from "../tool-runtime.js"
 import { coerceToNumber, coerceToString } from "./value.js"
@@ -339,6 +339,19 @@ export const arrayGlobal = <R>(ctx: Interpreter<R>) => {
         )
         return target
       },
+    ],
+    [
+      "toLocaleString",
+      0,
+      (thisValue) =>
+        Effect.map(
+          Effect.forEach(self(thisValue, "toLocaleString").items, (item) =>
+            item === null || item === undefined
+              ? Effect.succeed("")
+              : Effect.map(invoke(ctx, item, "toLocaleString", "Array.prototype.toLocaleString"), coerceToString),
+          ),
+          (parts) => parts.join(","),
+        ),
     ],
     ["keys", 0, (thisValue) => new IteratorObj(builtins.Iterator, self(thisValue, "keys").items.keys())],
     ["values", 0, (thisValue) => new IteratorObj(builtins.Iterator, self(thisValue, "values").items.values())],

@@ -62,7 +62,7 @@ import {
 } from "./model.js"
 import { checkStringLength } from "./limits.js"
 import { locate, materialize } from "./errors.js"
-import type { Builtins } from "./intrinsics.js"
+import { type Builtins, primitivePrototype } from "./intrinsics.js"
 import { globals } from "./globals.js"
 import {
   assign,
@@ -2071,16 +2071,14 @@ class Frame<R> {
 
       if (objectValue instanceof Obj) return { target: objectValue, key, receiver: objectValue }
 
-      // Primitives read through their wrapper prototype without being boxed; strings own length and indexes.
-      const builtins = self.ctx.builtins
+      // Strings own length and indexes; every other primitive property reads through the wrapper prototype.
       if (typeof objectValue === "string") {
         if (key === "length") return { value: objectValue.length }
         const index = typeof key === "symbol" ? undefined : parseArrayIndex(key)
         if (index !== undefined) return { value: objectValue[index] }
-        return { target: builtins.String, key, receiver: objectValue }
       }
-      if (typeof objectValue === "number") return { target: builtins.Number, key, receiver: objectValue }
-      if (typeof objectValue === "boolean") return { target: builtins.Boolean, key, receiver: objectValue }
+      const proto = primitivePrototype(self.ctx.builtins, objectValue)
+      if (proto !== undefined) return { target: proto, key, receiver: objectValue }
 
       if (objectValue === null || objectValue === undefined) {
         throw typeError(`Cannot read properties of ${objectValue} (reading '${String(key)}').`, objectNode)

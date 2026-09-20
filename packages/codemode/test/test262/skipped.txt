@@ -225,7 +225,6 @@ built-ins/Array/prototype/splice/S15.4.4.12_A4_T1.js  # Array.prototype.splice c
 built-ins/Array/prototype/splice/S15.4.4.12_A4_T2.js  # Array.prototype.splice called on incompatible receiver a data object.
 built-ins/Array/prototype/splice/S15.4.4.12_A4_T3.js  # Array.prototype.splice called on incompatible receiver a data object.
 built-ins/Array/prototype/splice/create-ctor-non-object.js  # null value Expected a TypeError to be thrown but no exception was thrown at all
-built-ins/Array/prototype/toLocaleString/S15.4.4.3_A1_T1.js  # #1: var n = 0; var obj = {toLocaleString: function() {n++}}; var arr = [undefined, obj, null, obj, o
 built-ins/Array/prototype/toLocaleString/S15.4.4.3_A3_T1.js  # #1: var n = 0; var obj = {toLocaleString: function() {n++}}; Array.prototype[1] = obj; x = [obj]; x.
 built-ins/Array/prototype/toReversed/holes-not-preserved.js  # Actual [4, undefined, 2, undefined, 0] and expected [4, 3, 2, undefined, 0] should have the same con
 built-ins/Array/prototype/toSorted/holes-not-preserved.js  # Actual [1, 3, 4, undefined, undefined] and expected [1, 2, 3, 4, undefined] should have the same con

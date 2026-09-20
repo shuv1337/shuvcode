@@ -145,6 +145,29 @@ export const mapGlobal = <R>(ctx: Interpreter<R>) => {
         return target
       },
     ],
+    [
+      "getOrInsert",
+      2,
+      (thisValue, args) => {
+        const target = self(thisValue, "getOrInsert").map
+        if (!target.has(args[0])) target.set(args[0], args[1])
+        return target.get(args[0])
+      },
+    ],
+    [
+      "getOrInsertComputed",
+      2,
+      (thisValue, args) => {
+        const target = self(thisValue, "getOrInsertComputed").map
+        const apply = applyCollectionCallback(ctx, args[1], "Map.getOrInsertComputed")
+        if (target.has(args[0])) return target.get(args[0])
+        // The callback sees the stored key (-0 is +0) and its result wins over anything it inserted itself.
+        return Effect.map(apply([args[0] === 0 ? 0 : args[0]]), (value) => {
+          target.set(args[0], value)
+          return value
+        })
+      },
+    ],
     ["delete", 1, (thisValue, args) => self(thisValue, "delete").map.delete(args[0])],
     [
       "clear",

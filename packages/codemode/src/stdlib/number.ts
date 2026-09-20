@@ -50,6 +50,7 @@ export const numberGlobal = <R>(ctx: Interpreter<R>) => {
   }
   methods(builtins, builtins.Number, [
     ["toFixed", 1, (thisValue, args) => self(thisValue, "toFixed").toFixed(optNum("toFixed", args[0]))],
+    ["toLocaleString", 0, (thisValue) => self(thisValue, "toLocaleString").toLocaleString("en-US")],
     [
       "toExponential",
       1,

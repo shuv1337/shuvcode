@@ -168,6 +168,7 @@ export const errorGlobal = <R>(type: ErrorType, ctx: Interpreter<R>) => {
     methods(builtins, prototype, [
       ["toString", 0, (thisValue) => errorToString(receiver(Obj, thisValue, "Error.prototype.toString"))],
     ])
+    methods(builtins, ctor, [["isError", 1, (_, args) => args[0] instanceof ErrorObj]])
   }
   return ctor
 }

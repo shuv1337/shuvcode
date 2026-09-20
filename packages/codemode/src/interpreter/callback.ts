@@ -1,6 +1,7 @@
 import { Effect, Exit } from "effect"
 import { coerceToNumber, coerceToString } from "../stdlib/value.js"
 import type { Interpreter } from "./interpreter.js"
+import { primitivePrototype } from "./intrinsics.js"
 import { typeError } from "./model.js"
 import { Callable, get, Native, DateObj, Obj } from "./objects.js"
 import { typeofValue } from "./references.js"
@@ -41,6 +42,13 @@ export const toPrimitive = <R>(
     }
     throw typeError("Cannot convert object to primitive value.")
   })
+}
+
+/** Invoke(value, name): calls the method the value would find through its prototype. */
+export const invoke = <R>(ctx: Interpreter<R>, value: unknown, name: string, label: string) => {
+  const target = value instanceof Obj ? value : primitivePrototype(ctx.builtins, value)
+  if (target === undefined) throw typeError(`${label} called on null or undefined.`)
+  return ctx.call(get(target, name), value, [])
 }
 
 export const toPrimitiveString = <R>(ctx: Interpreter<R>, value: unknown) =>

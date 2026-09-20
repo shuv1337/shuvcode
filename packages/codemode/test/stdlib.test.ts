@@ -898,6 +898,42 @@ describe("Map", () => {
     ).toEqual({ a: 3, b: 1, c: 1 })
   })
 
+  test("getOrInsert and getOrInsertComputed insert only when the key is missing", async () => {
+    expect(
+      await value(`
+      const groups = new Map()
+      groups.getOrInsert("a", []).push(1)
+      groups.getOrInsert("a", []).push(2)
+      let calls = 0
+      const computed = (key) => { calls++; return key + "!" }
+      const first = groups.getOrInsertComputed("b", computed)
+      const second = groups.getOrInsertComputed("b", computed)
+      const zero = groups.getOrInsertComputed(-0, (key) => 1 / key === Infinity)
+      return [[...groups], first, second, calls, zero]
+    `),
+    ).toEqual([
+      [
+        ["a", [1, 2]],
+        ["b", "b!"],
+        [0, true],
+      ],
+      "b!",
+      "b!",
+      1,
+      true,
+    ])
+    expect(
+      await value(`
+      const m = new Map()
+      const outer = m.getOrInsertComputed("k", () => { m.set("k", "inner"); return "outer" })
+      let thrown
+      try { m.getOrInsertComputed("j", () => { throw new Error("boom") }) } catch (error) { thrown = error.message }
+      return [outer, m.get("k"), thrown, m.has("j")]
+    `),
+    ).toEqual(["outer", "outer", "boom", false])
+    expect((await error(`new Map().getOrInsertComputed("k", 5)`)).message).toContain("expects a function callback")
+  })
+
   test("maps serialize to {} at the boundary, like JSON", async () => {
     expect(await value(`return new Map([["a", 1]])`)).toEqual({})
     expect(await value(`return JSON.stringify(new Map([["a", 1]]))`)).toBe("{}")
@@ -1061,7 +1097,7 @@ describe("Uint8Array", () => {
       console.log(b, new Uint8Array())
       return [String(b), b + "", +new Uint8Array([5]), Number.isNaN(Number(b)), b == "1,2", JSON.stringify(b), b.toLocaleString(), typeof b, b instanceof Uint8Array]
     `),
-    ).toEqual(["1,2", "1,2", 5, true, true, '{"0":1,"1":2}', "[object Uint8Array]", "object", true])
+    ).toEqual(["1,2", "1,2", 5, true, true, '{"0":1,"1":2}', "1,2", "object", true])
     expect((await run(`console.log(new Uint8Array([1, 2]), new Uint8Array())`)).logs).toEqual([
       "Uint8Array(2) [1,2] Uint8Array(0) []",
     ])
@@ -1228,6 +1264,49 @@ describe("built-in iterators", () => {
     expect((await error(`const it = [1].keys(); const next = it.next; return next()`)).message).toContain(
       "Iterator.prototype.next called on incompatible receiver undefined",
     )
+  })
+})
+
+describe("toLocaleString", () => {
+  test("numbers and dates format as en-US in UTC; everything else falls back to toString", async () => {
+    expect(
+      await value(`
+      return [
+        (1234567.891).toLocaleString(), new Date(0).toLocaleString(), new Date(0).toLocaleDateString(),
+        new Date(0).toLocaleTimeString(), "a".toLocaleString(), true.toLocaleString(), ({}).toLocaleString(),
+        ({ toString: () => "custom" }).toLocaleString(), new Uint8Array([1, 2]).toLocaleString(),
+      ]
+    `),
+    ).toEqual([
+      "1,234,567.891",
+      "1/1/1970, 12:00:00 AM",
+      "1/1/1970",
+      "12:00:00 AM",
+      "a",
+      "true",
+      "[object Object]",
+      "custom",
+      "1,2",
+    ])
+  })
+
+  test("arrays join each element's toLocaleString, skipping holes and nullish elements", async () => {
+    expect(
+      await value(`
+      let calls = 0
+      const item = { toLocaleString() { calls++; return "o" } }
+      return [[1234.5, "x", null, undefined, item, new Date(0)].toLocaleString(), [, item, , item].toLocaleString(), calls]
+    `),
+    ).toEqual(["1,234.5,x,,,o,1/1/1970, 12:00:00 AM", ",o,,o", 3])
+    expect((await error(`const f = ({}).toLocaleString; f()`)).message).toContain(
+      "Object.prototype.toLocaleString called on null or undefined",
+    )
+  })
+
+  test("toLocaleLowerCase and toLocaleUpperCase ignore the locale argument", async () => {
+    expect(
+      await value(`return ["ABC".toLocaleLowerCase("tr"), "abc".toLocaleUpperCase(), "İ".toLocaleLowerCase()]`),
+    ).toEqual(["abc", "ABC", "i̇"])
   })
 })
 

@@ -105,6 +105,13 @@ export const dateGlobal = <R>(ctx: Interpreter<R>) => {
     ["toTimeString", 0, (thisValue) => new Date(self(thisValue, "toTimeString").time).toTimeString()],
     ["toUTCString", 0, (thisValue) => new Date(self(thisValue, "toUTCString").time).toUTCString()],
     ["toGMTString", 0, (thisValue) => new Date(self(thisValue, "toGMTString").time).toUTCString()],
+    ...(["toLocaleString", "toLocaleDateString", "toLocaleTimeString"] as const).map(
+      (name): Method => [
+        name,
+        0,
+        (thisValue) => new Date(self(thisValue, name).time)[name]("en-US", { timeZone: "UTC" }),
+      ],
+    ),
     ...getters.map((name): Method => [name, 0, (thisValue) => new Date(self(thisValue, name).time)[name]()]),
     ...setters.map(
       ([name, length]): Method => [
