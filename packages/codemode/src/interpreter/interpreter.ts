@@ -110,20 +110,25 @@ const loopExit = (result: StatementResult, labels: ReadonlySet<string> | undefin
   return undefined
 }
 
-const calleeDescription = (callee: Expression | Super | undefined): string => {
-  if (callee?.type === "Identifier") return callee.name
-  if (callee?.type === "MemberExpression") {
-    const object = callee.object
-    const property = callee.property
-    const key =
-      !callee.computed && property.type === "Identifier"
-        ? property.name
-        : property.type === "Literal" && typeof property.value === "string"
-          ? property.value
-          : undefined
-    if (object.type === "Identifier" && key !== undefined) return `${object.name}.${key}`
+// Native engines name the callee (`search(...).catch is not a function`), including call chains. Returns
+// undefined when a link cannot be named, so a chain is either named completely or not at all.
+const calleeDescription = (node: Expression | Super | undefined): string | undefined => {
+  if (node?.type === "Identifier") return node.name
+  if (node?.type === "CallExpression") {
+    const target = calleeDescription(node.callee)
+    return target === undefined ? undefined : `${target}(...)`
   }
-  return "The called value"
+  if (node?.type !== "MemberExpression") return undefined
+  const property = node.property
+  const key =
+    !node.computed && property.type === "Identifier"
+      ? property.name
+      : property.type === "Literal" && typeof property.value === "string"
+        ? property.value
+        : undefined
+  if (key === undefined) return undefined
+  const object = calleeDescription(node.object)
+  return object === undefined ? undefined : `${object}.${key}`
 }
 
 // OrdinaryHasInstance: walk the left operand's chain looking for the constructor's `prototype`.
@@ -1305,7 +1310,7 @@ class Frame<R> {
         // `new` itself is supported, so a non-constructible callee is a TypeError like JS rather than
         // unsupported syntax. Built-ins like Number are real constructors in JS, so do not claim
         // otherwise; say `new` is unsupported for them and point at the plain call.
-        const name = calleeDescription(node.callee)
+        const name = calleeDescription(node.callee) ?? "The called value"
         const message =
           callee instanceof Fn
             ? `${name} cannot be constructed: user-defined constructors and classes are not supported. Call it as a function that returns a plain object instead.`
@@ -1608,7 +1613,7 @@ class Frame<R> {
       if (callable instanceof Native) {
         return yield* self.native(() => (callable as Native<R>).call(thisValue, args), node)
       }
-      throw typeError(`${calleeDescription(callee)} is not a function.`, callee ?? node)
+      throw typeError(`${calleeDescription(callee) ?? "The called value"} is not a function.`, callee ?? node)
     })
   }
 

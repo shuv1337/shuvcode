@@ -20,9 +20,9 @@ import { CodeMode, Tool } from "../src/index.js"
 
 // Standard-library value types: Date, RegExp, Map, Set. Programs use them as ordinary JS;
 // intra-CodeMode checkpoints (Object.* helpers, spread, coercion inputs) preserve the live
-// values, while at the host boundary (final result, tool arguments, JSON.stringify) they
-// serialize exactly as JSON.stringify would: Date -> ISO string (invalid -> null),
-// URL -> href, and RegExp/Map/Set/URLSearchParams -> {}.
+// values. JSON.stringify keeps Date -> ISO string (invalid -> null), URL -> href, and
+// RegExp/Map/Set/URLSearchParams -> {}. The host boundary matches that except URLSearchParams,
+// which cross as their query string, and Set, which crosses as an array.
 const run = (code: string) => Effect.runPromise(CodeMode.execute({ code, tools: {} }))
 const value = async (code: string) => {
   const result = await run(code)

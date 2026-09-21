@@ -86,9 +86,10 @@ export const unsupportedSyntax = (kind: string, node: AstNode): PendingThrow =>
 export const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null
 
+// Acorn lines are 1-based and its columns are 0-based. Diagnostics use 1-based columns of the submitted source.
 export const sourceLocation = (node: AstNode): { readonly line: number; readonly column: number } => ({
-  line: Math.max(1, (node.loc?.start.line ?? 2) - 1),
-  column: Math.max(1, (node.loc?.start.column ?? 4) - 3),
+  line: node.loc?.start.line ?? 1,
+  column: (node.loc?.start.column ?? 0) + 1,
 })
 
 export const formatLocation = (node?: AstNode): string => {
