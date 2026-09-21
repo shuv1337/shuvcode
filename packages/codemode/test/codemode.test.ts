@@ -995,6 +995,10 @@ describe("CodeMode public contract", () => {
       expect(value.items[0]?.path).toBe("tools.linear.list_issues")
     }
 
+    const prefixed = await Effect.runPromise(runtime.execute(`return search({ query: "", namespace: "tools.github" })`))
+    expect(prefixed.ok).toBe(true)
+    if (prefixed.ok) expect((prefixed.value as { items: Array<unknown> }).items).toHaveLength(2)
+
     const invalid = await Effect.runPromise(runtime.execute(`return search({ query: "issues", namespace: 7 })`))
     expect(invalid.ok).toBe(false)
     if (!invalid.ok) expect(invalid.error.kind).toBe("InvalidToolInput")

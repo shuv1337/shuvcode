@@ -221,14 +221,15 @@ const makeSearchTool = (searchIndex: ReadonlyArray<SearchEntry>): Tool => ({
       const request = input as typeof SearchInput.Type
       const query = request.query ?? ""
       const offset = request.offset ?? 0
+      let ns = request.namespace
+      if (ns !== undefined && !searchIndex.some((entry) => entry.description.path.startsWith("tools."))) {
+        if (ns === "tools") ns = undefined
+        else if (ns.startsWith("tools.")) ns = ns.slice("tools.".length)
+      }
       const scoped =
-        request.namespace === undefined
+        ns === undefined
           ? searchIndex
-          : searchIndex.filter(
-              (entry) =>
-                entry.description.path === request.namespace ||
-                entry.description.path.startsWith(`${request.namespace}.`),
-            )
+          : searchIndex.filter((entry) => entry.description.path === ns || entry.description.path.startsWith(`${ns}.`))
       const trimmed = query.trim()
       const pathQuery = trimmed.startsWith("tools.") ? trimmed.slice("tools.".length) : trimmed
       const exact =
