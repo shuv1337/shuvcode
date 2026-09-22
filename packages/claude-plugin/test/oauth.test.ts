@@ -42,6 +42,7 @@ describe("OAuth boundary", () => {
         fetch: async (url, init) => {
           expect(url).toBe("https://platform.claude.com/v1/oauth/token")
           expect(init.signal).toBe(abort.signal)
+          expect(new Headers(init.headers).get("user-agent")).toBe("claude-cli/2.1.280 (external, cli)")
           const body = new URLSearchParams(String(init.body))
           expect(body.get("code")).toBe("code")
           expect(body.get("code_verifier")).toBe("verifier")

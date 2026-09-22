@@ -65,7 +65,7 @@ describe("wire shaping", () => {
     const result = headers({ "Anthropic-Beta": "custom,oauth-2025-04-20" })
     expect(result["anthropic-beta"].split(",").filter((flag) => flag === "oauth-2025-04-20")).toHaveLength(1)
     expect(result["anthropic-beta"]).toContain("custom")
-    expect(result["user-agent"]).toBe("claude-cli/2.1.260 (external, cli)")
+    expect(result["user-agent"]).toBe("claude-cli/2.1.280 (external, cli)")
   })
 })
 

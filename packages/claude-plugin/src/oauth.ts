@@ -4,7 +4,7 @@ import { Effect, Option, Schema } from "effect"
 
 export const methodID = IntegrationMethodID.make("claude-pro-max")
 export const integrationID = "anthropic"
-export const userAgent = "claude-cli/2.1.260 (external, cli)"
+export const userAgent = "claude-cli/2.1.280 (external, cli)"
 const clientID = "9d1c250a-e61b-44d9-88ed-5944d1962f5e"
 const redirectURI = "https://platform.claude.com/oauth/code/callback"
 const tokenEndpoint = "https://platform.claude.com/v1/oauth/token"
