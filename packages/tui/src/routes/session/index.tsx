@@ -1530,11 +1530,12 @@ function TurnTokenUsage(props: {
   }))
   const summary = createMemo(() => {
     const items = steps()
+    const latest = items.at(-1)
     return {
       count: items.length,
-      newTokens: items.reduce((sum, item) => sum + item.newTokens, 0),
-      cached: items.reduce((sum, item) => sum + item.cached, 0),
-      total: items.reduce((sum, item) => sum + item.total, 0),
+      latestNewTokens: latest?.newTokens ?? 0,
+      latestCached: latest?.cached ?? 0,
+      latestTotal: latest?.total ?? 0,
       reuseDrops: items.filter((item) => item.reuseDrop !== undefined).length,
     }
   })
@@ -1554,8 +1555,9 @@ function TurnTokenUsage(props: {
             <span>{expanded() ? "- " : "+ "}</span>
             <span style={{ attributes: TextAttributes.BOLD }}>Tokens</span>
             <span>
-              : {summary().count} {summary().count === 1 ? "step" : "steps"} · {summary().newTokens.toLocaleString()}{" "}
-              new · {summary().cached.toLocaleString()} cached · {summary().total.toLocaleString()} total
+              : {summary().count} {summary().count === 1 ? "step" : "steps"} · latest:{" "}
+              {summary().latestNewTokens.toLocaleString()} new · {summary().latestCached.toLocaleString()} cached ·{" "}
+              {summary().latestTotal.toLocaleString()} total
             </span>
             <Show when={summary().reuseDrops > 0}>
               <span style={{ fg: theme.text.feedback.warning.base }}>
