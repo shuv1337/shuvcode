@@ -103,12 +103,13 @@ jobs:
       - name: Run unit tests
         timeout-minutes: 20
         run: |
-          # OpenCode infra trees stay in the repo but are outside fork CI (plan decision 14).
+          # OpenCode infra trees stay in the repo but are outside fork CI.
+          # The runners have four vCPUs, and each Bun test process performs its own concurrent work.
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            GITHUB_ACTIONS=false bun turbo test --filter='!@opencode/desktop' --filter='!@opencode/update'
+            GITHUB_ACTIONS=false bun turbo test --concurrency=3 --filter='!@opencode/desktop' --filter='!@opencode/update'
             exit 0
           fi
-          GITHUB_ACTIONS=false bun turbo test --affected --filter='!@opencode/desktop' --filter='!@opencode/update'
+          GITHUB_ACTIONS=false bun turbo test --affected --concurrency=3 --filter='!@opencode/desktop' --filter='!@opencode/update'
         env:
           TURBO_SCM_BASE: ${{ github.event_name == 'pull_request' && format('{0}^1', github.sha) || github.event.before }}
           TURBO_SCM_HEAD: ${{ github.sha }}

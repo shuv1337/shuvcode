@@ -5,7 +5,9 @@ import { Context, Duration, Effect, FileSystem, Layer, Ref } from "effect"
 import { ChildProcess } from "effect/unstable/process"
 import { parse, type ParseError } from "jsonc-parser"
 import path from "node:path"
+import { stripVTControlCharacters } from "node:util"
 import { action, parseReleaseVersion, type Policy } from "./updater-action"
+import { errorMessage } from "../util/error"
 
 declare const OPENCODE_CLI_NAME: string | undefined
 
@@ -18,6 +20,75 @@ export const methods = ["npm", "pnpm", "bun", "yarn"] as const
 export type Method = (typeof methods)[number]
 export type RunResult = { readonly type: "available" | "installed"; readonly version: string }
 export type CheckResult = RunResult | { readonly type: "unavailable"; readonly message: string }
+
+export class UpgradeError extends Error {
+  readonly title: string
+  readonly detail: string
+  readonly command?: string
+  readonly retry: string
+
+  constructor(
+    input: {
+      readonly title: string
+      readonly detail: string
+      readonly command?: string
+      readonly retry: string
+    },
+    options?: ErrorOptions,
+  ) {
+    super(input.detail, options)
+    this.name = "UpgradeError"
+    this.title = input.title
+    this.detail = input.detail
+    this.command = input.command
+    this.retry = input.retry
+  }
+}
+
+const installNames: Record<Method, string> = {
+  npm: "npm",
+  pnpm: "pnpm",
+  bun: "Bun",
+  yarn: "Yarn",
+}
+
+function conciseDetail(input: string) {
+  const lines = stripVTControlCharacters(input)
+    .trim()
+    .replaceAll("\r", "\n")
+    .split("\n")
+    .map((line) => line.trimEnd())
+    .filter((line) => line.trim().length > 0)
+  const tail = lines.slice(-12).join("\n")
+  const clipped = tail.length > 2_000
+  const detail = clipped ? `…${tail.slice(-1_999)}` : tail
+  if (!detail) return
+  if (lines.length <= 12 && !clipped) return detail
+  return `${detail}\n\nOutput shortened to the last 12 lines.`
+}
+
+function errorDetail(cause: unknown): string {
+  if (cause instanceof AppProcess.AppProcessError) {
+    const stderr = conciseDetail(cause.stderr ?? "")
+    if (stderr) return stderr
+    if (cause.cause !== undefined) return errorDetail(cause.cause)
+    return cause.message
+  }
+  if (cause instanceof Error) {
+    const detail = cause.cause === undefined ? undefined : errorDetail(cause.cause)
+    if (!detail || detail === cause.message) return cause.message
+    return `${cause.message}: ${detail}`
+  }
+  return errorMessage(cause)
+}
+
+function resultDetail(result: { code: number; stdout: string; stderr: string }) {
+  return (
+    conciseDetail(result.stderr) ??
+    conciseDetail(result.stdout) ??
+    `The command exited with code ${result.code} without any error output.`
+  )
+}
 
 export interface Interface {
   readonly run: (onInstall?: (version: string) => void) => Effect.Effect<RunResult | undefined>
@@ -112,7 +183,6 @@ const make = Effect.gen(function* () {
           stdout: result.stdout.toString("utf8"),
           stderr: result.stderr.toString("utf8"),
         })),
-        Effect.orElseSucceed(() => ({ code: 1, stdout: "", stderr: "" })),
       )
   })
 
@@ -126,7 +196,11 @@ const make = Effect.gen(function* () {
     ]
     const results = yield* Effect.forEach(
       checks,
-      (check) => exec(check.command).pipe(Effect.map((result) => ({ check, result }))),
+      (check) =>
+        exec(check.command).pipe(
+          Effect.orElseSucceed(() => ({ code: 1, stdout: "", stderr: "" })),
+          Effect.map((result) => ({ check, result })),
+        ),
       { concurrency: "unbounded" },
     )
     return results.find((result) => result.result.stdout.includes(installedPackage))?.check.method
@@ -145,9 +219,7 @@ const make = Effect.gen(function* () {
       command,
       run: exec(command, "5 minutes").pipe(
         Effect.flatMap((result) =>
-          result.code === 0
-            ? Effect.void
-            : Effect.fail(new Error(result.stderr.trim() || `Failed to uninstall with ${method}`)),
+          result.code === 0 ? Effect.void : Effect.fail(new Error(resultDetail(result))),
         ),
       ),
     }
@@ -161,12 +233,35 @@ const make = Effect.gen(function* () {
           headers: { "User-Agent": `shuvcode/${OPENCODE_VERSION}` },
           signal: AbortSignal.any([signal, AbortSignal.timeout(10_000)]),
         }),
-      catch: (cause) => new Error("Failed to check for updates", { cause }),
+      catch: (cause) =>
+        new UpgradeError(
+          {
+            title: "Could not check for Shuvcode updates",
+            detail: errorDetail(cause),
+            retry: "Check your network, then run shuvcode upgrade again.",
+          },
+          { cause },
+        ),
     })
-    if (!response.ok) return yield* Effect.fail(new Error(`Update check failed with status ${response.status}`))
+    if (!response.ok)
+      return yield* Effect.fail(
+        new UpgradeError({
+          title: "Could not check for Shuvcode updates",
+          detail: `The npm registry returned HTTP ${response.status}.`,
+          retry: "Try again in a few minutes.",
+        }),
+      )
     const data: { version: string } = yield* Effect.tryPromise({
       try: () => response.json(),
-      catch: (cause) => new Error("Failed to read update information", { cause }),
+      catch: (cause) =>
+        new UpgradeError(
+          {
+            title: "Could not read the Shuvcode update information",
+            detail: errorDetail(cause),
+            retry: "Try again in a few minutes.",
+          },
+          { cause },
+        ),
     })
     return { package: packageName, version: data.version }
   })
@@ -178,12 +273,42 @@ const make = Effect.gen(function* () {
       fs.remove(directory, { recursive: true, force: true }).pipe(Effect.ignore),
     )
 
+  const runUpgrade = (input: {
+    readonly method: Method
+    readonly command: string[]
+    readonly displayCommand?: string[]
+  }) => {
+    const failure = (detail: string, cause?: unknown) =>
+      new UpgradeError(
+        {
+          title: `${installNames[input.method]} could not install Shuvcode`,
+          detail,
+          command: (input.displayCommand ?? input.command).join(" "),
+          retry: "Fix the issue above, then run shuvcode upgrade again.",
+        },
+        cause === undefined ? undefined : { cause },
+      )
+    return exec(input.command, "5 minutes").pipe(
+      Effect.flatMap((result) => (result.code === 0 ? Effect.succeed(result) : Effect.fail(failure(resultDetail(result))))),
+      Effect.mapError((cause) =>
+        cause instanceof UpgradeError
+          ? cause
+          : failure(
+              cause instanceof AppProcess.AppProcessError && cause.stderr === undefined && cause.cause === undefined
+                ? `Failed to update with ${input.method}`
+                : errorDetail(cause),
+              cause,
+            ),
+      ),
+    )
+  }
+
   const upgrade = Effect.fnUntraced(function* (method: Method, input: string) {
     if (!parseReleaseVersion(input)) return yield* Effect.fail(new Error(`Invalid version: ${input}`))
     const version = input.trim().replace(/^v/, "")
-    const packageName = (yield* release()).package
-    const target = `${packageName}@${version}`
-    if (installedPackage && packageName !== installedPackage && (method === "pnpm" || method === "yarn")) {
+    const targetPackage = (yield* release()).package
+    const target = `${targetPackage}@${version}`
+    if (installedPackage && targetPackage !== installedPackage && (method === "pnpm" || method === "yarn")) {
       return yield* Effect.fail(new Error(`Reinstall ${target} with ${method} to migrate from ${installedPackage}.`))
     }
     const commands: Record<Exclude<Method, "bun">, string[]> = {
@@ -192,25 +317,41 @@ const make = Effect.gen(function* () {
         "npm",
         "install",
         "--global",
-        ...(installedPackage && packageName !== installedPackage ? ["--force"] : []),
+        ...(installedPackage && targetPackage !== installedPackage ? ["--force"] : []),
         target,
       ],
-      pnpm: ["pnpm", "add", "--global", `--allow-build=${packageName}`, target],
+      pnpm: ["pnpm", "add", "--global", `--allow-build=${targetPackage}`, target],
       yarn: ["yarn", "global", "add", target],
     }
-    const result = yield* Effect.scoped(
+    yield* Effect.scoped(
       Effect.gen(function* () {
         if (method === "bun") {
           // Bun does not prune old versions from its shared package cache.
           yield* fs.makeDirectory(global.cache, { recursive: true })
           const cache = yield* temporaryDirectory("update-")
-          return yield* exec(["bun", "install", "--global", "--trust", "--cache-dir", cache, target], "5 minutes")
+          return yield* runUpgrade({
+            method,
+            command: ["bun", "install", "--global", "--trust", "--cache-dir", cache, target],
+            displayCommand: ["bun", "install", "--global", "--trust", target],
+          })
         }
-        return yield* exec(commands[method], "5 minutes")
+        return yield* runUpgrade({ method, command: commands[method] })
       }),
-    ).pipe(Effect.mapError((cause) => new Error(`Failed to update with ${method}`, { cause })))
-    if (result.code === 0) return
-    return yield* Effect.fail(new Error(result.stderr.trim() || `Failed to update with ${method}`))
+    ).pipe(
+      Effect.mapError((cause) =>
+        cause instanceof UpgradeError
+          ? cause
+          : new UpgradeError(
+              {
+                title: "Could not prepare the Shuvcode upgrade",
+                detail: errorDetail(cause),
+                retry: "Fix the issue above, then run shuvcode upgrade again.",
+              },
+              { cause },
+            ),
+      ),
+      Effect.asVoid,
+    )
   })
 
   const inspect = Effect.fnUntraced(function* () {

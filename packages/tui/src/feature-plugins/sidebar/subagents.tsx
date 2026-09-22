@@ -45,13 +45,13 @@ export function SidebarSubagents(props: { context: Plugin.Context; sessionID: st
           minWidth={0}
           onMouseDown={() => void setCollapsed((draft) => void (draft.root = !draft.root))}
         >
-          <text fg={theme.text.default} flexShrink={0}>
+          <text fg={theme.text.base} flexShrink={0}>
             {open() ? "▼" : "▶"}
           </text>
-          <text fg={theme.text.default} wrapMode="none" truncate flexGrow={1} flexShrink={1} minWidth={0}>
+          <text fg={theme.text.base} wrapMode="none" truncate flexGrow={1} flexShrink={1} minWidth={0}>
             <b>Subagents</b>
             <Show when={!open()}>
-              <span style={{ fg: theme.text.subdued }}> {summary()}</span>
+              <span style={{ fg: theme.text.muted }}> {summary()}</span>
             </Show>
           </text>
         </box>
@@ -64,13 +64,13 @@ export function SidebarSubagents(props: { context: Plugin.Context; sessionID: st
                     flexShrink={0}
                     fg={
                       group[1].some((session) => props.context.data.session.status(session.id) === "running")
-                        ? theme.text.status.running
-                        : theme.text.default
+                        ? theme.text.feedback.info.base
+                        : theme.text.base
                     }
                   >
                     •
                   </text>
-                  <text fg={theme.text.default} wrapMode="none" truncate flexGrow={1} flexShrink={1} minWidth={0}>
+                  <text fg={theme.text.base} wrapMode="none" truncate flexGrow={1} flexShrink={1} minWidth={0}>
                     <b>{group[0]}</b>
                   </text>
                 </box>
@@ -89,7 +89,7 @@ export function SidebarSubagents(props: { context: Plugin.Context; sessionID: st
                           {glyph(session, status)}
                         </text>
                         <text
-                          fg={status === "running" ? theme.text.default : theme.text.subdued}
+                          fg={status === "running" ? theme.text.base : theme.text.muted}
                           wrapMode="none"
                           truncate
                           flexGrow={1}
@@ -147,8 +147,8 @@ function glyph(session: SessionInfo, status: "idle" | "running") {
 }
 
 function glyphColor(theme: Plugin.Context["theme"], session: SessionInfo, status: "idle" | "running") {
-  if (status === "running") return theme.text.status.running
-  if (session.outcome === "failed") return theme.text.feedback.error.default
-  if (session.outcome === "interrupted") return theme.text.feedback.warning.default
-  return theme.text.subdued
+  if (status === "running") return theme.text.feedback.info.base
+  if (session.outcome === "failed") return theme.text.feedback.error.base
+  if (session.outcome === "interrupted") return theme.text.feedback.warning.base
+  return theme.text.muted
 }

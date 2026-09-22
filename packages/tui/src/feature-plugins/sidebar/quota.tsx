@@ -93,9 +93,9 @@ function View(props: { context: Plugin.Context; sessionID: string }) {
   })
 
   const color = (remaining: number) => {
-    if (remaining <= 20) return theme.text.feedback.error.default
-    if (remaining <= 60) return theme.text.feedback.warning.default
-    return theme.text.feedback.success.default
+    if (remaining <= 20) return theme.text.feedback.error.base
+    if (remaining <= 60) return theme.text.feedback.warning.base
+    return theme.text.feedback.success.base
   }
 
   const lowest = createMemo(() => {
@@ -123,13 +123,13 @@ function View(props: { context: Plugin.Context; sessionID: string }) {
     <Show when={state().loaded && !state().unavailable && state().providers.length > 0}>
       <box>
         <box flexDirection="row" gap={1} minWidth={0} onMouseDown={toggleRoot}>
-          <text fg={theme.text.default} flexShrink={0}>
+          <text fg={theme.text.base} flexShrink={0}>
             {rootOpen() ? "▼" : "▶"}
           </text>
-          <text fg={theme.text.default} wrapMode="none" truncate flexGrow={1} flexShrink={1} minWidth={0}>
+          <text fg={theme.text.base} wrapMode="none" truncate flexGrow={1} flexShrink={1} minWidth={0}>
             <b>Quota</b>
             <Show when={!rootOpen()}>
-              <span style={{ fg: theme.text.subdued }}> {summary()}</span>
+              <span style={{ fg: theme.text.muted }}> {summary()}</span>
             </Show>
           </text>
         </box>
@@ -141,28 +141,28 @@ function View(props: { context: Plugin.Context; sessionID: string }) {
               )
               const dot = () =>
                 provider.status === "error"
-                  ? theme.text.feedback.error.default
+                  ? theme.text.feedback.error.base
                   : min() === undefined
-                    ? theme.text.subdued
+                    ? theme.text.muted
                     : color(min()!)
               return (
                 <box paddingLeft={1}>
                   <box flexDirection="row" gap={1} minWidth={0} onMouseDown={() => toggleProvider(provider.id)}>
-                    <text fg={theme.text.default} flexShrink={0}>
+                    <text fg={theme.text.base} flexShrink={0}>
                       {providerOpen(provider.id) ? "▼" : "▶"}
                     </text>
                     <text flexShrink={0} fg={dot()}>
                       •
                     </text>
-                    <text fg={theme.text.default} wrapMode="none" truncate flexGrow={1} flexShrink={1} minWidth={0}>
+                    <text fg={theme.text.base} wrapMode="none" truncate flexGrow={1} flexShrink={1} minWidth={0}>
                       <b>{provider.name}</b>
                       <Show when={provider.plan}>
-                        <span style={{ fg: theme.text.subdued }}> {provider.plan}</span>
+                        <span style={{ fg: theme.text.muted }}> {provider.plan}</span>
                       </Show>
                     </text>
                     <Show when={!providerOpen(provider.id)}>
                       <text
-                        fg={provider.status === "error" ? theme.text.feedback.error.default : theme.text.subdued}
+                        fg={provider.status === "error" ? theme.text.feedback.error.base : theme.text.muted}
                         wrapMode="none"
                         flexShrink={0}
                       >
@@ -173,14 +173,14 @@ function View(props: { context: Plugin.Context; sessionID: string }) {
                   <Show when={providerOpen(provider.id)}>
                     <Show when={provider.account}>
                       <box paddingLeft={4}>
-                        <text fg={theme.text.subdued} wrapMode="none" truncate>
+                        <text fg={theme.text.muted} wrapMode="none" truncate>
                           {provider.account}
                         </text>
                       </box>
                     </Show>
                     <Show when={provider.status === "error" && provider.error}>
                       <box paddingLeft={4}>
-                        <text fg={theme.text.feedback.error.default} wrapMode="none" truncate>
+                        <text fg={theme.text.feedback.error.base} wrapMode="none" truncate>
                           {provider.error}
                         </text>
                       </box>
@@ -189,7 +189,7 @@ function View(props: { context: Plugin.Context; sessionID: string }) {
                       {(window) => (
                         <box paddingLeft={4} minWidth={0}>
                           <box flexDirection="row" gap={1} minWidth={0}>
-                            <text fg={theme.text.default} wrapMode="none" truncate flexGrow={1} flexShrink={1} minWidth={0}>
+                            <text fg={theme.text.base} wrapMode="none" truncate flexGrow={1} flexShrink={1} minWidth={0}>
                               {window.label}
                             </text>
                             <text fg={color(window.remaining)} wrapMode="none" flexShrink={0}>
@@ -201,7 +201,7 @@ function View(props: { context: Plugin.Context; sessionID: string }) {
                               {bar(window.remaining, 12)}
                             </text>
                             <Show when={window.resetsAt !== undefined}>
-                              <text fg={theme.text.subdued} wrapMode="none" truncate flexShrink={1} minWidth={0}>
+                              <text fg={theme.text.muted} wrapMode="none" truncate flexShrink={1} minWidth={0}>
                                 resets {formatReset(window.resetsAt, now())}
                               </text>
                             </Show>

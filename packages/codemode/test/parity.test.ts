@@ -218,6 +218,19 @@ describe("property deletion", () => {
     ).toEqual([true, true, { keep: 1 }])
   })
 
+  test("a non-reference operand is evaluated and the result is true; a variable cannot be deleted", async () => {
+    expect(
+      await value(`
+        let called = false
+        const results = [delete 0, delete null, delete { x: 1 }, delete void 0, delete (() => { called = true })()]
+        let variable = 1
+        let failure
+        try { delete variable } catch (error) { failure = error.constructor.name }
+        return [results, called, failure]
+      `),
+    ).toEqual([[true, true, true, true, true], true, "TypeError"])
+  })
+
   test("evaluates computed object and key expressions once", async () => {
     expect(
       await value(`
@@ -502,9 +515,15 @@ describe("CodeMode-specific array behavior", () => {
     expect(err.message).toContain("circular")
   })
 
-  test("keys/values/entries return arrays usable with for...of and spread", async () => {
+  test("indexOf and lastIndexOf with no argument search for undefined", async () => {
+    expect(await value(`return [1, undefined, 3].indexOf()`)).toBe(1)
+    expect(await value(`return [1, undefined, 3].lastIndexOf()`)).toBe(1)
+    expect(await value(`return [1, 2, 3].indexOf()`)).toBe(-1)
+  })
+
+  test("keys/values/entries return iterators usable with for...of and spread", async () => {
     expect(await value(`return [...["x","y","z"].keys()]`)).toEqual([0, 1, 2])
-    expect(await value(`return ["x","y"].values()`)).toEqual(["x", "y"])
+    expect(await value(`return [...["x","y"].values()]`)).toEqual(["x", "y"])
     expect(
       await value(`
       const out = []
@@ -765,9 +784,17 @@ describe("destructuring assignment", () => {
     ).toEqual({ declared: "a", declarationRest: { 1: "b" }, assigned: "c", assignmentRest: { 1: "d" } })
   })
 
-  test("rejects computed keys that are not confined property keys", async () => {
-    const err = await error(`const key = {}; const { [key]: value } = {}`)
-    expect(err.message).toContain("Property key must be a string or number")
+  test("computed keys of any type become their string form, as in JS", async () => {
+    expect(
+      await value(`
+        const counts = {}
+        for (const category of ["a", null, undefined, "a", true, 1.5]) counts[category] = (counts[category] ?? 0) + 1
+        const key = {}
+        const { [key]: value } = { "[object Object]": 7 }
+        const o = { null: 1, "1,2": 2 }
+        return [counts, value, o[null], o[[1, 2]], undefined in o]
+      `),
+    ).toEqual([{ a: 2, null: 1, undefined: 1, true: 1, "1.5": 1 }, 7, 1, 2, false])
   })
 })
 
@@ -809,6 +836,36 @@ describe("coercion parity: global isFinite and isNaN", () => {
   test("work as array callbacks", async () => {
     expect(await value(`return [1, "2", "x", Infinity].filter(isFinite)`)).toEqual([1, "2"])
     expect(await value(`return ["1", "x"].map(isNaN)`)).toEqual([false, true])
+  })
+})
+
+describe("coercion parity: built-in arguments coerce as in JS", () => {
+  test("numeric arguments apply ToIntegerOrInfinity", async () => {
+    expect(
+      await value(`
+        return [
+          [1, 2, 3].indexOf(2, "1"), [1, 2, 3].lastIndexOf(3, "5"), [1, 2, 3].includes(1, "1"),
+          [1, 2, 3, 4].slice("1", "3"), [1, 2, 3].at(null), [1, 2, 3].at(1.7),
+          [1, [2, [3]]].flat(1.9), [1, 2, 3].with(1.5, 9), [1, 2, 3, 4].splice("1", "2"),
+          Math.max("3", "2"), Math.floor(null), Math.hypot("3", "4"),
+          parseInt("11", "2"), Number.parseInt("ff", "16"), (1.5).toFixed("2"), (255).toString("16"),
+          String.fromCharCode("65", 66.9), new Uint8Array([1, 2, 3]).indexOf(2, "1"),
+        ]
+      `),
+    ).toEqual([1, 2, false, [2, 3], 1, 2, [1, 2, [3]], [1, 9, 3], [2, 3], 3, 0, 5, 3, 255, "1.50", "ff", "AB", 1])
+  })
+
+  test("join separators, JSON.parse text, and Array.from length coerce", async () => {
+    expect(
+      await value(`
+        return [
+          [1, 2].join(null), [1, 2].join(0), [1, 2].join(undefined), new Uint8Array([1, 2]).join(null),
+          JSON.parse(123), JSON.parse(true),
+          Array.from({ length: "2" }), Array.from({ length: 2.5 }), Array.from({ length: -1 }), Array.from({}),
+        ]
+      `),
+    ).toEqual(["1null2", "102", "1,2", "1null2", 123, true, [null, null], [null, null], [], []])
+    expect((await error(`return JSON.parse(undefined)`)).message).toContain("JSON")
   })
 })
 
@@ -940,6 +997,12 @@ describe("coercion parity: unknown static members read as undefined", () => {
     expect(await value(`try { JSON.rawJSON("1") } catch (e) { return e.message }`)).toBe(
       "JSON.rawJSON is not a function.",
     )
+    expect(await value(`try { search({ query: "star" }).catch(() => 1) } catch (e) { return e.message }`)).toBe(
+      "search(...).catch is not a function.",
+    )
+    expect(
+      await value(`const foo = () => ({ bar: () => ({}) }); try { foo().bar().baz() } catch (e) { return e.message }`),
+    ).toBe("foo(...).bar(...).baz is not a function.")
   })
 
   test("built-ins are objects on a real prototype chain", async () => {
@@ -958,6 +1021,17 @@ describe("coercion parity: unknown static members read as undefined", () => {
         ]
       `),
     ).toEqual([true, true, true, "push", 1, 2, [], "function", true])
+  })
+})
+
+describe("async function line breaks", () => {
+  test("a line break between function and the name is an async function", async () => {
+    expect(await value(`async function\nfoo() { return 1 }\nreturn await foo()`)).toBe(1)
+  })
+
+  test("a line break between async and function is not an async function", async () => {
+    const failure = await error(`async\nfunction foo() { return 1 }\nreturn foo()`)
+    expect(failure.message).toContain("Unknown identifier 'async'")
   })
 })
 
