@@ -1,4 +1,5 @@
 export const SESSION_SIDEBAR_WIDTH = 42
+export const SESSION_SIDEBAR_MIN_WIDTH = 24
 export const SESSION_TABS_COMPACT_WIDTH = 5
 export const SESSION_TABS_COMPACT_BREAKPOINT = 12
 export const SESSION_SIDEBAR_MAX_WIDTH = 72
@@ -14,6 +15,16 @@ export function clampSessionTabsWidth(width: number, total: number) {
     SESSION_TABS_COMPACT_WIDTH,
     Math.min(width, SESSION_SIDEBAR_MAX_WIDTH, total - SESSION_CONTENT_MIN_WIDTH),
   )
+}
+
+export function clampSessionSidebarWidth(width: number, total: number) {
+  const limit = total - SESSION_CONTENT_MIN_WIDTH
+  const max = Math.min(
+    SESSION_SIDEBAR_MAX_WIDTH,
+    Math.max(1, total),
+    limit >= SESSION_SIDEBAR_MIN_WIDTH ? limit : Math.max(1, total),
+  )
+  return Math.max(Math.min(SESSION_SIDEBAR_MIN_WIDTH, max), Math.min(width, max))
 }
 
 export function clampSessionPaneWidth(width: number, total: number) {

@@ -19,7 +19,7 @@ import { useStorage } from "../context/storage"
 import { useDialog } from "../ui/dialog"
 import { Session } from "../routes/session"
 import { Sidebar } from "../routes/session/sidebar"
-import { clampSessionPaneWidth, SESSION_SIDEBAR_WIDTH } from "../ui/layout"
+import { clampSessionPaneWidth, clampSessionSidebarWidth, SESSION_SIDEBAR_WIDTH } from "../ui/layout"
 import { createPaneResize } from "../ui/pane-resize"
 import { PaneResizeHandle } from "../ui/pane-resize-handle"
 import { useToast } from "../ui/toast"
@@ -39,7 +39,11 @@ export function SessionFrame(props: { sessionID: string; verticalTabsWidth: numb
   const dialog = useDialog()
   const availableWidth = () => Math.max(0, dimensions().width - props.verticalTabsWidth)
   const defaultPaneWidth = () => Math.max(1, Math.floor(panels.width() / 2))
-  const [layout, updateLayout] = useStorage().store<{ paneWidth?: number; terminalWidth?: number }>("layout", {
+  const [layout, updateLayout] = useStorage().store<{
+    paneWidth?: number
+    terminalWidth?: number
+    sidebarWidth?: number
+  }>("layout", {
     initial: {},
   })
   const paneResize = createPaneResize({
@@ -54,9 +58,21 @@ export function SessionFrame(props: { sessionID: string; verticalTabsWidth: numb
       }).catch((error) => console.error("Failed to persist TUI layout", error))
     },
   })
+  const sidebarResize = createPaneResize({
+    value: () => layout.sidebarWidth ?? SESSION_SIDEBAR_WIDTH,
+    defaultValue: () => SESSION_SIDEBAR_WIDTH,
+    clamp: (width) => clampSessionSidebarWidth(width, availableWidth()),
+    fromMouse: (event) => dimensions().width - event.x - 1,
+    contains: (event, width) => event.x >= dimensions().width - width - 1 && event.x <= dimensions().width - width,
+    onCommit: (width) => {
+      void updateLayout((draft) => {
+        draft.sidebarWidth = width
+      }).catch((error) => console.error("Failed to persist TUI layout", error))
+    },
+  })
   let resizeRelease = false
-  const finishPaneResize = (event: MouseEvent) => {
-    if (paneResize.resizing()) {
+  const finishResize = (event: MouseEvent) => {
+    if (paneResize.resizing() || sidebarResize.resizing()) {
       // A captured drag-end can be followed by mouse-up on the focus overlay.
       resizeRelease = true
       queueMicrotask(() => {
@@ -64,6 +80,7 @@ export function SessionFrame(props: { sessionID: string; verticalTabsWidth: numb
       })
     }
     paneResize.onMouseUp(event)
+    sidebarResize.onMouseUp(event)
   }
   const [sidebarOpen, setSidebarOpen] = createSignal(false)
   const [sessionWidth, setSessionWidth] = createSignal<number>()
@@ -265,9 +282,12 @@ export function SessionFrame(props: { sessionID: string; verticalTabsWidth: numb
       minHeight={0}
       flexDirection="row"
       position="relative"
-      onMouseDrag={paneResize.onMouseDrag}
-      onMouseDragEnd={finishPaneResize}
-      onMouseUp={finishPaneResize}
+      onMouseDrag={(event) => {
+        paneResize.onMouseDrag(event)
+        sidebarResize.onMouseDrag(event)
+      }}
+      onMouseDragEnd={finishResize}
+      onMouseUp={finishResize}
     >
       <box
         id="session-pane"
@@ -315,7 +335,7 @@ export function SessionFrame(props: { sessionID: string; verticalTabsWidth: numb
             }}
             // Consume the release before revealing permission buttons underneath.
             onMouseUp={() => {
-              if (paneResize.resizing() || resizeRelease) return
+              if (paneResize.resizing() || sidebarResize.resizing() || resizeRelease) return
               focusSession()
             }}
           />
@@ -326,7 +346,7 @@ export function SessionFrame(props: { sessionID: string; verticalTabsWidth: numb
           ref={(value: BoxRenderable) => (rightNode = value)}
           flexShrink={0}
           width={
-            fullscreen() ? availableWidth() : rightPane() === "sidebar" ? SESSION_SIDEBAR_WIDTH : paneResize.size()
+            fullscreen() ? availableWidth() : rightPane() === "sidebar" ? sidebarResize.size() : paneResize.size()
           }
           minWidth={0}
           minHeight={0}
@@ -374,12 +394,15 @@ export function SessionFrame(props: { sessionID: string; verticalTabsWidth: numb
               </Show>
             }
           >
-            <Sidebar sessionID={props.sessionID} />
+            <Sidebar sessionID={props.sessionID} width={sidebarResize.size()} />
           </Show>
         </box>
       </Show>
       <Show when={!fullscreen() && (rightPane() === "terminal" || rightPane() === "panel") && availableWidth() >= 3}>
         <PaneResizeHandle resize={paneResize} left={availableWidth() - paneResize.size() - 1} highlight="right" />
+      </Show>
+      <Show when={!fullscreen() && rightPane() === "sidebar" && availableWidth() >= 3}>
+        <PaneResizeHandle resize={sidebarResize} left={availableWidth() - sidebarResize.size() - 1} highlight="right" />
       </Show>
       <Show when={rightPane() === "sidebar" && !wide()}>
         <box
@@ -391,7 +414,7 @@ export function SessionFrame(props: { sessionID: string; verticalTabsWidth: numb
           alignItems="flex-end"
           backgroundColor={RGBA.fromInts(0, 0, 0, 70)}
         >
-          <Sidebar sessionID={props.sessionID} />
+          <Sidebar sessionID={props.sessionID} width={sidebarResize.size()} />
         </box>
       </Show>
     </box>

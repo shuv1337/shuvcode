@@ -1,8 +1,10 @@
 import { expect, test } from "bun:test"
 import {
+  clampSessionSidebarWidth,
   clampSessionTabsWidth,
   sessionTabsFitVertically,
   SESSION_SIDEBAR_MAX_WIDTH,
+  SESSION_SIDEBAR_MIN_WIDTH,
   SESSION_SIDEBAR_WIDTH,
   SESSION_TABS_COMPACT_WIDTH,
 } from "../../src/ui/layout"
@@ -16,6 +18,14 @@ test("vertical tabs match the session sidebar and preserve readable content widt
 test("vertical tabs account for a resized width", () => {
   expect(sessionTabsFitVertically(124, 60)).toBe(true)
   expect(sessionTabsFitVertically(123, 60)).toBe(false)
+})
+
+test("session sidebar width stays readable and leaves room for the transcript", () => {
+  expect(clampSessionSidebarWidth(SESSION_SIDEBAR_WIDTH, 200)).toBe(42)
+  expect(clampSessionSidebarWidth(10, 200)).toBe(SESSION_SIDEBAR_MIN_WIDTH)
+  expect(clampSessionSidebarWidth(100, 200)).toBe(SESSION_SIDEBAR_MAX_WIDTH)
+  expect(clampSessionSidebarWidth(60, 100)).toBe(56)
+  expect(clampSessionSidebarWidth(42, 30)).toBe(30)
 })
 
 test("vertical tab width preserves minimum rail and content widths", () => {
