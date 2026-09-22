@@ -63,7 +63,7 @@ const assertEvaluation = (
   metadataKey: "typesafe" | "opencode",
 ) =>
   Effect.gen(function* () {
-    const response = yield* Evaluation.evaluate({ model, state, questions })
+    const response = yield* Evaluation.run({ model, state, questions })
     expect(response.model).toStartWith("jev-")
     expect(response.answers.department.type).toBe("choice")
     expect(response.answers.department.choice).toBe("billing")

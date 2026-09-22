@@ -40,7 +40,7 @@ describe("public exports", () => {
     expect(TestLLM.layer).toBeFunction()
     expect(TestLLM.testLayer).toBeFunction()
     expect(TestLLM.Test.of).toBeFunction()
-    expect(Evaluation.evaluate).toBeFunction()
+    expect(Evaluation.run).toBeFunction()
     expect(EvaluationClient.layer).toBeDefined()
     expect(EvaluationClient.fetchLayer).toBeDefined()
   })

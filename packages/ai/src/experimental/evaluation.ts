@@ -218,11 +218,11 @@ export function request(input: EvaluationRequest | EvaluationRequestInput) {
   })
 }
 
-export function evaluate<const Model extends object, const Questions extends EvaluationQuestions>(
+export function run<const Model extends object, const Questions extends EvaluationQuestions>(
   input: EvaluationRequestInput<Model, Questions>,
 ): Effect.Effect<EvaluationResponseFor<Questions>, AIError, Service>
-export function evaluate(input: EvaluationRequest): Effect.Effect<EvaluationResponse, AIError, Service>
-export function evaluate(input: EvaluationRequest | EvaluationRequestInput) {
+export function run(input: EvaluationRequest): Effect.Effect<EvaluationResponse, AIError, Service>
+export function run(input: EvaluationRequest | EvaluationRequestInput) {
   return Effect.try({
     try: () => (input instanceof EvaluationRequest ? input : request(input)),
     catch: (cause) =>
@@ -241,5 +241,5 @@ export function evaluate(input: EvaluationRequest | EvaluationRequestInput) {
 
 export const Evaluation = {
   request,
-  evaluate,
+  run,
 } as const

@@ -9,7 +9,7 @@ import { dynamicResponse } from "./lib/http.js"
 describe("experimental Evaluation", () => {
   it.effect("evaluates typed questions through System One", () =>
     Effect.gen(function* () {
-      const response = yield* Evaluation.evaluate({
+      const response = yield* Evaluation.run({
         model: TypeSafeAI.configure({
           apiKey: "test",
           baseURL: "https://typesafe.test/v1/",
@@ -116,7 +116,7 @@ describe("experimental Evaluation", () => {
   )
 
   it.effect("configures the OpenCode Zen System One endpoint", () =>
-    Evaluation.evaluate({
+    Evaluation.run({
       model: OpenCodeZen.configure({ apiKey: "zen-key", baseURL: "https://zen.test/v1" }).experimental.evaluation(
         "jev-1.13",
       ),
@@ -156,7 +156,7 @@ describe("experimental Evaluation", () => {
 
   it.effect("rejects malformed questions before network I/O", () =>
     Effect.gen(function* () {
-      const error = yield* Evaluation.evaluate({
+      const error = yield* Evaluation.run({
         model: TypeSafeAI.experimental.evaluation("jev-latest"),
         state: "hello",
         questions: { score: { type: "score", instructions: "How much?", criteria: ["only"] } },

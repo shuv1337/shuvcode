@@ -31,7 +31,7 @@ void (true satisfies Choice)
 void (true satisfies ClientRequirements)
 
 Effect.gen(function* () {
-  const response = yield* Evaluation.evaluate({
+  const response = yield* Evaluation.run({
     model: OpenCodeZen.experimental.evaluation("jev-1.13"),
     state: ["hello"],
     questions: { greeting: { type: "boolean", instructions: "Greeting?" } },
@@ -45,14 +45,14 @@ Effect.gen(function* () {
 
 declare const route: EvaluationRoute<{ readonly temperature?: number }>
 const custom = EvaluationModel.make({ id: "custom", provider: "custom", route })
-Evaluation.evaluate({
+Evaluation.run({
   model: custom,
   state: "hello",
   questions: { ok: { type: "boolean", instructions: "OK?" } },
   options: { temperature: 0.5 },
 })
 // @ts-expect-error Selected evaluation models retain their request option types.
-Evaluation.evaluate({
+Evaluation.run({
   model: custom,
   state: "hello",
   questions: { ok: { type: "boolean", instructions: "OK?" } },

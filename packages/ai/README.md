@@ -41,7 +41,7 @@ import { TypeSafeAI } from "@opencode/ai/providers"
 
 const model = TypeSafeAI.configure().experimental.evaluation("jev-latest")
 
-const program = Evaluation.evaluate({
+const program = Evaluation.run({
   model,
   state: "I was charged twice. Please refund the duplicate payment.",
   questions: {
