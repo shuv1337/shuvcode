@@ -223,7 +223,7 @@ and boolean-const handling (A2, A3). They are watchlist items, not plan items.
 - `opencode` / `opencode2` bins
 - Bare upstream version numbers on the `shuvcode` npm package
 - Upstream publish/deploy/signing/AUR/desktop-release workflows going live
-  on `Latitudes-Dev/shuvcode`
+  on `shuv1337/shuvcode`
 
 ## Layers
 
@@ -261,7 +261,7 @@ implementations against the new tree. Do not copy scarred whole files.
 - Updater targets `shuvcode` / `shuvcode-node` via npm dist-tag; never the
   upstream curl installer
 - TUI `shuv-logo.ts`
-- Guarded CLI-only publish (ownership check `Latitudes-Dev/shuvcode`),
+- Guarded CLI-only publish (ownership check `shuv1337/shuvcode`),
   Discord notify
 - `shuvcode/client` Promise facade; `package-smoke.ts` without the
   `SessionPolicy` assertion

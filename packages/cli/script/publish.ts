@@ -54,7 +54,7 @@ async function prepareDistribution(input: ForkDistribution) {
         exports: client ? { "./client": { types: "./client/index.d.ts", import: "./client/index.js" } } : undefined,
         version: input.version,
         license: pkg.license,
-        repository: { type: "git", url: "git+https://github.com/Latitudes-Dev/shuvcode.git" },
+        repository: { type: "git", url: "git+https://github.com/shuv1337/shuvcode.git" },
         os: ["darwin", "linux", "win32"],
         cpu: ["arm64", "x64"],
         optionalDependencies: input.binaries,

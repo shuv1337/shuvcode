@@ -141,7 +141,7 @@ for (const target of targets) {
         name,
         version: Script.version,
         license: pkg.license,
-        repository: { type: "git", url: "git+https://github.com/Latitudes-Dev/shuvcode.git" },
+        repository: { type: "git", url: "git+https://github.com/shuv1337/shuvcode.git" },
         os: [target.platform],
         cpu: [target.arch],
       },

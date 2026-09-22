@@ -2,7 +2,7 @@ import { $ } from "bun"
 import { fileURLToPath } from "url"
 import { buildTargets, targetName } from "./build-targets"
 
-export const forkRepository = "Latitudes-Dev/shuvcode"
+export const forkRepository = "shuv1337/shuvcode"
 export const expectedNpmMaintainer = "kcrommett"
 
 /** The GitHub repository the publish runs from; only the fork may publish `shuvcode`. */

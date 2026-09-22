@@ -28,7 +28,7 @@ env:
 
 jobs:
   build-cli:
-    if: github.repository == 'Latitudes-Dev/shuvcode'
+    if: github.repository == 'shuv1337/shuvcode'
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
@@ -60,7 +60,7 @@ jobs:
           if-no-files-found: error
 
   build-node-cli:
-    if: github.repository == 'Latitudes-Dev/shuvcode'
+    if: github.repository == 'shuv1337/shuvcode'
     runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:
@@ -98,7 +98,7 @@ jobs:
           if-no-files-found: error
 
   publish:
-    if: github.repository == 'Latitudes-Dev/shuvcode'
+    if: github.repository == 'shuv1337/shuvcode'
     permissions:
       contents: write
       id-token: write
@@ -200,7 +200,7 @@ jobs:
 
   notify-discord:
     needs: publish
-    if: success() && github.repository == 'Latitudes-Dev/shuvcode'
+    if: success() && github.repository == 'shuv1337/shuvcode'
     uses: ./.github/workflows/notify-discord.yml
     with:
       version: ${{ inputs.version }}

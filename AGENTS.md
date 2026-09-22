@@ -23,7 +23,7 @@ identity facts when merging or refactoring:
 - Default service port is `0x1337` (`0x1338` for the `local` channel).
 - Updates come from npm dist-tags on `shuvcode` / `shuvcode-node`; there is no
   curl installer and no `opencode.ai` update service.
-- Publishing is guarded to `Latitudes-Dev/shuvcode` and CLI packages only
+- Publishing is guarded to `shuv1337/shuvcode` and CLI packages only
   (`packages/cli/script/publish.ts`); OpenCode infra trees (`packages/console`,
   `packages/web`, `services/*`, enterprise, stats, desktop) stay in the repo but
   are outside fork CI and publish.

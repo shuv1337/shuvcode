@@ -92,7 +92,7 @@ Retain or reapply after the merge:
 | Default port `0x1337` (`0x1338` local) | CLI/server listen defaults |
 | Updater: npm dist-tags on `shuvcode`/`shuvcode-node`; methods `npm\|pnpm\|bun\|yarn`; `installedPackageName` maps `shuvcode-<platform>-<arch>` back to the wrapper | `packages/cli/src/services/updater.ts` |
 | Launcher, not postinstall copy | `packages/cli/script/launcher.mjs` |
-| Publish guard `Latitudes-Dev/shuvcode`, CLI packages only | `packages/cli/script/publish.ts`, `.github/workflows/publish.yml` |
+| Publish guard `shuv1337/shuvcode`, CLI packages only | `packages/cli/script/publish.ts`, `.github/workflows/publish.yml` |
 | Quota sidebar builtin | `@shuvcode/quota-plugin`; last in `packages/core/src/plugin/provider.ts` `ProviderPlugins`; TUI `shuvcode.sidebar.quota` |
 | `$` skill autocomplete | `packages/tui/src/feature-plugins/prompt/skill-dollar.ts` |
 | Night Owl default | TUI theme default |
@@ -151,7 +151,7 @@ Content conflicts reported by `git merge-tree` (7):
 |---|---|
 | `bun.lock` | Do not merge. `bun install` after identity is restored. |
 | `packages/cli/package.json` | Keep `name: "shuvcode"`, `bin: { "shuvcode": "./bin/shuvcode.mjs" }`, no `opencode` bin. Take upstream dependency/script edits. Set `version` to `2.0.8-shuv.1`. |
-| `packages/cli/script/publish.ts` | Keep the `Latitudes-Dev/shuvcode` repo guard and CLI-only package list. Take upstream publish mechanics. (`publish-aur.ts` exists on both sides and is not a conflict; leave AUR publish inactive.) |
+| `packages/cli/script/publish.ts` | Keep the `shuv1337/shuvcode` repo guard and CLI-only package list. Take upstream publish mechanics. (`publish-aur.ts` exists on both sides and is not a conflict; leave AUR publish inactive.) |
 | `packages/cli/src/services/updater.ts` | Keep fork npm dist-tag lookup + `installedPackageName`. Take upstream removal of server-side polling and `#49676` install-progress (`10cac9ab5d`). Fork-only `Updater.pollUpdates` becomes dead once `server-process.ts` and `updater-poll.test.ts` stop referencing it; delete it. |
 | `packages/core/src/codemode/tool.ts` | Keep fork decline/limits. Take upstream web/`fetch` exposure (`packages/core/src/codemode/web.ts` is an upstream add). |
 | `packages/core/src/tool.ts` | Keep Code Mode integration. Take upstream execute-list / extension-call refactors. |
@@ -294,7 +294,7 @@ bun run check
 
 - **`server.status` → `server.info`** breaks the four fork-owned API callers listed in Step 3. A repo-wide `rg server\.status` also matches MCP `server.status` field reads (`mcp/list.ts`, `dialog-mcp.tsx`, `app.tsx`) and upstream-converted files; use `rg 'server\.status\('` and only edit the four.
 - **Updater overlap** can drop `installedPackageName` and reintroduce curl or `@opencode/cli` package names. Diff `packages/cli/src/services/updater.ts` against `7bb5fea2a1` after the merge.
-- **`publish.ts` conflict** can drop the `Latitudes-Dev/shuvcode` guard or widen the package list beyond CLI packages.
+- **`publish.ts` conflict** can drop the `shuv1337/shuvcode` guard or widen the package list beyond CLI packages.
 - **`builtins.ts`** can drop quota or `$` while adding `/btw`.
 - **Theme rename** breaks custom themes that still say `surface`. Upstream `v1-migrate.ts` must map it; verify fallback tests.
 - **Code Mode `tool.ts`** is a two-hunk conflict. Losing decline extraction (see Fork invariants for the real files) makes user denies look like tool errors.

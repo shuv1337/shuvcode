@@ -154,7 +154,7 @@ export default { path: file, version: ${JSON.stringify(opencodePty.version)}, sh
         name,
         version: Script.version,
         license: "MIT",
-        repository: { type: "git", url: "git+https://github.com/Latitudes-Dev/shuvcode.git" },
+        repository: { type: "git", url: "git+https://github.com/shuv1337/shuvcode.git" },
         os: [item.os],
         cpu: [item.arch],
       },
