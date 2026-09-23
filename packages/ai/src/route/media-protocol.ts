@@ -1,4 +1,4 @@
-import { Clock, Duration, Effect, Schema } from "effect"
+import { Clock, Duration, Effect, Schema, type Stream } from "effect"
 import { HttpClientResponse } from "effect/unstable/http"
 import type { Snapshot, Status } from "../generation.js"
 import { Media } from "../media.js"
@@ -16,11 +16,16 @@ import {
 // Bodies
 // ---------------------------------------------------------------------------
 
+/** JSON `query` is appended to the endpoint URL before the route and caller `http.query` overlays. */
 export type Body =
-  | { readonly type: "json"; readonly value: Record<string, unknown> }
+  | { readonly type: "json"; readonly value: Record<string, unknown>; readonly query?: Record<string, string> }
   | { readonly type: "multipart"; readonly value: FormData }
 
-export const json = (value: Record<string, unknown>): Body => ({ type: "json", value })
+export const json = (value: Record<string, unknown>, query?: Record<string, string>): Body => ({
+  type: "json",
+  value,
+  query,
+})
 export const multipart = (value: FormData): Body => ({ type: "multipart", value })
 
 // ---------------------------------------------------------------------------
@@ -119,6 +124,42 @@ export const queued = <Request, Response, Token>(
   ...input,
 })
 
+export type Mode = "generate" | "stream"
+
+export type Addressed<Request> = Request & { readonly mode: Mode }
+
+export interface ResponseContext<Request> extends DecodeContext<Addressed<Request>> {
+  readonly http: HttpContext
+}
+
+/**
+ * One request whose body is parsed incrementally, like LLM protocols: `frames` → `step`* → `finish`. `generate` and
+ * `stream` share this state machine; `request.mode` lets a protocol pick a different body, path, or framing.
+ */
+export interface Streamed<Request, Event, Frame, State> {
+  readonly kind: "stream"
+  readonly id: string
+  readonly name: string
+  /** Common request fields this protocol cannot lower; the route rejects them before `body.from` runs. */
+  readonly unsupported?: ReadonlyArray<keyof Request & string>
+  readonly body: { readonly from: (request: Addressed<Request>) => Effect.Effect<Body, AIError> }
+  readonly frames: (
+    bytes: Stream.Stream<Uint8Array, AIError>,
+    context: DecodeContext<Addressed<Request>>,
+  ) => Stream.Stream<Frame, AIError>
+  readonly initial: () => State
+  readonly step: (state: State, frame: Frame) => Effect.Effect<readonly [State, ReadonlyArray<Event>], AIError>
+  /** Emit exactly one terminal event, or fail when the provider stopped before completing. */
+  readonly finish: (state: State, context: ResponseContext<Request>) => Effect.Effect<ReadonlyArray<Event>, AIError>
+}
+
+export const stream = <Request, Event, Frame, State>(
+  input: Omit<Streamed<Request, Event, Frame, State>, "kind">,
+): Streamed<Request, Event, Frame, State> => ({
+  kind: "stream",
+  ...input,
+})
+
 // ---------------------------------------------------------------------------
 // Response helpers
 // ---------------------------------------------------------------------------
@@ -201,6 +242,27 @@ export const status = <Table extends Record<string, Status>>(
   const normalized: Status | undefined = table[raw]
   if (normalized === undefined) return Effect.fail(output.invalid(`Unknown generation status "${raw}"`))
   return Effect.succeed(normalized)
+}
+
+export const frameError = (route: string, message: string, body?: string, cause?: unknown) =>
+  new AIError({ reason: new InvalidProviderOutputError({ route, message, body, cause }) })
+
+export const incomplete = (route: string) =>
+  new AIError({
+    reason: new InvalidProviderOutputError({
+      route,
+      message: "The provider response ended unexpectedly.",
+      classification: "incomplete-stream",
+    }),
+  })
+
+/** Schema-decode one JSON stream frame. Decode failures keep the frame as `reason.body`. */
+export const decodeFrame = <A>(route: string, name: string, schema: Schema.Codec<A, unknown>) => {
+  const decode = Schema.decodeUnknownEffect(Schema.fromJsonString(schema))
+  return (frame: string) =>
+    decode(frame).pipe(
+      Effect.mapError((cause) => frameError(route, `${name} sent an invalid stream event`, frame, cause)),
+    )
 }
 
 /** A `url` asset whose provider-declared retention window starts now. */
