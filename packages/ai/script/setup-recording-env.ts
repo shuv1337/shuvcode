@@ -161,11 +161,23 @@ const PROVIDERS: ReadonlyArray<Provider> = [
     id: "deepgram",
     label: "Deepgram",
     tier: "canary",
-    note: "Deepgram Aura text-to-speech recorded tests",
+    note: "Deepgram Aura text-to-speech and Nova transcription recorded tests",
     vars: [{ name: "DEEPGRAM_API_KEY" }],
     validate: (env) =>
       HttpClientRequest.get("https://api.deepgram.com/v1/projects").pipe(
         HttpClientRequest.setHeader("authorization", `Token ${Redacted.value(Redacted.make(env.DEEPGRAM_API_KEY))}`),
+        executeRequest,
+      ),
+  },
+  {
+    id: "assemblyai",
+    label: "AssemblyAI",
+    tier: "canary",
+    note: "AssemblyAI queued transcription recorded tests",
+    vars: [{ name: "ASSEMBLYAI_API_KEY" }],
+    validate: (env) =>
+      HttpClientRequest.get("https://api.assemblyai.com/v2/transcript?limit=1").pipe(
+        HttpClientRequest.setHeader("authorization", Redacted.value(Redacted.make(env.ASSEMBLYAI_API_KEY))),
         executeRequest,
       ),
   },

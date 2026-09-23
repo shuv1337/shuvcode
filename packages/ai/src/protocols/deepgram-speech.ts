@@ -3,6 +3,7 @@ import { MediaProtocol } from "../route/media-protocol.js"
 import { MediaRoute } from "../route/media.js"
 import { ProviderID, mergeJsonRecords } from "../schema/index.js"
 import { SpeechModel, type SpeechEvent, type SpeechRequestFor } from "../speech.js"
+import { MediaInput } from "./utils/media-input.js"
 import { SpeechStream } from "./utils/speech-stream.js"
 
 const ADAPTER = "deepgram-speech"
@@ -49,26 +50,24 @@ const FORMATS: Readonly<Record<string, { readonly encoding: string; readonly con
   aac: { encoding: "aac" },
 }
 
-const queryValue = (value: unknown) =>
-  typeof value === "string" || typeof value === "number" || typeof value === "boolean" ? String(value) : undefined
+const audioFormat = (request: Request) => {
+  const format = request.format === undefined ? undefined : FORMATS[request.format]
+  return {
+    encoding: request.providerOptions?.encoding ?? format?.encoding,
+    container: request.providerOptions?.container ?? format?.container,
+  }
+}
 
 const queryParameters = (request: Request) => {
-  const format = request.format === undefined ? undefined : FORMATS[request.format]
-  const { encoding, container, sampleRate, bitRate, ...native } = request.providerOptions ?? {}
-  return Object.fromEntries(
-    Object.entries({
-      ...native,
-      model: request.model.id,
-      encoding: encoding ?? format?.encoding,
-      container: container ?? format?.container,
-      sample_rate: sampleRate,
-      bit_rate: bitRate,
-      speed: request.speed,
-    }).flatMap(([key, value]) => {
-      const text = queryValue(value)
-      return text === undefined ? [] : [[key, text]]
-    }),
-  )
+  const { encoding: _encoding, container: _container, sampleRate, bitRate, ...native } = request.providerOptions ?? {}
+  return MediaInput.query(ADAPTER, {
+    ...native,
+    model: request.model.id,
+    ...audioFormat(request),
+    sample_rate: sampleRate,
+    bit_rate: bitRate,
+    speed: request.speed,
+  })
 }
 
 const fromRequest = Effect.fn("DeepgramSpeech.fromRequest")(function* (request: Request) {
@@ -84,7 +83,7 @@ const fromRequest = Effect.fn("DeepgramSpeech.fromRequest")(function* (request: 
     )
   return MediaProtocol.json(
     mergeJsonRecords({ text: request.text }, request.http?.body) ?? {},
-    queryParameters(request),
+    yield* queryParameters(request),
   )
 })
 
@@ -101,15 +100,15 @@ const HEADERLESS_ENCODINGS: Readonly<Record<string, SpeechStream.PcmEncoding>> =
 const finish = (state: State, context: MediaProtocol.ResponseContext<Request>) => {
   const headers = context.http.headers
   const mediaType = headers["content-type"]
-  const query = queryParameters(context.request)
-  const encoding = HEADERLESS_ENCODINGS[query.encoding ?? ""]
+  const format = audioFormat(context.request)
+  const encoding = HEADERLESS_ENCODINGS[format.encoding ?? ""]
   const requestID = headers["dg-request-id"]
   const modelName = headers["dg-model-name"]
   return SpeechStream.finish(ADAPTER, state, {
-    ...(query.container === "none" && encoding !== undefined
+    ...(format.container === "none" && encoding !== undefined
       ? SpeechStream.pcm(encoding, SpeechStream.sampleRate(mediaType), mediaType)
       : // Deepgram's default encoding is MP3; WAV is a container around any encoding.
-        { mediaType, info: { format: query.container === "wav" ? "wav" : (query.encoding ?? "mp3") } }),
+        { mediaType, info: { format: format.container === "wav" ? "wav" : (format.encoding ?? "mp3") } }),
     usage: SpeechStream.headerUsage("characters", headers["dg-char-count"]),
     providerMetadata:
       requestID === undefined && modelName === undefined

@@ -22,6 +22,7 @@ import {
 import { classifyProviderFailure } from "../provider-error.js"
 import { Media } from "../media.js"
 import { JsonObject, knownString, lenient, optionalArray, optionalNull, ProviderShared } from "./shared.js"
+import { GeminiGenerateContent } from "./utils/gemini-generate-content.js"
 import { GeminiToolSchema } from "./utils/gemini-tool-schema.js"
 import { Lifecycle } from "./utils/lifecycle.js"
 import { ToolSchemaProjection } from "./utils/tool-schema.js"
@@ -305,14 +306,9 @@ const lowerToolConfig = (toolChoice: NonNullable<LLMRequest["toolChoice"]>) =>
     tool: (name) => ({ functionCallingConfig: { mode: "ANY" as const, allowedFunctionNames: [name] } }),
   })
 
-// Gemini does not fetch public URLs; inline payloads and Gemini Files references are the accepted inputs.
 const lowerContentPart = Effect.fn("Gemini.lowerContentPart")(function* (part: TextPart | MediaPart) {
   if (part.type === "text") return { text: part.text }
-  const source = part.media.source
-  if (source.type === "ref" && source.provider === "google")
-    return { fileData: { mimeType: part.media.mediaType, fileUri: source.id } }
-  const media = yield* ProviderShared.requireInlineMedia("Gemini", part.media)
-  return { inlineData: { mimeType: media.mime, data: media.base64 } }
+  return yield* GeminiGenerateContent.mediaPart("Gemini", part.media)
 })
 
 const providerMetadata = (key: string, metadata: Record<string, unknown>): ProviderMetadata => ({ [key]: metadata })

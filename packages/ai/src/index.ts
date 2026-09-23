@@ -67,6 +67,25 @@ export type {
   SpeechRoute,
 } from "./speech.js"
 export { Speech } from "./speech.js"
+export { TranscriptionClient } from "./transcription-client.js"
+export {
+  TranscriptionEvent,
+  TranscriptionModel,
+  TranscriptionModelSchema,
+  TranscriptionRequest,
+  TranscriptionResponse,
+  TranscriptionSegment,
+  TranscriptionTimestamps,
+  TranscriptionWord,
+} from "./transcription.js"
+export type {
+  TranscriptionModelOptions,
+  TranscriptionOptions,
+  TranscriptionRequestFor,
+  TranscriptionRequestInput,
+  TranscriptionRoute,
+} from "./transcription.js"
+export { Transcription } from "./transcription.js"
 export { Media } from "./media.js"
 export { Generation } from "./generation.js"
 export type {

@@ -766,6 +766,69 @@ for await (const event of ai.speech.stream({ model, text: "Hello from OpenCode."
 }
 ```
 
+## Transcription
+
+Transcription (speech-to-text) is the one modality whose providers use every route kind: OpenAI and Gemini stream,
+Deepgram answers inline, and AssemblyAI is queued. `Transcription.generate` and `Transcription.stream` work on all of
+them; `Transcription.start` / `resume` return a `Generation` on queued routes and fail with `UnsupportedOperation`
+elsewhere. Models come from `.transcription(...)` selectors on the `OpenAI`, `Google`, `Deepgram`, and `AssemblyAI`
+facades. Common fields (`language`, `prompt`, `timestamps: "none" | "segment" | "word"`, `diarize`, `speakers`) lower
+natively or fail with a typed `AIError` before any network call; a route may return more than asked.
+
+```ts
+import { Media, Transcription, TranscriptionEvent } from "@opencode/ai"
+import { AssemblyAI, Deepgram, OpenAI } from "@opencode/ai/providers"
+
+const openai = OpenAI.configure({ apiKey: process.env.OPENAI_API_KEY })
+
+const program = Effect.gen(function* () {
+  const audio = yield* Media.file("./call.mp3")
+
+  // Speaker-labelled segments; labels are provider-native strings ("A", "0", "spk:0").
+  const response = yield* Transcription.generate({
+    model: Deepgram.configure({ apiKey }).transcription("nova-3"),
+    audio,
+    diarize: true,
+    timestamps: "word",
+  })
+  response.text // "Hello from OpenCode."
+  response.segments // [{ text, startSeconds, endSeconds, speaker: "0" }]
+  response.words // [{ text, startSeconds, endSeconds, speaker, confidence }]
+  response.language // the provider's own value, lowercased ("en", "english", "en_us")
+
+  // Text deltas as the model transcribes, then one finish carrying the whole transcript.
+  yield* Transcription.stream({ model: openai.transcription("gpt-4o-mini-transcribe"), audio }).pipe(
+    Stream.tap((event) => (TranscriptionEvent.is.textDelta(event) ? Console.log(event.delta) : Effect.void)),
+    Stream.runDrain,
+  )
+
+  // Queued: persist the token, resume from another process, and await.
+  const model = AssemblyAI.configure({ apiKey }).transcription("universal-3-5-pro")
+  const generation = yield* Transcription.start({ model, audio })
+  const resumed = yield* Transcription.resume(model, JSON.parse(JSON.stringify(generation.token)))
+  const transcript = yield* resumed.await({ poll: { interval: "3 seconds" } })
+})
+```
+
+Inline routes emit only `finish` from `stream` (no faked deltas); queued routes emit `generation-queued` /
+`generation-progress` before it. `TranscriptionClient.layer` needs `RequestExecutor.Service`.
+
+Provider notes:
+
+- **OpenAI** takes inline audio only; `diarize` needs `gpt-4o-transcribe-diarize`, timestamps need `whisper-1`, and `whisper-1` does not stream.
+- **Gemini** needs a transcribe model (`gemini-3.5-transcribe`); `prompt` and `speakers` fail typed.
+- **Deepgram** detects the language unless `language` is set; vocabulary goes in `providerOptions.keyterm`.
+- **AssemblyAI** uploads inline audio before submitting and is the only route that accepts `speakers`.
+
+The promise client mirrors the Effect API:
+
+```ts
+const text = (await ai.transcription.generate({ model, audio })).text
+for await (const event of ai.transcription.stream({ model, audio })) if (event.type === "text-delta") write(event.delta)
+const generation = await ai.transcription.start({ model: assemblyai, audio })
+const transcript = await generation.await({ poll: { interval: 3_000 } })
+```
+
 ## Public API
 
 - **`LLM.request({...})`** — build a provider-neutral `LLMRequest`. Accepts ergonomic inputs (`system: string`, `prompt: string`) that normalize into the canonical Schema classes.
@@ -778,7 +841,8 @@ for await (const event of ai.speech.stream({ model, text: "Hello from OpenCode."
 - **`Media`** — the shared asset type (`Media.Asset`, `Media.Source`) and constructors used by messages, tool results, and media requests.
 - **`Generation`** — provider-neutral handle for an in-flight media generation (`await`, `refresh`, `cancel`, `events`) used by queued media routes.
 - **`Speech.request` / `Speech.generate` / `Speech.stream`** — text-to-speech through a provider-neutral request; `SpeechClient` is its Effect service and layer.
-- **`@opencode/ai/promise`** — `AI.make({ layer? })` and a default `ai` client exposing `llm`, `image`, `video`, and `speech` as Promise / `AsyncIterable` APIs.
+- **`Transcription.request` / `generate` / `stream` / `start` / `resume`** — speech-to-text over inline, streaming, and queued routes; `TranscriptionClient` is its Effect service and layer.
+- **`@opencode/ai/promise`** — `AI.make({ layer? })` and a default `ai` client exposing `llm`, `image`, `video`, `speech`, and `transcription` as Promise / `AsyncIterable` APIs.
 
 ## Testing
 

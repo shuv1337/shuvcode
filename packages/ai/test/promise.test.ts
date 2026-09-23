@@ -1,10 +1,10 @@
 import { describe, expect, test } from "bun:test"
 import { Effect, Layer } from "effect"
 import { HttpClientRequest } from "effect/unstable/http"
-import { AIError, LLMEvent, Media, SpeechEvent } from "../src/index.js"
+import { AIError, LLMEvent, Media, SpeechEvent, TranscriptionEvent } from "../src/index.js"
 import { RequestExecutor } from "../src/route.js"
 import { AI } from "../src/promise.js"
-import { OpenAI, Runway } from "../src/providers.js"
+import { AssemblyAI, OpenAI, Runway } from "../src/providers.js"
 import { handlerLayer } from "./lib/http.js"
 import { sseEvents } from "./lib/sse.js"
 
@@ -18,7 +18,8 @@ const chatBody = sseEvents(
 
 /**
  * Executor layer that answers chat completions with SSE text, image generations with one base64 PNG, Runway video
- * tasks with a queued submission that succeeds on the second poll, and speech with raw audio or SSE audio deltas.
+ * tasks with a queued submission that succeeds on the second poll, speech with raw audio or SSE audio deltas, OpenAI
+ * transcription with JSON or SSE text deltas, and AssemblyAI transcripts that complete on the first poll.
  */
 const executor = (seen: Array<string>) =>
   RequestExecutor.layer.pipe(
@@ -44,6 +45,27 @@ const executor = (seen: Array<string>) =>
                   { headers: { "content-type": "text/event-stream" } },
                 )
               : input.respond(Uint8Array.from([1, 2, 3]), { headers: { "content-type": "audio/pcm" } })
+          if (web.url.endsWith("/audio/transcriptions"))
+            return input.text.includes('name="stream"')
+              ? input.respond(
+                  sseEvents(
+                    { type: "transcript.text.delta", delta: "Hello" },
+                    { type: "transcript.text.delta", delta: " there." },
+                    { type: "transcript.text.done", text: "Hello there." },
+                  ),
+                  { headers: { "content-type": "text/event-stream" } },
+                )
+              : input.respond(JSON.stringify({ text: "Hello there." }), {
+                  headers: { "content-type": "application/json" },
+                })
+          if (web.url.endsWith("/v2/transcript"))
+            return input.respond(JSON.stringify({ id: "tr_1", status: "queued" }), {
+              headers: { "content-type": "application/json" },
+            })
+          if (web.url.endsWith("/v2/transcript/tr_1"))
+            return input.respond(JSON.stringify({ id: "tr_1", status: "completed", text: "Hello there." }), {
+              headers: { "content-type": "application/json" },
+            })
           if (web.url.endsWith("/text_to_video"))
             return input.respond(JSON.stringify({ id: "task_1" }), { headers: { "content-type": "application/json" } })
           if (web.url.endsWith("/tasks/task_1")) {
@@ -131,6 +153,32 @@ describe("AI promise client", () => {
 
     expect(seen[0]).toBe("https://runway.test/v1/text_to_video")
     expect(seen.filter((url) => url.endsWith("/tasks/task_1")).length).toBeGreaterThanOrEqual(5)
+    await ai.dispose()
+  })
+
+  test("generates, streams, and starts transcriptions over the same runtime", async () => {
+    const ai = AI.make({ layer: executor([]) })
+    const audio = Media.url("https://audio.test/hello.mp3")
+    const bytes = Media.bytes(Uint8Array.from([0x49, 0x44, 0x33]), "audio/mpeg")
+
+    expect(
+      (await ai.transcription.generate({ model: openai.transcription("gpt-4o-mini-transcribe"), audio: bytes })).text,
+    ).toBe("Hello there.")
+
+    const deltas: Array<string> = []
+    for await (const event of ai.transcription.stream({
+      model: openai.transcription("gpt-4o-mini-transcribe"),
+      audio: bytes,
+    }))
+      if (TranscriptionEvent.is.textDelta(event)) deltas.push(event.delta)
+    expect(deltas).toEqual(["Hello", " there."])
+
+    const model = AssemblyAI.configure({ apiKey: "test", baseURL: "https://assemblyai.test" }).transcription(
+      "universal-2",
+    )
+    const generation = await ai.transcription.start({ model, audio })
+    expect(generation.token).toEqual({ transcriptID: "tr_1" })
+    expect((await generation.await({ poll: { interval: 10 } })).text).toBe("Hello there.")
     await ai.dispose()
   })
 

@@ -72,12 +72,6 @@ const isEdit = (request: Request) => (request.images?.length ?? 0) > 0
 
 const isInline = (asset: Media.Asset) => asset.inline() !== undefined
 
-const blob = (data: Uint8Array, mediaType: string) => {
-  const buffer = new ArrayBuffer(data.byteLength)
-  new Uint8Array(buffer).set(data)
-  return new Blob([buffer], { type: mediaType })
-}
-
 const reference = (asset: Media.Asset) =>
   ProviderShared.mediaReference(asset, PROVIDER, NAME).pipe(
     Effect.map((item) => (item.type === "ref" ? { file_id: item.value } : { image_url: item.value })),
@@ -104,9 +98,11 @@ const fromRequest = Effect.fn("OpenAIImages.fromRequest")(function* (request: Re
       form.append(key, typeof value === "string" ? value : ProviderShared.encodeJson(value))
     })
     const uploads = yield* Effect.forEach(images, (image) => MediaInput.inlineBytes(ADAPTER, image))
-    uploads.forEach((data, index) => form.append("image[]", blob(data, images[index].mediaType), `image-${index}`))
+    uploads.forEach((data, index) =>
+      form.append("image[]", MediaInput.blob(data, images[index].mediaType), `image-${index}`),
+    )
     if (mask !== undefined)
-      form.append("mask", blob(yield* MediaInput.inlineBytes(ADAPTER, mask), mask.mediaType), "mask")
+      form.append("mask", MediaInput.blob(yield* MediaInput.inlineBytes(ADAPTER, mask), mask.mediaType), "mask")
     return MediaProtocol.multipart(form)
   }
 
@@ -130,6 +126,7 @@ const fromRequest = Effect.fn("OpenAIImages.fromRequest")(function* (request: Re
 // ---------------------------------------------------------------------------
 
 const requestedFormat = (body: MediaProtocol.Body) => {
+  if (body.type === "binary") return undefined
   const value = body.type === "json" ? body.value.output_format : body.value.get("output_format")
   return typeof value === "string" ? value : undefined
 }

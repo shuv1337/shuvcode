@@ -6,10 +6,12 @@ import { HttpOptions, ProviderID, mergeHttpOptions, type ModelID } from "../sche
 import { Gemini } from "../protocols/gemini.js"
 import { GoogleImages } from "../protocols/google-images.js"
 import { GoogleSpeech } from "../protocols/google-speech.js"
+import { GoogleTranscription } from "../protocols/google-transcription.js"
 import { GoogleVideo } from "../protocols/google-video.js"
 
 export type { GoogleImageOptions } from "../protocols/google-images.js"
 export type { GoogleSpeechOptions } from "../protocols/google-speech.js"
+export type { GoogleTranscriptionOptions } from "../protocols/google-transcription.js"
 export type { GoogleVideoOptions } from "../protocols/google-video.js"
 export type GeminiOptionsInput = Gemini.OptionsInput
 export type GeminiProviderOptionsInput = Gemini.ProviderOptionsInput
@@ -57,6 +59,7 @@ export const configure = (input: Config = {}) => {
     image: (modelID: string | ModelID) => GoogleImages.model(media(modelID)),
     video: (modelID: string | ModelID) => GoogleVideo.model(media(modelID)),
     speech: (modelID: string | ModelID) => GoogleSpeech.model(media(modelID)),
+    transcription: (modelID: string | ModelID) => GoogleTranscription.model(media(modelID)),
     configure,
   }
 }
@@ -77,3 +80,4 @@ export const model: ProviderPackage.Definition<Settings, Gemini.ProviderOptionsI
 export const image = provider.image
 export const video = provider.video
 export const speech = provider.speech
+export const transcription = provider.transcription

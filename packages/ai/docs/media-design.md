@@ -1,6 +1,6 @@
 # Media generation in `@opencode/ai` — public API direction
 
-Status: phases 1–2 implemented; phase 3 Speech implemented, Transcription pending; phases 4–5 proposal.
+Status: phases 1–3 implemented (Speech and Transcription); phases 4–5 proposal.
 
 ## Goal
 
@@ -249,23 +249,71 @@ Deferred: `Speech.session(...)` — input-streaming TTS where text arrives incre
 
 #### Transcription (STT)
 
+Shipped as the second half of phase 3 (`src/transcription.ts`, `src/transcription-client.ts`, protocols
+`openai-transcription`, `google-transcription`, `deepgram-transcription`, `assemblyai-transcription`; new `AssemblyAI`
+facade).
+
 ```ts
 const request = Transcription.request({
-  model: openai.transcription("gpt-4o-transcribe"),
-  audio: Media.file("./call.wav"),
-  language: "en",
-  prompt: "Names: Shoubhit, OpenCode.",
-  timestamps: "word",                              // none | segment | word
+  model: openai.transcription("gpt-4o-transcribe-diarize"),
+  audio: yield* Media.file("./call.wav"),
+  language: "en",                                  // provider-native passthrough
+  timestamps: "segment",                           // none | segment | word
   diarize: true,
-  providerOptions: { chunkingStrategy: "auto" },
+  speakers: 2,                                     // expected count, hint only (AssemblyAI)
+  providerOptions: { known_speaker_names: ["agent"] },
 })
 
 const response = yield* Transcription.generate(request)
-response.text; response.segments; response.words; response.language; response.durationSeconds
-yield* Transcription.stream(request)               // Stream<TranscriptionEvent>: text-delta | segment | finish
+response.text; response.segments; response.words; response.language; response.durationSeconds; response.usage
+yield* Transcription.stream(request)               // Stream<TranscriptionEvent>: generation-queued | generation-progress | text-delta | segment | finish
+const generation = yield* Transcription.start(request) // queued routes only
+yield* Transcription.resume(model, token)
 ```
 
-Realtime STT over WebSocket is the same future `session` shape as input-streaming TTS.
+Transcription is the first modality whose providers span all three protocol kinds, and it needed no fourth kind.
+Every `MediaRoute` now carries its `kind`; `TranscriptionRoute` is the union of the inline, stream, and queued routes;
+`TranscriptionModel.fromRoute` is overloaded per protocol kind (arity picks the overload: `<Options>`,
+`<Options, Frame, State>`, `<Options, Token>`) and composes through `MediaRoute.inline` / `stream` / `queued`; and
+`TranscriptionClient` dispatches on `route.kind`. `generate` on a queued route is `start` then `await`; `stream` on an
+inline route is the response as a single `finish`, and on a queued route it is the status observations followed by
+`finish`. `start` / `resume` on a non-queued route fail with `UnsupportedOperation` (`transcription.start`). The
+`finish` event carries the whole transcript (text, segments, words, language, duration, usage), so the stream route's
+`collect` is just "take `finish`".
+
+The route layer gained a `binary` body with array-valued `query` (Deepgram) and `Queued.start.prepare` (AssemblyAI's
+upload); `packages/ai/AGENTS.md` (Media Routes) describes both.
+
+Settled rules:
+
+- **Timestamps.** A granularity the selected route or model cannot produce fails as `UnsupportedOperation`
+  (`media.timestamps`), following Speech; a route that returns more than asked (Deepgram and AssemblyAI always return
+  words) is not stripped. Segments always carry start and end times: Gemini times each transcription part from its
+  word offsets, so segment timestamps and diarization also request word offsets there.
+- **Diarization.** `diarize` means segments (and words, where the provider labels them) carry `speaker`. Labels are
+  provider-native strings — OpenAI `A` or a known speaker name, Deepgram `0`, Gemini `spk:0`, AssemblyAI `A` — with no
+  cross-provider speaker model. `speakers` is a hint; only AssemblyAI (`speakers_expected`) accepts it.
+- **Language** is passed through (`language`, OpenAI `gpt-transcribe` `languages[]`, Gemini `languageCodes`,
+  AssemblyAI `language_code`). `response.language` is the provider's own value, lowercased but not normalized: an
+  ISO code on most routes, `english` from whisper-1, `en_us` from AssemblyAI. Deepgram and AssemblyAI assume English
+  unless asked to detect, so a missing `language` enables their detection.
+- **Gemini** requires a transcribe model; other model ids fail with `UnsupportedOperation` before the call, because
+  general models ignore `audioTranscriptionConfig` and answer conversationally. Streamed chunks carry whole speaker
+  turns (one part per turn), which join with a space.
+- **Streaming inline providers** emit only `finish`; deltas are never faked.
+- **Units.** AssemblyAI milliseconds and Gemini protobuf durations (`"0.400s"`) are normalized to seconds at the
+  protocol boundary.
+
+| Provider | Kind | Audio input | `timestamps` | `diarize` | Unsupported | Usage |
+|---|---|---|---|---|---|---|
+| OpenAI | stream (`stream: true` in `stream` mode) | multipart `file` (inline only) | `whisper-1` (`verbose_json`); diarize model: `segment` | `gpt-4o-transcribe-diarize` (`diarized_json`) | `speakers`; `prompt` on the diarize model; streaming on `whisper-1` | `tokens` or `seconds` |
+| Gemini | stream (`generateContent` / `streamGenerateContent`) | `inlineData` or Gemini Files `fileData` | `audioTranscriptionConfig.wordTimestamp` | `audioTranscriptionConfig.diarization` | `prompt`, `speakers` | `tokens` |
+| Deepgram | inline | raw body, or JSON `{ url }` | words always; `segment` → `utterances` | `diarize_model=latest` + `utterances` | `prompt`, `speakers` | `seconds` (`metadata.duration`) |
+| AssemblyAI | queued (upload → submit → poll) | `/v2/upload` then `audio_url`, or a URL | words always; `segment` → `speaker_labels` | `speaker_labels` | — | `seconds` (`audio_duration`) |
+
+Deferred: `Transcription.session(...)` — realtime STT over WebSocket (Deepgram live, AssemblyAI streaming, ElevenLabs
+realtime, OpenAI realtime transcription) — is the same future scoped `session` shape as input-streaming TTS and ships
+with the realtime work in phase 5. ElevenLabs Scribe is not implemented yet.
 
 ### `Generation` — shared async execution
 
@@ -338,13 +386,14 @@ Existing facades gain per-modality selectors; the modality routes each facade pr
 | Facade | llm | image | video | speech | transcription | other |
 |---|---|---|---|---|---|---|
 | `OpenAI` | responses (default), chat | Images API | Sora (deprecated 2026-09-24) | ✓ | ✓ | |
-| `Google` | Gemini | Gemini-native (default), `imagen` | Veo | Gemini TTS | Gemini transcribe | |
+| `Google` | Gemini | Gemini-native (default), `imagen` | Veo | Gemini TTS | `gemini-3.5-transcribe` | |
 | `XAI` | ✓ | ✓ | ✓ | | | |
 | `ElevenLabs` | | | | ✓ | Scribe | soundEffect, music |
 | `Cartesia` | | | | ✓ | | |
 | `Deepgram` | | | | Aura | ✓ | |
 | `Fal` | | ✓ | ✓ | | | |
-| `Replicate`, `Runway`, `Luma`, `Kling`, `MiniMax`, `AssemblyAI`, `BlackForestLabs`, `Stability` | | per provider | | | | |
+| `AssemblyAI` | | | | | ✓ (queued) | |
+| `Replicate`, `Runway`, `Luma`, `Kling`, `MiniMax`, `BlackForestLabs`, `Stability` | | per provider | | | | |
 
 New facades follow the existing one-file-per-provider rule. Package entrypoints are modality-specific, such as `@opencode/ai/providers/openai/images`, and return the concrete model.
 
@@ -358,7 +407,7 @@ Media does not fit the LLM four-axis route (SSE frames → event state machine) 
 - `MediaProtocol.queued` — `start` (body + decode to `{ token, snapshot }`), `status`, `result`, optional `cancel`, `pollHint`, and a `token` codec. `result` is always a separate GET (against the status document for Veo/xAI/Runway, fal's `response_url` otherwise) so `await` after `start` and after `resume` share one path. `PollContext.auth` hands the auth headers the route sent to the protocol for output URLs that need them (Veo downloads); they become transient `Media.Asset.headers`, never part of `source`. There is no separate `download` step: `Media.Asset.bytes()` downloads through the executor with those headers. `MediaRoute.inline(...)` / `MediaRoute.queued(...)` compose each kind with endpoint and auth; the queued route decodes the token once and hands `Generation` a token-free `{ status, result, cancel? }`.
 - `MediaProtocol.stream` — `body.from(request)` over the request plus its `mode`, `frames` (a function that picks the framing for the call: `Framing.sse`, `lines`, `document`, or the raw bytes), fresh per-response `initial()` state, `step` emitting modality events, and `finish(state, context)` — with the observed response for header-only usage — emitting exactly one terminal event or failing as an incomplete stream. The route fills `reason.http` on stream errors. `MediaRoute.stream(...)` exposes `stream` and `generate` (the same stream folded by the modality's `collect`).
 
-`MediaRoute.inline` / `MediaRoute.queued` / `MediaRoute.stream` compose one protocol kind with endpoint/auth; `ImageModel`/`VideoModel`/`SpeechModel` share the `MediaModel` base (`src/media-model.ts`).
+`MediaRoute.inline` / `MediaRoute.queued` / `MediaRoute.stream` compose one protocol kind with endpoint/auth and tag the route with its `kind`; `ImageModel`/`VideoModel`/`SpeechModel`/`TranscriptionModel` share the `MediaModel` base (`src/media-model.ts`).
 
 ### LLM integration
 
@@ -388,7 +437,7 @@ Foundation + Image ship together as the reference implementation, serially. Vide
 
 1. **Foundation** — per-modality selectors, `Media`, `Generation`, `Poll`, `Usage` union, `MediaProtocol` kinds, `@opencode/ai/promise` with `llm` + `image`. Port the five existing image protocols onto it. Unify `MediaPart` and add the `media` LLM event (fixes Gemini image output being dropped).
 2. **Video** — ✅ Veo, xAI, fal, Runway shipped (`MediaProtocol.queued`, `Video.start/generate/resume/stream`, promise `ai.video`). Deferred: `Video.complete` (webhooks), Luma, Kling, MiniMax, Replicate.
-3. **Speech + Transcription** — ✅ Speech: OpenAI, Gemini TTS, ElevenLabs, Cartesia, Deepgram shipped (`MediaProtocol.stream`, `Speech.generate/stream`, promise `ai.speech`). Pending: Transcription (OpenAI, ElevenLabs Scribe, Gemini, Deepgram, AssemblyAI). Deferred: `Speech.session` (WebSocket input streaming).
+3. **Speech + Transcription** — ✅ Speech: OpenAI, Gemini TTS, ElevenLabs, Cartesia, Deepgram shipped (`MediaProtocol.stream`, `Speech.generate/stream`, promise `ai.speech`). ✅ Transcription: OpenAI, Gemini, Deepgram, AssemblyAI shipped across all three route kinds (`Transcription.generate/stream/start/resume`, promise `ai.transcription`). Pending: ElevenLabs Scribe. Deferred: `Speech.session` and `Transcription.session` (WebSocket streaming).
 4. **Image queued routes and partials** — BFL, fal, Replicate, Stability; OpenAI `partial_images` streaming.
 5. **Later** — ElevenLabs music/SFX, Lyria, `Speech.session` / `Transcription.session`, realtime.
 
