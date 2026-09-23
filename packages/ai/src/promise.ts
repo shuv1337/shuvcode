@@ -1,4 +1,5 @@
 import { Effect, Layer, ManagedRuntime, Stream } from "effect"
+import type { AwaitOptions, Generation, Snapshot } from "./generation.js"
 import { Image, ImageModel, ImageRequest, type ImageRequestInput } from "./image.js"
 import { ImageClient } from "./image-client.js"
 import { LLM } from "./index.js"
@@ -6,10 +7,12 @@ import { LLMClient } from "./route/client.js"
 import { RequestExecutor } from "./route/executor.js"
 import { LanguageModel, LLMRequest } from "./schema/index.js"
 import type { RequestInput } from "./llm.js"
+import { Video, VideoModel, VideoRequest, type VideoOptions, type VideoRequestInput } from "./video.js"
+import { VideoClient } from "./video-client.js"
 
 /**
- * Promise-first entrypoint for scripts and non-Effect callers. One `ManagedRuntime` hosts the LLM and image clients
- * over a request executor; every method runs the corresponding Effect API and rethrows `AIError` unchanged.
+ * Promise-first entrypoint for scripts and non-Effect callers. One `ManagedRuntime` hosts the LLM, image, and video
+ * clients over a request executor; every method runs the corresponding Effect API and rethrows `AIError` unchanged.
  */
 export interface Options {
   /** Executor layer; defaults to `RequestExecutor.fetchLayer`. Inject a recorder or middleware here. */
@@ -23,7 +26,17 @@ export interface RunOptions {
 export type Services =
   | Layer.Success<typeof LLMClient.layer>
   | Layer.Success<typeof ImageClient.layer>
+  | Layer.Success<typeof VideoClient.layer>
   | RequestExecutor.Service
+
+/** Promise view of a `Generation`: its snapshot plus `await`, `refresh`, and `cancel` returning promises. */
+export type GenerationHandle<Response> = Snapshot & {
+  /** Serializable JSON; pass it back to `resume` from another process. */
+  readonly token: unknown
+  readonly await: (options?: AwaitOptions & RunOptions) => Promise<Response>
+  readonly refresh: (options?: RunOptions) => Promise<GenerationHandle<Response>>
+  readonly cancel: (options?: RunOptions) => Promise<void>
+}
 
 const abortEffect = (signal: AbortSignal | undefined) =>
   signal === undefined
@@ -40,7 +53,7 @@ const abortEffect = (signal: AbortSignal | undefined) =>
 
 export const make = (options: Options = {}) => {
   const runtime = ManagedRuntime.make(
-    Layer.mergeAll(LLMClient.layer, ImageClient.layer).pipe(
+    Layer.mergeAll(LLMClient.layer, ImageClient.layer, VideoClient.layer).pipe(
       Layer.provideMerge(options.layer ?? RequestExecutor.fetchLayer),
     ),
   )
@@ -61,19 +74,27 @@ export const make = (options: Options = {}) => {
       ),
     )
 
+  const handle = <Response>(generation: Generation<Response>): GenerationHandle<Response> => ({
+    ...generation.snapshot,
+    token: generation.token,
+    await: (options) => run(generation.await({ poll: options?.poll }), options),
+    refresh: (options) => run(generation.refresh(), options).then(handle),
+    cancel: (options) => run(generation.cancel(), options),
+  })
+
   // The typed `generate`/`stream` overloads take a concrete input or a request, not the union; normalize once here.
   const llmRequest = (input: RequestInput | LLMRequest) => (input instanceof LLMRequest ? input : LLM.request(input))
   const imageRequest = (input: ImageRequestInput | ImageRequest) =>
     input instanceof ImageRequest ? input : Image.request(input)
+  const videoRequest = (input: VideoRequestInput | VideoRequest) =>
+    input instanceof VideoRequest ? input : Video.request(input)
 
   return {
     run,
     llm: {
       request: LLM.request,
-      generate: <const Model extends LanguageModel>(
-        input: RequestInput<Model> | LLMRequest,
-        options?: RunOptions,
-      ) => run(LLM.generate(llmRequest(input)), options),
+      generate: <const Model extends LanguageModel>(input: RequestInput<Model> | LLMRequest, options?: RunOptions) =>
+        run(LLM.generate(llmRequest(input)), options),
       stream: <const Model extends LanguageModel>(input: RequestInput<Model> | LLMRequest, options?: RunOptions) =>
         iterate(LLM.stream(llmRequest(input)), options),
     },
@@ -83,10 +104,23 @@ export const make = (options: Options = {}) => {
         input: ImageRequestInput<Model> | ImageRequest,
         options?: RunOptions,
       ) => run(Image.generate(imageRequest(input)), options),
-      stream: <const Model extends ImageModel>(
-        input: ImageRequestInput<Model> | ImageRequest,
-        options?: RunOptions,
-      ) => iterate(Image.stream(imageRequest(input)), options),
+      stream: <const Model extends ImageModel>(input: ImageRequestInput<Model> | ImageRequest, options?: RunOptions) =>
+        iterate(Image.stream(imageRequest(input)), options),
+    },
+    video: {
+      request: Video.request,
+      start: <const Model extends VideoModel>(input: VideoRequestInput<Model> | VideoRequest, options?: RunOptions) =>
+        run(Video.start(videoRequest(input)), options).then(handle),
+      generate: <const Model extends VideoModel>(
+        input: VideoRequestInput<Model> | VideoRequest,
+        options?: AwaitOptions & RunOptions,
+      ) => run(Video.generate(videoRequest(input), { poll: options?.poll }), options),
+      resume: <Options extends VideoOptions>(model: VideoModel<Options>, token: unknown, options?: RunOptions) =>
+        run(Video.resume(model, token), options).then(handle),
+      stream: <const Model extends VideoModel>(
+        input: VideoRequestInput<Model> | VideoRequest,
+        options?: AwaitOptions & RunOptions,
+      ) => iterate(Video.stream(videoRequest(input), { poll: options?.poll }), options),
     },
     dispose: () => runtime.dispose(),
   }

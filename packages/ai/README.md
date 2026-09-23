@@ -602,6 +602,86 @@ const program = Effect.gen(function* () {
 
 The hosted result is represented as a provider-executed tool call and tool result, and the generated image is also emitted as a first-class `media` `LLMEvent` (`response.message` then carries a `media` part). Gemini image-capable models emit the same `media` event for inline image output. Retaining `response.message` preserves the generated image for continuation on both routes.
 
+## Video generation
+
+Video mirrors `Image` with one difference: every provider is asynchronous, so the route is a submit-then-poll
+`Generation`. Models come from `.video(...)` selectors on the `Google` (Veo), `XAI`, `Fal`, and `Runway` facades.
+Common fields (`frames`, `references`, `video`, `durationSeconds`, `aspectRatio`, `resolution`, `audio`, `n`, `seed`,
+`negativePrompt`) lower natively or fail with a typed `AIError` before any network call; provider-native controls live
+under `providerOptions`, inferred from the selected model.
+
+```ts
+import { Video, VideoClient } from "@opencode/ai"
+import { Google } from "@opencode/ai/providers"
+
+const google = Google.configure({ apiKey: process.env.GOOGLE_GENERATIVE_AI_API_KEY })
+
+// Simple: submit and wait.
+const program = Effect.gen(function* () {
+  const response = yield* Video.generate(
+    {
+      model: google.video("veo-3.1-generate-preview"),
+      prompt: "Panning wide shot of a calico kitten sleeping in the sunshine",
+      aspectRatio: "16:9",
+      resolution: "1080p",
+      durationSeconds: 8,
+      providerOptions: { personGeneration: "allow_adult" },
+    },
+    { poll: { interval: "10 seconds", timeout: "10 minutes" } },
+  )
+  // Veo serves files for two days behind the API key. The asset knows the deadline (`expiresAt`) and carries the
+  // download credentials only on the live instance (`asset.headers`), never in `source` or JSON: materialize
+  // before persisting, or the persisted URL cannot be fetched again.
+  return yield* response.video.materialize()
+})
+
+// Explicit control: keep the handle, persist the token, resume elsewhere.
+const controlled = Effect.gen(function* () {
+  const generation = yield* Video.start({ model: google.video("veo-3.1-generate-preview"), prompt })
+  generation.id // provider operation / task / request id
+  generation.status // "queued" | "running" | "completed" | "failed" | "cancelled" | "expired"
+  generation.token // route-owned JSON: `{ operation }`, `{ requestID }`, `{ taskID }`, or fal's follow-up URLs
+  const saved = JSON.stringify(generation.token)
+
+  const resumed = yield* Video.resume(google.video("veo-3.1-generate-preview"), JSON.parse(saved))
+  return yield* resumed.await({ poll: { interval: "10 seconds" } })
+})
+
+// Progress as a stream: generation-queued | generation-progress | video | finish.
+const events = Video.stream({ model: Runway.configure({ apiKey }).video("gen4.5"), prompt }, { poll })
+```
+
+`VideoClient.layer` needs `RequestExecutor.Service`, and status polls, result fetches, cancels, and asset downloads
+all run through the same executor with the route's auth. `Generation.await` and `Generation.events` fail with a
+`Timeout` reason when `poll.timeout` (default 10 minutes) elapses. Failed,
+cancelled, and expired generations fail typed with the provider's terminal document on `reason.body`; moderation
+outcomes (Veo `raiMediaFilteredReasons`, xAI `respect_moderation`, Runway `SAFETY.*` codes) surface as `notices` when
+a video is still returned and as a `ContentPolicy` reason when nothing is.
+
+Provider notes:
+
+- **Google Veo** takes inline bytes only (materialize `url` assets first); `frames.last` requires `frames.first`;
+  audio is always on, so `audio: false` fails typed; one video per request. Output URLs need the API key to
+  download, which the returned asset holds transiently (see above).
+- **xAI** sends a `video` input to `/videos/edits`, or `/videos/extensions` with `providerOptions.mode: "extend"`.
+  `seed` and `negativePrompt` are not supported.
+- **fal** endpoints are model-specific: `durationSeconds`, `references`, and `frames.last` fail typed and belong in
+  `providerOptions` under the model's own names (`duration: "8s"`, `end_image_url`, …). Auth is
+  `Authorization: Key <FAL_KEY>`.
+- **Runway** expects pixel ratios in `aspectRatio` for most models (`"1280:720"`), pins `X-Runway-Version`, reports
+  `usage: { type: "credits" }`, and its output URLs expire after 24–48 hours.
+
+The promise client exposes the same surface: `ai.video.start(...)` resolves to a handle with `await`, `refresh`,
+`cancel`, and `token`; `ai.video.generate`, `ai.video.resume(model, token)`, and `ai.video.stream` mirror the Effect
+API.
+
+```ts
+import { ai } from "@opencode/ai/promise"
+
+const generation = await ai.video.start({ model, prompt })
+const video = await generation.await({ poll: { interval: 10_000 }, signal })
+```
+
 ## Public API
 
 - **`LLM.request({...})`** — build a provider-neutral `LLMRequest`. Accepts ergonomic inputs (`system: string`, `prompt: string`) that normalize into the canonical Schema classes.

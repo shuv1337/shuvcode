@@ -1,6 +1,6 @@
 # Media generation in `@opencode/ai` — public API direction
 
-Status: proposal. Branch `media-support`.
+Status: phases 1–2 implemented; phases 3–5 proposal.
 
 ## Goal
 
@@ -66,7 +66,7 @@ import { Media } from "@opencode/ai"
 Media.Source =
   | { type: "bytes";  data: Uint8Array; mediaType: string }
   | { type: "base64"; data: string;     mediaType: string }
-  | { type: "url";    url: string; mediaType?: string; expiresAt?: number; headers?: Record<string, string> }
+  | { type: "url";    url: string; mediaType?: string; expiresAt?: number }
   | { type: "ref";    provider: ProviderID; id: string; mediaType?: string }   // file_id, gs://, runway://, prior generation
 
 class Media.Asset {
@@ -76,6 +76,7 @@ class Media.Asset {
   readonly info?: { width?; height?; durationSeconds?; sampleRate?; channels?; encoding?; format? }
   readonly expiresAt?: number
   readonly providerMetadata?: ProviderMetadata
+  readonly headers?: Record<string, string>     // transient download credentials (Veo); never in source/JSON
 
   bytes(): Effect<Uint8Array, AIError, RequestExecutor.Service>   // downloads/decodes lazily, cached
   base64(): Effect<string, AIError, RequestExecutor.Service>
@@ -129,40 +130,54 @@ Editing is not a separate function; `images`/`mask` on the request select the ed
 
 #### Video
 
+Shipped in phase 2 (`src/video.ts`, `src/video-client.ts`, protocols `google-video`, `xai-video`, `fal-video`, `runway-video`).
+
 ```ts
 const request = Video.request({
   model: google.video("veo-3.1-generate-preview"),
   prompt: "Panning wide shot of a calico kitten sleeping in the sunshine",
   frames: { first: Media.file("./start.png"), last: Media.file("./end.png") },
-  references: [Media.url("https://…/style.png")],
-  video: Media.ref("openai", "video_123"),      // edit / extend / remix source
+  references: [Media.file("./style.png")],
+  video: Media.bytes(previous, "video/mp4"),    // edit / extend source
   durationSeconds: 8,
   aspectRatio: "16:9",
   resolution: "1080p",
   audio: true,
   n: 1,
-  providerOptions: { personGeneration: "dont_allow", negativePrompt: "text, watermark" },
+  seed: 7,
+  negativePrompt: "text, watermark",            // common, not provider-native
+  providerOptions: { personGeneration: "allow_adult" },
 })
 
 // Simple: wait for it.
 const response = yield* Video.generate(request, { poll: { interval: "10 seconds", timeout: "10 minutes" } })
-response.video                                     // Media.Asset (url with expiresAt, or bytes when the route downloads)
+response.video                                     // Media.Asset: url with expiresAt (+ transient `headers` for Veo downloads)
+response.usage                                     // credits on Runway; the other three report none
+response.notices                                   // Veo raiMediaFilteredReasons → filtered, xAI respect_moderation → moderated
 yield* response.video.materialize()                // pull bytes before the URL expires
 
 // Explicit generation control.
 const generation = yield* Video.start(request)     // Generation<VideoResponse>
-generation.id; generation.status; generation.progress; generation.token   // token is serializable JSON
+generation.id; generation.status; generation.progress; generation.position; generation.token
 yield* generation.await({ poll })                  // VideoResponse
-yield* generation.cancel()
+yield* generation.cancel()                         // fal PUT cancel_url, Runway DELETE /tasks/{id}; no-op for Veo and xAI
 
-// Resume from another process.
-const resumed = yield* Video.resume(model, token)  // Generation<VideoResponse>
+// Resume from another process. The token is validated against the route's codec and refreshed once.
+const resumed = yield* Video.resume(model, JSON.parse(saved))
 
 // Progress as a stream.
-yield* Video.stream(request)                       // Stream<VideoEvent>: generation-queued { position } | generation-progress { progress, logs } | video { index, video } | finish
+yield* Video.stream(request, { poll })             // Stream<VideoEvent>: generation-queued { id, position } | generation-progress { id, progress } | video { index, video } | finish { usage, notices }
 ```
 
-Webhooks: `Video.complete(model, token, webhook)` finishes a generation from a webhook payload without polling. Token shape is route-owned and opaque (Veo operation name, fal `response_url`, Runway task id).
+Tokens are route-owned JSON: Veo `{ operation }`, xAI `{ requestID }`, Runway `{ taskID }`, fal
+`{ requestID, statusURL, responseURL, cancelURL }` (fal's follow-up URLs are authoritative and absolute). Common-field
+lowering per provider: Veo takes inline media only and rejects `audio: false` and `n > 1`; xAI rejects `seed` and
+`negativePrompt` and routes a `video` input to edits or (`providerOptions.mode: "extend"`) extensions; fal rejects
+`durationSeconds`, `references`, and `frames.last` because the field names and enums differ per model; Runway passes
+`aspectRatio` through as its pixel `ratio` and rejects `n`.
+
+Deferred: `Video.complete(model, token, webhook)` (finish from a webhook payload without polling) and provider poll
+hints (none of the four providers emit one). Later providers: Luma, Kling, MiniMax, Replicate.
 
 #### Speech (TTS)
 
@@ -209,18 +224,20 @@ Realtime STT over WebSocket is the same future `session` shape as input-streamin
 ```ts
 class Generation<Response> {
   readonly id: string
-  readonly model: MediaModel
+  readonly route: GenerationRoute<Response>        // token-free: { status, result, cancel?: Effect; pollHint? } closed over the decoded token
   readonly token: unknown                          // route-owned serializable JSON
   readonly status: "queued" | "running" | "completed" | "failed" | "cancelled" | "expired"
   readonly progress?: number                       // 0..1, normalized
   readonly position?: number
   readonly expiresAt?: number
   refresh(): Effect<Generation<Response>, AIError>
-  await(options?: { poll?: Poll }): Effect<Response, AIError>
+  result(): Effect<Response, AIError>
+  await(options?: AwaitOptions): Effect<Response, AIError>
   cancel(): Effect<void, AIError>
-  events(options?): Stream<GenerationEvent, AIError>
+  events(options?: AwaitOptions): Stream<GenerationEvent, AIError>   // fails with Timeout past poll.timeout, checked per observation
 }
 
+AwaitOptions = { poll?: Poll }
 Poll = { interval?: Duration; timeout?: Duration; schedule?: Schedule }   // route may override from provider hints (`openai-poll-after-ms`)
 ```
 
@@ -288,10 +305,10 @@ New facades follow the existing one-file-per-provider rule. Package entrypoints 
 Media does not fit the LLM four-axis route (SSE frames → event state machine) except for streaming TTS/STT. Reuse `Endpoint`, `Auth`, `Framing`, `RequestExecutor`, and add media protocol kinds:
 
 - `MediaProtocol.inline` — `body.from(request)` (JSON, multipart, or query), `response.decode(response)` (JSON, or binary body → `Media.Asset`).
-- `MediaProtocol.queued` — `start`, `status`, `result`, `cancel`, optional `download`, `pollHint`, `token` schema.
+- `MediaProtocol.queued` — `start` (body + decode to `{ token, snapshot }`), `status`, `result`, optional `cancel`, `pollHint`, and a `token` codec. `result` is always a separate GET (against the status document for Veo/xAI/Runway, fal's `response_url` otherwise) so `await` after `start` and after `resume` share one path. `PollContext.auth` hands the auth headers the route sent to the protocol for output URLs that need them (Veo downloads); they become transient `Media.Asset.headers`, never part of `source`. There is no separate `download` step: `Media.Asset.bytes()` downloads through the executor with those headers. `MediaRoute.inline(...)` / `MediaRoute.queued(...)` compose each kind with endpoint and auth; the queued route decodes the token once and hands `Generation` a token-free `{ status, result, cancel? }`.
 - `MediaProtocol.stream` — framing + `step` state machine emitting modality events, same discipline as LLM protocols.
 
-`Route.make` for media composes one protocol kind with endpoint/auth. The existing `ImageRoute { generate(request, execute) }` is the ad-hoc version of `inline` and gets folded in.
+`MediaRoute.inline` / `MediaRoute.queued` compose one protocol kind with endpoint/auth; `ImageModel`/`VideoModel` share the `MediaModel` base (`src/media-model.ts`).
 
 ### LLM integration
 
@@ -320,7 +337,7 @@ Foundation + Image ship together as the reference implementation, serially. Vide
 ## Phasing
 
 1. **Foundation** — per-modality selectors, `Media`, `Generation`, `Poll`, `Usage` union, `MediaProtocol` kinds, `@opencode/ai/promise` with `llm` + `image`. Port the five existing image protocols onto it. Unify `MediaPart` and add the `media` LLM event (fixes Gemini image output being dropped).
-2. **Video** — Veo, xAI, fal, Runway first. Then Luma, Kling, MiniMax, Replicate.
+2. **Video** — ✅ Veo, xAI, fal, Runway shipped (`MediaProtocol.queued`, `Video.start/generate/resume/stream`, promise `ai.video`). Deferred: `Video.complete` (webhooks), Luma, Kling, MiniMax, Replicate.
 3. **Speech + Transcription** — OpenAI, ElevenLabs, Gemini TTS, Deepgram, Cartesia, AssemblyAI. Streaming TTS from the start.
 4. **Image queued routes and partials** — BFL, fal, Replicate, Stability; OpenAI `partial_images` streaming.
 5. **Later** — ElevenLabs music/SFX, Lyria, `Speech.session` / `Transcription.session`, realtime.

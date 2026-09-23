@@ -6,9 +6,11 @@ import * as path from "node:path"
 import { fileURLToPath } from "node:url"
 import { LLMClient, RequestExecutor } from "../src/route.js"
 import { ImageClient } from "../src/image-client.js"
+import { VideoClient } from "../src/video-client.js"
 import { EvaluationClient } from "../src/experimental/evaluation-client.js"
 import type { Service as EvaluationClientService } from "../src/experimental/evaluation-client.js"
 import type { Service as ImageClientService } from "../src/image-client.js"
+import type { Service as VideoClientService } from "../src/video-client.js"
 import type { Service as LLMClientService } from "../src/route/client.js"
 import type { Service as RequestExecutorService } from "../src/route/executor.js"
 import {
@@ -24,6 +26,7 @@ type RecordedEnv =
   | RequestExecutorService
   | LLMClientService
   | ImageClientService
+  | VideoClientService
   | EvaluationClientService
   | Socket.WebSocketConstructor
 
@@ -99,6 +102,7 @@ export const recordedTests = (options: RecordedTestsOptions) =>
         requestExecutor,
         LLMClient.layer.pipe(Layer.provide(requestExecutor)),
         ImageClient.layer.pipe(Layer.provide(requestExecutor)),
+        VideoClient.layer.pipe(Layer.provide(requestExecutor)),
         EvaluationClient.layer.pipe(Layer.provide(requestExecutor)),
         webSocket,
       )

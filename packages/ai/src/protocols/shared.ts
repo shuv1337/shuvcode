@@ -192,6 +192,28 @@ export const inlineRequired = (route: string, asset: Media.Asset) =>
 /** The remote URL of a `url` asset, for protocols that accept `http(s)` references natively. */
 export const mediaUrl = (asset: Media.Asset) => (asset.source.type === "url" ? asset.source.url : undefined)
 
+export type MediaReference = { readonly type: "dataUrl" | "url" | "ref"; readonly value: string }
+
+/**
+ * The one string a provider can address an asset by: inline payloads as a data URL, `url` sources as their URL, and
+ * this provider's own `ref` as its id. Other providers' refs are never forwarded and fail typed; omit `provider` for
+ * APIs with no file handles at all.
+ */
+export const mediaReference = (
+  asset: Media.Asset,
+  provider: ProviderID | undefined,
+  label: string,
+): Effect.Effect<MediaReference, AIError> => {
+  const inline = asset.inline()
+  if (inline) return Effect.succeed({ type: "dataUrl", value: inline.dataUrl })
+  const url = mediaUrl(asset)
+  if (url) return Effect.succeed({ type: "url", value: url })
+  if (provider !== undefined && asset.source.type === "ref" && asset.source.provider === provider)
+    return Effect.succeed({ type: "ref", value: asset.source.id })
+  const accepted = provider === undefined ? "" : `, and ${provider} references`
+  return Effect.fail(invalidRequest(`${label} accepts inline bytes, data URLs, http(s) URLs${accepted}`))
+}
+
 /**
  * Lift a tool-result file into a `MediaPart`. Tool files carry either a data URL, an `http(s)` URL, or raw base64 in
  * `uri`; the declared `mime` wins over any data-URL prefix so tool authors control the type the model sees.

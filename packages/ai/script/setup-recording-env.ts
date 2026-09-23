@@ -105,6 +105,36 @@ const PROVIDERS: ReadonlyArray<Provider> = [
     validate: (env) => validateBearer("https://api.x.ai/v1/models", Redacted.make(env.XAI_API_KEY)),
   },
   {
+    id: "fal",
+    label: "fal",
+    tier: "canary",
+    note: "fal queue video recorded tests",
+    vars: [{ name: "FAL_KEY" }],
+    // fal has no free authenticated list endpoint; a 404 for an unknown request id proves the key was accepted.
+    validate: (env) =>
+      Effect.gen(function* () {
+        const http = yield* HttpClient.HttpClient
+        const response = yield* http.execute(
+          HttpClientRequest.get(
+            "https://queue.fal.run/fal-ai/veo3.1/requests/00000000-0000-0000-0000-000000000000/status",
+          ).pipe(HttpClientRequest.setHeaders({ authorization: `Key ${Redacted.value(Redacted.make(env.FAL_KEY))}` })),
+        )
+        if (response.status === 404) return undefined
+        return yield* responseError(response)
+      }),
+  },
+  {
+    id: "runway",
+    label: "Runway",
+    tier: "canary",
+    note: "Runway task video recorded tests",
+    vars: [{ name: "RUNWAYML_API_SECRET" }],
+    validate: (env) =>
+      validateBearer("https://api.dev.runwayml.com/v1/organization", Redacted.make(env.RUNWAYML_API_SECRET), {
+        "X-Runway-Version": "2024-11-06",
+      }),
+  },
+  {
     id: "cloudflare-ai-gateway",
     label: "Cloudflare AI Gateway",
     tier: "canary",
