@@ -6,7 +6,7 @@
 - Fork base: `integration-v2` at `c283b6a2f6`. The last merged upstream parent is `68b28bdb98` (`8d4fa6044b` is the prior merge commit).
 - 34 upstream commits, 248 changed files, approximately 14.6k additions and 1.1k deletions. The upstream release moves from `2.0.14` to `2.0.15`.
 - Work on `sync-upstream-sep23` in `/tmp/shuvcode/sync-upstream-sep23`. This branch starts at the clean fork tip. The original detached checkout has unrelated uncommitted TUI edits; leave it alone.
-- No merge has been started. `git merge-tree --write-tree --name-only integration-v2 upstream/v2` reports four content conflicts: `bun.lock`, `packages/cli/package.json`, `packages/cli/src/services/updater.ts`, and `packages/cli/test/updater-install.test.ts`.
+- `git merge-tree --write-tree --name-only integration-v2 upstream/v2` predicted four content conflicts: `bun.lock`, `packages/cli/package.json`, `packages/cli/src/services/updater.ts`, and `packages/cli/test/updater-install.test.ts`. The merge resolved those four in this worktree.
 
 ## Merge decisions
 
@@ -24,3 +24,9 @@
 3. Run affected package tests/typechecks from package directories: `packages/cli` (especially updater-install, retained-image, debug-config, mini), `packages/tui` (session transcript and fork sidebar/mini), `packages/core`, and `packages/ai` as appropriate. Run `bun run check` from the repository root. Verify generated client output if required by a public API change.
 4. Smoke-test the TUI with `bun run dev:live` from this worktree, including narrow and wide layouts, session history, sidebar and mini model picker. Confirm the fork's `shuvcode` command, default theme, and update behavior still match the identity contract.
 5. Review the merge diff against both parents, then report the result. Push, PR, and release require a separate request; never open an upstream PR implicitly.
+
+## Validation performed
+
+- Regenerated and frozen-install-checked `bun.lock`; retained `shuvcode@2.0.15-shuv.1`, npm dist-tag upgrades, the fork's packages and CLI identity.
+- `bun run check` passed. Focused CLI (updater, debug config, Mini, import/publish boundaries), TUI (session grouping, anchors, mounting, backfill, sidebar, Mini), Core (MCP, subagents, model transport), AI (media), and fork version tests passed.
+- Windows-specific retained-image tests are skipped on this Linux host. The package-image identity test runs cross-platform; the Windows upgrade, uninstall, and service link behavior still needs a Windows run.

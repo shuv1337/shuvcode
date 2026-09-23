@@ -6,6 +6,7 @@ import { ChildProcess } from "effect/unstable/process"
 import { parse, type ParseError } from "jsonc-parser"
 import path from "node:path"
 import { stripVTControlCharacters } from "node:util"
+import { RetainedImage } from "./retained-image"
 import { action, parseReleaseVersion, type Policy } from "./updater-action"
 import { errorMessage } from "../util/error"
 
@@ -217,10 +218,11 @@ const make = Effect.gen(function* () {
     const command = commands[method]
     return {
       command,
-      run: exec(command, "5 minutes").pipe(
-        Effect.flatMap((result) =>
-          result.code === 0 ? Effect.void : Effect.fail(new Error(resultDetail(result))),
+      run: retaining(
+        exec(command, "5 minutes").pipe(
+          Effect.flatMap((result) => (result.code === 0 ? Effect.void : Effect.fail(new Error(resultDetail(result))))),
         ),
+        global.tmp,
       ),
     }
   }
@@ -273,6 +275,18 @@ const make = Effect.gen(function* () {
       fs.remove(directory, { recursive: true, force: true }).pipe(Effect.ignore),
     )
 
+  // On Windows the installer must delete or replace the running binary, which only works
+  // while another link to it exists (see RetainedImage). Upgrades keep that link in the
+  // cache; uninstall has already removed the cache, so it uses the temporary directory.
+  const retaining = <A, E, R>(effect: Effect.Effect<A, E, R>, directory = global.cache) => {
+    if (process.platform !== "win32") return effect
+    // Only the installed binary is at stake; source checkouts run inside bun or node.
+    if (!installedPackage) return effect
+    return Effect.scoped(RetainedImage.retain(directory, "upgrade").pipe(Effect.andThen(effect))).pipe(
+      Effect.provideService(FileSystem.FileSystem, fs),
+    )
+  }
+
   const runUpgrade = (input: {
     readonly method: Method
     readonly command: string[]
@@ -289,7 +303,9 @@ const make = Effect.gen(function* () {
         cause === undefined ? undefined : { cause },
       )
     return exec(input.command, "5 minutes").pipe(
-      Effect.flatMap((result) => (result.code === 0 ? Effect.succeed(result) : Effect.fail(failure(resultDetail(result))))),
+      Effect.flatMap((result) =>
+        result.code === 0 ? Effect.succeed(result) : Effect.fail(failure(resultDetail(result))),
+      ),
       Effect.mapError((cause) =>
         cause instanceof UpgradeError
           ? cause
@@ -329,13 +345,15 @@ const make = Effect.gen(function* () {
           // Bun does not prune old versions from its shared package cache.
           yield* fs.makeDirectory(global.cache, { recursive: true })
           const cache = yield* temporaryDirectory("update-")
-          return yield* runUpgrade({
-            method,
-            command: ["bun", "install", "--global", "--trust", "--cache-dir", cache, target],
-            displayCommand: ["bun", "install", "--global", "--trust", target],
-          })
+          return yield* retaining(
+            runUpgrade({
+              method,
+              command: ["bun", "install", "--global", "--trust", "--cache-dir", cache, target],
+              displayCommand: ["bun", "install", "--global", "--trust", target],
+            }),
+          )
         }
-        return yield* runUpgrade({ method, command: commands[method] })
+        return yield* retaining(runUpgrade({ method, command: commands[method] }))
       }),
     ).pipe(
       Effect.mapError((cause) =>
