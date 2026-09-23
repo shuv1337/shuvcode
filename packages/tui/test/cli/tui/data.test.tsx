@@ -153,7 +153,7 @@ test("syncs VCS info and applies branch updates", async () => {
   }
 })
 
-test("proactively syncs project metadata newest first", async () => {
+test("proactively syncs project metadata most recently active first", async () => {
   const events = createEventStream()
   const calls = createFetch((url) => {
     if (url.pathname !== "/api/project") return
@@ -162,14 +162,14 @@ test("proactively syncs project metadata newest first", async () => {
         id: "proj_old",
         canonical: "/old/project",
         name: "Old project",
-        time: { created: 1, updated: 1 },
+        time: { created: 1, updated: 1, active: 3 },
         sandboxes: [],
       },
       {
         id: "proj_test",
         canonical: worktree,
         name: "OpenCode",
-        time: { created: 1, updated: 2 },
+        time: { created: 1, updated: 2, active: 2 },
         sandboxes: [],
       },
     ])
@@ -197,17 +197,17 @@ test("proactively syncs project metadata newest first", async () => {
     await wait(() => data.project.get("proj_test") !== undefined)
     expect(data.project.list()).toEqual([
       {
-        id: "proj_test",
-        canonical: worktree,
-        name: "OpenCode",
-        time: { created: 1, updated: 2 },
-        sandboxes: [],
-      },
-      {
         id: "proj_old",
         canonical: "/old/project",
         name: "Old project",
-        time: { created: 1, updated: 1 },
+        time: { created: 1, updated: 1, active: 3 },
+        sandboxes: [],
+      },
+      {
+        id: "proj_test",
+        canonical: worktree,
+        name: "OpenCode",
+        time: { created: 1, updated: 2, active: 2 },
         sandboxes: [],
       },
     ])
@@ -1826,7 +1826,7 @@ test("refreshes integrations after integration updates", async () => {
                 id: "openai",
                 name: "OpenAI",
                 methods: [{ type: "key" }],
-                connections: [{ type: "credential", id: "cred_openai", label: "OpenAI" }],
+                connections: [{ type: "credential", method: "key", id: "cred_openai", label: "OpenAI" }],
               },
             ],
     })
@@ -2176,9 +2176,7 @@ test("keeps shell state scoped to location", async () => {
         },
       },
     })
-    await wait(() =>
-      data.shell.list({ directory: other }).some((shell) => shell.id === "sh_live_other"),
-    )
+    await wait(() => data.shell.list({ directory: other }).some((shell) => shell.id === "sh_live_other"))
     expect(data.shell.list().map((shell) => shell.id)).toEqual(["sh_default"])
     expect(
       data.shell.listBySession("ses_shared").find((shell) => shell.id === "sh_live_other")?.location.directory,
@@ -2638,9 +2636,7 @@ test("resyncs global forms only for the active location after reconnect", async 
     await wait(() => data.session.form.list("global", home)?.[0]?.id === "frm_default_2", 4000)
     expect(data.session.form.list("global", other)?.[0]?.id).toBe("frm_other_1")
     expect(requests).toHaveLength(1)
-    expect(requests.map((url) => url.searchParams.get("location[directory]") ?? directory)).toEqual([
-      home.directory,
-    ])
+    expect(requests.map((url) => url.searchParams.get("location[directory]") ?? directory)).toEqual([home.directory])
   } finally {
     app.renderer.destroy()
   }

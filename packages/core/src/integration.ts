@@ -365,6 +365,7 @@ const layer = Layer.effect(
           type: "credential" as const,
           id: credential.id,
           label: credential.label,
+          method: credential.value.type,
         }))
         .toReversed()
       const env = (entry?.methods ?? [])

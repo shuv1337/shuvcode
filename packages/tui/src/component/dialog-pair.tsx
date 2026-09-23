@@ -2,6 +2,7 @@ import { TextAttributes } from "@opentui/core"
 import { useTerminalDimensions } from "@opentui/solid"
 import { createMemo, createResource, createSignal, For, Show } from "solid-js"
 import { renderUnicodeCompact } from "uqr"
+import { base64Encode } from "@opencode/util/encode"
 import { useClient } from "../context/client"
 import { useTheme } from "../context/theme"
 import { useDialog } from "../ui/dialog"
@@ -46,6 +47,17 @@ export function DialogPair(props: { credentials?: DialogPairCredentials }) {
     const url = new URL(value)
     url.hostname = "localhost"
     return url.toString().replace(/\/$/, "")
+  })
+  // Matches `shuvcode pair`: a /connect link carrying the credentials in its hash, decoded by the app's pairing scan.
+  const link = createMemo(() => {
+    const value = info()
+    const url = value?.urls[0]
+    if (!value?.password || !url) return
+    const connect = new URL("/connect", url).toString()
+    return {
+      connect,
+      href: `${connect}#${base64Encode(JSON.stringify({ username: value.username, password: value.password }))}`,
+    }
   })
   const horizontal = createMemo(() => dimensions().width >= 96)
   const content = () => {
@@ -96,20 +108,40 @@ export function DialogPair(props: { credentials?: DialogPairCredentials }) {
               {showPassword() ? value.password : "************"}
             </text>
           </box>
+          <Show when={link()}>
+            {(current) => (
+              <box>
+                <text fg={theme.text.muted}>Link</text>
+                <text
+                  fg={passwordHover() ? theme.text.base : theme.text.muted}
+                  wrapMode="char"
+                  onMouseOver={() => setPasswordHover(true)}
+                  onMouseOut={() => setPasswordHover(false)}
+                  onMouseUp={() => setShowPassword((show) => !show)}
+                >
+                  {showPassword() ? current().href : `${current().connect}#************`}
+                </text>
+              </box>
+            )}
+          </Show>
           <Show when={value.urls.some((url) => ["localhost", "127.0.0.1", "[::1]"].includes(new URL(url).hostname))}>
             <text fg={theme.text.muted} wrapMode="word">
               Run `shuvcode service set hostname 0.0.0.0` to access the service remotely.
             </text>
           </Show>
         </box>
-        <box
-          width={horizontal() ? undefined : "100%"}
-          flexGrow={horizontal() ? 1 : 0}
-          flexShrink={0}
-          alignItems={horizontal() ? "flex-end" : "center"}
-        >
-          <text fg={theme.text.base}>{renderUnicodeCompact(JSON.stringify(value), { border: 1 })}</text>
-        </box>
+        <Show when={link()}>
+          {(current) => (
+            <box
+              width={horizontal() ? undefined : "100%"}
+              flexGrow={horizontal() ? 1 : 0}
+              flexShrink={0}
+              alignItems={horizontal() ? "flex-end" : "center"}
+            >
+              <text fg={theme.text.base}>{renderUnicodeCompact(current().href, { border: 1 })}</text>
+            </box>
+          )}
+        </Show>
       </box>
     )
   }

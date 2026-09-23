@@ -1,5 +1,10 @@
-import { Schema } from "effect"
-import { migrateV1, resolveThemeDocument, ThemeDocument, themeDecodeError, type ModeDefinition } from "@opencode/theme/tui"
+import {
+  migrateV1,
+  parseThemeDocument,
+  resolveThemeDocument,
+  type ThemeDocument,
+  type ModeDefinition,
+} from "@opencode/theme/tui"
 import { resolveThemeColors } from "./resolve"
 import { DEFAULT_THEME_NAME, DEFAULT_THEMES, type Theme, type ThemeV1Json } from "./v1"
 import opencode from "./assets/v2/opencode.json" with { type: "json" }
@@ -21,7 +26,6 @@ let customThemes: Record<string, ThemeDocumentSource> = {}
 let systemTheme: ThemeDocumentSource | undefined
 const listeners = new Set<(themes: Record<string, ThemeDocumentSource>) => void>()
 const parsed = new WeakMap<object, ThemeDocument>()
-const decodeThemeDocument = Schema.decodeUnknownSync(ThemeDocument, { reportInput: true })
 let opencodeTheme: (ThemeDocument & {
   readonly light: ModeDefinition
   readonly dark: ModeDefinition
@@ -29,9 +33,9 @@ let opencodeTheme: (ThemeDocument & {
 
 export function getOpenCodeTheme() {
   if (opencodeTheme) return opencodeTheme
-  const decoded = decodeThemeDocument(opencode) as NonNullable<typeof opencodeTheme>
-  opencodeTheme = decoded
-  return decoded
+  const document = parseThemeDocument(opencode, "opencode") as NonNullable<typeof opencodeTheme>
+  opencodeTheme = document
+  return document
 }
 
 function listThemes(): Record<string, ThemeDocumentSource> {
@@ -66,7 +70,7 @@ export function parseTheme(source: ThemeDocumentSource, name = "theme") {
   const cached = parsed.get(source)
   if (cached) return cached
 
-  const document = "theme" in source ? migrateV1(source as ThemeV1Json) : decodeV2Theme(source, name)
+  const document = "theme" in source ? migrateV1(source as ThemeV1Json) : parseThemeDocument(source, name)
 
   parsed.set(source, document)
   return document
@@ -121,13 +125,5 @@ export function resolveTheme(theme: ThemeV1Json, mode: "dark" | "light"): Theme 
     ...resolved.theme,
     _hasSelectedListItemText: resolved.hasSelectedListItemText,
     thinkingOpacity: resolved.thinkingOpacity,
-  }
-}
-
-function decodeV2Theme(source: ThemeDocumentSource, name: string) {
-  try {
-    return decodeThemeDocument(source)
-  } catch (error) {
-    throw themeDecodeError(error, name)
   }
 }

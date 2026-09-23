@@ -44,6 +44,7 @@ const connection = (credential: Credential.Info) => ({
   type: "credential" as const,
   id: credential.id,
   label: credential.label,
+  method: "oauth" as const,
 })
 
 describe("OAuth refresh safety", () => {

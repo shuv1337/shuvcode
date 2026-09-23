@@ -1,7 +1,7 @@
 # Fresh v2.0.3 fork rewrite map
 
-Locked 2026-09-15 PDT. Amended the same day after review
-(`PLAN-fresh-v2-rewrite-review.md`, approved). Decision map, not an
+Locked 2026-09-15 PDT. Amended the same day after an
+approved review (review file since removed). Decision map, not an
 execution authorization. Does not authorize a bookmark move, push, PR,
 release, live-database convert, or deletion of `integration-v2`.
 
@@ -396,8 +396,8 @@ checks. Review findings fixed: expired Google auth retains login registration,
 explicit Gemini tool restrictions survive wrapping, and OAuth cancellation
 reaches network operations. No public Protocol/HttpApi changed.
 
-This clears the missing-implementation blocker recorded in
-`PLAN-live-test-v2-rewrite-results.md`; it does not establish live auth validity,
+This clears the missing-implementation blocker recorded by the
+2026-09-15 live-test gate (results file since removed); it does not establish live auth validity,
 remote subscription billing, refresh ownership, or full L6/watchlist completion.
 The old service remains untouched. Run the revised shutdown-first suite for
 real coverage; ordinary API-key tests are not substitutes.

@@ -106,7 +106,7 @@ it.effect(
         integration: {
           ...host.integration,
           connection: {
-            active: () => Effect.succeed({ type: "credential", id: "fixture", label: "fixture" }),
+            active: () => Effect.succeed({ type: "credential", id: "fixture", label: "fixture", method: "oauth" }),
             resolve: () => Effect.sync(() => ({ ...imported, access: `fixture-${++resolutions}` })),
           },
         },
@@ -194,7 +194,7 @@ it.effect("Antigravity fails resolution and invalid request metadata without API
       integration: {
         ...host.integration,
         connection: {
-          active: () => Effect.succeed({ type: "credential", id: "fixture", label: "fixture" }),
+          active: () => Effect.succeed({ type: "credential", id: "fixture", label: "fixture", method: "oauth" }),
           resolve: () =>
             mode === "error"
               ? Effect.fail(new Error("refresh refused"))
