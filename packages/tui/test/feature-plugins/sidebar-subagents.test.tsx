@@ -36,12 +36,12 @@ function context(input?: {
   return {
     theme: {
       text: {
-        default: color,
-        subdued: color,
-        status: { running: color },
+        base: color,
+        muted: color,
         feedback: {
-          error: { default: color },
-          warning: { default: color },
+          info: { base: color },
+          error: { base: color },
+          warning: { base: color },
         },
       },
     },

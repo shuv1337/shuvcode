@@ -264,7 +264,7 @@ test("concurrent service processes elect one server", async () => {
       pid: info.pid,
       urls: [info.url],
       // The server reports the canonical tmp directory; Windows os.tmpdir() can be an 8.3 short name.
-      paths: { tmp: await fs.realpath(path.join(os.tmpdir(), "opencode")) },
+      paths: { tmp: await fs.realpath(path.join(os.tmpdir(), "shuvcode")) },
     })
     const contender = Bun.spawn(command, { env, stderr: "pipe", stdout: "ignore" })
     try {
@@ -443,7 +443,7 @@ test("port contender recognizes an incumbent registered during the bind race", a
       requests.count += 1
       if (requests.count === 2) recognizing.resolve()
       return Response.json(
-        { version: OPENCODE_VERSION, pid: process.pid, urls: [], paths: { tmp: "/tmp/opencode" } },
+        { version: OPENCODE_VERSION, pid: process.pid, urls: [], paths: { tmp: "/tmp/shuvcode" } },
         { status: 503 },
       )
     },
