@@ -20,7 +20,8 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean; width?: n
   return (
     <Show when={session()}>
       <box
-        backgroundColor={theme.background.raised.base}
+        // Canvas ground, not the raised panel used by shell blocks.
+        backgroundColor={theme.background.base}
         width={props.width ?? SESSION_SIDEBAR_WIDTH}
         height="100%"
         paddingTop={1}
@@ -37,7 +38,7 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean; width?: n
               title: withTimestampedFallback(session()),
             }}
             enabled={config.animations ?? true}
-            backdrop={theme.background.raised.base}
+            backdrop={theme.background.base}
             attributes={
               data.session.title.pending(props.sessionID) && config.animations === false
                 ? TextAttributes.DIM
@@ -61,7 +62,7 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean; width?: n
             width: 1,
             height: "100%",
             trackOptions: {
-              backgroundColor: theme.background.raised.base,
+              backgroundColor: theme.background.base,
               foregroundColor: theme.scrollbar.base,
             },
           }}
