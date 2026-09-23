@@ -190,10 +190,10 @@ test.each(["timer", "output", "close", "panel"] as const)(
       await app.renderOnce()
       expect(app.renderer.root.findDescendantById("mini-startup")).toBeUndefined()
       const rows = app.externalOutput.take().flatMap((event) => event.rows)
-      expect(rows.filter((row) => row.includes("oc mini"))).toEqual(["\u25aa oc mini vtest \u00b7 /project"])
+      expect(rows.filter((row) => row.includes("sc mini"))).toEqual(["\u25aa sc mini vtest \u00b7 /project"])
       if (finish === "output")
         expect(rows.findIndex((row) => row.includes("first output"))).toBeGreaterThan(
-          rows.findIndex((row) => row.includes("oc mini")),
+          rows.findIndex((row) => row.includes("sc mini")),
         )
       if (finish !== "panel") expect(app.renderer.currentFocusedEditor).toBe(editor)
       app.footer.finishStartup()
