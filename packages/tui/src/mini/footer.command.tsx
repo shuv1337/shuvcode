@@ -395,6 +395,7 @@ export function RunCommandMenuBody(props: {
   queued: Accessor<FooterQueuedPrompt[]>
   variants: Accessor<string[]>
   variantCycle: string
+  modelList: string
   onClose: () => void
   onAgent: () => void
   onModel: () => void
@@ -470,6 +471,7 @@ export function RunCommandMenuBody(props: {
         action: "model",
         category: "Agent",
         display: "Switch model",
+        footer: props.modelList,
       },
       ...(props.queued().length > 0
         ? [

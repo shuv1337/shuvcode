@@ -202,6 +202,7 @@ export function RunFooterView(props: RunFooterViewProps) {
   const subagentInterruptShortcut = () => shortcut("composer.subagent.interrupt")
   const interrupt = () => shortcut("session.interrupt")
   const variantCycle = () => monoShortcut(shortcuts.all("variant.cycle") ?? "", props.mono)
+  const modelList = () => shortcut("model.list")
   const clearShortcut = () => shortcut("prompt.clear")
   const busy = createMemo(() => props.state().phase === "running")
   const started = createMemo(() => (busy() ? performance.now() : undefined))
@@ -564,6 +565,12 @@ export function RunFooterView(props: RunFooterViewProps) {
         run: openCommand,
       },
       {
+        id: "model.list",
+        title: "Switch model",
+        group: "Model",
+        run: openModel,
+      },
+      {
         id: "variant.cycle",
         title: "Cycle model variant",
         group: "Model",
@@ -810,6 +817,7 @@ export function RunFooterView(props: RunFooterViewProps) {
                             queued={queuedPrompts}
                             variants={props.variants}
                             variantCycle={variantCycle()}
+                            modelList={modelList()}
                             onClose={closePanel}
                             onAgent={openAgent}
                             onModel={openModel}

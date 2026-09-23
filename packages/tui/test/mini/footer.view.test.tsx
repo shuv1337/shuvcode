@@ -850,6 +850,7 @@ test("direct command panel renders grouped actions without catalog commands", as
           queued={() => []}
           variants={variants}
           variantCycle="ctrl+t"
+          modelList="ctrl+x m"
           onClose={() => {}}
           onAgent={() => {}}
           onModel={() => {}}
@@ -1063,6 +1064,7 @@ test("direct command panel shows subagent entry when available", async () => {
           queued={() => []}
           variants={variants}
           variantCycle="ctrl+t"
+          modelList="ctrl+x m"
           onClose={() => {}}
           onAgent={() => {}}
           onModel={() => {}}
@@ -1113,6 +1115,7 @@ test("direct command panel keeps completed subagents available", async () => {
           queued={() => []}
           variants={variants}
           variantCycle="ctrl+t"
+          modelList="ctrl+x m"
           onClose={() => {}}
           onAgent={() => {}}
           onModel={() => {}}
@@ -1446,6 +1449,52 @@ test.skip("direct footer dispatches leader variant binding only when leader is r
     app.mockInput.pressKey("x", { ctrl: true })
     app.mockInput.pressKey("t")
     expect(calls).toEqual(["cycle"])
+  } finally {
+    app.cleanup()
+  }
+})
+
+test("direct footer opens the model list from model.list", async () => {
+  const app = await renderFooter({
+    height: RUN_COMMAND_PANEL_ROWS,
+    providers: [provider()],
+    currentModel: { providerID: "opencode", modelID: "gpt-5" },
+  })
+
+  try {
+    await app.renderOnce()
+    app.mockInput.pressKey("m")
+    await app.renderOnce()
+    expect(app.captureCharFrame()).not.toContain("Select model")
+
+    app.mockInput.pressKey("x", { ctrl: true })
+    app.mockInput.pressKey("m")
+    await app.renderOnce()
+    expect(app.captureCharFrame()).toContain("Select model")
+    expect(app.captureCharFrame()).toContain("GPT-5")
+  } finally {
+    app.cleanup()
+  }
+})
+
+test.each(["ctrl+m", "none"] as const)("model.list follows the configured binding (%s)", async (key) => {
+  const app = await renderFooter({
+    height: RUN_COMMAND_PANEL_ROWS,
+    tuiConfig: createTuiResolvedConfig({ keybinds: { "model.list": key } }),
+    providers: [provider()],
+  })
+
+  try {
+    await app.renderOnce()
+    app.mockInput.pressKey("x", { ctrl: true })
+    app.mockInput.pressKey("m")
+    await app.renderOnce()
+    expect(app.captureCharFrame().includes("Select model")).toBe(false)
+
+    if (key === "none") return
+    app.mockInput.pressKey("m", { ctrl: true })
+    await app.renderOnce()
+    expect(app.captureCharFrame()).toContain("Select model")
   } finally {
     app.cleanup()
   }
