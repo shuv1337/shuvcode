@@ -310,7 +310,8 @@ reject }` object.
       `(value, index)` arguments and stepwise synchronous iterator consumption.
 - [x] Iteration/transformation: `map`, `filter`, `flatMap`, and `forEach`.
 - [x] Searching/tests: `find`, `findIndex`, `findLast`, `findLastIndex`, `some`, `every`, `includes`, `indexOf`, and
-      `lastIndexOf`.
+      `lastIndexOf`. An explicit `undefined` fromIndex counts as present: `[1, 2, 1].lastIndexOf(1, undefined)` is `0`
+      while `lastIndexOf(1)` is `2`.
 - [x] Aggregation: `reduce` and `reduceRight`.
 - [x] Ordering: `sort`, `toSorted`, `reverse`, and `toReversed`.
 - [x] Access/copying: `at`, `slice`, `concat`, `flat`, `with`, `join`, and `toLocaleString` (each element's
@@ -495,11 +496,16 @@ with a hint to encode as text first (`TextDecoder`, `toBase64`, `toHex`).
       cannot be deleted. `length` is a prototype accessor, so `Object.keys` lists only indexes.
 - [x] `at`, `slice`, `subarray` (a view on the same bytes), `set`, `fill`, `reverse`, `indexOf`, `lastIndexOf`,
       `includes`, `join`, `toString`, `toBase64`, `toHex`, and live `keys`, `values`, `entries`, and `[Symbol.iterator]`
-      iterators.
+      iterators. Start indexes coerce as for arrays, and `lastIndexOf(x, undefined)` searches from index 0 while
+      `lastIndexOf(x)` searches from the end, as in JS.
 - [x] Spread, destructuring, `for...of`, `yield*`, `Array.from`, and `new Set(bytes)`. `Array.isArray` is false.
 - [x] String coercion joins with commas; `JSON.stringify` gives `{"0":1,...}`; `console.log` prints
       `Uint8Array(n) [...]`.
-- [ ] Callback methods (`forEach`, `map`, `filter`, `find`, `reduce`, ...); use `Array.from(bytes, fn)` meanwhile.
+- [x] Callback methods `forEach`, `map`, `filter`, `find`, `findIndex`, `findLast`, `findLastIndex`, `some`, `every`,
+      `reduce`, and `reduceRight`, sharing the Array implementations; the callback receives `(byte, index, bytes)`.
+      `map` and `filter` return new Uint8Arrays with results clamped like index writes (`map((b) => b * 100)` on
+      `[1, 2, 3]` is `[100, 200, 44]`); `reduce` on an empty Uint8Array without an initial value is a `TypeError`.
+- [x] `sort` in place, numeric ascending by default (`[10, 9, 1]` sorts to `[1, 9, 10]`) or by comparator.
 - [ ] `ArrayBuffer`, `DataView`, and other typed arrays.
 
 ## Web platform helpers
