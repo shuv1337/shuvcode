@@ -5,7 +5,7 @@ import { Auth } from "../route/auth.js"
 import { Endpoint } from "../route/endpoint.js"
 import { Protocol } from "../route/protocol.js"
 import { HttpTransport } from "../route/transport/index.js"
-import { LLMRequest, mergeJsonRecords, type ToolDefinition, type ToolEntry } from "../schema/index.js"
+import { LLMRequest, type ToolDefinition, type ToolEntry } from "../schema/index.js"
 import { resolveEffortUpdates } from "../effort-updates.js"
 import { OpenResponses } from "./open-responses.js"
 import { OpenResponsesOptions } from "./utils/open-responses-options.js"
@@ -135,11 +135,6 @@ export const CompactionTrigger = Schema.Struct({ type: Schema.Literal("compactio
 const CheckpointBody = Schema.Struct({
   ...OpenAIResponsesBody.fields,
   input: Schema.Array(Schema.Union([OpenAIResponsesInputItem, CompactionTrigger])),
-  store: Schema.Literal(false),
-  prompt_cache_retention: optionalNull(Schema.String),
-  prompt_cache_options: optionalNull(
-    Schema.Struct({ mode: Schema.optional(Schema.String), ttl: Schema.optional(Schema.String) }),
-  ),
 })
 
 const adapter = {
@@ -191,6 +186,8 @@ const lowerToolEntry = Effect.fn("OpenAIResponses.lowerToolEntry")(function* (to
   }
 })
 
+const lowerTools = (request: LLMRequest) => Effect.forEach(request.tools, lowerToolEntry)
+
 const lowerToolChoice = (toolChoice: NonNullable<LLMRequest["toolChoice"]>, tools: ReadonlyArray<ToolEntry>) =>
   ProviderShared.matchToolChoice(NAME, toolChoice, {
     auto: () => "auto" as const,
@@ -214,7 +211,7 @@ const fromRequest = Effect.fn("OpenAIResponses.fromRequest")(function* (request:
     ...(yield* OpenResponses.lowerConversation(updates.request, adapter)),
     ...OpenResponses.lowerGeneration(request, { ...options, reasoningEffort: updates.effort }),
     context_management: management?.map((edit) => ({ type: edit.type, compact_threshold: edit.compactThreshold })),
-    tools: request.tools.length === 0 ? undefined : yield* Effect.forEach(request.tools, lowerToolEntry),
+    tools: request.tools.length === 0 ? undefined : yield* lowerTools(request),
     tool_choice:
       request.tools.length === 0
         ? undefined
@@ -226,7 +223,6 @@ const fromRequest = Effect.fn("OpenAIResponses.fromRequest")(function* (request:
 const checkpointBody = {
   schema: CheckpointBody,
   from: Effect.fn("OpenAIResponses.checkpointBody")(function* (request: LLMRequest) {
-    const native = yield* fromRequest(LLMRequest.update(request, { toolChoice: undefined }))
     const overlay = request.http?.body
     // Complete history is required for stateless replay and SSE recovery. Raw input overrides bypass that contract.
     if (
@@ -237,18 +233,13 @@ const checkpointBody = {
       return yield* ProviderShared.invalidRequest(
         "Trigger compaction requires complete canonical history, not an input or continuation override",
       )
-    return yield* ProviderShared.validateWith(Schema.decodeUnknownEffect(CheckpointBody))({
-      ...mergeJsonRecords(native, overlay),
-      input: [...native.input, { type: "compaction_trigger" }],
-      stream: true,
-      store: false,
-      parallel_tool_calls: true,
-      tool_choice: undefined,
-      context_management: undefined,
-      text: undefined,
-      max_output_tokens: undefined,
-      max_tool_calls: undefined,
-    })
+    if (overlay?.stream !== undefined && overlay.stream !== true)
+      return yield* ProviderShared.invalidRequest("Trigger compaction requires a streamed response")
+    const native = yield* fromRequest(request)
+    return {
+      ...native,
+      input: [...native.input, { type: "compaction_trigger" as const }],
+    }
   }),
 }
 
@@ -330,7 +321,10 @@ export const transport = channelTransport({
 })
 
 export const route = Route.make({
-  compact: { endpoint: ResponsesCompaction.make(adapter), trigger: ResponsesCheckpoint.make(checkpointBody) },
+  compact: {
+    endpoint: ResponsesCompaction.make(adapter, lowerTools),
+    trigger: ResponsesCheckpoint.make(checkpointBody),
+  },
   id: ADAPTER,
   provider: "openai",
   providerMetadataKey: "openai",

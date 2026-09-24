@@ -375,6 +375,18 @@ it.effect("routes AI Gateway model options by upstream prefix", () =>
       bedrock: { reasoningConfig: { type: "enabled" } },
     })
 
+    const openai = yield* aisdk.model({
+      ...model("@ai-sdk/gateway", { gateway: { order: ["openai"] } }),
+      modelID: Model.ID.make("openai/gpt-5.5"),
+    })
+    const openaiPrepared = yield* compileRequest(
+      LLM.request({ model: openai, prompt: "Hello", providerOptions: { textVerbosity: "low" } }),
+    )
+    expect(openaiPrepared.body.providerOptions).toEqual({
+      gateway: { order: ["openai"] },
+      openai: { textVerbosity: "low" },
+    })
+
     const fallback = yield* aisdk.model({
       ...model("@ai-sdk/gateway", { reasoningEffort: "high" }),
       modelID: Model.ID.make("deepseek/deepseek-v4"),
