@@ -340,7 +340,7 @@ function SessionScreenContent(props: { session: SessionModel; browser: ReturnTyp
       </div>
 
       <Show when={composer.active()} keyed>
-        {(model) => <ActiveSessionComposerRegion model={model} />}
+        {(model) => <ActiveSessionComposerRegion model={model} suggestionBoundary={timeline.scroller} />}
       </Show>
     </>
   )
