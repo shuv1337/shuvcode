@@ -901,6 +901,44 @@ describe("Tool", () => {
     )
   })
 
+  it.effect("leaves remote failure images untouched, matching success", () =>
+    Effect.gen(function* () {
+      const service = yield* Tool.Service
+      const content = [
+        { type: "file" as const, uri: "https://example.com/shot.png", mime: "image/png", name: "shot.png" },
+        { type: "file" as const, uri: "file:///tmp/shot.png", mime: "image/png", name: "local.png" },
+        { type: "text" as const, text: "remote" },
+      ]
+      yield* transform(
+        service,
+        {
+          shown: {
+            name: "shown",
+            description: "Return remote images",
+            input: Schema.Struct({ text: Schema.String }),
+            output: Schema.Struct({ text: Schema.String }),
+            execute: () => Effect.succeed({ output: { text: "remote" }, content }),
+          },
+          hidden: {
+            name: "hidden",
+            description: "Fail with the same remote images",
+            input: Schema.Struct({ text: Schema.String }),
+            output: Schema.Struct({ text: Schema.String }),
+            execute: () => new Tool.Error({ message: "remote failed", content }),
+          },
+        },
+        { codemode: false },
+      )
+
+      const success = yield* executeTool(service, call("shown"))
+      const failure = yield* executeTool(service, call("hidden"))
+      expect(success.status).toBe("completed")
+      expect(failure.status).toBe("error")
+      expect(failure.content).toEqual(success.content)
+      expect(failure.content).toEqual(content)
+    }),
+  )
+
   it.effect("normalizes rich failure images once and keeps the call failed", () =>
     Effect.gen(function* () {
       const service = yield* Tool.Service

@@ -4631,6 +4631,96 @@ describe("SessionRunnerLLM", () => {
     expect(JSON.stringify(replay)).not.toContain('"status":"completed"')
   })
 
+  scenario("truncates rich failures with the same rule as success", function* (s) {
+    const registry = yield* Tool.Service
+    const huge = "x".repeat(60 * 1024)
+    const owned = { truncated: false }
+    yield* transformTools(
+      registry,
+      {
+        ok_open: {
+          name: "ok_open",
+          description: "Succeed with an unowned transcript",
+          input: Schema.Struct({}),
+          output: Schema.Struct({}),
+          execute: () => Effect.succeed({ output: {}, content: huge }),
+        },
+        fail_open: {
+          name: "fail_open",
+          description: "Fail with an unowned transcript",
+          input: Schema.Struct({}),
+          output: Schema.Struct({}),
+          execute: () => new Tool.Error({ message: "dump failed", content: huge }),
+        },
+        ok_owned: {
+          name: "ok_owned",
+          description: "Succeed with a tool-owned truncation flag",
+          input: Schema.Struct({}),
+          output: Schema.Struct({}),
+          execute: () => Effect.succeed({ output: {}, content: huge, metadata: owned }),
+        },
+        fail_owned: {
+          name: "fail_owned",
+          description: "Fail with a foreign tool-owned truncation flag",
+          input: Schema.Struct({}),
+          output: Schema.Struct({}),
+          execute: () =>
+            Effect.fail({
+              _tag: "Tool.Error",
+              message: "owned failure",
+              metadata: owned,
+              content: huge,
+            } as never),
+        },
+      },
+      { codemode: false },
+    )
+    yield* s.admit("Compare truncation")
+    yield* s.llm.push(
+      TestLLM.toolCalls(
+        LLMEvent.toolCall({ id: "ok-open", name: "ok_open", input: {} }),
+        LLMEvent.toolCall({ id: "fail-open", name: "fail_open", input: {} }),
+        LLMEvent.toolCall({ id: "ok-owned", name: "ok_owned", input: {} }),
+        LLMEvent.toolCall({ id: "fail-owned", name: "fail_owned", input: {} }),
+      ),
+      TestLLM.stop(),
+    )
+    yield* s.resume
+
+    const context = yield* s.context
+    const state = (id: string) => {
+      const assistant = context.find(
+        (message) => message.type === "assistant" && message.content.some((part) => part.type === "tool" && part.id === id),
+      )
+      const tool = assistant?.type === "assistant" ? assistant.content.find((part) => part.type === "tool" && part.id === id) : undefined
+      if (tool?.type !== "tool" || (tool.state.status !== "completed" && tool.state.status !== "error"))
+        return undefined
+      return tool.state
+    }
+    const openSuccess = state("ok-open")
+    const openFailure = state("fail-open")
+    const ownedSuccess = state("ok-owned")
+    const ownedFailure = state("fail-owned")
+    const text = (content: ReadonlyArray<{ type: string; text?: string }> | undefined) =>
+      content?.flatMap((item) => (item.type === "text" ? [item.text ?? ""] : [])).join("\n") ?? ""
+    const spilled = (value: string) => value.replace(/\n?\.\.\. \d+ bytes truncated; full content saved to .* \.\.\.$/, "")
+
+    expect(openSuccess?.status).toBe("completed")
+    expect(openFailure?.status).toBe("error")
+    expect(openSuccess?.metadata).toMatchObject({ truncated: true })
+    expect(openFailure?.metadata).toMatchObject({ truncated: true })
+    expect(text(openSuccess?.content)).toContain("truncated")
+    expect(spilled(text(openFailure?.content))).toBe(spilled(text(openSuccess?.content)))
+    expect(text(openFailure?.content)).not.toBe(huge)
+
+    expect(ownedSuccess?.status).toBe("completed")
+    expect(ownedFailure?.status).toBe("error")
+    expect(ownedSuccess?.content).toEqual([{ type: "text", text: huge }])
+    expect(ownedFailure?.content).toEqual(ownedSuccess?.content)
+    expect(ownedSuccess?.metadata).toEqual({ truncated: false })
+    expect(ownedFailure?.metadata).toEqual({ truncated: false })
+  })
+
   scenario("bounds oversized rich failure text before publishing the failure", function* (s) {
     const registry = yield* Tool.Service
     yield* transformTools(
