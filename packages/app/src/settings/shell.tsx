@@ -191,7 +191,10 @@ function RootSettings() {
   const servers = useServerCollectionController()
   const inventory = useSettingsServers()
   const platform = usePlatform()
-  const [state, setState] = createStore({ worktreeFilterReset: 0 })
+  const [state, setState] = createStore({
+    worktreeFilterReset: 0,
+    modelProvider: undefined as string | undefined,
+  })
   const list = servers.collection.items
   const singleEntry = createMemo(() => (inventory().length === 1 ? inventory()[0] : undefined))
   const single = createMemo(() => singleEntry()?.connection)
@@ -320,10 +323,21 @@ function RootSettings() {
               />
             </Tabs.Content>
             <Tabs.Content value="providers" class="settings-panel">
-              <SettingsProviders directory={undefined} onBack={() => surface.select("providers")} />
+              <SettingsProviders
+                directory={undefined}
+                onSelectProvider={(providerID) => {
+                  setState("modelProvider", providerID)
+                  surface.select("models")
+                }}
+              />
             </Tabs.Content>
             <Tabs.Content value="models" class="settings-panel">
-              <SettingsModels active={surface.view().tab === "models"} autofocus={!surface.search.state.selected} />
+              <SettingsModels
+                active={surface.view().tab === "models"}
+                autofocus={!surface.search.state.selected}
+                provider={state.modelProvider}
+                onReveal={() => setState("modelProvider", undefined)}
+              />
             </Tabs.Content>
             <Tabs.Content value="extensions" class="settings-panel">
               <SettingsExtensions subtab={surface.view().subtab} onSubtab={(value) => surface.subtab(value)} />
@@ -347,7 +361,10 @@ function ServerSettings(props: { entry: SettingsServer }) {
   const surface = useSettingsSurface()
   const activeDirectory = useSettingsDirectory(() => props.entry.connection)
   const prefetchWorkspaces = useWorkspacesPrefetch(() => props.entry.connection)
-  const [state, setState] = createStore({ worktreeFilterReset: 0 })
+  const [state, setState] = createStore({
+    worktreeFilterReset: 0,
+    modelProvider: undefined as string | undefined,
+  })
   const groups = createMemo<SettingsNavGroup[]>(() => [
     {
       items: nestedServerTabs.map((item) => ({
@@ -402,10 +419,20 @@ function ServerSettings(props: { entry: SettingsServer }) {
               />
             </Tabs.Content>
             <Tabs.Content value="providers" class="settings-panel">
-              <SettingsProviders directory={undefined} onBack={() => surface.select("providers")} />
+              <SettingsProviders
+                directory={undefined}
+                onSelectProvider={(providerID) => {
+                  setState("modelProvider", providerID)
+                  surface.select("models")
+                }}
+              />
             </Tabs.Content>
             <Tabs.Content value="models" class="settings-panel">
-              <SettingsModels active={surface.view().tab === "models"} />
+              <SettingsModels
+                active={surface.view().tab === "models"}
+                provider={state.modelProvider}
+                onReveal={() => setState("modelProvider", undefined)}
+              />
             </Tabs.Content>
             <Tabs.Content value="extensions" class="settings-panel">
               <SettingsExtensions subtab={surface.view().subtab} onSubtab={(value) => surface.subtab(value)} />

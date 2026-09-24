@@ -16,7 +16,7 @@ import { Icon } from "@opencode/ui/icon"
 import { IconButton } from "@opencode/ui/icon-button"
 import { createAnimatedPresence } from "@/runtime/animated-presence"
 import { resolveBlobUrl } from "@/runtime/persistence/drafts"
-import { ProviderIcon } from "@opencode/ui/provider-icon"
+import { ProviderModelIcon } from "@/providers/models/provider-group"
 import { useI18n } from "@opencode/ui/context/i18n"
 import { Button } from "@opencode/ui/button"
 import { Keybind } from "@opencode/ui/keybind"
@@ -702,7 +702,7 @@ function ComposerEditorConfiguredSelect(props: {
       current={current()}
       currentIcon={
         <Show when={props.model && providerID()}>
-          <ProviderIcon id={providerID()!} class="size-4 shrink-0 opacity-60" />
+          {(id) => <ProviderModelIcon provider={{ id: id(), name: id() }} class="shrink-0 opacity-60" />}
         </Show>
       }
       onSelect={props.control.onSelect}
