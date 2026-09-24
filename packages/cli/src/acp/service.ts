@@ -208,7 +208,7 @@ export function make(input: {
           _meta: { [ChildSessionUpdatesCapability]: true },
         },
         authMethods: [authMethod],
-        agentInfo: { name: "OpenCode", version: OPENCODE_VERSION },
+        agentInfo: { name: "Shuvcode", version: OPENCODE_VERSION },
       }
     },
     authenticate: async (params) => {
