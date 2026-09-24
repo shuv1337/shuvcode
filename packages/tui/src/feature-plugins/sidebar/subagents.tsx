@@ -34,7 +34,10 @@ export function SidebarSubagents(props: { context: Plugin.Context; sessionID: st
     () => children().filter((session) => props.context.data.session.status(session.id) === "running").length,
   )
   const open = () => !collapsed.root
-  const summary = createMemo(() => (running() > 0 ? `(${running()} running)` : `(${children().length})`))
+  const summary = createMemo(() => {
+    const finished = children().length - running()
+    return `(${[running() > 0 && `${running()} running`, finished > 0 && `${finished} done`].filter(Boolean).join(", ")})`
+  })
 
   return (
     <Show when={children().length > 0}>
@@ -50,9 +53,7 @@ export function SidebarSubagents(props: { context: Plugin.Context; sessionID: st
           </text>
           <text fg={theme.text.base} wrapMode="none" truncate flexGrow={1} flexShrink={1} minWidth={0}>
             <b>Subagents</b>
-            <Show when={!open()}>
-              <span style={{ fg: theme.text.muted }}> {summary()}</span>
-            </Show>
+            <span style={{ fg: theme.text.muted }}> {summary()}</span>
           </text>
         </box>
         <Show when={open()}>

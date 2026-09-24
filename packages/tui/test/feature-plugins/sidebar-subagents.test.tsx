@@ -162,7 +162,7 @@ test("sidebar lists a child's own descendants when that session is current", asy
   }
 })
 
-test("sidebar collapsed summary prefers running count", async () => {
+test("sidebar collapsed summary shows running and finished counts", async () => {
   const app = await testRender(
     () => (
       <SidebarSubagents
@@ -184,7 +184,7 @@ test("sidebar collapsed summary prefers running count", async () => {
     await app.renderOnce()
     const frame = app.captureCharFrame()
     expect(frame).toContain("Subagents")
-    expect(frame).toContain("(1 running)")
+    expect(frame).toContain("(1 running, 1 done)")
     expect(frame).not.toContain("One")
     expect(frame).not.toContain("Two")
   } finally {
