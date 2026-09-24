@@ -1,6 +1,6 @@
-import type { JsonSchema, LanguageModelToolSchemaCompatibility } from "../../schema/index.js"
+import type { JsonSchema, LanguageModel, LanguageModelSanitizerCompatibility } from "../../schema/index.js"
 import { isRecord } from "../../utils/record.js"
-import { GeminiToolSchema } from "./gemini-tool-schema.js"
+import { GeminiJsonSchema } from "./gemini-json-schema.js"
 
 const tupleItemsSchema = (items: ReadonlyArray<unknown>) => {
   const projected = items.map(moonshotNode)
@@ -46,18 +46,29 @@ const moonshot = (schema: JsonSchema): JsonSchema => {
 const openAI = (schema: JsonSchema): JsonSchema => schema
 const responses = openAI
 
-const gemini = (schema: JsonSchema): JsonSchema => GeminiToolSchema.convert(schema) ?? {}
+const gemini = GeminiJsonSchema.normalize
 
+const MODEL_NAMES = [
+  [/gemini/i, "gemini"],
+  [/kimi/i, "moonshot"],
+] as const
+
+// An explicit `sanitizer` wins, and `none` opts out. Otherwise the protocol's own default
+// applies (the Gemini API always uses Gemini's rules), then the model name selects the family's rules
+// so models reached through gateways and OpenAI-compatible endpoints get the same handling.
 const modelCompatibility = (
   schema: JsonSchema,
-  compatibility: LanguageModelToolSchemaCompatibility | undefined,
+  model: LanguageModel,
+  protocolDefault?: LanguageModelSanitizerCompatibility,
 ): JsonSchema => {
-  if (compatibility === undefined) return schema
-  switch (compatibility) {
+  switch (model.compatibility?.sanitizer ?? protocolDefault ?? MODEL_NAMES.find(([name]) => name.test(model.id))?.[1]) {
     case "gemini":
       return gemini(schema)
     case "moonshot":
       return moonshot(schema)
+    case "none":
+    case undefined:
+      return schema
   }
 }
 
