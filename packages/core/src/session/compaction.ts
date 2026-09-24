@@ -304,8 +304,12 @@ const serializeRecentMessage = (message: SessionMessage.Info) => {
             `[Assistant tool call]: ${part.name}(${input})`,
             `[Tool result]: ${truncateToolOutput(serializeToolContent(part.state.content))}`,
           ]
-        if (part.state.status === "error")
-          return [`[Assistant tool call]: ${part.name}(${input})`, `[Tool error]: ${part.state.error.message}`]
+        if (part.state.status === "error") {
+          const lines = [`[Assistant tool call]: ${part.name}(${input})`, `[Tool error]: ${part.state.error.message}`]
+          if (part.state.content !== undefined)
+            lines.push(`[Tool error content]: ${truncateToolOutput(serializeToolContent(part.state.content))}`)
+          return lines
+        }
         return [`[Assistant tool call]: ${part.name}(${input})`]
       })
       .join("\n")

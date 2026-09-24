@@ -17,6 +17,7 @@ import { Permission } from "../../permission.js"
 import { Snapshot } from "../../snapshot.js"
 import { Tool } from "../../tool.js"
 import { ToolOutput } from "../../tool-output.js"
+import { normalizeContent } from "../../tool/runtime.js"
 import { QuestionTool } from "../../tool/plugin/question.js"
 import { StepFailedError } from "../error.js"
 import { SessionEvent } from "../event.js"
@@ -122,7 +123,18 @@ export const make = Effect.gen(function* () {
                 Effect.flatMap(toolOutput.truncate),
                 Effect.flatMap((outcome) => publisher.toolExecution(event.id, event.name, outcome)),
                 Effect.catchTag("Tool.Error", (error) =>
-                  publisher.failTool(event.id, toSessionError(error), error.metadata).pipe(Effect.asVoid),
+                  Effect.gen(function* () {
+                    const raw = error.content
+                    if (raw === undefined || (typeof raw !== "string" && raw.length === 0)) {
+                      yield* publisher.failTool(event.id, toSessionError(error), error.metadata)
+                      return
+                    }
+                    const truncated = yield* toolOutput.truncate({
+                      content: normalizeContent(raw),
+                      ...(error.metadata === undefined ? {} : { metadata: error.metadata }),
+                    })
+                    yield* publisher.failTool(event.id, toSessionError(error), truncated.metadata, truncated.content)
+                  }),
                 ),
               ),
             ).pipe(Effect.forkScoped),

@@ -231,6 +231,11 @@ export const toolFileMedia = (item: Tool.FileContent): MediaPart => {
 
 export const trimBaseUrl = (value: string) => value.replace(/\/+$/, "")
 
+export const toolErrorContent = (part: ToolResultPart): ReadonlyArray<Tool.Content> | undefined => {
+  if (part.result.type !== "error" || part.result.content === undefined || part.result.content.length === 0) return
+  return part.result.content
+}
+
 export const toolResultText = (part: ToolResultPart) => {
   if (part.result.type === "text") return String(part.result.value)
   if (part.result.type === "error") {

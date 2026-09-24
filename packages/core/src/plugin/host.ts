@@ -1,6 +1,7 @@
 export * as PluginHost from "./host.js"
 
 import { Plugin } from "@opencode/plugin/effect"
+import { features } from "@opencode/plugin/features"
 import type { IntegrationMethodRegistration } from "@opencode/plugin/effect/integration"
 import { EventManifest } from "@opencode/schema/event-manifest"
 import type { Event } from "@opencode/schema/event"
@@ -116,6 +117,7 @@ export const make = Effect.fn("PluginHost.make")(function* (
     app,
     location: locationInfo(),
     options: {},
+    features,
     rpc: Object.assign(rpc.client, { register: rpc.register }),
     agent: {
       get: (input) => {

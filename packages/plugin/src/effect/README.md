@@ -27,6 +27,8 @@ Plugin setup registers hooks imperatively through each domain's `hook` method.
 
 Configuration supplied for the plugin is available as `ctx.options`.
 
+Engine capabilities are on `ctx.features`, not the engine version. `ctx.features.richFailures === true` means a failed `Tool.Error` may carry canonical `content` (text and file blocks) that the engine keeps failed, stores in history, and sends to the model. Probe the runtime object; do not import a version constant.
+
 Registrations are owned by the plugin scope. Closing the scope removes them automatically; a registration may also be removed early through `dispose`.
 
 ## Transform Hooks

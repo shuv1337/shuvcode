@@ -579,12 +579,15 @@ const lowerToolResultOutput = Effect.fnUntraced(function* (
   request: LLMRequest,
   adapter: ProviderAdapter,
 ) {
+  const rich = ProviderShared.toolErrorContent(part)
   // Text/json/error results are encoded as a plain string for backward
   // compatibility with existing cassettes and provider expectations.
-  if (part.result.type !== "content") return ProviderShared.toolResultText(part)
+  if (part.result.type !== "content" && rich === undefined) return ProviderShared.toolResultText(part)
   // Preserve the narrowed array element type when compiled through a consumer package.
-  const content: ReadonlyArray<Content> = part.result.value
-  return yield* Effect.forEach(content, (item) => lowerToolResultContentItem(item, request, adapter))
+  const content: ReadonlyArray<Content> = part.result.type === "content" ? part.result.value : rich!
+  const blocks = yield* Effect.forEach(content, (item) => lowerToolResultContentItem(item, request, adapter))
+  if (part.result.type !== "error") return blocks
+  return [{ type: "input_text" as const, text: ProviderShared.toolResultText(part) }, ...blocks]
 })
 
 const DEFAULT_EFFORT = "medium"
@@ -706,10 +709,13 @@ const lowerMessages = Effect.fn("OpenResponses.lowerMessages")(function* (
             }
             continue
           }
+          const rich = ProviderShared.toolErrorContent(part)
           const content: ReadonlyArray<Content> =
             part.result.type === "content"
               ? part.result.value
-              : [{ type: "text", text: ProviderShared.toolResultText(part) }]
+              : rich === undefined
+                ? [{ type: "text", text: ProviderShared.toolResultText(part) }]
+                : [{ type: "text", text: ProviderShared.toolResultText(part) }, ...rich]
           input.push({
             type: "message",
             role: "user",

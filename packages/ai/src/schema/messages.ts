@@ -67,6 +67,7 @@ const toolResultValueSchema = Schema.Union([
   Schema.Struct({
     type: Schema.Literal("error"),
     value: Schema.Unknown,
+    content: Schema.optional(Schema.Array(Tool.Content)),
   }),
   Schema.Struct({
     type: Schema.Literal("content"),

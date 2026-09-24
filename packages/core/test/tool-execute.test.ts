@@ -94,6 +94,30 @@ test("declared outputs cannot bypass validation and raw outputs stay JSON-compat
   )
 })
 
+test("structural Tool.Error from another schema copy keeps its content", async () => {
+  const foreign = {
+    _tag: "Tool.Error",
+    message: "bundled failure",
+    metadata: { source: "companion" },
+    content: [
+      { type: "text" as const, text: "could not capture" },
+      { type: "file" as const, uri: "data:image/png;base64,aW1hZ2U=", mime: "image/png", name: "shot.png" },
+    ],
+  }
+  const bundled: Info = {
+    name: "bundled",
+    description: "Fails with a foreign Tool.Error",
+    input: Schema.Struct({}),
+    execute: () => Effect.fail(foreign as never),
+  }
+
+  const error = await Effect.runPromise(execute(bundled, {}, context).pipe(Effect.flip))
+  expect(error).toBeInstanceOf(Tool.Error)
+  expect(error.message).toBe("bundled failure")
+  expect(error.metadata).toEqual({ source: "companion" })
+  expect(error.content).toEqual(foreign.content)
+})
+
 test("foreign typed failures settle as Tool.Error at the untrusted boundary", async () => {
   class ForeignFailure extends Schema.TaggedError<ForeignFailure>()("Plugin.ForeignFailure", {
     message: Schema.String,
