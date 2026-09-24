@@ -8,7 +8,7 @@ import { Option, Schema } from "effect"
 import { GoogleAntigravityOAuth } from "./oauth"
 
 export const generateURL = `${GoogleAntigravityOAuth.cloudCodeEndpoint}/v1internal:streamGenerateContent?alt=sse`
-export const defaultModelID = Model.ID.make("gemini-3.7-flash-high")
+export const defaultModelID = Model.ID.make("gemini-3.8-flash-high")
 export const googleProviderID = Provider.ID.google
 
 const FLASH_LIMIT = { context: 1_048_576, output: 65_536 }
@@ -255,5 +255,4 @@ export function applyModels(evt: ModelEditor, active: boolean) {
       })
     }
   }
-  evt.default.set(googleProviderID, defaultModelID)
 }

@@ -46,7 +46,7 @@ const source = Effect.fn(function* () {
   })
 })
 
-it.effect("Antigravity transforms real source/model editors with shipped limits, aliases, zero costs and default", () =>
+it.effect("Antigravity transforms real source/model editors with shipped limits, aliases, and zero costs", () =>
   Effect.gen(function* () {
     const credentials = yield* Credential.Service
     const models = yield* Model.Service
@@ -65,7 +65,6 @@ it.effect("Antigravity transforms real source/model editors with shipped limits,
       )
     }
     expect((yield* models.get(Provider.ID.google, Model.ID.make("gemini-old")))?.enabled).toBe(false)
-    expect((yield* models.default())?.id).toBe(GoogleAntigravityWire.defaultModelID)
   }),
 )
 

@@ -171,4 +171,18 @@ describe("Mini CLI host", () => {
     await input.preferences.saveVariant(model, "high")
     expect(await input.preferences.resolveVariant(model)).toBe("high")
   })
+
+  test("delegates model preferences", async () => {
+    await using directory = await tmpdir()
+    const input = host({ stdin: stream(true), cleanup() {} }, directory.path)
+
+    expect(await input.preferences.resolveModel?.()).toBeUndefined()
+
+    await input.preferences.saveModel?.(model)
+    expect(await input.preferences.resolveModel?.()).toEqual(model)
+
+    const other = { providerID: "test", modelID: "other" }
+    await input.preferences.saveModel?.(other)
+    expect(await input.preferences.resolveModel?.()).toEqual(other)
+  })
 })

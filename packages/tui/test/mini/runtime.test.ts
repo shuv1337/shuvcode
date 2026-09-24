@@ -592,4 +592,96 @@ describe("run interactive runtime", () => {
     expect(catalogs.command).toHaveBeenCalledWith(query, { signal: expect.any(AbortSignal) })
     expect(fileFind).toHaveBeenCalledWith({ query: "index", type: "file", ...query })
   })
+
+  test("restores saved model preferences and persists model selection", async () => {
+    const sdk = OpenCode.make({ baseUrl: "https://opencode.test" })
+    const painted = defer<void>()
+    const api = footer()
+    api.idle = () => painted.promise
+    let savedModel: { providerID: string; modelID: string } | undefined
+    const testHost: MiniHost = {
+      ...host(),
+      preferences: {
+        resolveModel: async () => ({ providerID: "test", modelID: "saved" }),
+        saveModel: async (model) => {
+          savedModel = model
+        },
+        resolveVariant: async () => undefined,
+        saveVariant: async () => {},
+      },
+    }
+    const model = catalogModel({
+      id: "saved",
+      providerID: "test",
+      name: "Saved Model",
+      variants: ["low", "high"],
+    })
+    const otherModel = catalogModel({
+      id: "other",
+      providerID: "test",
+      name: "Other Model",
+      variants: ["low"],
+    })
+    stubCatalogLists(sdk, {
+      providers: [catalogProvider("test", "Test Provider")],
+      models: [model, otherModel],
+    })
+    const defaultModel = spyOn(sdk.model, "default")
+    let lifecycle!: LifecycleInput
+
+    const task = runInteractiveDeferredMode(
+      {
+        host: testHost,
+        sdk,
+        directory: "/tmp",
+        target: async () => ({
+          sessionID: "ses-saved-model",
+          location: { directory: "/tmp", project: { id: "pro-1", directory: "/tmp", canonical: "/tmp" } },
+          agent: "build",
+          model: undefined,
+          variant: undefined,
+          resume: false,
+        }),
+        agent: "build",
+        model: undefined,
+        variant: undefined,
+        files: [],
+      },
+      {
+        createRuntimeLifecycle: async (input) => {
+          lifecycle = input
+          return {
+            footer: api,
+            onResize: () => () => {},
+            refreshTheme: () => {},
+            setTitle: () => {},
+            resetForReplay: () => Promise.resolve(),
+            close: () => Promise.resolve(),
+          }
+        },
+        streamTransport: Promise.resolve({
+          createSessionTransport: async (input) => {
+            setTimeout(() => input.footer.close(), 0)
+            return {
+              runPromptTurn: async () => {},
+              admitPromptTurn: async () => {},
+              waitForIdle: async () => {},
+              interruptActiveTurn: async () => {},
+              selectSubagent: () => {},
+              replayOnResize: async () => false,
+              close: async () => {},
+            }
+          },
+          formatUnknownError: (error: unknown) => String(error),
+        }),
+      },
+    )
+
+    painted.resolve()
+    await task
+
+    expect(defaultModel).not.toHaveBeenCalled()
+    await lifecycle.onModelSelect?.({ providerID: "test", modelID: "other" })
+    expect(savedModel).toEqual({ providerID: "test", modelID: "other" })
+  })
 })

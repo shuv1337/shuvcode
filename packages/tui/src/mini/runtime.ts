@@ -209,11 +209,13 @@ async function runInteractiveRuntime(input: RunRuntimeInput, deps: RunRuntimeDep
     model: undefined as RunInput["model"],
     variant: undefined as string | undefined,
   }
-  const savedVariant = await input.host.preferences.resolveVariant(ctx.model)
+  const savedModel = ctx.model ? undefined : await input.host.preferences.resolveModel?.()
+  const initialModel = ctx.model ?? savedModel
+  const savedVariant = await input.host.preferences.resolveVariant(initialModel)
   const state: RuntimeState = {
     sdk: ctx.sdk,
     shown: !session.first,
-    model: ctx.model ?? session.model,
+    model: initialModel,
     defaultModel: undefined,
     providers: [],
     variants: [],
@@ -318,6 +320,7 @@ async function runInteractiveRuntime(input: RunRuntimeInput, deps: RunRuntimeDep
       }
 
       state.model = model
+      void input.host.preferences.saveModel?.(model)
       state.activeVariant = undefined
       state.variants = variantsFor(state.providers, model)
       const switching = input.host.preferences.resolveVariant(model).then((saved) => {
@@ -470,8 +473,8 @@ async function runInteractiveRuntime(input: RunRuntimeInput, deps: RunRuntimeDep
         shell.setTitle(state.sessionTitle)
         state.agent = next.agent
         state.location = next.location
-        state.model = next.model
-        state.activeVariant = next.variant
+        state.model = next.model ?? state.model
+        state.activeVariant = next.variant ?? state.activeVariant
         footer.event({ type: "agent", agent: state.agent })
         if (!next.resume) return
         const resumed = await resolveSessionInfo(state.sdk, next.sessionID, next.model, runtimeController.signal)
@@ -621,6 +624,14 @@ async function runInteractiveRuntime(input: RunRuntimeInput, deps: RunRuntimeDep
   ) {
     if (!currentClient(attempt)) return
     state.providers = info.providers
+    if (state.model) {
+      const provider = state.providers.find((item) => item.id === state.model?.providerID)
+      const valid = provider?.models?.[state.model.modelID] !== undefined
+      if (!valid) {
+        state.model = undefined
+        loadDefaultModel(attempt)
+      }
+    }
     const model = state.model ?? state.defaultModel
     state.variants = variantsFor(state.providers, model)
     state.activeVariant = boot
@@ -910,6 +921,9 @@ async function runInteractiveRuntime(input: RunRuntimeInput, deps: RunRuntimeDep
       },
       admit: async (prompt, delivery, signal) => {
         await state.switching?.catch(() => {})
+        if (!state.model && state.defaultModel) state.model = state.defaultModel
+        const effectiveModel = state.model ?? state.defaultModel
+        if (effectiveModel) void input.host.preferences.saveModel?.(effectiveModel)
         const next = await ensureStream()
         await next.handle.admitPromptTurn(
           {

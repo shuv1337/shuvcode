@@ -159,6 +159,8 @@ export type MiniHost = {
     }
   }
   preferences: {
+    resolveModel?(): Promise<RunInput["model"]>
+    saveModel?(model: RunInput["model"]): Promise<void>
     resolveVariant(model: RunInput["model"]): Promise<string | undefined>
     saveVariant(model: RunInput["model"], variant: string | undefined): Promise<void>
   }

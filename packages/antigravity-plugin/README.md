@@ -15,7 +15,8 @@ browser authorization uses a Node HTTP callback listener on localhost port 36742
 There are no Core imports, SDK transport wrappers, or proxy servers.
 
 - Provider/model transforms expose the shipped Gemini 3.8 variants and older
-  subscription variants. The existing default remains `gemini-3.7-flash-high`.
+  subscription variants without overriding the user's default model. Fallback
+  requests without a model ID resolve to `gemini-3.8-flash-high`.
 - Access-only imports activate using shipped models without discovery requests.
   Normal OAuth connections may discover model enums, with shipped defaults if
   discovery is unavailable.
