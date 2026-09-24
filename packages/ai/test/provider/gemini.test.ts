@@ -482,6 +482,68 @@ describe("Gemini route", () => {
     }),
   )
 
+  it.effect("lowers rich tool failures with error text and the success media split", () =>
+    Effect.gen(function* () {
+      const uri = "data:image/png;base64,AAECAw=="
+      const value = { error: { type: "tool.execution", message: "snapshot failed" }, content: [] }
+      const request = LLM.request({
+        model,
+        messages: [
+          Message.assistant([ToolCallPart.make({ id: "call_1", name: "snapshot", input: {} })]),
+          Message.tool({
+            id: "call_1",
+            name: "snapshot",
+            result: {
+              type: "error",
+              value,
+              content: [
+                { type: "text", text: "could not capture" },
+                { type: "file", uri, mime: "image/png", name: "shot.png" },
+              ],
+            },
+          }),
+        ],
+      })
+      const legacy = yield* compileRequest(LLMRequest.update(request, { model }))
+      const current = yield* compileRequest(LLMRequest.update(request, { model: gemini3 }))
+      const errorText = `${JSON.stringify(value)}\ncould not capture`
+
+      expect(legacy.body.contents).toEqual([
+        { role: "model", parts: [{ functionCall: { name: "snapshot", args: {} } }] },
+        {
+          role: "user",
+          parts: [
+            {
+              functionResponse: {
+                name: "snapshot",
+                response: { name: "snapshot", content: errorText },
+              },
+            },
+          ],
+        },
+        {
+          role: "user",
+          parts: [{ text: "Attached media from tool result:" }, { inlineData: { mimeType: "image/png", data: "AAECAw==" } }],
+        },
+      ])
+      expect(current.body.contents[1]).toMatchObject({
+        role: "user",
+        parts: [
+          {
+            functionResponse: {
+              id: "call_1",
+              name: "snapshot",
+              response: { name: "snapshot", content: errorText },
+              parts: [{ inlineData: { mimeType: "image/png", data: "AAECAw==" } }],
+            },
+          },
+        ],
+      })
+      expect(JSON.stringify(legacy.body.contents[1])).not.toContain("data:")
+      expect(JSON.stringify(current.body.contents[1]?.parts?.[0]?.functionResponse?.response)).not.toContain("data:")
+    }),
+  )
+
   it.effect("nests media inside function responses for gemini 3", () =>
     Effect.gen(function* () {
       const prepared = yield* compileRequest(

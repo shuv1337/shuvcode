@@ -501,6 +501,46 @@ describe("OpenAI Chat route", () => {
     }),
   )
 
+  it.effect("lowers rich tool failures as error text plus a following media message", () =>
+    Effect.gen(function* () {
+      const uri = "data:image/png;base64,AAECAw=="
+      const value = { error: { type: "tool.execution", message: "snapshot failed" }, content: [] }
+      const prepared = yield* compileRequest(
+        LLM.request({
+          model,
+          messages: [
+            Message.assistant([ToolCallPart.make({ id: "call_1", name: "snapshot", input: {} })]),
+            Message.tool({
+              id: "call_1",
+              name: "snapshot",
+              result: {
+                type: "error",
+                value,
+                content: [
+                  { type: "text", text: "could not capture" },
+                  { type: "file", uri, mime: "image/png", name: "shot.png" },
+                ],
+              },
+            }),
+          ],
+        }),
+      )
+
+      const messages = prepared.body.messages
+      const tool = messages.find((message) => message.role === "tool")
+      expect(tool).toMatchObject({
+        role: "tool",
+        tool_call_id: "call_1",
+        content: `${ProviderShared.encodeJson(value)}\ncould not capture`,
+      })
+      expect(typeof tool?.content === "string" ? tool.content : "").not.toContain("data:")
+      expect(messages.at(-1)).toMatchObject({
+        role: "user",
+        content: [{ type: "image_url", image_url: { url: uri } }],
+      })
+    }),
+  )
+
   it.effect("preserves structured tool errors for the model", () =>
     Effect.gen(function* () {
       const error = { error: { type: "unknown", message: "Tool execution interrupted" } }

@@ -774,12 +774,15 @@ const lowerToolResultContentItem = Effect.fnUntraced(function* (item: Tool.Conte
 })
 
 const lowerToolResultContent = Effect.fnUntraced(function* (part: ToolResultPart) {
+  const rich = ProviderShared.toolErrorContent(part)
   // Text / json / error results stay as a string for backward compatibility
   // with existing cassettes and provider expectations.
-  if (part.result.type !== "content") return ProviderShared.toolResultText(part)
+  if (part.result.type !== "content" && rich === undefined) return ProviderShared.toolResultText(part)
   // Preserve the narrowed array element type when compiled through a consumer package.
-  const content: ReadonlyArray<Tool.Content> = part.result.value
-  return yield* Effect.forEach(content, lowerToolResultContentItem)
+  const content: ReadonlyArray<Tool.Content> = part.result.type === "content" ? part.result.value : rich!
+  const blocks = yield* Effect.forEach(content, lowerToolResultContentItem)
+  if (part.result.type !== "error") return blocks
+  return [{ type: "text" as const, text: ProviderShared.toolResultText(part) }, ...blocks]
 })
 
 const requireThinkingSignature = (request: LLMRequest) => {

@@ -75,7 +75,7 @@ function normalizeToolResult(part: ToolResultPart, call: ToolCallPart | undefine
   if (named.result.type === "text" && named.result.value === "")
     return { ...named, result: { type: "text", value: EMPTY_TOOL_OUTPUT } }
   if (named.result.type === "error" && named.result.value === "")
-    return { ...named, result: { type: "error", value: EMPTY_TOOL_OUTPUT } }
+    return { ...named, result: { ...named.result, value: EMPTY_TOOL_OUTPUT } }
   if (named.result.type !== "content") return named
   const value = named.result.value.filter((item) => item.type !== "text" || item.text !== "")
   if (value.length === 0) return { ...named, result: { type: "text", value: EMPTY_TOOL_OUTPUT } }

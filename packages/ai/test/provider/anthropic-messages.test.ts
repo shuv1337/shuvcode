@@ -794,6 +794,48 @@ describe("Anthropic Messages route", () => {
     }),
   )
 
+  it.effect("lowers rich tool failures with is_error and image content", () =>
+    Effect.gen(function* () {
+      const uri = "data:image/png;base64,AAECAw=="
+      const prepared = yield* compileRequest(
+        LLM.request({
+          model,
+          cache: "none",
+          messages: [
+            Message.assistant([ToolCallPart.make({ id: "call_1", name: "snapshot", input: {} })]),
+            Message.tool({
+              id: "call_1",
+              name: "snapshot",
+              result: {
+                type: "error",
+                value: { error: { type: "tool.execution", message: "snapshot failed" }, content: [] },
+                content: [
+                  { type: "text", text: "could not capture" },
+                  { type: "file", uri, mime: "image/png", name: "shot.png" },
+                ],
+              },
+            }),
+          ],
+        }),
+      )
+
+      const result = expectToolResult(prepared.body)
+      expect(result.is_error).toBe(true)
+      expect(result.content).toEqual([
+        {
+          type: "text",
+          text: JSON.stringify({ error: { type: "tool.execution", message: "snapshot failed" }, content: [] }),
+        },
+        { type: "text", text: "could not capture" },
+        { type: "image", source: { type: "base64", media_type: "image/png", data: "AAECAw==" } },
+      ])
+      const text = Array.isArray(result.content)
+        ? result.content.flatMap((item) => (item.type === "text" ? [item.text] : [])).join("\n")
+        : result.content
+      expect(text).not.toContain("data:")
+    }),
+  )
+
   it.effect("prepares the composed native continuation request", () =>
     Effect.gen(function* () {
       const prepared = yield* compileRequest(

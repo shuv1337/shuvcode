@@ -294,8 +294,21 @@ const lowerToolResultContent = Effect.fn("BedrockConverse.lowerToolResultContent
   part: ToolResultPart,
   documentNames: Set<string>,
 ) {
-  if (part.result.type === "text" || part.result.type === "error")
-    return [{ text: ProviderShared.toolResultText(part) }]
+  if (part.result.type === "text") return [{ text: ProviderShared.toolResultText(part) }]
+  if (part.result.type === "error") {
+    const rich = ProviderShared.toolErrorContent(part)
+    const text = { text: ProviderShared.toolResultText(part) }
+    if (rich === undefined) return [text]
+    const blocks: Array<Schema.Schema.Type<typeof BedrockToolResultContentItem>> = [text]
+    for (const item of rich) {
+      if (item.type === "text") {
+        blocks.push({ text: item.text })
+        continue
+      }
+      blocks.push(...(yield* BedrockMedia.lower(ProviderShared.toolFileMedia(item), documentNames)))
+    }
+    return blocks
+  }
   if (part.result.type === "json") return [{ json: part.result.value }]
 
   const content: Array<Schema.Schema.Type<typeof BedrockToolResultContentItem>> = []
