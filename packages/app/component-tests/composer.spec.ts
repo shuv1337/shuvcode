@@ -214,6 +214,23 @@ for (const draft of ["empty-draft", "multiline-draft", "mixed-attachments"]) {
   })
 }
 
+story.describe("touch attachments", () => {
+  story.use({ hasTouch: true, isMobile: true, viewport: { width: 390, height: 844 } })
+
+  story("keeps attachment remove buttons visible without hover", async ({ mount, page }) => {
+    const component = await mount("opencode-composer-flow--mixed-attachments")
+    expect(await page.evaluate(() => matchMedia("(hover: none)").matches)).toBe(true)
+
+    const remove = component.getByRole("button", { name: "Remove attachment", exact: true })
+    await expect(remove).not.toHaveCount(0)
+    for (const button of await remove.all()) await expect(button).toHaveCSS("opacity", "1")
+
+    const count = await remove.count()
+    await remove.first().tap()
+    await expect(remove).toHaveCount(count - 1)
+  })
+})
+
 story("renders a draft once and supports editing, caret restoration, and failure recovery", async ({ mount, page }) => {
   await page.addInitScript(() => {
     const replace = Element.prototype.replaceChildren
