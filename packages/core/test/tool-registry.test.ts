@@ -901,6 +901,56 @@ describe("Tool", () => {
     )
   })
 
+  it.effect("normalizes rich failure images once and keeps the call failed", () =>
+    Effect.gen(function* () {
+      const service = yield* Tool.Service
+      yield* transform(
+        service,
+        {
+          snapshot: {
+            name: "snapshot",
+            description: "Fail with images",
+            input: Schema.Struct({ text: Schema.String }),
+            output: Schema.Struct({ text: Schema.String }),
+            execute: ({ text }) =>
+              Effect.fail(
+                new Tool.Error({
+                  message: "snapshot failed",
+                  content: [
+                    { type: "file", uri: "data:image/png;base64,aW1hZ2U=", mime: "image/png", name: "frame.png" },
+                    {
+                      type: "file",
+                      uri: "data:image/png;base64,aW1hZ2U=",
+                      mime: "image/png",
+                      name: "too-large.png",
+                    },
+                    { type: "file", uri: "data:image/png;base64,aW1hZ2U=", mime: "image/png", name: "corrupt.png" },
+                    { type: "text", text },
+                  ],
+                }),
+              ),
+          },
+        },
+        { codemode: false },
+      )
+
+      const execution = yield* executeTool(service, call("snapshot"))
+      expect(execution.status).toBe("error")
+      expect(execution.error).toEqual({ type: "tool.execution", message: "snapshot failed" })
+      expect(execution.content).toEqual([
+        {
+          type: "file",
+          uri: "data:image/jpeg;base64,aW1hZ2Ugbm9ybWFsaXplZA==",
+          mime: "image/jpeg",
+          name: "frame.png",
+        },
+        { type: "text", text: "snapshot" },
+        { type: "text", text: "[1 image omitted: could not be decoded.]" },
+        { type: "text", text: "[1 image omitted: could not be resized below the image size limit.]" },
+      ])
+    }),
+  )
+
   it.effect("normalizes image tool output once and drops unresizable images", () =>
     Effect.gen(function* () {
       const service = yield* Tool.Service

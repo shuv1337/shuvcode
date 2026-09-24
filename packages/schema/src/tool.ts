@@ -58,12 +58,6 @@ type OutputValue<S> = S extends undefined
       ? A
       : any
 
-export class Error extends Schema.TaggedError<Error>()("Tool.Error", {
-  message: Schema.String,
-  error: Schema.optional(Schema.Defect()),
-  metadata: Schema.optional(Schema.Record(Schema.String, Schema.Unknown)),
-}) {}
-
 export interface TextContent extends Schema.Schema.Type<typeof TextContent> {}
 export const TextContent = Schema.Struct({
   type: Schema.Literal("text"),
@@ -82,6 +76,13 @@ export const Content = Schema.Union([TextContent, FileContent])
   .pipe(Schema.toTaggedUnion("type"))
   .annotate({ identifier: "Tool.Content" })
 export type Content = Schema.Schema.Type<typeof Content>
+
+export class Error extends Schema.TaggedError<Error>()("Tool.Error", {
+  message: Schema.String,
+  error: Schema.optional(Schema.Defect()),
+  metadata: Schema.optional(Schema.Record(Schema.String, Schema.Unknown)),
+  content: Schema.optional(Schema.Union([Schema.String, Schema.Array(Content)])),
+}) {}
 
 export interface Result<Output extends ValueSchema<any> | undefined = ValueSchema<any> | undefined> {
   readonly output?: OutputValue<Output>

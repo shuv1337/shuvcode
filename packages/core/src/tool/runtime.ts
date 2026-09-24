@@ -1,10 +1,27 @@
 import type { ToolDefinition } from "@opencode/ai"
 import { Tool } from "@opencode/schema/tool"
 import type { StandardJSONSchemaV1, StandardSchemaV1 } from "@standard-schema/spec"
-import { Cache, Effect, JsonSchema, Schema, SchemaIssue, SchemaRepresentation } from "effect"
+import { Cache, Effect, JsonSchema, Option, Schema, SchemaIssue, SchemaRepresentation } from "effect"
 import { $ZodType, toJSONSchema } from "zod/v4/core"
 
 const formatEffectIssues = SchemaIssue.makeFormatterStandardSchemaV1()
+const decodeToolErrorContent = Schema.decodeUnknownOption(Schema.Union([Schema.String, Schema.Array(Tool.Content)]))
+const decodeToolErrorMetadata = Schema.decodeUnknownOption(Schema.Record(Schema.String, Schema.Unknown))
+
+export const adoptToolError = (error: unknown): Tool.Error | undefined => {
+  if (error instanceof Tool.Error) return error
+  if (typeof error !== "object" || error === null || !("_tag" in error) || error._tag !== "Tool.Error") return undefined
+  if (!("message" in error) || typeof error.message !== "string") return undefined
+  const content = "content" in error ? Option.getOrUndefined(decodeToolErrorContent(error.content)) : undefined
+  const metadata = "metadata" in error ? Option.getOrUndefined(decodeToolErrorMetadata(error.metadata)) : undefined
+  const cause = "error" in error ? error.error : undefined
+  return new Tool.Error({
+    message: error.message,
+    ...(cause === undefined ? {} : { error: cause }),
+    ...(metadata === undefined ? {} : { metadata }),
+    ...(content === undefined ? {} : { content }),
+  })
+}
 
 const jsonSchemas = Effect.runSync(
   Cache.make<JsonSchema.JsonSchema, Schema.Codec<unknown> | undefined>({
@@ -34,12 +51,12 @@ export const execute = (tool: Tool.Info<any, any>, input: unknown, context: Tool
     // enforced here at the untrusted boundary. Declines tunnel through as defects and
     // interrupts are not errors; neither is touched.
     const result = yield* tool.execute(decoded, context).pipe(
-      Effect.mapError((error: unknown) =>
-        error instanceof Tool.Error
-          ? error
-          : new Tool.Error({
-              message: error instanceof globalThis.Error ? error.message : String(error),
-            }),
+      Effect.mapError(
+        (error: unknown) =>
+          adoptToolError(error) ??
+          new Tool.Error({
+            message: error instanceof globalThis.Error ? error.message : String(error),
+          }),
       ),
     )
     if (tool.output === undefined) {

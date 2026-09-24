@@ -96,6 +96,15 @@ export const executeTool = (
     Effect.flatMap((tools) => tools.execute(input)),
     Effect.map((result) => ({ status: "completed" as const, ...result }) satisfies ToolExecution),
     Effect.catchTag("Tool.Error", (error) =>
-      Effect.succeed({ status: "error" as const, error: toSessionError(error) } satisfies ToolExecution),
+      Effect.succeed({
+        status: "error" as const,
+        error: toSessionError(error),
+        ...(error.content === undefined
+          ? {}
+          : {
+              content: typeof error.content === "string" ? [{ type: "text" as const, text: error.content }] : error.content,
+            }),
+        ...(error.metadata === undefined ? {} : { metadata: error.metadata }),
+      } satisfies ToolExecution),
     ),
   )

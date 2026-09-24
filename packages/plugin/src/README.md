@@ -39,6 +39,15 @@ setup: async (ctx) => {
 
 Configuration supplied for the plugin is available as `ctx.options`.
 
+Engine capabilities are on `ctx.features`, not the engine version. `ctx.features.richFailures === true` means a failed `Tool.Error` may carry canonical `content` (text and file blocks) that the engine keeps failed, stores in history, and sends to the model. A plugin that bundles its own `@opencode/plugin` copy probes the runtime object:
+
+```ts
+const richFailures =
+  typeof context.features === "object" &&
+  context.features !== null &&
+  context.features.richFailures === true
+```
+
 A registration may be removed early through `dispose`:
 
 ```ts

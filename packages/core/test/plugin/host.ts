@@ -1,4 +1,5 @@
 import { Plugin } from "@opencode/plugin/effect"
+import { features } from "@opencode/plugin/features"
 import type { IntegrationMethod } from "@opencode/plugin/effect/integration"
 import { Agent } from "@opencode/core/agent"
 import { Credential } from "@opencode/core/credential"
@@ -28,6 +29,7 @@ export function host(overrides: Overrides = {}): Plugin.Context {
         },
       }),
     options: {},
+    features: overrides.features ?? features,
     rpc:
       overrides.rpc ??
       Object.assign(

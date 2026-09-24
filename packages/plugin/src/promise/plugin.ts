@@ -22,11 +22,13 @@ import type { ToolDomain } from "./tool.js"
 import type { VcsDomain } from "./vcs.js"
 import type { WebSearchDomain } from "./websearch.js"
 import type { WorktreeDomain } from "./worktree.js"
+import type { Features } from "../features.js"
 
 export interface Context {
   readonly app: App
   readonly location: Location.Info
   readonly options: PluginOptions
+  readonly features: Features
   readonly agent: AgentDomain
   readonly aisdk: AISDKDomain
   readonly command: CommandDomain

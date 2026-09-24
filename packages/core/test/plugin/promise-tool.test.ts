@@ -12,6 +12,20 @@ import { PluginTestLayer } from "./fixture"
 
 const it = testEffect(PluginTestLayer)
 
+it.live("plugin activation exposes richFailures without reading the engine version", () =>
+  Effect.gen(function* () {
+    const plugins = yield* Plugin.Service
+    const seen: Array<boolean | undefined> = []
+    yield* PluginPromise.fromPromise({
+      id: "rich-failures-probe",
+      async setup(context) {
+        seen.push(context.features?.richFailures)
+      },
+    }).effect(yield* PluginHost.make(plugins))
+    expect(seen).toEqual([true])
+  }),
+)
+
 it.live("Promise tool executors receive interruption through their AbortSignal", () =>
   Effect.gen(function* () {
     const plugins = yield* Plugin.Service
