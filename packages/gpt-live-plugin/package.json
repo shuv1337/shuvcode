@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json.schemastore.org/package.json",
+  "name": "@shuvcode/gpt-live-plugin",
+  "version": "0.1.1",
+  "private": true,
+  "type": "module",
+  "license": "MIT",
+  "description": "Real-time GPT-Live voice calls with a Shuvcode session on a ChatGPT subscription. Vendored from shuv1337/opencode-gpt-live.",
+  "exports": {
+    ".": "./src/server/index.ts",
+    "./tui": "./src/tui/index.ts",
+    "./rpc": "./src/shared/rpc.ts"
+  },
+  "scripts": {
+    "test": "bun test",
+    "typecheck": "tsgo --noEmit",
+    "build:native": "cargo build --release --manifest-path native/Cargo.toml"
+  },
+  "dependencies": {
+    "@opencode/plugin": "workspace:*",
+    "@opentui/core": "catalog:",
+    "zod": "catalog:"
+  },
+  "devDependencies": {
+    "@opencode/theme": "workspace:*",
+    "@opentui/solid": "catalog:",
+    "@tsconfig/bun": "catalog:",
+    "@types/bun": "catalog:",
+    "@typescript/native-preview": "catalog:",
+    "solid-js": "catalog:",
+    "typescript": "catalog:"
+  }
+}

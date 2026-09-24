@@ -199,6 +199,13 @@ export const Definitions = {
   "prompt.stash.pop": keybind("none", "Pop stashed prompt"),
   "prompt.stash.list": keybind("none", "List stashed prompts"),
 
+  "voice.toggle": keybind("<leader>v", "Start or end a GPT-Live voice call"),
+  "voice.mute": keybind("ctrl+y", "Mute or unmute the microphone during a voice call"),
+  "voice.panel": keybind("ctrl+s", "Show or hide the voice call transcript"),
+  "voice.stop": keybind("none", "End the voice call"),
+  "voice.new": keybind("none", "Start a voice call with a fresh voice session"),
+  "voice.pick": keybind("none", "Choose the GPT-Live voice"),
+
   "prompt.clear": keybind("ctrl+c", "Clear input field"),
   "prompt.paste": keybind({ key: "ctrl+v", preventDefault: false }, "Paste from clipboard"),
   "input.submit": keybind("return", "Submit input"),

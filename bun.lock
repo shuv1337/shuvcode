@@ -392,6 +392,7 @@
         "@parcel/watcher": "2.5.1",
         "@shuvcode/antigravity-plugin": "workspace:*",
         "@shuvcode/claude-plugin": "workspace:*",
+        "@shuvcode/gpt-live-plugin": "workspace:*",
         "@shuvcode/quota-plugin": "workspace:*",
         "@silvia-odwyer/photon-node": "0.3.4",
         "@standard-schema/spec": "catalog:",
@@ -537,6 +538,24 @@
         "@cloudflare/workers-types": "catalog:",
         "@tsconfig/node22": "22.0.2",
         "@types/node": "catalog:",
+        "typescript": "catalog:",
+      },
+    },
+    "packages/gpt-live-plugin": {
+      "name": "@shuvcode/gpt-live-plugin",
+      "version": "0.1.1",
+      "dependencies": {
+        "@opencode/plugin": "workspace:*",
+        "@opentui/core": "catalog:",
+        "zod": "catalog:",
+      },
+      "devDependencies": {
+        "@opencode/theme": "workspace:*",
+        "@opentui/solid": "catalog:",
+        "@tsconfig/bun": "catalog:",
+        "@types/bun": "catalog:",
+        "@typescript/native-preview": "catalog:",
+        "solid-js": "catalog:",
         "typescript": "catalog:",
       },
     },
@@ -953,11 +972,13 @@
         "@opentui/core": "catalog:",
         "@opentui/keymap": "catalog:",
         "@opentui/solid": "catalog:",
+        "@shuvcode/gpt-live-plugin": "workspace:*",
         "@shuvcode/quota-plugin": "workspace:*",
         "@solid-primitives/event-bus": "1.1.2",
         "effect": "catalog:",
         "fuzzysort": "catalog:",
         "get-east-asian-width": "catalog:",
+        "marked": "catalog:",
         "open": "10.1.2",
         "opentui-spinner": "catalog:",
         "remeda": "catalog:",
@@ -2844,6 +2865,8 @@
     "@shuvcode/antigravity-plugin": ["@shuvcode/antigravity-plugin@workspace:packages/antigravity-plugin"],
 
     "@shuvcode/claude-plugin": ["@shuvcode/claude-plugin@workspace:packages/claude-plugin"],
+
+    "@shuvcode/gpt-live-plugin": ["@shuvcode/gpt-live-plugin@workspace:packages/gpt-live-plugin"],
 
     "@shuvcode/quota-plugin": ["@shuvcode/quota-plugin@workspace:packages/quota-plugin"],
 

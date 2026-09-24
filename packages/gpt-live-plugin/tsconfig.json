@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json.schemastore.org/tsconfig.json",
+  "extends": "@tsconfig/bun/tsconfig.json",
+  "compilerOptions": {
+    "rootDir": ".",
+    "noEmit": true,
+    "jsx": "preserve",
+    "jsxImportSource": "@opentui/solid",
+    "resolveJsonModule": true,
+    "noUncheckedIndexedAccess": false
+  },
+  "include": ["src", "test"]
+}

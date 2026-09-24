@@ -1,6 +1,7 @@
 import HomeFooter from "../feature-plugins/home/footer"
 import PromptBtw from "../feature-plugins/prompt/btw"
 import PromptFooter from "../feature-plugins/prompt/footer"
+import QuickQuote from "../feature-plugins/prompt/quick-quote"
 import SkillDollar from "../feature-plugins/prompt/skill-dollar"
 import SidebarContext from "../feature-plugins/sidebar/context"
 import SidebarFooter from "../feature-plugins/sidebar/footer"
@@ -14,12 +15,14 @@ import Storybook from "../feature-plugins/system/storybook"
 import Stats from "../feature-plugins/system/stats"
 import Latex from "@opencode/latex/plugin"
 import Merman from "@opencode/merman/plugin"
+import GptLive from "@shuvcode/gpt-live-plugin/tui"
 
 export const builtins = [
   HomeFooter,
   PromptFooter,
   PromptBtw,
   SkillDollar,
+  QuickQuote,
   // Prepends to sidebar.content, so it renders above Context/MCP regardless of list order.
   SidebarQuota,
   SidebarContext,
@@ -31,6 +34,7 @@ export const builtins = [
   Stats,
   Merman,
   Latex,
+  GptLive,
   // The storybook is a development tool; keep its route and palette commands out of
   // normal launches and register it only for OPENCODE_STORY runs.
   ...(process.env.OPENCODE_STORY ? [Storybook] : []),

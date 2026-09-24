@@ -102,6 +102,8 @@ import { ToolInputRepairPlugin } from "./tool-input-repair.js"
 import { OptimizePlugin } from "./optimize.js"
 import { VcsGitPlugin } from "./vcs/git.js"
 import { WarmingPlugin } from "./warming.js"
+import { PluginPromise } from "./promise.js"
+import GptLivePlugin from "@shuvcode/gpt-live-plugin"
 import { WellKnownPlugin } from "../wellknown/plugin.js"
 
 const services = [
@@ -245,6 +247,7 @@ const pre = [
   WebSearchTool.Plugin,
   WriteTool.Plugin,
   WarmingPlugin.Plugin,
+  PluginPromise.fromPromise(GptLivePlugin),
 ] as const satisfies readonly InternalPlugin[]
 
 const post = [

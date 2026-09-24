@@ -1,0 +1,22 @@
+opencode-gpt-live
+Copyright (c) 2026 M. Adel Alhashemi
+Licensed under the MIT License (see LICENSE).
+
+The prebuilt gpt-live-host audio helper includes third-party software, each under its
+own license. The main components:
+
+  webrtc, rtc (webrtc-rs)   MIT OR Apache-2.0   https://github.com/webrtc-rs/webrtc
+  cpal                      Apache-2.0          https://github.com/RustAudio/cpal
+  sonora                    BSD-3-Clause        https://crates.io/crates/sonora
+                            (a Rust port of WebRTC audio processing)
+  libopus (via opusic-sys)  BSD-3-Clause        https://opus-codec.org
+  opus                      MIT OR Apache-2.0   https://crates.io/crates/opus
+  rubato                    MIT OR Apache-2.0   https://github.com/HEnquist/rubato
+  ring                      Apache-2.0 AND ISC  https://github.com/briansmith/ring
+  tokio                     MIT                 https://tokio.rs
+
+The complete list of Rust dependencies and versions is in native/Cargo.lock; run
+`cargo tree --manifest-path native/Cargo.toml` to see how they fit together.
+
+ChatGPT and GPT-Live are trademarks of OpenAI. This project is not affiliated with or
+endorsed by OpenAI or the OpenCode project.

@@ -127,6 +127,7 @@
     "@parcel/watcher": "2.5.1",
     "@shuvcode/antigravity-plugin": "workspace:*",
     "@shuvcode/claude-plugin": "workspace:*",
+    "@shuvcode/gpt-live-plugin": "workspace:*",
     "@shuvcode/quota-plugin": "workspace:*",
     "@silvia-odwyer/photon-node": "0.3.4",
     "@standard-schema/spec": "catalog:",
