@@ -10,8 +10,8 @@ import {
   LLMEvent,
   Usage,
   type FinishReason,
-  type JsonSchema,
   type LLMRequest,
+  type LanguageModel,
   type MediaPart,
   type ProviderMetadata,
   type ProviderOptions,
@@ -23,7 +23,6 @@ import { classifyProviderFailure } from "../provider-error.js"
 import { Media } from "../media.js"
 import { JsonObject, knownString, lenient, optionalArray, optionalNull, ProviderShared } from "./shared.js"
 import { GeminiGenerateContent } from "./utils/gemini-generate-content.js"
-import { GeminiJsonSchema } from "./utils/gemini-json-schema.js"
 import { Lifecycle } from "./utils/lifecycle.js"
 import { ToolSchemaProjection } from "./utils/tool-schema.js"
 
@@ -269,12 +268,12 @@ interface ParserState {
 // =============================================================================
 // Request Lowering
 // =============================================================================
-// Tool schemas go in `parametersJsonSchema`, which accepts standard JSON Schema.
-// `utils/gemini-json-schema` rewrites only the few shapes Gemini still rejects.
-const lowerTool = (tool: ToolDefinition, inputSchema: JsonSchema) => ({
+// Tool schemas go in `parametersJsonSchema`, which accepts standard JSON Schema. Gemini's schema
+// rules are this API's default, including for tuned endpoints whose IDs do not name Gemini.
+const lowerTool = (tool: ToolDefinition, model: LanguageModel) => ({
   name: tool.name,
   description: tool.description,
-  parametersJsonSchema: GeminiJsonSchema.normalize(inputSchema),
+  parametersJsonSchema: ToolSchemaProjection.modelCompatibility(tool.inputSchema, model, "gemini"),
 })
 
 const lowerToolConfig = (toolChoice: NonNullable<LLMRequest["toolChoice"]>) =>
@@ -444,7 +443,6 @@ const fromRequest = Effect.fn("Gemini.fromRequest")(function* (request: LLMReque
   const hasTools = flattened.tools.length > 0
   const generation = request.generation
   const options = yield* decodeOptions(request.providerOptions ?? {})
-  const toolSchemaCompatibility = request.model.compatibility?.toolSchema
   const generationConfig = {
     maxOutputTokens: generation?.maxTokens,
     temperature: generation?.temperature,
@@ -470,9 +468,7 @@ const fromRequest = Effect.fn("Gemini.fromRequest")(function* (request: LLMReque
     tools: hasTools
       ? [
           {
-            functionDeclarations: flattened.tools.map((tool) =>
-              lowerTool(tool, ToolSchemaProjection.modelCompatibility(tool.inputSchema, toolSchemaCompatibility)),
-            ),
+            functionDeclarations: flattened.tools.map((tool) => lowerTool(tool, request.model)),
           },
         ]
       : undefined,
