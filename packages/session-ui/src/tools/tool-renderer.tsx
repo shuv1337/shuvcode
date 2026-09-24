@@ -378,7 +378,7 @@ export function getToolInfo(
         title: i18n.t("ui.tool.patch"),
         subtitle:
           Array.isArray(input.files) && input.files.length
-            ? `${input.files.length} ${i18n.plural("ui.common.file", input.files.length)}`
+            ? i18n.plural("ui.common.fileCount", input.files.length)
             : undefined,
       }
     case "todowrite":
@@ -514,7 +514,7 @@ export function CurrentContextToolGroup(props: {
     () => props.busy || tools().some((tool) => tool.state.status === "streaming" || tool.state.status === "running"),
   )
   const names = createMemo(() =>
-    [
+    i18n.list([
       ...new Set(
         props.parts.flatMap((part) => {
           if (part.type !== "tool" && part.type !== "shell") return []
@@ -530,31 +530,16 @@ export function CurrentContextToolGroup(props: {
           ]
         }),
       ),
-    ].join(", "),
+    ]),
   )
   const label = createMemo(() => {
     const thoughts = props.parts.filter((part) => part.type === "reasoning").length
     if (!names() && !thoughts) {
-      const text = i18n.t("ui.messagePart.context.updates")
-      return { text, title: "", before: text, count: "", between: "", after: "" }
+      return i18n.t("ui.messagePart.context.updates")
     }
     const title = names() || i18n.plural("ui.messagePart.context.thought", thoughts)
     const count = props.parts.filter((part) => part.type === "tool" || part.type === "shell").length || thoughts
-    const text = i18n.plural("ui.messagePart.tools.used", count, { tools: title })
-    const index = text.indexOf(title)
-    const before = text.slice(0, index).trim()
-    const countText = String(count)
-    const countIndex = before.indexOf(countText)
-    const after = text.slice(index + title.length).trim()
-    if (countIndex === -1) return { text, title, before, count: "", between: "", after }
-    return {
-      text,
-      title,
-      before: before.slice(0, countIndex).trim(),
-      count: countText,
-      between: before.slice(countIndex + countText.length).trim(),
-      after,
-    }
+    return i18n.plural("ui.messagePart.tools.used", count, { tools: title })
   })
   const items = createMemo(() =>
     (props.open ? props.parts : []).reduce<
@@ -610,31 +595,8 @@ export function CurrentContextToolGroup(props: {
         open={props.open}
         onOpenChange={change}
         trigger={
-          <div data-component="context-tool-group-trigger" aria-label={label().text}>
-            <span data-slot="context-tool-group-title">
-              <Show when={label().before || label().count || label().between}>
-                <span data-slot="context-tool-group-usage">
-                  <Show when={label().before}>
-                    {(before) => (
-                      <span data-slot="context-tool-group-prefix">
-                        {before()}
-                        {label().title ? " " : ""}
-                      </span>
-                    )}
-                  </Show>
-                  <Show when={label().count}>
-                    {(count) => <span data-slot="context-tool-group-count">{count()} </span>}
-                  </Show>
-                  <Show when={label().between}>
-                    {(between) => <span data-slot="context-tool-group-prefix">{between()} </span>}
-                  </Show>
-                </span>
-              </Show>
-              <Show when={label().title}>{(title) => <span data-slot="basic-tool-tool-title">{title()}</span>}</Show>
-              <Show when={label().after}>
-                {(after) => <span data-slot="context-tool-group-prefix">{after()}</span>}
-              </Show>
-            </span>
+          <div data-component="context-tool-group-trigger" aria-label={label()}>
+            <span data-slot="context-tool-group-title">{label()}</span>
           </div>
         }
       >
