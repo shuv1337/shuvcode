@@ -329,8 +329,17 @@ export function PluginProvider(props: ParentProps<{ packages: PackageSource; dir
       }
 
       const selected = [...desired.values()].filter((item) => matches(target, item.plugin.id))
-      if (selected.length || target === "*" || target.endsWith(".*") || target.startsWith("opencode.")) {
+      if (
+        selected.length ||
+        target === "*" ||
+        target.endsWith(".*") ||
+        target.startsWith("opencode.") ||
+        target.startsWith("shuvcode.")
+      ) {
         for (const item of selected) item.enabled = true
+        // `{ "package": "<builtin id>", "options": { ... } }` configures that built-in.
+        const builtin = desired.get(target)
+        if (typeof entry !== "string" && entry.options && builtin?.source === "builtin") builtin.options = entry.options
         continue
       }
 

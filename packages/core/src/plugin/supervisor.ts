@@ -34,6 +34,16 @@ const resolve = Effect.fn("PluginSupervisor.resolve")(function* (
     Plugin.Info & { readonly state: Extract<Plugin.State, { readonly status: "failed" }> }
   >()
   const plugins = () => [...definitions, ...packages.values()]
+  const configured = new Map<string, Readonly<Record<string, unknown>>>()
+  const configure = (plugin: Plugin.Generation): Plugin.Generation => {
+    const options = configured.get(plugin.id)
+    if (!options) return plugin
+    return {
+      ...plugin,
+      revision: JSON.stringify([plugin.revision, options]),
+      effect: (host) => plugin.effect({ ...host, options }),
+    }
+  }
 
   for (const operation of operations) {
     if (operation.type === "remove") {
@@ -49,9 +59,15 @@ const resolve = Effect.fn("PluginSupervisor.resolve")(function* (
       matched.length > 0 ||
       operation.target === "*" ||
       operation.target.endsWith(".*") ||
-      operation.target.startsWith("opencode.")
+      operation.target.startsWith("opencode.") ||
+      operation.target.startsWith("shuvcode.")
     if (selectsPlugins) {
       matched.forEach((plugin) => enabled.add(plugin.id))
+      // `{ "package": "<builtin id>", "options": { ... } }` configures that built-in.
+      if (Object.keys(operation.options).length > 0)
+        definitions
+          .filter((plugin) => plugin.id === operation.target)
+          .forEach((plugin) => configured.set(plugin.id, operation.options))
       continue
     }
 
@@ -89,9 +105,9 @@ const resolve = Effect.fn("PluginSupervisor.resolve")(function* (
   }
 
   const ordered = [
-    ...pre.filter((plugin) => enabled.has(plugin.id)),
+    ...pre.filter((plugin) => enabled.has(plugin.id)).map(configure),
     ...[...packages.values()].filter((plugin) => enabled.has(plugin.id)),
-    ...post.filter((plugin) => enabled.has(plugin.id)),
+    ...post.filter((plugin) => enabled.has(plugin.id)).map(configure),
   ]
   // Registry activation dies on a duplicate ID, which would drop the whole generation including builtins.
   // Keep the first occurrence in boot order and report later ones like any other plugin setup failure.

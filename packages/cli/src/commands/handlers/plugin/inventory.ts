@@ -48,7 +48,14 @@ export const inspect = Effect.fn("cli.plugin.inspect")(function* (selected?: str
     ...new Set(
       (info.plugins ?? []).flatMap((entry) => {
         const target = typeof entry === "string" ? entry : entry.package
-        if (target.startsWith("-") || target === "*" || target.endsWith(".*") || target.startsWith("opencode.")) return []
+        if (
+          target.startsWith("-") ||
+          target === "*" ||
+          target.endsWith(".*") ||
+          target.startsWith("opencode.") ||
+          target.startsWith("shuvcode.")
+        )
+          return []
         return [target]
       }),
     ),

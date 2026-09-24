@@ -258,4 +258,32 @@ describe("PluginSupervisor", () => {
       expect(source.activations).toBe(2)
     }),
   )
+  it.live("passes config options to a built-in plugin selected by its ID", () =>
+    Effect.gen(function* () {
+      const sdk = yield* SdkPlugins.Service
+      yield* sdk.register(
+        define({
+          id: "configurable",
+          effect: (ctx) =>
+            ctx.command
+              .transform((editor) => editor.add({ name: String(ctx.options.command), execute: () => Effect.void }))
+              .pipe(Effect.asVoid),
+        }),
+      )
+      source.operations = [{ type: "add", target: "configurable", options: { command: "configured-greet" } }]
+      yield* Effect.addFinalizer(() => Effect.sync(() => (source.operations = [])))
+      const directory = yield* tmpdirScoped()
+      const locations = yield* LocationServiceMap.Service
+      const configured = yield* Effect.gen(function* () {
+        const plugins = yield* Plugin.Service
+        yield* plugins.awaitActivation
+        const commands = yield* Command.Service
+        return yield* commands.get("configured-greet")
+      }).pipe(
+        Effect.scoped,
+        Effect.provide(locations.get(Location.Ref.make({ directory: AbsolutePath.make(directory.path) }))),
+      )
+      expect(configured).toBeDefined()
+    }),
+  )
 })

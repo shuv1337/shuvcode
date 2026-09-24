@@ -29,7 +29,13 @@ export default Runtime.handler(
     const configured = yield* Effect.forEach([...(info.plugins ?? []), ...discovered], (entry) =>
       Effect.gen(function* () {
         const target = typeof entry === "string" ? entry : entry.package
-        if (target.startsWith("-") || target === "*" || target.endsWith(".*") || target.startsWith("opencode."))
+        if (
+          target.startsWith("-") ||
+          target === "*" ||
+          target.endsWith(".*") ||
+          target.startsWith("opencode.") ||
+          target.startsWith("shuvcode.")
+        )
           return []
         const local = localSource(target, path.dirname(config.path))
         if (local) {
