@@ -15,6 +15,7 @@ import { AbsolutePath } from "@opencode/core/schema"
 import { Session } from "@opencode/core/session"
 import { SessionExecution } from "@opencode/core/session/execution"
 import { ToolActivity } from "@opencode/core/tool-activity"
+import { execute } from "@opencode/core/tool/runtime"
 import { SessionRestart } from "@opencode/core/session/execution/restart"
 import { UserInterruptedError } from "@opencode/core/session/error"
 import { SessionEvent } from "@opencode/core/session/event"
@@ -24,6 +25,8 @@ import { SessionRunner } from "@opencode/core/session/runner/index"
 import { SessionInboxTable, SessionTable } from "@opencode/core/session/sql"
 import { SessionStore } from "@opencode/core/session/store"
 import { Cause, Context, Deferred, Effect, Exit, Fiber, Layer, LayerMap, Scope } from "effect"
+import { Agent } from "@opencode/schema/agent"
+import { CallID } from "@opencode/schema/tool"
 import { eq } from "drizzle-orm"
 import { testEffect } from "./lib/effect"
 
@@ -56,6 +59,56 @@ describe("SessionExecution lifecycle", () => {
       reason: "user",
     })
   })
+
+  it.effect("a drain running a tool holds exactly one lease and releases it", () =>
+    Effect.gen(function* () {
+      const database = yield* Database.Service
+      const sessionID = Session.ID.make("ses_lease_account")
+      yield* seedSessions(database, [sessionID])
+      const held = yield* Deferred.make<number>()
+      const finished = yield* Deferred.make<number>()
+      const release = yield* Deferred.make<void>()
+      const scope = yield* Scope.make()
+      yield* Effect.addFinalizer(() => Scope.close(scope, Exit.void))
+      const context = yield* buildExecution(scope, ({ sessionID }) =>
+        Effect.gen(function* () {
+          const activity = yield* ToolActivity.Service
+          yield* activity.lease(sessionID).pipe(
+            Effect.andThen(
+              Effect.gen(function* () {
+                yield* execute(
+                  {
+                    name: "hold",
+                    description: "Hold",
+                    input: {},
+                    execute: () => Effect.succeed({ content: "ok" }),
+                  },
+                  {},
+                  {
+                    sessionID,
+                    agent: Agent.ID.make("build"),
+                    messageID: SessionMessage.ID.make("msg_lease"),
+                    id: CallID.make("call_lease"),
+                    progress: () => Effect.void,
+                  },
+                )
+                yield* Deferred.succeed(held, yield* activity.count(sessionID))
+                yield* Deferred.await(release)
+              }),
+            ),
+            Effect.scoped,
+          )
+          yield* Deferred.succeed(finished, yield* activity.count(sessionID))
+        }).pipe(Effect.orDie) as unknown as Effect.Effect<void, SessionRunner.RunError>,
+      )
+      const execution = Context.get(context, SessionExecution.Service)
+      const running = yield* execution.resume(sessionID).pipe(Effect.forkIn(scope))
+      expect(yield* Deferred.await(held)).toBe(1)
+      yield* Deferred.succeed(release, undefined)
+      expect(yield* Deferred.await(finished)).toBe(0)
+      yield* Fiber.join(running)
+    }),
+  )
 
   it.effect("the sweep only lists claimed top-level Sessions", () =>
     Effect.gen(function* () {

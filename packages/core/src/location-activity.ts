@@ -14,7 +14,14 @@ const isSessionEvent = Schema.is(SessionEvent.Durable)
 
 export class Service extends Context.Service<Service, {}>()("@opencode/LocationActivity") {}
 
-export function layer(options: { readonly timeToLive?: Duration.Input; readonly sweepInterval?: Duration.Input } = {}) {
+export function layer(
+  options: {
+    readonly timeToLive?: Duration.Input
+    readonly sweepInterval?: Duration.Input
+    /** Test seam. Runs after an expiry is observed and before the keep-or-interrupt decision. */
+    readonly beforeDecision?: Effect.Effect<void, never, ToolActivity.Service>
+  } = {},
+) {
   return Layer.effect(
     Service,
     Effect.gen(function* () {
@@ -69,33 +76,40 @@ export function layer(options: { readonly timeToLive?: Duration.Input; readonly 
         const now = clock.currentTimeMillisUnsafe()
         const expired = Array.from(entries.values()).filter((entry) => entry.expiresAt <= now)
         if (expired.length === 0) return
-        const active = yield* Effect.forEach(yield* execution.active, (sessionID) => sessions.get(sessionID))
-        const holding = yield* activity.holding
-        const leased = new Set(
-          active.flatMap((session) => (session && holding.has(session.id) ? [key(session.location)] : [])),
-        )
+        if (options.beforeDecision) yield* options.beforeDecision
         yield* Effect.forEach(
           expired,
           (entry) =>
             Effect.gen(function* () {
-              if (leased.has(key(entry.ref))) {
-                // A tool still running is not idle. Re-touch and leave the execution
-                // alone; eviction waits until the last lease releases and a full TTL passes.
-                yield* touch(entry.ref)
-                return
-              }
-              const owners = active.flatMap((session) =>
-                session && key(session.location) === key(entry.ref) ? [session] : [],
+              const decision = yield* activity.exclusive(
+                Effect.gen(function* () {
+                  const id = key(entry.ref)
+                  const active = yield* Effect.forEach(yield* execution.active, (sessionID) => sessions.get(sessionID))
+                  const holding = yield* activity.holding
+                  if (active.some((session) => session && holding.has(session.id) && key(session.location) === id)) {
+                    yield* touch(entry.ref)
+                    return { action: "keep" as const }
+                  }
+                  const current = entries.get(id)
+                  if (!current || current.expiresAt > clock.currentTimeMillisUnsafe())
+                    return { action: "keep" as const }
+                  const owners = active.flatMap((session) =>
+                    session && key(session.location) === id ? [session] : [],
+                  )
+                  yield* Effect.forEach(
+                    owners,
+                    (session) => execution.interrupt(session.id, { reason: "inactivity" }),
+                    { discard: true },
+                  )
+                  return { action: "interrupt" as const, owners }
+                }),
               )
-              // Invalidation only detaches the cache entry; borrowers retain the old
-              // graph. Stop its executions and settle tool cleanup before detaching it.
+              if (decision.action === "keep") return
+              // Settlement waits outside the lease lock so a releasing tool can finish.
               yield* Effect.forEach(
-                owners,
+                decision.owners,
                 (session) => execution.interrupt(session.id, { reason: "inactivity", awaitSettlement: true }),
-                {
-                  discard: true,
-                  concurrency: "unbounded",
-                },
+                { discard: true, concurrency: "unbounded" },
               )
               const remaining = yield* Effect.forEach(yield* execution.active, (sessionID) => sessions.get(sessionID))
               // New work admitted during cleanup may now own the cached graph.
