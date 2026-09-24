@@ -366,6 +366,8 @@ function modelFromLanguage(info: RuntimeInfo, language: LanguageModelV3) {
     provider: ProviderID.make(providerID),
     providerMetadataKey: optionKey,
     protocol: "ai-sdk",
+    // AI SDK providers convert tool schemas themselves, so model-family sanitizers stay off here.
+    sanitizer: "none",
     endpoint: Endpoint.path("/", { baseURL: "https://ai-sdk.local" }),
     auth: Auth.none,
     transport: {

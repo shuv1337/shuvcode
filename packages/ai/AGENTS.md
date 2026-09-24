@@ -275,6 +275,7 @@ Use this order for every protocol module:
 ### Rules
 
 - Keep protocol files focused on the protocol. Move provider-specific projection, signing, media normalization, or other bulky transformations into `src/protocols/utils/*`.
+- Send `tool.inputSchema` as given. `prepareRequest` applies the tool schema rules (`ToolSchemaProjection.tools`) once per request, including tools in namespaces. A protocol whose API needs a model family's rules for every model declares `sanitizer` instead of transforming schemas itself.
 - Use `Effect.fn("Provider.fromRequest")` for request body construction entrypoints. Use `Effect.fn(...)` for event handlers that yield effects; keep purely synchronous handlers as plain functions returning a `StepResult` that the dispatcher lifts via `Effect.succeed(...)`.
 - Parser state owns terminal information. The state machine records finish reason, usage, and pending tool calls; emit one terminal `finish` event (or `provider-error`) for each completed response. If a provider splits reason and usage across events, merge them in parser state before flushing.
 - Emit exactly one terminal `finish` event for a completed response, normally after a matching `step-finish`. Use `stream.terminal` to stop reading when the provider has a completion sentinel; use `stream.onHalt` when the final event must be flushed after the framed stream ends.

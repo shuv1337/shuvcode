@@ -11,7 +11,6 @@ import {
   Usage,
   type FinishReason,
   type LLMRequest,
-  type LanguageModel,
   type MediaPart,
   type ProviderMetadata,
   type ProviderOptions,
@@ -24,7 +23,6 @@ import { Media } from "../media.js"
 import { JsonObject, knownString, lenient, optionalArray, optionalNull, ProviderShared } from "./shared.js"
 import { GeminiGenerateContent } from "./utils/gemini-generate-content.js"
 import { Lifecycle } from "./utils/lifecycle.js"
-import { ToolSchemaProjection } from "./utils/tool-schema.js"
 
 const ADAPTER = "gemini"
 // Google documents this sentinel for replaying Gemini 3 function calls after their original signature was lost.
@@ -270,12 +268,11 @@ interface ParserState {
 // =============================================================================
 // Request Lowering
 // =============================================================================
-// Tool schemas go in `parametersJsonSchema`, which accepts standard JSON Schema. Gemini's schema
-// rules are this API's default, including for tuned endpoints whose IDs do not name Gemini.
-const lowerTool = (tool: ToolDefinition, model: LanguageModel) => ({
+// Tool schemas go in `parametersJsonSchema`, which accepts standard JSON Schema.
+const lowerTool = (tool: ToolDefinition) => ({
   name: tool.name,
   description: tool.description,
-  parametersJsonSchema: ToolSchemaProjection.modelCompatibility(tool.inputSchema, model, "gemini"),
+  parametersJsonSchema: tool.inputSchema,
 })
 
 const lowerToolConfig = (toolChoice: NonNullable<LLMRequest["toolChoice"]>) =>
@@ -482,7 +479,7 @@ const fromRequest = Effect.fn("Gemini.fromRequest")(function* (request: LLMReque
     tools: hasTools
       ? [
           {
-            functionDeclarations: flattened.tools.map((tool) => lowerTool(tool, request.model)),
+            functionDeclarations: flattened.tools.map(lowerTool),
           },
         ]
       : undefined,
@@ -818,6 +815,8 @@ export const protocol = Protocol.make({
     schema: GeminiBody,
     from: fromRequest,
   },
+  // Gemini's schema rules are this API's default, including for tuned endpoints whose IDs do not name Gemini.
+  sanitizer: "gemini",
   stream: {
     event: Protocol.jsonEvent(GeminiEvent),
     initial: (request) => ({

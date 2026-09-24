@@ -9,7 +9,6 @@ import {
   type CacheHint,
   type FinishReason,
   type FinishReasonDetails,
-  type JsonSchema,
   type LLMRequest,
   type LanguageModel,
   type ProviderMetadata,
@@ -26,7 +25,6 @@ import { BedrockCache } from "./utils/bedrock-cache.js"
 import { BedrockMedia } from "./utils/bedrock-media.js"
 import { Lifecycle } from "./utils/lifecycle.js"
 import { MistralToolID } from "./utils/mistral-tool-id.js"
-import { ToolSchemaProjection } from "./utils/tool-schema.js"
 import { ToolStream } from "./utils/tool-stream.js"
 import { concatBytes } from "../utils/bytes.js"
 
@@ -221,22 +219,18 @@ type BedrockEvent = Schema.Schema.Type<typeof BedrockEvent>
 // =============================================================================
 // Request Lowering
 // =============================================================================
-const lowerToolSpec = (tool: ToolDefinition, inputSchema: JsonSchema): BedrockToolSpec => ({
+const lowerToolSpec = (tool: ToolDefinition): BedrockToolSpec => ({
   toolSpec: {
     name: tool.name,
     ...(tool.description.trim().length > 0 ? { description: tool.description } : {}),
-    inputSchema: { json: inputSchema },
+    inputSchema: { json: tool.inputSchema },
   },
 })
 
-const lowerTools = (
-  model: LanguageModel,
-  breakpoints: BedrockCache.Breakpoints,
-  tools: ReadonlyArray<ToolDefinition>,
-): BedrockTool[] => {
+const lowerTools = (breakpoints: BedrockCache.Breakpoints, tools: ReadonlyArray<ToolDefinition>): BedrockTool[] => {
   const result: BedrockTool[] = []
   for (const tool of tools) {
-    result.push(lowerToolSpec(tool, ToolSchemaProjection.modelCompatibility(tool.inputSchema, model)))
+    result.push(lowerToolSpec(tool))
     const cachePoint = BedrockCache.block(breakpoints, tool.cache)
     if (cachePoint) result.push(cachePoint)
   }
@@ -473,7 +467,7 @@ const fromRequest = Effect.fn("BedrockConverse.fromRequest")(function* (request:
   const toolConfig = (() => {
     if (flattened.tools.length === 0) return undefined
     return {
-      tools: lowerTools(request.model, breakpoints, flattened.tools),
+      tools: lowerTools(breakpoints, flattened.tools),
       // Converse has no native "none". Keep definitions stable for prompt
       // caching and omit only the unsupported choice.
       toolChoice,

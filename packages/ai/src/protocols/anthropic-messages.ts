@@ -18,7 +18,6 @@ import {
   type CacheHint,
   type FinishReasonDetails,
   type FinishReason,
-  type JsonSchema,
   type MediaPart,
   type ProviderMetadata,
   type ProviderOptions,
@@ -31,7 +30,6 @@ import { classifyProviderFailure } from "../provider-error.js"
 import { effortUpdate, resolveEffortUpdates } from "../effort-updates.js"
 import * as Cache from "./utils/cache.js"
 import { Lifecycle } from "./utils/lifecycle.js"
-import { ToolSchemaProjection } from "./utils/tool-schema.js"
 import { ToolStream } from "./utils/tool-stream.js"
 
 const ADAPTER = "anthropic-messages"
@@ -525,10 +523,10 @@ const redactedDataFromMetadata = (metadata: ProviderMetadata | undefined, key: s
   return typeof provider.redactedData === "string" ? provider.redactedData : undefined
 }
 
-const lowerTool = (breakpoints: Cache.Breakpoints, tool: ToolDefinition, inputSchema: JsonSchema): AnthropicTool => ({
+const lowerTool = (breakpoints: Cache.Breakpoints, tool: ToolDefinition): AnthropicTool => ({
   name: tool.name,
   description: tool.description,
-  input_schema: inputSchema,
+  input_schema: tool.inputSchema,
   cache_control: cacheControl(breakpoints, tool.cache),
 })
 
@@ -1049,12 +1047,7 @@ const fromRequest = Effect.fn("AnthropicMessages.fromRequest")(function* (reques
   // over-mark we keep their tool hints and shed the message-tail ones first.
   const breakpoints = Cache.newBreakpoints(ANTHROPIC_BREAKPOINT_CAP)
   const flattened = ProviderShared.flattenToolRequest(updates.request)
-  const tools =
-    flattened.tools.length === 0
-      ? undefined
-      : flattened.tools.map((tool) =>
-          lowerTool(breakpoints, tool, ToolSchemaProjection.modelCompatibility(tool.inputSchema, request.model)),
-        )
+  const tools = flattened.tools.length === 0 ? undefined : flattened.tools.map((tool) => lowerTool(breakpoints, tool))
   // Anthropic rejects tool_choice when tools are absent; "none" is only meaningful with tools present.
   const toolChoice = tools === undefined || !request.toolChoice ? undefined : yield* lowerToolChoice(request.toolChoice)
   const systemParts = request.system.filter((part) => part.text.length > 0)
