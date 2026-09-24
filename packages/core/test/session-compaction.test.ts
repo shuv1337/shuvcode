@@ -102,6 +102,83 @@ test("compaction prompt preserves detailed work state and relevant files", () =>
   expect(prompt).toContain("## Relevant Files")
 })
 
+it.effect("compaction recent text keeps rich failure content without data URIs", () =>
+  Effect.gen(function* () {
+    requests = []
+    const compaction = yield* SessionCompaction.Service
+    const store = yield* SessionStore.Service
+    yield* compaction.transform((editor) => {
+      editor.configure({ tokens: 1 })
+    })
+    const sessionID = Session.ID.make("ses_rich_failure_compaction")
+    const session = yield* insertSession(sessionID)
+    const modelRequests = yield* SessionModelRequest.Service
+    const uri = "data:image/png;base64,aW1hZ2U="
+    const created = DateTime.makeUnsafe(0)
+    const messages = [
+      {
+        id: SessionMessage.ID.create(),
+        type: "user" as const,
+        text: "Older turn that should be summarized.",
+        time: { created },
+      },
+      SessionMessage.Assistant.make({
+        id: SessionMessage.ID.create(),
+        type: "assistant",
+        agent: Agent.defaultID,
+        model: { id: Model.ID.make("summary-model"), providerID: Provider.ID.make("test") },
+        content: [SessionMessage.AssistantText.make({ type: "text", text: "Working on the older turn." })],
+        time: { created },
+      }),
+      {
+        id: SessionMessage.ID.create(),
+        type: "user" as const,
+        text: "Capture the failure.",
+        time: { created: DateTime.makeUnsafe(1) },
+      },
+      SessionMessage.Assistant.make({
+        id: SessionMessage.ID.create(),
+        type: "assistant",
+        agent: Agent.defaultID,
+        model: { id: Model.ID.make("summary-model"), providerID: Provider.ID.make("test") },
+        content: [
+          SessionMessage.AssistantTool.make({
+            type: "tool",
+            id: "call-shot",
+            name: "snapshot",
+            state: SessionMessage.ToolStateError.make({
+              status: "error",
+              input: {},
+              error: { type: "tool.execution", message: "snapshot failed" },
+              content: [
+                { type: "text", text: "could not capture" },
+                { type: "file", uri, mime: "image/png", name: "shot.png" },
+              ],
+            }),
+            time: { created: DateTime.makeUnsafe(2), completed: DateTime.makeUnsafe(2) },
+          }),
+        ],
+        time: { created: DateTime.makeUnsafe(2), completed: DateTime.makeUnsafe(2) },
+      }),
+    ]
+    expect(
+      yield* compaction.compactManual({
+        session,
+        resolveContext: () => Effect.succeed(loaded(session, messages)),
+        prepare: modelRequests.compaction,
+        messages,
+        inputID: SessionMessage.ID.make("msg_rich_failure_compaction"),
+      }),
+    ).toEqual({ status: "completed" })
+    const checkpoint = (yield* store.context(sessionID)).find((message) => message.type === "compaction")
+    const recent = checkpoint?.type === "compaction" && checkpoint.status === "completed" ? checkpoint.recent : ""
+    expect(recent).toContain("[Tool error]: snapshot failed")
+    expect(recent).toContain("could not capture")
+    expect(recent).toContain("[Attached image/png: shot.png]")
+    expect(recent).not.toContain("data:")
+  }),
+)
+
 test("compaction describes tool media without embedding base64", () => {
   const base64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAAB"
   const serialized = SessionCompaction.serializeToolContent([

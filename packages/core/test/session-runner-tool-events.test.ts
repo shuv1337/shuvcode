@@ -255,6 +255,52 @@ test("interrupted non-subagent failures do not expose their progress session IDs
   })
 })
 
+test("local failure content stays on the failed event", async () => {
+  const { published, publisher } = capture()
+  const content = [
+    { type: "text" as const, text: "could not capture" },
+    { type: "file" as const, uri: "data:image/png;base64,aW1hZ2U=", mime: "image/png", name: "shot.png" },
+  ]
+  await Effect.runPromise(publisher.publish(call))
+  await Effect.runPromise(
+    publisher.failTool(call.id, { type: "tool.execution", message: "snapshot failed" }, undefined, content),
+  )
+
+  const failed = published.find((event) => event.type === "session.tool.failed.2")?.data
+  expect(failed).toMatchObject({
+    error: { type: "tool.execution", message: "snapshot failed" },
+    content,
+  })
+  expect(failed).not.toMatchObject({ error: { type: "tool.execution", message: "snapshot failed" }, content: undefined })
+})
+
+test("hosted tool errors forward sibling content without stringifying it into the message", async () => {
+  const { published, publisher } = capture()
+  const content = [
+    { type: "text" as const, text: "provider failed" },
+    { type: "file" as const, uri: "data:image/png;base64,aW1hZ2U=", mime: "image/png", name: "shot.png" },
+  ]
+  await Effect.runPromise(publisher.publish(LLMEvent.toolCall({ ...call, providerExecuted: true })))
+  await Effect.runPromise(
+    publisher.publish(
+      LLMEvent.toolResult({
+        id: call.id,
+        name: call.name,
+        providerExecuted: true,
+        result: { type: "error", value: "snapshot failed", content },
+      }),
+    ),
+  )
+
+  const failed = published.find((event) => event.type === "session.tool.failed.2")?.data
+  expect(failed).toMatchObject({
+    error: { type: "tool.execution", message: "snapshot failed" },
+    content,
+    executed: true,
+  })
+  expect(JSON.stringify((failed as { error: { message: string } }).error)).not.toContain("data:")
+})
+
 test("local failure metadata completes the progress snapshot", async () => {
   const { published, publisher } = capture()
   await Effect.runPromise(publisher.publish(call))

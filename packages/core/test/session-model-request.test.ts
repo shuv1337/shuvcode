@@ -24,6 +24,43 @@ describe("SessionModelRequest.unsupportedParts", () => {
     ])
   })
 
+  test("replaces unsupported media nested in failed tool results", () => {
+    const messages = unsupportedParts(
+      [
+        Message.tool(
+          ToolResultPart.make({
+            id: "call_1",
+            name: "snapshot",
+            result: {
+              type: "error",
+              value: { error: { type: "tool.execution", message: "snapshot failed" }, content: [] },
+              content: [
+                { type: "text", text: "could not capture" },
+                { type: "file", uri: "data:image/png;base64,aGVsbG8=", mime: "image/png", name: "logo.png" },
+              ],
+            },
+          }),
+        ),
+      ],
+      capabilities(["text"]),
+    )
+
+    expect(messages[0]?.content[0]).toMatchObject({
+      type: "tool-result",
+      result: {
+        type: "error",
+        value: { error: { type: "tool.execution", message: "snapshot failed" }, content: [] },
+        content: [
+          { type: "text", text: "could not capture" },
+          {
+            type: "text",
+            text: 'ERROR: Cannot read "logo.png" (this model does not support image input). Inform the user.',
+          },
+        ],
+      },
+    })
+  })
+
   test("replaces unsupported media nested in tool results", () => {
     const messages = unsupportedParts(
       [
@@ -109,6 +146,44 @@ describe("SessionModelRequest.boundImages", () => {
         type: "content",
         value: [{ type: "text" }, { type: "file", name: "second.png" }],
       },
+    })
+  })
+
+  test("replaces images nested in failed tool results", () => {
+    const image = "a".repeat(13 * 1024 * 1024)
+    const uri = `data:image/png;base64,${image}`
+    const result = boundImages([
+      Message.tool(
+        ToolResultPart.make({
+          id: "call_1",
+          name: "snapshot",
+          result: {
+            type: "error",
+            value: { error: { type: "tool.execution", message: "snapshot failed" }, content: [] },
+            content: [
+              { type: "text", text: "could not capture" },
+              { type: "file", uri, mime: "image/png", name: "first.png" },
+              { type: "file", uri, mime: "image/png", name: "second.png" },
+            ],
+          },
+        }),
+      ),
+    ])
+
+    expect(result[0]?.content[0]).toMatchObject({
+      type: "tool-result",
+      result: {
+        type: "error",
+        content: [{ type: "text", text: "could not capture" }, { type: "text" }, { type: "file", name: "second.png" }],
+      },
+    })
+    const failed = result[0]?.content[0]
+    expect(failed && failed.type === "tool-result" && failed.result.type === "error" ? failed.result.content?.[1] : undefined).toMatchObject({
+      type: "text",
+    })
+    expect(failed && failed.type === "tool-result" && failed.result.type === "error" ? failed.result.content?.[2] : undefined).toMatchObject({
+      type: "file",
+      name: "second.png",
     })
   })
 })

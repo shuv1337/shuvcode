@@ -109,6 +109,24 @@ const unsupportedMedia = (mime: string, name: string | undefined, capabilities: 
   }
 }
 
+const toolResultBlocks = (part: LLMRequest["messages"][number]["content"][number]) => {
+  if (part.type !== "tool-result") return
+  if (part.result.type === "content") return part.result.value
+  if (part.result.type === "error" && part.result.content !== undefined && part.result.content.length > 0)
+    return part.result.content
+}
+
+const mapToolResultBlocks = (
+  part: LLMRequest["messages"][number]["content"][number],
+  map: (item: Content) => Content,
+) => {
+  const blocks = toolResultBlocks(part)
+  if (part.type !== "tool-result" || blocks === undefined) return part
+  const value = blocks.map(map)
+  if (part.result.type === "content") return { ...part, result: { ...part.result, value } }
+  return { ...part, result: { ...part.result, content: value } }
+}
+
 export const unsupportedParts = (messages: LLMRequest["messages"], capabilities: Model.Capabilities) =>
   messages.map((message) =>
     Message.make({
@@ -117,17 +135,10 @@ export const unsupportedParts = (messages: LLMRequest["messages"], capabilities:
         if (part.type === "media") {
           return unsupportedMedia(part.media.mediaType, part.filename, capabilities) ?? part
         }
-        if (part.type !== "tool-result" || part.result.type !== "content") return part
-        return {
-          ...part,
-          result: {
-            ...part.result,
-            value: part.result.value.map((item: Content) => {
-              if (item.type !== "file") return item
-              return unsupportedMedia(item.mime, item.name, capabilities) ?? item
-            }),
-          },
-        }
+        return mapToolResultBlocks(part, (item) => {
+          if (item.type !== "file") return item
+          return unsupportedMedia(item.mime, item.name, capabilities) ?? item
+        })
       }),
     }),
   )
@@ -145,10 +156,11 @@ export const boundImages = (messages: LLMRequest["messages"]) => {
       total +
       message.content.reduce((sum, part) => {
         if (part.type === "media" && isImage(part.media.mediaType)) return sum + size(part.media)
-        if (part.type !== "tool-result" || part.result.type !== "content") return sum
+        const blocks = toolResultBlocks(part)
+        if (blocks === undefined) return sum
         return (
           sum +
-          part.result.value.reduce(
+          blocks.reduce(
             (bytes: number, item: Content) =>
               bytes + (item.type === "file" && isImage(item.mime) ? Buffer.byteLength(item.uri) : 0),
             0,
@@ -168,18 +180,11 @@ export const boundImages = (messages: LLMRequest["messages"]) => {
           removed += size(part.media)
           return Message.text(IMAGE_REMOVED)
         }
-        if (part.type !== "tool-result" || part.result.type !== "content") return part
-        return {
-          ...part,
-          result: {
-            ...part.result,
-            value: part.result.value.map((item: Content) => {
-              if (item.type !== "file" || !isImage(item.mime) || imageBytes - removed <= IMAGE_BYTES_TARGET) return item
-              removed += Buffer.byteLength(item.uri)
-              return { type: "text" as const, text: IMAGE_REMOVED }
-            }),
-          },
-        }
+        return mapToolResultBlocks(part, (item) => {
+          if (item.type !== "file" || !isImage(item.mime) || imageBytes - removed <= IMAGE_BYTES_TARGET) return item
+          removed += Buffer.byteLength(item.uri)
+          return { type: "text" as const, text: IMAGE_REMOVED }
+        })
       }),
     }),
   )

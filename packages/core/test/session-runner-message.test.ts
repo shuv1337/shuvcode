@@ -847,6 +847,61 @@ Recent work
     ])
   })
 
+  test("keeps rich failure media beside the error value", () => {
+    const uri = "data:image/png;base64,aW1hZ2U="
+    const messages = toLLMMessages(
+      [
+        SessionMessage.Assistant.make({
+          id: id("assistant-rich-failure"),
+          type: "assistant",
+          agent: build,
+          model: { id: Model.ID.make("model"), providerID: Provider.ID.make("provider") },
+          content: [
+            SessionMessage.AssistantTool.make({
+              type: "tool",
+              id: "failed-shot",
+              name: "snapshot",
+              state: SessionMessage.ToolStateError.make({
+                status: "error",
+                input: {},
+                error: { type: "tool.execution", message: "snapshot failed" },
+                content: [
+                  { type: "text", text: "could not capture" },
+                  { type: "file", uri, mime: "image/png", name: "shot.png" },
+                ],
+              }),
+              time: { created, completed: created },
+            }),
+          ],
+          time: { created, completed: created },
+        }),
+      ],
+      model,
+    )
+
+    expect(messages[0]?.content).toEqual([
+      { type: "tool-call", id: "failed-shot", name: "snapshot", input: {} },
+    ])
+    expect(messages[1]?.content).toEqual([
+      {
+        type: "tool-result",
+        id: "failed-shot",
+        name: "snapshot",
+        result: {
+          type: "error",
+          value: { error: { type: "tool.execution", message: "snapshot failed" }, content: [] },
+          content: [
+            { type: "text", text: "could not capture" },
+            { type: "file", uri, mime: "image/png", name: "shot.png" },
+          ],
+        },
+      },
+    ])
+    expect(JSON.stringify(messages[1]?.content[0]).includes(uri)).toBe(true)
+    const result = messages[1]?.content[0]
+    expect(result && result.type === "tool-result" && result.result.type === "error" ? JSON.stringify(result.result.value) : "").not.toContain("data:")
+  })
+
   test("restores OpenAI encrypted reasoning metadata", () => {
     const messages = toLLMMessages(
       [
