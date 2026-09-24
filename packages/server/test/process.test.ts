@@ -209,7 +209,7 @@ it.live("pairing links sign in browsers with a cookie and API clients with a tok
 
     const reused = yield* request(`/auth/connect/${browser.code}`, { headers: { accept: "text/html" } })
     expect(reused.status).toBe(401)
-    expect(yield* Effect.promise(() => reused.text())).toContain("opencode pair")
+    expect(yield* Effect.promise(() => reused.text())).toContain("shuvcode pair")
 
     expect((yield* request("/api/info", { headers: { cookie } })).status).toBe(200)
     expect((yield* request("/api/info", { headers: { cookie, origin: base } })).status).toBe(200)
