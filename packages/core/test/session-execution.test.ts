@@ -14,6 +14,7 @@ import { ProjectTable } from "@opencode/core/project/sql"
 import { AbsolutePath } from "@opencode/core/schema"
 import { Session } from "@opencode/core/session"
 import { SessionExecution } from "@opencode/core/session/execution"
+import { ToolActivity } from "@opencode/core/tool-activity"
 import { SessionRestart } from "@opencode/core/session/execution/restart"
 import { UserInterruptedError } from "@opencode/core/session/error"
 import { SessionEvent } from "@opencode/core/session/event"
@@ -1382,6 +1383,7 @@ function buildExecution(
       SessionRestart.layer(options).pipe(
         Layer.provideMerge(sessionLayer),
         Layer.provideMerge(Layer.fresh(SessionExecution.layer)),
+        Layer.provide(ToolActivity.layer),
         Layer.provide(Layer.succeed(Database.Service, database)),
         Layer.provide(Layer.succeed(Bus.Service, bus)),
         Layer.provide(Layer.succeed(SessionStore.Service, store)),

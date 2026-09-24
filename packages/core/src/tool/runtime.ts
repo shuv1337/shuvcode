@@ -1,7 +1,8 @@
 import type { ToolDefinition } from "@opencode/ai"
 import { Tool } from "@opencode/schema/tool"
 import type { StandardJSONSchemaV1, StandardSchemaV1 } from "@standard-schema/spec"
-import { Cache, Effect, JsonSchema, Schema, SchemaIssue, SchemaRepresentation } from "effect"
+import { Cache, Effect, JsonSchema, Option, Schema, SchemaIssue, SchemaRepresentation } from "effect"
+import { ToolActivity } from "../tool-activity.js"
 import { $ZodType, toJSONSchema } from "zod/v4/core"
 
 const formatEffectIssues = SchemaIssue.makeFormatterStandardSchemaV1()
@@ -25,7 +26,7 @@ export const definition = (tool: Tool.Info<any, any>): ToolDefinition => ({
   ...(tool.output === undefined ? {} : { outputSchema: outputJsonSchema(tool.output) }),
 })
 
-export const execute = (tool: Tool.Info<any, any>, input: unknown, context: Tool.Context) =>
+const executeBody = (tool: Tool.Info<any, any>, input: unknown, context: Tool.Context) =>
   Effect.gen(function* () {
     const decoded = yield* decodeInput(tool, input)
     // Tool implementations declare `Tool.Error` but plugins can fail with anything at
@@ -57,6 +58,18 @@ export const execute = (tool: Tool.Info<any, any>, input: unknown, context: Tool
       content: normalizeContent(result.content, output),
       ...(result.metadata === undefined ? {} : { metadata: result.metadata }),
     }
+  })
+
+export const execute = (tool: Tool.Info<any, any>, input: unknown, context: Tool.Context) =>
+  withToolLease(context.sessionID, executeBody(tool, input, context))
+
+// Isolated tool tests call execute without a session drain. A missing service skips
+// the lease; SessionExecution provides ToolActivity on every drain fiber.
+const withToolLease = <A, E, R>(sessionID: Tool.Context["sessionID"], effect: Effect.Effect<A, E, R>) =>
+  Effect.gen(function* () {
+    const activity = yield* Effect.serviceOption(ToolActivity.Service)
+    if (Option.isNone(activity)) return yield* effect
+    return yield* activity.value.lease(sessionID).pipe(Effect.andThen(effect), Effect.scoped)
   })
 
 const decodeInput = (tool: Tool.Info<any, any>, value: unknown) =>

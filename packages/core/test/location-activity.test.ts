@@ -19,7 +19,12 @@ import { SessionEvent } from "@opencode/core/session/event"
 import { SessionRunner } from "@opencode/core/session/runner/index"
 import { SessionTable } from "@opencode/core/session/sql"
 import { SessionStore } from "@opencode/core/session/store"
+import { ToolActivity } from "@opencode/core/tool-activity"
+import { execute } from "@opencode/core/tool/runtime"
 import { Workspace } from "@opencode/core/workspace"
+import { Agent } from "@opencode/schema/agent"
+import { SessionMessage } from "@opencode/schema/session-message"
+import { Tool } from "@opencode/schema/tool"
 import { testEffect } from "./lib/effect"
 
 // Keep real execution ownership, location caching, forms, and eviction. The fixture
@@ -218,4 +223,285 @@ describe("LocationActivity eviction", () => {
         }),
     )
   }
+})
+
+type ToolGate = {
+  mode: "hold" | "fail" | "die" | "idle"
+  readonly started: Deferred.Deferred<void>
+  readonly release: Deferred.Deferred<string>
+  readonly settle: Deferred.Deferred<void>
+  readonly delivered: Deferred.Deferred<string>
+}
+
+const gates = new Map<string, ToolGate>()
+
+const timeToLive = "5 seconds"
+const sweepInterval = "1 second"
+
+const toolLocations = Layer.effect(
+  LocationServiceMap.Service,
+  Effect.gen(function* () {
+    const map = yield* LayerMap.make(
+      (ref: Location.Ref) =>
+        // The fixture only exercises Location, the runner, and the test gate.
+        // oxlint-disable-next-line typescript-eslint/no-unsafe-type-assertion
+        (() => {
+          const gate: ToolGate = {
+            mode: "hold",
+            started: Deferred.makeUnsafe<void>(),
+            release: Deferred.makeUnsafe<string>(),
+            settle: Deferred.makeUnsafe<void>(),
+            delivered: Deferred.makeUnsafe<string>(),
+          }
+          gates.set(ref.directory, gate)
+          const tool: Tool.Info = {
+            name: "hold",
+            description: "Hold",
+            input: {},
+            execute: () =>
+              Effect.gen(function* () {
+                yield* Deferred.succeed(gate.started, undefined)
+                if (gate.mode === "fail") return yield* new Tool.Error({ message: "nope" })
+                if (gate.mode === "die") return yield* Effect.die("tool defect")
+                const value = yield* Deferred.await(gate.release)
+                return { content: value }
+              }),
+          }
+          return Layer.merge(
+            Layer.succeed(
+              Location.Service,
+              Location.Service.of({
+                directory: ref.directory,
+                workspaceID: ref.workspaceID,
+                project: { id: Project.ID.global, directory: ref.directory, canonical: ref.directory },
+              }),
+            ),
+            Layer.succeed(
+              SessionRunner.Service,
+              SessionRunner.Service.of({
+                drain: ({ sessionID }) =>
+                  Effect.gen(function* () {
+                    if (gate.mode === "idle") {
+                      yield* Deferred.succeed(gate.started, undefined)
+                      yield* Deferred.await(gate.settle)
+                      return SessionRunner.DrainResult.Complete()
+                    }
+                    const result = yield* execute(
+                      tool,
+                      {},
+                      {
+                        sessionID,
+                        agent: Agent.ID.make("build"),
+                        messageID: SessionMessage.ID.make("msg_hold"),
+                        id: Tool.CallID.make("call_hold"),
+                        progress: () => Effect.void,
+                      },
+                    ).pipe(Effect.orDie)
+                    const item = result.content[0]
+                    if (item?.type !== "text") return yield* Effect.die("expected text")
+                    yield* Deferred.succeed(gate.delivered, item.text)
+                    yield* Deferred.await(gate.settle)
+                    return SessionRunner.DrainResult.Complete()
+                  }),
+              }),
+            ),
+          ).pipe(Layer.fresh)
+        })() as unknown as Layer.Layer<LocationServices>,
+      { idleTimeToLive: Duration.infinity },
+    )
+    return {
+      ...map,
+      get: (ref: Location.Ref) => map.get(LocationServiceMap.canonical(ref)),
+      contextEffect: (ref: Location.Ref) => map.contextEffect(LocationServiceMap.canonical(ref)),
+      contextEffectOption: (ref: Location.Ref) => map.contextEffectOption(LocationServiceMap.canonical(ref)),
+      invalidate: (ref: Location.Ref) => map.invalidate(LocationServiceMap.canonical(ref)),
+    }
+  }),
+)
+
+const activity = testEffect(
+  AppNodeBuilder.build(
+    LayerNode.group([
+      Database.node,
+      Bus.node,
+      SessionStore.node,
+      LocationServiceMap.node,
+      SessionExecution.node,
+      LocationActivity.node,
+      ToolActivity.node,
+    ]),
+    [
+      LocationServiceMap.node.replace(
+        makeGlobalNode({
+          service: LocationServiceMap.Service,
+          layer: toolLocations,
+          deps: [],
+        }),
+      ),
+      LocationActivity.node.replace(
+        makeGlobalNode({
+          service: LocationActivity.Service,
+          layer: LocationActivity.layer({ timeToLive, sweepInterval }),
+          deps: [Bus.node, LocationServiceMap.node, SessionExecution.node, SessionStore.node, ToolActivity.node],
+        }),
+      ),
+    ],
+  ),
+)
+
+const watchInterruptions = Effect.gen(function* () {
+  const bus = yield* Bus.Service
+  const interrupted: SessionEvent.Execution.Interrupted["data"][] = []
+  const unsubscribe = yield* bus.listen((event) =>
+    Effect.sync(() => {
+      if (event.type !== SessionEvent.Execution.Interrupted.type) return
+      interrupted.push(Schema.decodeUnknownSync(SessionEvent.Execution.Interrupted.data)(event.data))
+    }),
+  )
+  yield* Effect.addFinalizer(() => unsubscribe)
+  return interrupted
+})
+
+const seed = (sessionID: Session.ID, directory: string) =>
+  Effect.gen(function* () {
+    const db = (yield* Database.Service).db
+    const ref = LocationServiceMap.canonical({ directory: AbsolutePath.make(directory) })
+    yield* db
+      .insert(ProjectTable)
+      .values({ id: Project.ID.global, worktree: ref.directory, sandboxes: [] })
+      .run()
+      .pipe(Effect.orDie)
+    yield* db
+      .insert(SessionTable)
+      .values({
+        id: sessionID,
+        project_id: Project.ID.global,
+        slug: "tool",
+        directory: ref.directory,
+        title: "Tool",
+        version: "test",
+      })
+      .run()
+      .pipe(Effect.orDie)
+    return ref
+  })
+
+describe("LocationActivity tool leases", () => {
+  activity.effect("keeps a Location active while a tool is in flight and evicts one TTL after it completes", () =>
+    Effect.gen(function* () {
+      const map = yield* LocationServiceMap.Service
+      const execution = yield* SessionExecution.Service
+      const leases = yield* ToolActivity.Service
+      const interrupted = yield* watchInterruptions
+      const sessionID = Session.ID.make("ses_holding")
+      const ref = yield* seed(sessionID, "/hold")
+      yield* map.contextEffect(ref).pipe(Effect.scoped)
+      const gate = gates.get(ref.directory)
+      if (!gate) return yield* Effect.die("missing tool gate")
+      const running = yield* execution.resume(sessionID).pipe(Effect.exit, Effect.forkScoped)
+      yield* Deferred.await(gate.started)
+
+      yield* TestClock.adjust("30 seconds")
+      expect(Array.from(yield* execution.active)).toEqual([sessionID])
+      expect(Array.from(yield* RcMap.keys(map.rcMap))).toEqual([ref])
+      expect(interrupted).toEqual([])
+      expect(yield* leases.count(sessionID)).toBe(1)
+
+      yield* Deferred.succeed(gate.release, "done")
+      expect(yield* Deferred.await(gate.delivered)).toBe("done")
+      expect(yield* leases.count(sessionID)).toBe(0)
+      expect(Array.from(yield* execution.active)).toEqual([sessionID])
+      yield* TestClock.adjust("4 seconds")
+      expect(Array.from(yield* RcMap.keys(map.rcMap))).toEqual([ref])
+      expect(interrupted).toEqual([])
+
+      yield* TestClock.adjust("2 seconds")
+      expect(interrupted).toEqual([{ sessionID, reason: "inactivity" }])
+      expect(Array.from(yield* RcMap.keys(map.rcMap))).toEqual([])
+      expect((yield* Fiber.join(running))._tag).toBe("Failure")
+    }),
+  )
+
+  activity.effect("evicts a Location with no in-flight tools on schedule", () =>
+    Effect.gen(function* () {
+      const map = yield* LocationServiceMap.Service
+      const execution = yield* SessionExecution.Service
+      const interrupted = yield* watchInterruptions
+      const sessionID = Session.ID.make("ses_idle")
+      const ref = yield* seed(sessionID, "/idle")
+      yield* map.contextEffect(ref).pipe(Effect.scoped)
+      const gate = gates.get(ref.directory)
+      if (!gate) return yield* Effect.die("missing tool gate")
+      gate.mode = "idle"
+      const running = yield* execution.resume(sessionID).pipe(Effect.exit, Effect.forkScoped)
+      yield* Deferred.await(gate.started)
+
+      yield* TestClock.adjust("5 seconds")
+      expect(Array.from(yield* RcMap.keys(map.rcMap))).toEqual([ref])
+      expect(interrupted).toEqual([])
+      yield* TestClock.adjust("2 seconds")
+      expect(interrupted).toEqual([{ sessionID, reason: "inactivity" }])
+      expect(Array.from(yield* RcMap.keys(map.rcMap))).toEqual([])
+      expect((yield* Fiber.join(running))._tag).toBe("Failure")
+    }),
+  )
+
+  for (const mode of ["fail", "die"] as const) {
+    activity.effect(
+      `releases the lease when a tool ${mode === "fail" ? "fails" : "defects"} so eviction stays on schedule`,
+      () =>
+        Effect.gen(function* () {
+          const map = yield* LocationServiceMap.Service
+          const execution = yield* SessionExecution.Service
+          const leases = yield* ToolActivity.Service
+          const interrupted = yield* watchInterruptions
+          const sessionID = Session.ID.make(`ses_${mode}`)
+          const ref = yield* seed(sessionID, `/${mode}`)
+          yield* map.contextEffect(ref).pipe(Effect.scoped)
+          const gate = gates.get(ref.directory)
+          if (!gate) return yield* Effect.die("missing tool gate")
+          gate.mode = mode
+          const running = yield* execution.resume(sessionID).pipe(Effect.exit, Effect.forkScoped)
+          yield* Deferred.await(gate.started)
+          expect((yield* Fiber.join(running))._tag).toBe("Failure")
+          expect(yield* leases.count(sessionID)).toBe(0)
+
+          yield* TestClock.adjust("4 seconds")
+          expect(Array.from(yield* RcMap.keys(map.rcMap))).toEqual([ref])
+          expect(interrupted).toEqual([])
+          yield* TestClock.adjust("2 seconds")
+          expect(Array.from(yield* RcMap.keys(map.rcMap))).toEqual([])
+        }),
+    )
+  }
+
+  activity.effect("releases the lease when a tool is interrupted so eviction stays on schedule", () =>
+    Effect.gen(function* () {
+      const map = yield* LocationServiceMap.Service
+      const execution = yield* SessionExecution.Service
+      const leases = yield* ToolActivity.Service
+      const interrupted = yield* watchInterruptions
+      const sessionID = Session.ID.make("ses_interrupted")
+      const ref = yield* seed(sessionID, "/interrupted")
+      yield* map.contextEffect(ref).pipe(Effect.scoped)
+      const gate = gates.get(ref.directory)
+      if (!gate) return yield* Effect.die("missing tool gate")
+      const running = yield* execution.resume(sessionID).pipe(Effect.exit, Effect.forkScoped)
+      yield* Deferred.await(gate.started)
+      yield* TestClock.adjust("30 seconds")
+      expect(interrupted).toEqual([])
+      expect(yield* leases.count(sessionID)).toBe(1)
+      expect(Array.from(yield* RcMap.keys(map.rcMap))).toEqual([ref])
+
+      yield* execution.interrupt(sessionID, { awaitSettlement: true })
+      expect(yield* leases.count(sessionID)).toBe(0)
+      expect(interrupted).toEqual([{ sessionID, reason: "user" }])
+      yield* TestClock.adjust("4 seconds")
+      expect(Array.from(yield* RcMap.keys(map.rcMap))).toEqual([ref])
+      yield* TestClock.adjust("2 seconds")
+      expect(Array.from(yield* RcMap.keys(map.rcMap))).toEqual([])
+      expect(interrupted.some((event) => event.reason === "inactivity")).toBe(false)
+      expect((yield* Fiber.join(running))._tag).toBe("Failure")
+    }),
+  )
 })
