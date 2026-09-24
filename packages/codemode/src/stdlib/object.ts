@@ -154,16 +154,7 @@ export const objectGlobal = <R>(ctx: Interpreter<R>) => {
         ),
     ],
     ["hasOwn", 2, (_, args) => hasOwn(enumerableSource(ctx, "Object.hasOwn(...)", args[0]), propertyKey(args[1]))],
-    [
-      "is",
-      2,
-      (_, args) => {
-        if (containsOpaqueReference(args[0]) || containsOpaqueReference(args[1])) {
-          throw invalidData("Object.is requires data values.")
-        }
-        return Object.is(args[0], args[1])
-      },
-    ],
+    ["is", 2, (_, args) => Object.is(args[0], args[1])],
     ["assign", 2, (_, args) => objectAssign(ctx, args)],
     ["fromEntries", 1, (_, args) => objectFromEntries(ctx, args[0])],
   ])

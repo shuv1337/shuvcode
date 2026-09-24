@@ -1,6 +1,15 @@
 {
   "revision": "250f204f23a9249ff204be2baec29600faae7b75",
-  "directories": ["built-ins/Array/prototype", "built-ins/Iterator", "built-ins/String/raw", "language/expressions/tagged-template", "language/statements"],
+  "directories": [
+    "built-ins/Array/prototype",
+    "built-ins/Iterator",
+    "built-ins/Object/is",
+    "built-ins/String/raw",
+    "language/expressions/does-not-equals",
+    "language/expressions/equals",
+    "language/expressions/tagged-template",
+    "language/statements"
+  ],
   "harness": ["assert.js", "sta.js", "compareArray.js", "doneprintHandle.js"],
   "flags": ["module", "raw", "noStrict"],
   "boundaries": {

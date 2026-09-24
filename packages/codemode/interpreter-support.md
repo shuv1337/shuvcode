@@ -207,11 +207,16 @@ ultimate source of truth. Upstream test262 files run verbatim from `test/test262
       non-reference (`delete 0`, `delete f()`) evaluates the operand and is `true`; `delete x` on a variable throws.
 - [x] Coercion helpers and template interpolation accept functions and namespaces: `String(fn)` and `${fn}` give
       `"[object Function]"` rather than the source text, `isNaN(fn)` is `true`.
-- [ ] Operators other than `===`/`!==`, `switch` discriminants and cases, and `Object.is` applied to a function,
-      promise, generator, tool reference, or any object holding one anywhere inside; JavaScript compares by identity or
-      coerces (`fn == null` is `false`, `fn + ""` is its source text), the interpreter throws
-      `TypeError: Binary operators require data values.` The check walks both operands' whole object graphs, so
-      `rows == null` on a large array is slow where `rows === null` is not.
+- [x] `==` and `!=` follow IsLooselyEqual: objects (including functions and tool references) compare by identity, a
+      nullish operand never coerces the other side, and a data object facing a primitive coerces through its built-in
+      primitive form (`fn == null` is `false`, `fn == fn` is `true`, `[1] == 1` and `[1, 2] == "1,2"` are `true`).
+      `switch` matches cases with `===`, so `switch (fn) { case fn: }` selects, and `Object.is` compares any two
+      values. Operators inspect only their direct operands, so `rows == null` on a large array costs the same as
+      `rows === null`, and an object merely holding a function inside (`[fn] + ""`, `-[fn]`) coerces like any other
+      data object (`"[object Function]"`, `NaN`).
+- [ ] Coercing a function, promise, generator, or tool reference itself: `fn + ""`, `-fn`, `fn++`, and `fn == 1`
+      throw `TypeError: Binary operators require data values.` (or the unary/update form) where JavaScript would use
+      the source text or `NaN`.
 - [ ] ToPrimitive on program objects: operators, `Number`/`String`, `Error(message)`, `parseInt` radix, multi-argument
       `Date` construction and `Date.UTC`, and numeric built-in arguments (`Math.max`, `at`, `indexOf` start) should call
       the object's own `valueOf`/`toString` in spec order and surface their throws. Today they use the built-in form

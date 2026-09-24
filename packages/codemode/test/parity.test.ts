@@ -1178,3 +1178,56 @@ describe("sloppy duplicate parameters and for...in targets", () => {
     ).toEqual([["p", "q"], "q", ["p", "q"], "a"])
   })
 })
+
+describe("loose equality and operator gates on opaque references", () => {
+  test("== follows IsLooselyEqual for data values", async () => {
+    expect(
+      await value(`
+        return [null == undefined, "1" == 1, true == 1, "" == 0, [1] == 1, [1, 2] == "1,2",
+          ({}) == "[object Object]", NaN == NaN, ({}) == ({}), null == 0, new Date(0) == 0]
+      `),
+    ).toEqual([true, true, true, true, true, true, true, false, false, false, false])
+  })
+
+  test("functions and tool references compare by identity and are never equal to nullish", async () => {
+    expect(
+      await value(`
+        const fn = () => 1, other = () => 2
+        return [fn == null, fn != null, fn == undefined, fn == fn, fn == other, [fn] == null, ({ f: fn }) == null,
+          [fn] == [fn], tools == null, tools == tools]
+      `),
+    ).toEqual([false, true, false, true, false, false, false, false, false, true])
+  })
+
+  test("coercing an opaque reference against a non-nullish primitive still rejects", async () => {
+    expect((await error(`const fn = () => 1; return fn == 1`)).message).toContain(
+      "Binary operators require data values",
+    )
+    expect((await error(`const fn = () => 1; return fn + ""`)).message).toContain(
+      "Binary operators require data values",
+    )
+    expect((await error(`const fn = () => 1; return -fn`)).message).toContain("Unary operators require data values")
+    expect((await error(`let fn = () => 1; fn++`)).message).toContain("'++' requires a data value")
+  })
+
+  test("switch and Object.is match opaque references by identity", async () => {
+    expect(
+      await value(`
+        const fn = () => 1, other = () => 2
+        const pick = (v) => { switch (v) { case fn: return "fn"; case other: return "other"; default: return "none" } }
+        return [pick(fn), pick(other), pick(1), Object.is(fn, fn), Object.is(fn, other), Object.is(NaN, NaN), Object.is(0, -0)]
+      `),
+    ).toEqual(["fn", "other", "none", true, false, true, false])
+  })
+
+  test("operators look only at their direct operands, so nested functions coerce like other data", async () => {
+    expect(
+      await value(`
+        const fn = () => 1
+        let x = [fn]
+        x++
+        return [[1, [2]] + "", ({ a: 1 }) * 2, [fn] + "", Number.isNaN(-[fn]), Number.isNaN(x), typeof fn, !fn]
+      `),
+    ).toEqual(["1,2", null, "[object Function]", true, true, "function", false])
+  })
+})

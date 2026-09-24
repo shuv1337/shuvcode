@@ -198,6 +198,13 @@ built-ins/Iterator/prototype/drop/limit-tonumber-throws.js  # Expected a Test262
 built-ins/Iterator/prototype/drop/limit-tonumber.js  # Iterator.prototype.drop expects a non-negative count, received NaN.
 built-ins/Iterator/prototype/take/limit-tonumber-throws.js  # Expected a Test262Error but got a RangeError
 built-ins/Iterator/prototype/take/limit-tonumber.js  # Iterator.prototype.take expects a non-negative count, received NaN.
+built-ins/Object/is/not-same-value-x-y-object.js  # Object(number) wrapper objects are not supported; use the primitive value directly.
+built-ins/Object/is/same-value-x-y-object.js  # Object(number) wrapper objects are not supported; use the primitive value directly.
+language/expressions/does-not-equals/S11.9.2_A7.8.js  # #1: (true != {valueOf: function() {return 1}}) === false
+language/expressions/does-not-equals/S11.9.2_A7.9.js  # #1: ({valueOf: function() {return 1}} != true) === false
+language/expressions/equals/S11.9.1_A7.8.js  # #1: ({valueOf: function() {return 1}} == true) === true
+language/expressions/equals/S11.9.1_A7.9.js  # #1: (true == {valueOf: function() {return 1}}) === true
+language/expressions/equals/S9.1_A1_T3.js  # #1: var object = {valueOf: function() {return 1}, toString: function() {return 0}}; object + "" ===
 language/expressions/tagged-template/constructor-invocation.js  # The called value cannot be constructed: user-defined constructors and classes are not supported.
 language/expressions/tagged-template/template-object-frozen-strict.js  # Expected a TypeError to be thrown but no exception was thrown at all
 language/statements/async-generator/dstr/ary-init-iter-get-err-array-prototype.js  # Expected a TypeError to be thrown but no exception was thrown at all
@@ -265,7 +272,5 @@ language/statements/return/S12.9_A1_T6.js  # expected SyntaxError but the progra
 language/statements/return/S12.9_A1_T7.js  # expected SyntaxError but the program ran
 language/statements/return/S12.9_A1_T8.js  # expected SyntaxError but the program ran
 language/statements/return/S12.9_A1_T9.js  # expected SyntaxError but the program ran
-language/statements/switch/S12.11_A1_T4.js  # Switch discriminants must be data values.
-language/statements/switch/scope-lex-open-dflt.js  # Switch discriminants must be data values.
 language/statements/try/dstr/ary-init-iter-get-err-array-prototype.js  # Expected a TypeError to be thrown but no exception was thrown at all
 language/statements/variable/dstr/ary-init-iter-get-err-array-prototype.js  # Expected a TypeError to be thrown but no exception was thrown at all
