@@ -55,6 +55,7 @@ function context(input?: {
     },
     data: {
       session: {
+        get: (id: string) => input?.sessions?.find((session) => session.id === id),
         list: () => input?.sessions ?? [],
         status: (id: string) => input?.status?.[id] ?? "idle",
       },
@@ -134,13 +135,15 @@ test("sidebar groups direct children by agent and hides nested descendants", asy
   }
 })
 
-test("sidebar lists a child's own descendants when that session is current", async () => {
+test("sidebar lists siblings and own descendants when a child session is current", async () => {
   const app = await testRender(
     () => (
       <SidebarSubagents
         context={context({
           sessions: [
+            child({ id: "session", parentID: "", title: "Parent" }),
             child({ id: "general-1", parentID: "session", agent: "general", title: "Diagnose auth" }),
+            child({ id: "general-2", parentID: "session", agent: "general", title: "Review output" }),
             child({ id: "nested", parentID: "general-1", agent: "explore", title: "Map routes" }),
           ],
         })}
@@ -154,9 +157,11 @@ test("sidebar lists a child's own descendants when that session is current", asy
     await app.renderOnce()
     const frame = app.captureCharFrame()
     expect(frame).toContain("Subagents")
+    expect(frame).toContain("General")
+    expect(frame).toContain("Diagnose auth")
+    expect(frame).toContain("Review output")
     expect(frame).toContain("Explore")
     expect(frame).toContain("Map routes")
-    expect(frame).not.toContain("Diagnose auth")
   } finally {
     app.renderer.destroy()
   }

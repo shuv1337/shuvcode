@@ -122,7 +122,6 @@ export function SessionFrame(props: { sessionID: string; verticalTabsWidth: numb
   )
   const wide = createMemo(() => dimensions().width - props.verticalTabsWidth > 120)
   const sidebarVisible = createMemo(() => {
-    if (data.session.get(props.sessionID)?.parentID) return false
     if (sidebarOpen()) return true
     return (config.data.session?.sidebar ?? "auto") === "auto" && wide()
   })
@@ -345,9 +344,7 @@ export function SessionFrame(props: { sessionID: string; verticalTabsWidth: numb
         <box
           ref={(value: BoxRenderable) => (rightNode = value)}
           flexShrink={0}
-          width={
-            fullscreen() ? availableWidth() : rightPane() === "sidebar" ? sidebarResize.size() : paneResize.size()
-          }
+          width={fullscreen() ? availableWidth() : rightPane() === "sidebar" ? sidebarResize.size() : paneResize.size()}
           minWidth={0}
           minHeight={0}
         >

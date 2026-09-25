@@ -3,6 +3,7 @@ import type { SessionInfo } from "@opencode/client"
 import { createMemo, For, Show } from "solid-js"
 import { displayLabel } from "@opencode/util/session-title-fallback"
 import { Locale } from "../../util/locale"
+import { sessionFamily } from "../../util/session"
 
 type Collapsed = { root: boolean }
 
@@ -11,15 +12,17 @@ export function SidebarSubagents(props: { context: Plugin.Context; sessionID: st
   const [collapsed, setCollapsed] = props.context.storage.store<Collapsed>("collapsed", {
     initial: { root: false },
   })
-  const children = createMemo(() =>
-    props.context.data.session
-      .list()
-      .filter((session) => session.parentID === props.sessionID)
-      .toSorted((a, b) => a.time.created - b.time.created),
-  )
+  const related = createMemo(() => {
+    const sessions = props.context.data.session.list()
+    const current = props.context.data.session.get(props.sessionID)
+    const items = current?.parentID
+      ? sessionFamily(sessions, props.sessionID).map(({ session }) => session)
+      : sessions.filter((session) => session.parentID === props.sessionID)
+    return items.toSorted((a, b) => a.time.created - b.time.created)
+  })
   const groups = createMemo(() => {
     const map = new Map<string, SessionInfo[]>()
-    children().forEach((session) => {
+    related().forEach((session) => {
       const agent = label(session).agent
       const group = map.get(agent)
       if (!group) {
@@ -31,16 +34,16 @@ export function SidebarSubagents(props: { context: Plugin.Context; sessionID: st
     return [...map.entries()]
   })
   const running = createMemo(
-    () => children().filter((session) => props.context.data.session.status(session.id) === "running").length,
+    () => related().filter((session) => props.context.data.session.status(session.id) === "running").length,
   )
   const open = () => !collapsed.root
   const summary = createMemo(() => {
-    const finished = children().length - running()
+    const finished = related().length - running()
     return `(${[running() > 0 && `${running()} running`, finished > 0 && `${finished} done`].filter(Boolean).join(", ")})`
   })
 
   return (
-    <Show when={children().length > 0}>
+    <Show when={related().length > 0}>
       <box>
         <box
           flexDirection="row"

@@ -127,7 +127,7 @@ test.each([40, 120])("shell completion notices do not navigate at width %s", asy
   }
 })
 
-test.each([40, 120])("subagent completion notices navigate to the child session at width %s", async (width) => {
+test.each([40, 120, 160])("subagent completion notices navigate to the child session at width %s", async (width) => {
   await using state = await tmpdir()
   const setup = await createTestRenderer({ width, height: 20, useThread: false, kittyKeyboard: true })
   setup.renderer.start()
@@ -141,6 +141,7 @@ test.each([40, 120])("subagent completion notices navigate to the child session 
     time: { created: 0, updated: 0 },
   }
   const child = { ...parent, id: "ses_child", title: "Diagnose authentication", parentID: parent.id }
+  const sibling = { ...parent, id: "ses_sibling", title: "Review the fix", parentID: parent.id }
   const messages = [
     { id: "user-0", type: "user", text: "Run a background subagent", time: { created: 0 } },
     {
@@ -154,7 +155,7 @@ test.each([40, 120])("subagent completion notices navigate to the child session 
   ]
   const childMessages = [{ id: "child-user", type: "user", text: "Investigate authentication", time: { created: 0 } }]
   const calls = createFetch((url) => {
-    if (url.pathname === "/api/session") return json({ data: [parent, child], cursor: {} })
+    if (url.pathname === "/api/session") return json({ data: [parent, child, sibling], cursor: {} })
     if (url.pathname === `/api/session/${parent.id}`) return json({ data: parent })
     if (url.pathname === `/api/session/${child.id}`) return json({ data: child })
     if (url.pathname === `/api/session/${parent.id}/message`) return json({ data: messages.toReversed(), cursor: {} })
@@ -187,6 +188,9 @@ test.each([40, 120])("subagent completion notices navigate to the child session 
     const x = lines[y].indexOf("General finished")
     await setup.mockMouse.click(x + 1, y)
     await setup.waitForFrame((frame) => frame.includes("Investigate authentication"))
+    if (width > 120) {
+      await setup.waitForFrame((frame) => frame.includes("Subagents") && frame.includes("Review the fix"))
+    }
   } finally {
     setup.renderer.destroy()
     await task
