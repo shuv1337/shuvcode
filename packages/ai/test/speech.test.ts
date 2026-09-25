@@ -28,10 +28,49 @@ const cartesia = Cartesia.configure({ apiKey: "test", baseURL: "https://cartesia
 const google = Google.configure({ apiKey: "test", baseURL: "https://google.test/v1beta" }).speech(
   "gemini-2.5-flash-preview-tts",
 )
+const google38 = Google.configure({ apiKey: "test", baseURL: "https://google.test/v1beta" }).speech(
+  "gemini-3.8-flash-tts",
+)
+const google38Lite = Google.configure({ apiKey: "test", baseURL: "https://google.test/v1beta" }).speech(
+  "gemini-3.8-flash-lite-tts",
+)
 const deepgram = Deepgram.configure({ apiKey: "test", baseURL: "https://deepgram.test" }).speech("aura-2-thalia-en")
 const voice = "JBFqnCBsd6RMkjVDRZzb"
 
 describe("Speech", () => {
+  it.effect("preserves Google's WAV output instead of describing it as raw PCM", () =>
+    Effect.gen(function* () {
+      const bytes = new TextEncoder().encode("RIFF....WAVEfmt ")
+      const response = yield* Speech.generate({ model: google38, text: "Hi" }).pipe(
+        Effect.provide(
+          respond(
+            JSON.stringify({
+              candidates: [
+                { content: { parts: [{ inlineData: { mimeType: "audio/wav", data: Encoding.encodeBase64(bytes) } }] } },
+              ],
+            }),
+            "application/json",
+          ),
+        ),
+      )
+      expect(response.audio.mediaType).toBe("audio/wav")
+      expect(response.audio.info?.format).toBe("wav")
+      expect(response.audio.info?.encoding).toBeUndefined()
+      expect(yield* response.audio.bytes()).toEqual(bytes)
+    }),
+  )
+
+  it.effect("rejects raw PCM for Gemini 3.8 unary requests before sending", () =>
+    Effect.gen(function* () {
+      const errors = yield* Effect.all(
+        [google38, google38Lite].map((model) =>
+          Speech.generate({ model, text: "Hi", format: "pcm" }).pipe(Effect.flip),
+        ),
+      ).pipe(Effect.provide(layer(() => Effect.die("An unsupported request reached the network"))))
+      expect(errors.map((error) => error.reason._tag)).toEqual(["UnsupportedOperation", "UnsupportedOperation"])
+    }),
+  )
+
   it.effect("rejects what a provider cannot produce before sending anything", () =>
     Effect.gen(function* () {
       const errors = yield* Effect.all(
