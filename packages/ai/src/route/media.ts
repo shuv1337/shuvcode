@@ -2,26 +2,21 @@ import { Effect, Schema, Stream } from "effect"
 import { Headers, HttpClientRequest, type HttpClientResponse } from "effect/unstable/http"
 import { Auth, type AuthInput } from "./auth.js"
 import { Endpoint } from "./endpoint.js"
-import { Service as RequestExecutorService, type Interface } from "./executor-service.js"
+import { RequestExecutorService, type Interface } from "./executor-service.js"
 import { RequestExecutor } from "./executor.js"
 import { MediaProtocol } from "./media-protocol.js"
-import {
-  Generation,
-  resultEvents,
-  type AwaitOptions,
-  type Observation,
-  type Route as GenerationRoute,
-} from "../generation.js"
+import { Generation, isTerminal } from "../generation.js"
 import type { Media } from "../media.js"
-import { ProviderShared } from "../protocols/shared.js"
 import {
   AIError,
   AIErrorReason,
   HttpOptions,
   InvalidRequestError,
   ProviderID,
+  UnsupportedOperationError,
   mergeHttpOptions,
 } from "../schema/index.js"
+import { encodeJson } from "../utils/json.js"
 import { sanitizeSurrogates } from "../utils/sanitize.js"
 
 export type Execute = Interface["execute"]
@@ -41,12 +36,23 @@ export interface ModelInput {
   readonly http?: HttpOptions
 }
 
+/** A provider facade's `configure(...)` input as the `ModelInput` every media selector shares, minus the model id. */
+export const deployment = (
+  input: { readonly baseURL?: string; readonly headers?: Record<string, string>; readonly http?: HttpOptions.Input },
+  auth: Auth.Definition,
+): Omit<ModelInput, "id"> => ({
+  auth,
+  baseURL: input.baseURL,
+  headers: input.headers,
+  http: HttpOptions.make(input.http),
+})
+
 // ---------------------------------------------------------------------------
 // Routes
 // ---------------------------------------------------------------------------
 
 /** One request, one response. */
-export interface Route<Request extends MediaRequest, Response> {
+export interface InlineRoute<Request extends MediaRequest, Response> {
   readonly kind: "inline"
   readonly id: string
   readonly provider: ProviderID
@@ -80,13 +86,11 @@ export interface StreamRoute<Request extends MediaRequest, Event, Response> {
 }
 
 export type AnyRoute<Request extends MediaRequest, Event, Response> =
-  | Route<Request, Response>
+  | InlineRoute<Request, Response>
   | StreamRoute<Request, Event, Response>
   | QueuedRoute<Request, Response>
 
 export interface Composition<Request extends MediaRequest> {
-  readonly id: string
-  readonly provider: string | ProviderID
   readonly endpoint: Endpoint.Definition<MediaProtocol.Body, Request>
   readonly auth: Auth.Definition
   /** Deployment headers applied before transport authentication. */
@@ -115,12 +119,12 @@ export interface StreamInput<Request extends MediaRequest, Event, Response, Fram
  */
 export const inline = <Request extends MediaRequest, Response>(
   input: InlineInput<Request, Response>,
-): Route<Request, Response> => {
+): InlineRoute<Request, Response> => {
   const transport = makeTransport(input)
   return {
     kind: "inline",
-    id: input.id,
-    provider: transport.provider,
+    id: input.protocol.id,
+    provider: input.protocol.provider,
     protocol: input.protocol.id,
     generate: Effect.fn(`MediaRoute.generate`)(function* (request: Request, execute: Execute) {
       const submitted = yield* transport.submit(
@@ -160,16 +164,20 @@ export const queued = <Request extends MediaRequest, Response, Token>(
       transport
         .call("GET", operation.path(token), http, execute)
         .pipe(Effect.flatMap((sent) => operation.decode(sent.response, { token, auth: sent.auth, materialize })))
+    const status = poll(protocol.status)
     const cancel = protocol.cancel
-    const route: GenerationRoute<Response> = {
-      status: poll(protocol.status),
+    const send =
+      cancel === undefined
+        ? undefined
+        : transport.call(cancel.method, cancel.path(token), http, execute).pipe(Effect.asVoid)
+    return {
+      status,
       result: poll(protocol.result),
       cancel:
-        cancel === undefined
-          ? undefined
-          : transport.call(cancel.method, cancel.path(token), http, execute).pipe(Effect.asVoid),
+        send !== undefined && cancel?.activeOnly
+          ? status.pipe(Effect.flatMap((snapshot) => (isTerminal(snapshot.status) ? Effect.void : send)))
+          : send,
     }
-    return route
   }
 
   const start = Effect.fn("MediaRoute.start")(function* (request: Request, execute: Execute) {
@@ -193,7 +201,7 @@ export const queued = <Request extends MediaRequest, Response, Token>(
         (cause) =>
           new AIError({
             reason: new InvalidRequestError({
-              message: `${input.id} cannot resume a generation from this token`,
+              message: `${protocol.id} cannot resume a generation from this token`,
               cause,
             }),
           }),
@@ -203,7 +211,7 @@ export const queued = <Request extends MediaRequest, Response, Token>(
     return new Generation(route, encodeToken(token), yield* route.status)
   })
 
-  return { kind: "queued", id: input.id, provider: transport.provider, protocol: protocol.id, start, resume }
+  return { kind: "queued", id: protocol.id, provider: protocol.provider, protocol: protocol.id, start, resume }
 }
 
 /** Compose a streaming media protocol; `generate` runs the same stream in `generate` mode and folds it with `collect`. */
@@ -255,8 +263,8 @@ export const stream = <Request extends MediaRequest, Event, Response, Frame, Sta
     )
   return {
     kind: "stream",
-    id: input.id,
-    provider: transport.provider,
+    id: protocol.id,
+    provider: protocol.provider,
     protocol: protocol.id,
     stream: (request, execute) => events(request, execute, "stream"),
     generate: (request, execute) =>
@@ -264,67 +272,17 @@ export const stream = <Request extends MediaRequest, Event, Response, Frame, Sta
   }
 }
 
-export const dispatch = <Event, Response>(input: {
-  readonly modality: string
-  readonly execute: Execute
-  readonly responseEvents: (response: Response) => ReadonlyArray<Event>
-}) => {
-  const notQueued = (route: { readonly provider: ProviderID; readonly id: string }, operation: string) =>
-    ProviderShared.unsupportedOperation({
-      operation: `${input.modality}.${operation}`,
-      provider: route.provider,
-      route: route.id,
-      message: `${route.provider}/${route.id} is not a queued route; use generate or stream`,
-    })
-  const start = <Request extends MediaRequest>(route: AnyRoute<Request, Event, Response>, request: Request) => {
-    if (route.kind !== "queued") return Effect.fail(notQueued(route, "start"))
-    return route.start(request, input.execute)
-  }
-  return {
-    start,
-    resume: <Request extends MediaRequest>(
-      route: AnyRoute<Request, Event, Response>,
-      model: MediaRequest["model"],
-      token: unknown,
-    ) => {
-      if (route.kind !== "queued") return Effect.fail(notQueued(route, "resume"))
-      return route.resume(model, token, input.execute)
-    },
-    generate: <Request extends MediaRequest>(
-      route: AnyRoute<Request, Event, Response>,
-      request: Request,
-      options?: AwaitOptions,
-    ) => {
-      if (route.kind !== "queued") return route.generate(request, input.execute)
-      return start(route, request).pipe(Effect.flatMap((generation) => generation.await(options)))
-    },
-    stream: <Request extends MediaRequest>(
-      route: AnyRoute<Request, Event, Response>,
-      request: Request,
-      options?: AwaitOptions,
-    ): Stream.Stream<Event | Observation, AIError> => {
-      if (route.kind === "stream") return route.stream(request, input.execute)
-      if (route.kind === "queued")
-        return Stream.unwrap(
-          start(route, request).pipe(
-            Effect.map((generation) => resultEvents(generation, input.responseEvents, options)),
-          ),
-        )
-      return Stream.fromIterableEffect(Effect.map(route.generate(request, input.execute), input.responseEvents))
-    },
-  }
-}
-
 // ---------------------------------------------------------------------------
 // Transport plumbing shared by every kind
 // ---------------------------------------------------------------------------
 
-const makeTransport = <Request extends MediaRequest>(input: Composition<Request>) => {
-  const provider = ProviderID.make(input.provider)
+const makeTransport = <Request extends MediaRequest>(
+  input: Composition<Request> & { readonly protocol: { readonly id: string; readonly provider: ProviderID } },
+) => {
   const routeHttp = input.headers === undefined ? undefined : new HttpOptions({ headers: input.headers })
   const authorize = Auth.toEffect(input.auth)
-  const baseURL = (path: string) => new URL(`${ProviderShared.trimBaseUrl(input.endpoint.baseURL ?? "")}${path}`)
-  /** `auth` is only what `Auth` added, never deployment headers. */
+  const baseURL = (path: string) => new URL(`${Endpoint.trimBaseUrl(input.endpoint.baseURL ?? "")}${path}`)
+  /** `auth` is only what `Auth` added or changed, never untouched deployment headers. */
   const send = Effect.fn("MediaRoute.send")(function* (
     call: {
       readonly method: AuthInput["method"]
@@ -347,10 +305,12 @@ const makeTransport = <Request extends MediaRequest>(input: Composition<Request>
     const response = yield* execute(
       encoded.apply(HttpClientRequest.make(call.method)(url).pipe(HttpClientRequest.setHeaders(headers))),
     )
-    return { response, auth: Object.fromEntries(Object.entries(headers).filter(([key]) => !(key in call.headers))) }
+    return {
+      response,
+      auth: Object.fromEntries(Object.entries(headers).filter(([key, value]) => encoded.headers[key] !== value)),
+    }
   })
   return {
-    provider,
     /** Route and model overlays; `start` additionally merges the request's own `http`. */
     http: (model: MediaRequest["model"]) => mergeHttpOptions(routeHttp, model.http),
     /** POST the protocol body to the route endpoint. */
@@ -363,7 +323,7 @@ const makeTransport = <Request extends MediaRequest>(input: Composition<Request>
       },
       execute: Execute,
     ) {
-      yield* rejectUnsupported(input.id, provider, request, protocol.unsupported)
+      yield* rejectUnsupported(input.protocol.id, input.protocol.provider, request, protocol.unsupported)
       const http = mergeHttpOptions(routeHttp, request.model.http, request.http)
       const headers = Headers.fromInput(http?.headers)
       const prepared =
@@ -408,7 +368,7 @@ const withQuery = (url: URL, query: MediaProtocol.Query | undefined) => {
 const encode = (body: MediaProtocol.Body | undefined, headers: Headers.Headers) => {
   if (body === undefined) return { text: "", headers, apply: (request: HttpClientRequest.HttpClientRequest) => request }
   if (body.type === "json") {
-    const text = ProviderShared.encodeJson(body.value)
+    const text = encodeJson(body.value)
     return { text, headers, apply: HttpClientRequest.bodyText(text, "application/json") }
   }
   if (body.type === "binary")
@@ -425,7 +385,11 @@ const encode = (body: MediaProtocol.Body | undefined, headers: Headers.Headers) 
   }
 }
 
-/** Common fields are never silently dropped: a present field the protocol declared unsupported fails typed. */
+/**
+ * Common fields are never silently dropped: a present field the protocol declared unsupported fails typed. `false`
+ * counts as present because some booleans mean something when false (video `audio`); protocols reject opt-in
+ * booleans such as speech `timestamps` with `=== true` in `body.from` instead of listing them.
+ */
 const rejectUnsupported = <Request extends object>(
   route: string,
   provider: ProviderID,
@@ -438,11 +402,13 @@ const rejectUnsupported = <Request extends object>(
   })
   if (present.length === 0) return Effect.void
   return Effect.fail(
-    ProviderShared.unsupportedOperation({
-      operation: `media.${present[0]}`,
-      provider,
-      route,
-      message: `${provider}/${route} does not support ${present.join(", ")}`,
+    new AIError({
+      reason: new UnsupportedOperationError({
+        operation: `media.${present[0]}`,
+        provider,
+        route,
+        message: `${provider}/${route} does not support ${present.join(", ")}`,
+      }),
     }),
   )
 }

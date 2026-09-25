@@ -18,7 +18,7 @@ import {
   type Value,
 } from "../interpreter/objects.js"
 import { describeValue, rejectCircularInsertion } from "../interpreter/references.js"
-import { applyCollectionCallback, invoke, preserveConsumerError } from "../interpreter/callback.js"
+import { applyCollectionCallback, invoke, preserveConsumerError, withPrimitives } from "../interpreter/callback.js"
 import type { Interpreter } from "../interpreter/interpreter.js"
 import { compareText } from "../tool-runtime.js"
 
@@ -49,7 +49,7 @@ const arrayFrom = <R>(ctx: Interpreter<R>, args: Array<Value>): Effect.Effect<Va
       const values: Array<Value> = []
       for (let index = 0; index < arrayLike.length; index += 1) {
         const item = get(arrayLike.source, index)
-        values.push(apply === undefined ? item : yield* apply([item, index]))
+        values.push(apply === undefined ? item : yield* apply([item, index], args[2]))
       }
       return new Arr(proto, values)
     }
@@ -59,7 +59,9 @@ const arrayFrom = <R>(ctx: Interpreter<R>, args: Array<Value>): Effect.Effect<Va
       const step = yield* cursor.next
       if (step.done) return new Arr(proto, values)
       values.push(
-        apply === undefined ? step.value : yield* preserveConsumerError(cursor.close, apply([step.value, index])),
+        apply === undefined
+          ? step.value
+          : yield* preserveConsumerError(cursor.close, apply([step.value, index], args[2])),
       )
       index += 1
     }
@@ -146,20 +148,30 @@ export const arrayGlobal = <R>(ctx: Interpreter<R>) => {
       "join",
       1,
       (thisValue, args) => {
-        const joined = self(thisValue, "join")
-          .items.map((item) => coerceToString(item ?? ""))
-          .join(args[0] === undefined ? "," : coerceToString(args[0]))
-        checkStringLength(joined.length)
-        return joined
+        // .map would keep holes, which Effect.forEach would then hand to the body as undefined.
+        const parts = Array.from(self(thisValue, "join").items, (item) => item ?? "")
+        return withPrimitives(
+          ctx,
+          "string",
+          [args[0] === undefined ? "," : args[0], ...parts],
+          ([separator, ...items]) => {
+            const joined = items.map(coerceToString).join(coerceToString(separator))
+            checkStringLength(joined.length)
+            return joined
+          },
+        )
       },
     ],
     [
       "toString",
       0,
       (thisValue) =>
-        self(thisValue, "toString")
-          .items.map((item) => coerceToString(item ?? ""))
-          .join(","),
+        withPrimitives(
+          ctx,
+          "string",
+          Array.from(self(thisValue, "toString").items, (item) => item ?? ""),
+          (items) => items.map(coerceToString).join(","),
+        ),
     ],
     [
       "includes",
@@ -362,7 +374,7 @@ export const arrayGlobal = <R>(ctx: Interpreter<R>) => {
           const values: Array<Value> = []
           for (let index = 0; index < length; index += 1) {
             if (!(index in target.items)) continue
-            const mapped = yield* apply([target.items[index], index, target])
+            const mapped = yield* apply([target.items[index], index, target], args[1])
             if (mapped instanceof Arr) values.push(...mapped.items)
             else values.push(mapped)
           }
@@ -401,7 +413,10 @@ export const callbackMethods = <R, T extends Obj>(
     length,
     (thisValue, args) => {
       const target = self(thisValue, name)
-      return body(elements(target), target, applyCollectionCallback(ctx, args[0], `${label}.${name}`), args)
+      const call = applyCollectionCallback(ctx, args[0], `${label}.${name}`)
+      // reduce and reduceRight take an initial value where the others take a thisArg.
+      const thisArg = name.startsWith("reduce") ? undefined : args[1]
+      return body(elements(target), target, (callbackArgs) => call(callbackArgs, thisArg), args)
     },
   ]
   return [
