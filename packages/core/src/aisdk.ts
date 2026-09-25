@@ -548,8 +548,10 @@ function message(input: LLMRequest["messages"][number]): LanguageModelV3Message[
 function toolMessage(input: LLMRequest["messages"][number]) {
   const media: UserContent = []
   const content = input.content.flatMap((part) => {
-    if (part.type !== "tool-result" || part.result.type !== "content") return toolResultPart(part)
-    const value = part.result.value.filter((item) => {
+    if (part.type !== "tool-result") return toolResultPart(part)
+    const blocks = part.result.type === "content" ? part.result.value : ProviderShared.toolErrorContent(part)
+    if (blocks === undefined) return toolResultPart(part)
+    const kept = blocks.filter((item) => {
       if (item.type !== "file") return true
       if (!item.mime.startsWith("image/") && item.mime !== "application/pdf") return true
       media.push({
@@ -560,12 +562,24 @@ function toolMessage(input: LLMRequest["messages"][number]) {
       })
       return false
     })
+    if (part.result.type === "error") {
+      const text = [ProviderShared.toolResultText(part), ...kept.flatMap((item) => (item.type === "text" ? [item.text] : []))]
+        .filter((item) => item.length > 0)
+        .join("\n")
+      return toolResultPart({
+        ...part,
+        result: {
+          type: "error",
+          value: text.length > 0 ? text : "Media attached in the following user message.",
+        },
+      })
+    }
     return toolResultPart({
       ...part,
       result:
-        value.length === 0
+        kept.length === 0
           ? { type: "text", value: "Media attached in the following user message." }
-          : { ...part.result, value },
+          : { ...part.result, value: kept },
     })
   })
   return {
@@ -649,8 +663,9 @@ function toolResultPart(part: ContentPart): ToolResultContent[] {
 
 function toolOutput(result: ToolResultValue) {
   switch (result.type) {
-    case "text":
     case "error":
+      return { type: "error-text" as const, value: messageValue(result.value) }
+    case "text":
       return { type: "text" as const, value: messageValue(result.value) }
     case "content":
       return {

@@ -1,6 +1,6 @@
 import { describe, expect } from "bun:test"
 import { Effect } from "effect"
-import { LLM, LLMEvent, Message } from "../../src/index.js"
+import { LLM, LLMEvent, Message, ToolCallPart } from "../../src/index.js"
 import { OpenAI } from "../../src/providers.js"
 import { configure } from "../../src/providers/openai-compatible-responses.js"
 import { compileRequest, LLMClient } from "../../src/route/client.js"
@@ -13,6 +13,46 @@ for (const model of [
   configure({ apiKey: "test-key", baseURL: "https://responses.example.test/v1" }).model("example-model"),
 ]) {
   describe(`${model.route.protocol} message replay`, () => {
+    it.effect("lowers rich tool failures without putting data URIs in the error text", () =>
+      Effect.gen(function* () {
+        const uri = "data:image/png;base64,AAECAw=="
+        const value = { error: { type: "tool.execution", message: "snapshot failed" }, content: [] }
+        const prepared = yield* compileRequest(
+          LLM.request({
+            model,
+            messages: [
+              Message.assistant([ToolCallPart.make({ id: "call_1", name: "snapshot", input: {} })]),
+              Message.tool({
+                id: "call_1",
+                name: "snapshot",
+                result: {
+                  type: "error",
+                  value,
+                  content: [
+                    { type: "text", text: "could not capture" },
+                    { type: "file", uri, mime: "image/png", name: "shot.png" },
+                  ],
+                },
+              }),
+            ],
+          }),
+        )
+        const output = prepared.body.input.find((item) => item.type === "function_call_output")
+        expect(output).toMatchObject({
+          type: "function_call_output",
+          call_id: "call_1",
+          output: [
+            { type: "input_text", text: JSON.stringify(value) },
+            { type: "input_text", text: "could not capture" },
+            { type: "input_image", image_url: uri },
+          ],
+        })
+        const text = Array.isArray(output && "output" in output ? output.output : undefined)
+          ? output.output.flatMap((item) => (typeof item === "object" && item.type === "input_text" ? [item.text] : []))
+          : []
+        expect(text.join("\n")).not.toContain("data:")
+      }),
+    )
     const key = model.route.providerMetadataKey ?? "openresponses"
 
     it.effect("marks assistant text completed regardless of stored status", () =>

@@ -303,7 +303,8 @@ const lowerToolResults = Effect.fn("MistralChat.lowerToolResults")(function* (
   for (const part of message.content) {
     if (part.type !== "tool-result")
       return yield* ProviderShared.unsupportedContent("Mistral Chat", "tool", ["tool-result"])
-    if (part.result.type !== "content") {
+    const rich = ProviderShared.toolErrorContent(part)
+    if (part.result.type !== "content" && rich === undefined) {
       output.push({
         role: "tool",
         tool_call_id: normalizeID(part.id),
@@ -312,8 +313,10 @@ const lowerToolResults = Effect.fn("MistralChat.lowerToolResults")(function* (
       })
       continue
     }
-    const content: MistralUserContent[] = []
-    for (const item of part.result.value) {
+    const blocks = part.result.type === "content" ? part.result.value : rich!
+    const content: MistralUserContent[] =
+      part.result.type === "error" ? [{ type: "text", text: ProviderShared.toolResultText(part) }] : []
+    for (const item of blocks) {
       if (item.type === "text") {
         content.push({ type: "text", text: item.text })
         continue

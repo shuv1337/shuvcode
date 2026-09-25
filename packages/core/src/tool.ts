@@ -4,7 +4,7 @@ export type { Context, Metadata, Namespace, Options, Result } from "@opencode/sc
 
 import { ToolDefinition, type ToolCall } from "@opencode/ai"
 import { Tool } from "@opencode/schema/tool"
-import { Context, Effect, Layer, Result, Schema, SchemaIssue, Types } from "effect"
+import { Context, Effect, Layer, Option, Result, Schema, SchemaIssue, Types } from "effect"
 import { makeLocationNode } from "@opencode/util/effect/app-node"
 import type { Agent } from "./agent.js"
 import { CodeModeCatalog } from "./codemode/catalog.js"
@@ -15,7 +15,8 @@ import { PluginHooks } from "./plugin/hooks.js"
 import { SessionMessage } from "./session/message.js"
 import { SessionSchema } from "./session/schema.js"
 import { State } from "./state.js"
-import { definition, effectiveName, execute, normalizedName, normalizeContent } from "./tool/runtime.js"
+import { adoptToolError, definition, effectiveName, execute, normalizedName, normalizeContent } from "./tool/runtime.js"
+import { ToolActivity } from "./tool-activity.js"
 import { Wildcard } from "./util/wildcard.js"
 
 export class RegistrationError extends Schema.TaggedError<RegistrationError>()("Tool.RegistrationError", {
@@ -100,6 +101,20 @@ const layer = Layer.effect(
       ]
     })
 
+    const settleFailure = (error: Tool.Error) =>
+      Effect.gen(function* () {
+        const adopted = adoptToolError(error) ?? error
+        const raw = adopted.content
+        if (raw === undefined || (typeof raw !== "string" && raw.length === 0)) return yield* adopted
+        const content = yield* normalizeImages(normalizeContent(raw))
+        return yield* new Tool.Error({
+          message: adopted.message,
+          ...(adopted.error === undefined ? {} : { error: adopted.error }),
+          ...(adopted.metadata === undefined ? {} : { metadata: adopted.metadata }),
+          content,
+        })
+      })
+
     const beforeExecute = (name: string, input: unknown, context: Tool.Context) =>
       hooks.trigger("tool", "execute.before", {
         tool: name,
@@ -135,7 +150,7 @@ const layer = Layer.effect(
           error: execution.failure,
         }
         yield* hooks.trigger("tool", "execute.after", afterEvent)
-        return yield* afterEvent.error
+        return yield* (adoptToolError(afterEvent.error) ?? afterEvent.error)
       }
       const afterEvent: PluginHooks.Domains["tool"]["execute.after"] = {
         ...base,
@@ -254,6 +269,28 @@ const layer = Layer.effect(
               ? catalog.value
               : CodeModeTool.catalog(codeModeCatalogInventory)
           if (codeModeCatalog) catalog = { data, names, value: codeModeCatalog }
+          const executeCall = Effect.fnUntraced(function* (input: Parameters<Snapshot["execute"]>[0]) {
+            const context: Tool.Context = {
+              sessionID: input.sessionID,
+              agent: input.agent,
+              messageID: input.messageID,
+              id: Tool.CallID.make(input.call.id),
+              progress: input.progress ?? (() => Effect.void),
+            }
+            const event = yield* beforeExecute(input.call.name, input.call.input, context)
+            const requested = input.definitions?.get(event.tool)
+            // Preserve session context removal and alias resolution, now after the repair hook.
+            if (!requested && input.definitions && (direct.has(event.tool) || codeModeTool?.name === event.tool))
+              return yield* new Tool.Error({ message: `Tool is not available for this request: ${event.tool}` })
+            const name = requested?.name ?? event.tool
+            if (name === "execute" && codeModeTool)
+              return yield* executeTool(codeModeTool, name, event.input, context)
+            const tool = direct.get(name)
+            if (tool) return yield* executeTool(tool, name, event.input, context)
+            return yield* new Tool.Error({
+              message: `No tool named "${name}" is currently available. Please use a tool from the available tool list.`,
+            })
+          })
           return {
             ...(codeModeCatalog === undefined ? {} : { codeModeCatalog }),
             definitions: [
@@ -263,26 +300,10 @@ const layer = Layer.effect(
               ...(codeModeTool ? [definition(codeModeTool)] : []),
             ],
             execute: Effect.fnUntraced(function* (input: Parameters<Snapshot["execute"]>[0]) {
-              const context: Tool.Context = {
-                sessionID: input.sessionID,
-                agent: input.agent,
-                messageID: input.messageID,
-                id: Tool.CallID.make(input.call.id),
-                progress: input.progress ?? (() => Effect.void),
-              }
-              const event = yield* beforeExecute(input.call.name, input.call.input, context)
-              const requested = input.definitions?.get(event.tool)
-              // Preserve session context removal and alias resolution, now after the repair hook.
-              if (!requested && input.definitions && (direct.has(event.tool) || codeModeTool?.name === event.tool))
-                return yield* new Tool.Error({ message: `Tool is not available for this request: ${event.tool}` })
-              const name = requested?.name ?? event.tool
-              if (name === "execute" && codeModeTool)
-                return yield* executeTool(codeModeTool, name, event.input, context)
-              const tool = direct.get(name)
-              if (tool) return yield* executeTool(tool, name, event.input, context)
-              return yield* new Tool.Error({
-                message: `No tool named "${name}" is currently available. Please use a tool from the available tool list.`,
-              })
+              const activity = yield* Effect.serviceOption(ToolActivity.Service)
+              const run = executeCall(input).pipe(Effect.catchTag("Tool.Error", settleFailure))
+              if (Option.isNone(activity)) return yield* run
+              return yield* activity.value.lease(input.sessionID).pipe(Effect.andThen(run), Effect.scoped)
             }),
           }
         }),

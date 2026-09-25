@@ -36,7 +36,17 @@ export const dispatch = (tools: Tools, call: ToolCallPart): Effect.Effect<Dispat
   return decodeAndExecute(tool, call).pipe(
     Effect.map((value) => result(call, value)),
     Effect.catchTag("Tool.Error", (failure) =>
-      Effect.succeed(result(call, { type: "error", value: failure.message }, failure.error)),
+      Effect.succeed(
+        result(
+          call,
+          {
+            type: "error",
+            value: failure.message,
+            ...failureContent(failure.content),
+          },
+          failure.error,
+        ),
+      ),
     ),
   )
 }
@@ -70,6 +80,12 @@ const decodeAndExecute = (tool: AnyTool, call: ToolCallPart): Effect.Effect<Tool
       ),
     ),
   )
+
+const failureContent = (content: ToolFailure["content"]) => {
+  if (content === undefined || content.length === 0) return {}
+  if (typeof content === "string") return { content: [{ type: "text" as const, text: content }] }
+  return { content }
+}
 
 const result = (call: ToolCallPart, value: ToolResultValueType | ToolSettlement, error?: unknown): DispatchResult => {
   const settlement = ToolResultValue.is(value) ? { result: value } : value

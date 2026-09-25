@@ -794,6 +794,97 @@ describe("Anthropic Messages route", () => {
     }),
   )
 
+  it.effect("lowers remote failure images through the same blocks as success", () =>
+    Effect.gen(function* () {
+      const https = "https://example.com/shot.png"
+      const file = "file:///tmp/shot.png"
+      const blocks = [
+        { type: "text" as const, text: "remote" },
+        { type: "file" as const, uri: https, mime: "image/png", name: "shot.png" },
+        { type: "file" as const, uri: file, mime: "image/png", name: "local.png" },
+      ]
+      const media = (body: AnthropicMessages.AnthropicMessagesBody) => {
+        const content = expectToolResult(body).content
+        return Array.isArray(content) ? content.filter((item) => item.type === "image") : []
+      }
+      const success = yield* compileRequest(
+        LLM.request({
+          model,
+          cache: "none",
+          messages: [
+            Message.assistant([ToolCallPart.make({ id: "call_1", name: "snapshot", input: {} })]),
+            Message.tool({ id: "call_1", name: "snapshot", resultType: "content", result: blocks }),
+          ],
+        }),
+      )
+      const failure = yield* compileRequest(
+        LLM.request({
+          model,
+          cache: "none",
+          messages: [
+            Message.assistant([ToolCallPart.make({ id: "call_1", name: "snapshot", input: {} })]),
+            Message.tool({
+              id: "call_1",
+              name: "snapshot",
+              result: {
+                type: "error",
+                value: { error: { type: "tool.execution", message: "snapshot failed" }, content: [] },
+                content: blocks,
+              },
+            }),
+          ],
+        }),
+      )
+      expect(media(failure.body)).toEqual(media(success.body))
+      expect(media(success.body)).toEqual([
+        { type: "image", source: { type: "url", url: https } },
+        { type: "image", source: { type: "base64", media_type: "image/png", data: file } },
+      ])
+    }),
+  )
+
+  it.effect("lowers rich tool failures with is_error and image content", () =>
+    Effect.gen(function* () {
+      const uri = "data:image/png;base64,AAECAw=="
+      const prepared = yield* compileRequest(
+        LLM.request({
+          model,
+          cache: "none",
+          messages: [
+            Message.assistant([ToolCallPart.make({ id: "call_1", name: "snapshot", input: {} })]),
+            Message.tool({
+              id: "call_1",
+              name: "snapshot",
+              result: {
+                type: "error",
+                value: { error: { type: "tool.execution", message: "snapshot failed" }, content: [] },
+                content: [
+                  { type: "text", text: "could not capture" },
+                  { type: "file", uri, mime: "image/png", name: "shot.png" },
+                ],
+              },
+            }),
+          ],
+        }),
+      )
+
+      const result = expectToolResult(prepared.body)
+      expect(result.is_error).toBe(true)
+      expect(result.content).toEqual([
+        {
+          type: "text",
+          text: JSON.stringify({ error: { type: "tool.execution", message: "snapshot failed" }, content: [] }),
+        },
+        { type: "text", text: "could not capture" },
+        { type: "image", source: { type: "base64", media_type: "image/png", data: "AAECAw==" } },
+      ])
+      const text = Array.isArray(result.content)
+        ? result.content.flatMap((item) => (item.type === "text" ? [item.text] : [])).join("\n")
+        : result.content
+      expect(text).not.toContain("data:")
+    }),
+  )
+
   it.effect("prepares the composed native continuation request", () =>
     Effect.gen(function* () {
       const prepared = yield* compileRequest(

@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test"
 import { ConfigProvider, Effect } from "effect"
 import { HttpClientRequest } from "effect/unstable/http"
-import { LLM, LLMEvent, Message, ToolDefinition, Media } from "../../src/index.js"
+import { LLM, LLMEvent, Message, ToolCallPart, ToolDefinition, Media } from "../../src/index.js"
 import { Mistral } from "../../src/providers/index.js"
 import { MistralChat } from "../../src/protocols/index.js"
 import { LLMClient } from "../../src/route.js"
@@ -261,6 +261,49 @@ describe("Mistral Chat", () => {
           ],
         },
       ])
+    }),
+  )
+
+  it.effect("lowers rich tool failures as error text beside media", () =>
+    Effect.gen(function* () {
+      const uri = "data:image/png;base64,AAECAw=="
+      const value = { error: { type: "tool.execution", message: "snapshot failed" }, content: [] }
+      const prepared = yield* compileRequest(
+        LLM.request({
+          model,
+          messages: [
+            Message.assistant([ToolCallPart.make({ id: "Ab12Cd34E", name: "snapshot", input: {} })]),
+            Message.tool({
+              id: "Ab12Cd34E",
+              name: "snapshot",
+              result: {
+                type: "error",
+                value,
+                content: [
+                  { type: "text", text: "could not capture" },
+                  { type: "file", uri, mime: "image/png", name: "shot.png" },
+                ],
+              },
+            }),
+          ],
+        }),
+      )
+
+      const tool = prepared.body.messages.find((message) => message.role === "tool")
+      expect(tool).toEqual({
+        role: "tool",
+        tool_call_id: "Ab12Cd34E",
+        name: "snapshot",
+        content: [
+          { type: "text", text: JSON.stringify(value) },
+          { type: "text", text: "could not capture" },
+          { type: "image_url", image_url: uri },
+        ],
+      })
+      const text = Array.isArray(tool?.content)
+        ? tool.content.flatMap((item) => (item.type === "text" ? [item.text] : [])).join("\n")
+        : String(tool?.content ?? "")
+      expect(text).not.toContain("data:")
     }),
   )
 

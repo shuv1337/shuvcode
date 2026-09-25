@@ -629,6 +629,52 @@ describe("Bedrock Converse route", () => {
     }),
   )
 
+  it.effect("lowers rich tool failures with status error and an image", () =>
+    Effect.gen(function* () {
+      const prepared = yield* compileRequest(
+        LLM.request({
+          model,
+          cache: "none",
+          messages: [
+            Message.assistant([ToolCallPart.make({ id: "tool_1", name: "snapshot", input: {} })]),
+            Message.tool({
+              id: "tool_1",
+              name: "snapshot",
+              result: {
+                type: "error",
+                value: { error: { type: "tool.execution", message: "snapshot failed" }, content: [] },
+                content: [
+                  { type: "text", text: "could not capture" },
+                  { type: "file", uri: "data:image/png;base64,AAAA", mime: "image/png", name: "shot.png" },
+                ],
+              },
+            }),
+          ],
+        }),
+      )
+
+      expect(prepared.body.messages[1]?.content).toEqual([
+        {
+          toolResult: {
+            toolUseId: "tool_1",
+            status: "error",
+            content: [
+              {
+                text: JSON.stringify({ error: { type: "tool.execution", message: "snapshot failed" }, content: [] }),
+              },
+              { text: "could not capture" },
+              { image: { format: "png", source: { bytes: "AAAA" } } },
+            ],
+          },
+        },
+      ])
+      const text = JSON.stringify(
+        prepared.body.messages[1]?.content?.[0]?.toolResult?.content?.filter((item) => "text" in item),
+      )
+      expect(text).not.toContain("data:")
+    }),
+  )
+
   it.effect("decodes text-delta + messageStop + metadata usage from binary event stream", () =>
     Effect.gen(function* () {
       const body = eventStreamBody(

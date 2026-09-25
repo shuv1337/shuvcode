@@ -3,7 +3,7 @@ import type { Agent } from "@opencode/schema/agent"
 import type { Model } from "@opencode/schema/model"
 import type { RelativePath } from "@opencode/schema/schema"
 import type { Snapshot } from "@opencode/schema/snapshot"
-import { Effect, Fiber, Iterable } from "effect"
+import { Deferred, Effect, Fiber, Iterable, Option } from "effect"
 import { isReadonlyArrayNonEmpty } from "effect/Array"
 import { Bus } from "../../bus.js"
 import { SessionEvent } from "../event.js"
@@ -13,6 +13,7 @@ import { SessionError } from "@opencode/schema/session-error"
 import { Money } from "@opencode/schema/money"
 import { SessionUsage } from "../usage.js"
 import type { Tool } from "../../tool.js"
+import { ToolActivity } from "../../tool-activity.js"
 
 type Input = {
   readonly sessionID: SessionSchema.ID
@@ -84,6 +85,31 @@ export const createLLMEventPublisher = (bus: Pick<Bus.Interface, "publish">, inp
     progress?: Tool.Metadata
   }
   const tools = new Map<string, ToolState>()
+  const hostedReleases = new Map<string, Effect.Effect<void>>()
+  const trackHosted = (id: string) =>
+    Effect.gen(function* () {
+      if (hostedReleases.has(id)) return
+      const activity = yield* Effect.serviceOption(ToolActivity.Service)
+      if (Option.isNone(activity)) return
+      const done = yield* Deferred.make<void>()
+      const held = yield* Deferred.make<void>()
+      hostedReleases.set(
+        id,
+        Effect.suspend(() => {
+          hostedReleases.delete(id)
+          return Deferred.succeed(done, undefined).pipe(Effect.asVoid)
+        }),
+      )
+      // Child of this fiber, so stream interruption releases the lease even when
+      // the execution scope outlives the drain. Wait until the lease is held so
+      // the call is not visible before the Location is protected.
+      yield* activity.value
+        .lease(input.sessionID)
+        .pipe(Effect.andThen(Deferred.succeed(held, undefined)), Effect.andThen(Deferred.await(done)), Effect.scoped)
+        .pipe(Effect.forkChild({ startImmediately: true }))
+      yield* Deferred.await(held)
+    })
+  const releaseHosted = (id: string) => hostedReleases.get(id) ?? Effect.void
   const failureSnapshot = (tool: { readonly progress?: Tool.Metadata }, metadata?: Tool.Metadata) => {
     if (tool.progress === undefined) return metadata === undefined ? {} : { metadata }
     if (metadata === undefined) return { metadata: tool.progress }
@@ -339,10 +365,16 @@ export const createLLMEventPublisher = (bus: Pick<Bus.Interface, "publish">, inp
 
   const flush = Effect.fn("SessionRunner.flush")(flushFragments)
 
-  const failTool = Effect.fnUntraced(function* (id: string, error: SessionError.Error, metadata?: Tool.Metadata) {
+  const failTool = Effect.fnUntraced(function* (
+    id: string,
+    error: SessionError.Error,
+    metadata?: Tool.Metadata,
+    content?: ReadonlyArray<Tool.Content>,
+  ) {
     const tool = tools.get(id)
     if (!tool || tool.settled) return false
     tool.settled = true
+    yield* releaseHosted(id)
     yield* bus.publish(SessionEvent.Tool.Failed, {
       sessionID: input.sessionID,
       assistantMessageID,
@@ -351,6 +383,7 @@ export const createLLMEventPublisher = (bus: Pick<Bus.Interface, "publish">, inp
         tool.name === "subagent" && error.type === "aborted" && typeof tool.progress?.sessionID === "string"
           ? { ...error, message: `${error.message} (sessionID: ${tool.progress.sessionID})` }
           : error,
+      ...(content !== undefined && isReadonlyArrayNonEmpty(content) ? { content } : {}),
       ...failureSnapshot(tool, metadata),
       executed: tool.providerExecuted,
     })
@@ -464,6 +497,7 @@ export const createLLMEventPublisher = (bus: Pick<Bus.Interface, "publish">, inp
         if (tool.called) return yield* Effect.die(new Error(`Duplicate tool call: ${event.id}`))
         tool.called = true
         tool.providerExecuted = event.providerExecuted === true
+        if (tool.providerExecuted) yield* trackHosted(event.id)
         yield* bus.publish(SessionEvent.Tool.Called, {
           sessionID: input.sessionID,
           assistantMessageID,
@@ -487,14 +521,17 @@ export const createLLMEventPublisher = (bus: Pick<Bus.Interface, "publish">, inp
           return yield* Effect.die(new Error(`Duplicate tool result: ${event.id}`))
         }
         tool.settled = true
+        yield* releaseHosted(event.id)
         const executed = event.providerExecuted === true || tool.providerExecuted
         const resultState = providerState(event.providerMetadata)
         if (event.result.type === "error") {
+          const content = event.result.content
           yield* bus.publish(SessionEvent.Tool.Failed, {
             sessionID: input.sessionID,
             assistantMessageID,
             id: event.id,
             error: { type: "tool.execution", message: stringify(event.result.value) },
+            ...(content !== undefined && isReadonlyArrayNonEmpty(content) ? { content } : {}),
             ...failureSnapshot(tool),
             executed,
             resultState,
@@ -518,6 +555,7 @@ export const createLLMEventPublisher = (bus: Pick<Bus.Interface, "publish">, inp
           return yield* Effect.die(new Error(`Tool error name changed for ${event.id}: ${tool.name} -> ${event.name}`))
         if (tool.settled) return yield* Effect.die(new Error(`Duplicate tool error: ${event.id}`))
         tool.settled = true
+        yield* releaseHosted(event.id)
         yield* bus.publish(SessionEvent.Tool.Failed, {
           sessionID: input.sessionID,
           assistantMessageID,

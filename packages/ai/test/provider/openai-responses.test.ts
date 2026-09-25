@@ -1584,6 +1584,44 @@ describe("OpenAI Responses route", () => {
     }),
   )
 
+  it.effect("lowers rich tool failures as error text plus media, never a data URI in the text", () =>
+    Effect.gen(function* () {
+      const uri = "data:image/png;base64,AAECAw=="
+      const value = { error: { type: "tool.execution", message: "snapshot failed" }, content: [] }
+      const prepared = yield* compileRequest(
+        LLM.request({
+          model,
+          messages: [
+            Message.assistant([ToolCallPart.make({ id: "call_1", name: "snapshot", input: {} })]),
+            Message.tool({
+              id: "call_1",
+              name: "snapshot",
+              result: {
+                type: "error",
+                value,
+                content: [
+                  { type: "text", text: "could not capture" },
+                  { type: "file", uri, mime: "image/png", name: "shot.png" },
+                ],
+              },
+            }),
+          ],
+        }),
+      )
+
+      const output = expectToolOutput(prepared.body).output
+      expect(output).toEqual([
+        { type: "input_text", text: ProviderShared.encodeJson(value) },
+        { type: "input_text", text: "could not capture" },
+        { type: "input_image", image_url: uri },
+      ])
+      const text = Array.isArray(output)
+        ? output.flatMap((item) => (item.type === "input_text" ? [item.text] : [])).join("\n")
+        : String(output)
+      expect(text).not.toContain("data:")
+    }),
+  )
+
   it.effect("keeps primitive tool errors as plain text", () =>
     Effect.gen(function* () {
       const prepared = yield* compileRequest(

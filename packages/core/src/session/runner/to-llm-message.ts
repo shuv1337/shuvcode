@@ -139,11 +139,13 @@ const toolResult = (tool: SessionMessage.AssistantTool, providerMetadata: Provid
     })
   }
   if (tool.state.status === "error") {
+    const value = { error: tool.state.error, content: [] }
+    const rich = tool.state.content
     return ToolResultPart.make({
       id: tool.id,
       name: tool.name,
-      result: { error: tool.state.error, content: tool.state.content ?? [] },
-      resultType: "error",
+      result: rich === undefined ? value : { type: "error", value, content: rich },
+      ...(rich === undefined ? { resultType: "error" as const } : {}),
       providerExecuted: tool.executed,
       providerMetadata,
     })

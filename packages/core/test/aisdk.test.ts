@@ -615,6 +615,76 @@ it.effect("normalizes file data across AI SDK prompt parts", () =>
   }),
 )
 
+it.effect("lowers rich tool failures as error-text plus the media attachment", () =>
+  Effect.gen(function* () {
+    const aisdk = yield* AISDK.Service
+    yield* aisdk.hook.sdk((event) => {
+      event.sdk = { languageModel: () => ({ provider: event.model.providerID }) }
+    })
+    const uri = "data:image/png;base64,AAECAw=="
+    const value = { error: { type: "tool.execution", message: "snapshot failed" }, content: [] }
+    const resolved = yield* aisdk.model(model("opaque-provider"))
+    const prepared = yield* compileRequest(
+      LLM.request({
+        model: resolved,
+        messages: [
+          Message.assistant([
+            { type: "tool-call", id: "call_1", name: "snapshot", input: {} },
+          ]),
+          Message.tool({
+            id: "call_1",
+            name: "snapshot",
+            result: {
+              type: "error",
+              value,
+              content: [
+                { type: "text", text: "could not capture" },
+                { type: "file", uri, mime: "image/png", name: "shot.png" },
+              ],
+            },
+          }),
+        ],
+      }),
+    )
+
+    expect(prepared.body.prompt).toEqual([
+      {
+        role: "assistant",
+        content: [
+          {
+            type: "tool-call",
+            toolCallId: "call_1",
+            toolName: "snapshot",
+            input: {},
+            providerExecuted: undefined,
+            providerOptions: undefined,
+          },
+        ],
+      },
+      {
+        role: "tool",
+        content: [
+          {
+            type: "tool-result",
+            toolCallId: "call_1",
+            toolName: "snapshot",
+            output: { type: "error-text", value: `${JSON.stringify(value)}\ncould not capture` },
+            providerOptions: undefined,
+          },
+        ],
+      },
+      {
+        role: "user",
+        content: [
+          { type: "text", text: "Attached media from tool result:" },
+          { type: "file", mediaType: "image/png", data: "AAECAw==", filename: "shot.png" },
+        ],
+      },
+    ])
+    expect(JSON.stringify(prepared.body.prompt[1])).not.toContain("data:")
+  }),
+)
+
 it.effect("does not treat SSE comment heartbeats as model progress", () =>
   Effect.gen(function* () {
     const aisdk = yield* AISDK.Service

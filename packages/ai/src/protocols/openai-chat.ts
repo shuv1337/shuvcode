@@ -506,7 +506,8 @@ const lowerToolMessages = Effect.fn("OpenAIChat.lowerToolMessages")(function* (
   for (const part of message.content) {
     if (!ProviderShared.supportsContent(part, ["tool-result"]))
       return yield* ProviderShared.unsupportedContent("OpenAI Chat", "tool", ["tool-result"])
-    if (part.result.type !== "content") {
+    const rich = ProviderShared.toolErrorContent(part)
+    if (part.result.type !== "content" && rich === undefined) {
       messages.push({
         role: "tool",
         tool_call_id: options.toolCallID?.(part.id) ?? part.id,
@@ -515,8 +516,11 @@ const lowerToolMessages = Effect.fn("OpenAIChat.lowerToolMessages")(function* (
       })
       continue
     }
-    const content: ReadonlyArray<Tool.Content> = part.result.value
-    const text = content.filter((item) => item.type === "text").map((item) => item.text)
+    const content: ReadonlyArray<Tool.Content> = part.result.type === "content" ? part.result.value : rich!
+    const text = [
+      ...(part.result.type === "error" ? [ProviderShared.toolResultText(part)] : []),
+      ...content.filter((item) => item.type === "text").map((item) => item.text),
+    ]
     messages.push({
       role: "tool",
       tool_call_id: options.toolCallID?.(part.id) ?? part.id,

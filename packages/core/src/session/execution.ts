@@ -14,6 +14,7 @@ import { SessionStore } from "./store.js"
 import { toSessionError } from "./to-session-error.js"
 import { UserInterruptedError } from "./error.js"
 import { SessionInbox } from "./inbox.js"
+import { ToolActivity } from "../tool-activity.js"
 
 export interface Interface {
   /** Snapshots active execution owned by this process. */
@@ -64,6 +65,7 @@ export const layer = Layer.effect(
     const instances = yield* Instance.Service
     const bus = yield* Bus.Service
     const jobs = yield* Job.Service
+    const activity = yield* ToolActivity.Service
     const db = (yield* Database.Service).db
     const reportLifecycle = <A>(sessionID: SessionSchema.ID, effect: Effect.Effect<A>) =>
       effect.pipe(
@@ -99,6 +101,9 @@ export const layer = Layer.effect(
         runner.drain({ sessionID, force, continuation, promotable }),
       ).pipe(
         instances.provide(session),
+        // The drain fiber is forked from this layer's runtime, not the caller's.
+        // Tool execution only keeps its Location active when that fiber can see ToolActivity.
+        Effect.provideService(ToolActivity.Service, activity),
         Effect.tapCause((cause) =>
           Cause.hasInterruptsOnly(cause)
             ? Effect.void
@@ -181,7 +186,7 @@ export const layer = Layer.effect(
 export const node = makeGlobalNode({
   service: Service,
   layer,
-  deps: [SessionStore.node, Instance.node, Bus.node, Database.node, Job.node],
+  deps: [SessionStore.node, Instance.node, Bus.node, Database.node, Job.node, ToolActivity.node],
 })
 
 /** Low-level compatibility layer for callers that only need durable Session recording. */

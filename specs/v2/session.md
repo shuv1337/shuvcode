@@ -54,6 +54,8 @@ Inbox commands own identity and type checks and return typed `SessionInbox.Lifec
 
 `SessionExecution` is process-global and keyed only by Session ID. At drain start it loads the Session, enters its Location through `LocationServiceMap`, and invokes the Location-scoped runner. The runner, model resolution, tools, permissions, plugins, and filesystem remain Location-scoped.
 
+`LocationActivity` evicts a cached Location after an idle window (60 minutes by default). A tool call in flight is not idle, including hooks, hosted calls, and waits for a person (question, permission, or a shell with no timeout). Abandoned waits end when the session is interrupted or stopped. See `docs/location-activity.md`.
+
 `SessionRunCoordinator` provides the local ownership rules:
 
 - Explicit resumes join the active execution for the same Session.

@@ -7,13 +7,21 @@ import { LocationServiceMap } from "./location-service-map.js"
 import { SessionEvent } from "./session/event.js"
 import { SessionExecution } from "./session/execution.js"
 import { SessionStore } from "./session/store.js"
+import { ToolActivity } from "./tool-activity.js"
 import { makeGlobalNode } from "@opencode/util/effect/app-node"
 
 const isSessionEvent = Schema.is(SessionEvent.Durable)
 
 export class Service extends Context.Service<Service, {}>()("@opencode/LocationActivity") {}
 
-export function layer(options: { readonly timeToLive?: Duration.Input; readonly sweepInterval?: Duration.Input } = {}) {
+export function layer(
+  options: {
+    readonly timeToLive?: Duration.Input
+    readonly sweepInterval?: Duration.Input
+    /** Test seam. Runs after an expiry is observed and before the keep-or-interrupt decision. */
+    readonly beforeDecision?: Effect.Effect<void, never, ToolActivity.Service>
+  } = {},
+) {
   return Layer.effect(
     Service,
     Effect.gen(function* () {
@@ -22,6 +30,7 @@ export function layer(options: { readonly timeToLive?: Duration.Input; readonly 
       const locations = yield* LocationServiceMap.Service
       const execution = yield* SessionExecution.Service
       const sessions = yield* SessionStore.Service
+      const activity = yield* ToolActivity.Service
       const timeToLive = Duration.toMillis(options.timeToLive ?? "60 minutes")
       const entries = new Map<string, { readonly ref: Location.Ref; expiresAt: number }>()
       const key = (ref: Location.Ref) => `${LocationServiceMap.canonical(ref).directory}\0${ref.workspaceID ?? ""}`
@@ -39,6 +48,23 @@ export function layer(options: { readonly timeToLive?: Duration.Input; readonly 
         )
       })
       yield* Effect.addFinalizer(() => unsubscribe)
+      const unsubscribeActivity = yield* activity.listen((event) => {
+        if (event.count !== 0) return Effect.void
+        return Effect.gen(function* () {
+          const session = yield* sessions.get(event.sessionID)
+          if (!session) return
+          const id = key(session.location)
+          const cached = Array.from(yield* RcMap.keys(locations.rcMap)).some((ref) => key(ref) === id)
+          if (!cached) return
+          const holding = yield* activity.holding
+          const placed = yield* Effect.forEach(holding, (sessionID) => sessions.get(sessionID))
+          if (placed.some((other) => other && key(other.location) === id)) return
+          // Idle time starts when the last in-flight tool at this Location releases,
+          // not when the next sweep happens to notice.
+          yield* touch(session.location)
+        })
+      })
+      yield* Effect.addFinalizer(() => unsubscribeActivity)
       yield* Effect.gen(function* () {
         yield* Effect.sleep(options.sweepInterval ?? "1 minute")
         const refs = Array.from(yield* RcMap.keys(locations.rcMap))
@@ -50,23 +76,40 @@ export function layer(options: { readonly timeToLive?: Duration.Input; readonly 
         const now = clock.currentTimeMillisUnsafe()
         const expired = Array.from(entries.values()).filter((entry) => entry.expiresAt <= now)
         if (expired.length === 0) return
-        const active = yield* Effect.forEach(yield* execution.active, (sessionID) => sessions.get(sessionID))
+        if (options.beforeDecision) yield* options.beforeDecision
         yield* Effect.forEach(
           expired,
           (entry) =>
             Effect.gen(function* () {
-              const owners = active.flatMap((session) =>
-                session && key(session.location) === key(entry.ref) ? [session] : [],
+              const decision = yield* activity.exclusive(
+                Effect.gen(function* () {
+                  const id = key(entry.ref)
+                  const active = yield* Effect.forEach(yield* execution.active, (sessionID) => sessions.get(sessionID))
+                  const holding = yield* activity.holding
+                  if (active.some((session) => session && holding.has(session.id) && key(session.location) === id)) {
+                    yield* touch(entry.ref)
+                    return { action: "keep" as const }
+                  }
+                  const current = entries.get(id)
+                  if (!current || current.expiresAt > clock.currentTimeMillisUnsafe())
+                    return { action: "keep" as const }
+                  const owners = active.flatMap((session) =>
+                    session && key(session.location) === id ? [session] : [],
+                  )
+                  yield* Effect.forEach(
+                    owners,
+                    (session) => execution.interrupt(session.id, { reason: "inactivity" }),
+                    { discard: true },
+                  )
+                  return { action: "interrupt" as const, owners }
+                }),
               )
-              // Invalidation only detaches the cache entry; borrowers retain the old
-              // graph. Stop its executions and settle tool cleanup before detaching it.
+              if (decision.action === "keep") return
+              // Settlement waits outside the lease lock so a releasing tool can finish.
               yield* Effect.forEach(
-                owners,
+                decision.owners,
                 (session) => execution.interrupt(session.id, { reason: "inactivity", awaitSettlement: true }),
-                {
-                  discard: true,
-                  concurrency: "unbounded",
-                },
+                { discard: true, concurrency: "unbounded" },
               )
               const remaining = yield* Effect.forEach(yield* execution.active, (sessionID) => sessions.get(sessionID))
               // New work admitted during cleanup may now own the cached graph.
@@ -92,5 +135,5 @@ export function layer(options: { readonly timeToLive?: Duration.Input; readonly 
 export const node = makeGlobalNode({
   service: Service,
   layer: layer(),
-  deps: [Bus.node, LocationServiceMap.node, SessionExecution.node, SessionStore.node],
+  deps: [Bus.node, LocationServiceMap.node, SessionExecution.node, SessionStore.node, ToolActivity.node],
 })

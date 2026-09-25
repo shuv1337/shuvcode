@@ -392,7 +392,8 @@ const lowerMessages = Effect.fn("Gemini.lowerMessages")(function* (request: LLMR
     for (const part of message.content) {
       if (!ProviderShared.supportsContent(part, ["tool-result"]))
         return yield* ProviderShared.unsupportedContent("Gemini", "tool", ["tool-result"])
-      if (part.result.type !== "content") {
+      const rich = ProviderShared.toolErrorContent(part)
+      if (part.result.type !== "content" && rich === undefined) {
         parts.push({
           functionResponse: {
             ...(omitCallIds ? {} : { id: part.id }),
@@ -405,8 +406,11 @@ const lowerMessages = Effect.fn("Gemini.lowerMessages")(function* (request: LLMR
         })
         continue
       }
-      const content: ReadonlyArray<Tool.Content> = part.result.value
-      const text = content.filter((item) => item.type === "text").map((item) => item.text)
+      const content: ReadonlyArray<Tool.Content> = part.result.type === "content" ? part.result.value : rich!
+      const text = [
+        ...(part.result.type === "error" ? [ProviderShared.toolResultText(part)] : []),
+        ...content.filter((item) => item.type === "text").map((item) => item.text),
+      ]
       const media: GeminiInlineDataPart[] = []
       for (const item of content) {
         if (item.type === "text") continue

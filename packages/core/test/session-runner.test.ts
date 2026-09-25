@@ -4580,6 +4580,175 @@ describe("SessionRunnerLLM", () => {
     ])
   })
 
+  scenario("keeps rich tool failures failed and out of the next request's error text", function* (s) {
+    const registry = yield* Tool.Service
+    const uri = "data:image/png;base64,aW1hZ2U="
+    yield* transformTools(
+      registry,
+      {
+        snapshot: {
+          name: "snapshot",
+          description: "Fail with an image",
+          input: Schema.Struct({}),
+          output: Schema.Struct({}),
+          execute: () =>
+            new Tool.Error({
+              message: "snapshot failed",
+              content: [
+                { type: "text", text: "could not capture" },
+                { type: "file", uri, mime: "image/png", name: "shot.png" },
+              ],
+            }),
+        },
+      },
+      { codemode: false },
+    )
+    yield* s.admit("Capture")
+    yield* s.llm.push(TestLLM.tool("call-shot", "snapshot", {}), TestLLM.stop())
+    yield* s.resume
+
+    expect(yield* s.context).toMatchObject([
+      Expected.user("Capture"),
+      Expected.assistant({}, [
+        Expected.failedTool({ id: "call-shot" }, { error: { message: "snapshot failed" } }),
+      ]),
+      { type: "assistant", finish: "stop" },
+    ])
+    const stored = (yield* s.context).find((message) => message.type === "assistant" && message.content.some((part) => part.type === "tool" && part.id === "call-shot"))
+    const storedTool = stored?.type === "assistant" ? stored.content.find((part) => part.type === "tool") : undefined
+    expect(storedTool?.type === "tool" && storedTool.state.status).toBe("error")
+    expect(storedTool?.type === "tool" && storedTool.state.status === "error" ? storedTool.state.content : undefined).toEqual(
+      expect.arrayContaining([{ type: "text", text: "could not capture" }]),
+    )
+    const replay = s.requests[1]
+    const failed = replay?.messages
+      .flatMap((message) => message.content)
+      .find((part) => part.type === "tool-result" && part.id === "call-shot")
+    expect(failed?.type).toBe("tool-result")
+    if (failed?.type !== "tool-result" || failed.result.type !== "error") return
+    expect(JSON.stringify(failed.result.value)).not.toContain("data:")
+    expect(failed.result.content?.some((item) => item.type === "file" || item.type === "text")).toBe(true)
+    expect(JSON.stringify(replay)).not.toContain('"status":"completed"')
+  })
+
+  scenario("truncates rich failures with the same rule as success", function* (s) {
+    const registry = yield* Tool.Service
+    const huge = "x".repeat(60 * 1024)
+    const owned = { truncated: false }
+    yield* transformTools(
+      registry,
+      {
+        ok_open: {
+          name: "ok_open",
+          description: "Succeed with an unowned transcript",
+          input: Schema.Struct({}),
+          output: Schema.Struct({}),
+          execute: () => Effect.succeed({ output: {}, content: huge }),
+        },
+        fail_open: {
+          name: "fail_open",
+          description: "Fail with an unowned transcript",
+          input: Schema.Struct({}),
+          output: Schema.Struct({}),
+          execute: () => new Tool.Error({ message: "dump failed", content: huge }),
+        },
+        ok_owned: {
+          name: "ok_owned",
+          description: "Succeed with a tool-owned truncation flag",
+          input: Schema.Struct({}),
+          output: Schema.Struct({}),
+          execute: () => Effect.succeed({ output: {}, content: huge, metadata: owned }),
+        },
+        fail_owned: {
+          name: "fail_owned",
+          description: "Fail with a foreign tool-owned truncation flag",
+          input: Schema.Struct({}),
+          output: Schema.Struct({}),
+          execute: () =>
+            Effect.fail({
+              _tag: "Tool.Error",
+              message: "owned failure",
+              metadata: owned,
+              content: huge,
+            } as never),
+        },
+      },
+      { codemode: false },
+    )
+    yield* s.admit("Compare truncation")
+    yield* s.llm.push(
+      TestLLM.toolCalls(
+        LLMEvent.toolCall({ id: "ok-open", name: "ok_open", input: {} }),
+        LLMEvent.toolCall({ id: "fail-open", name: "fail_open", input: {} }),
+        LLMEvent.toolCall({ id: "ok-owned", name: "ok_owned", input: {} }),
+        LLMEvent.toolCall({ id: "fail-owned", name: "fail_owned", input: {} }),
+      ),
+      TestLLM.stop(),
+    )
+    yield* s.resume
+
+    const context = yield* s.context
+    const state = (id: string) => {
+      const assistant = context.find(
+        (message) => message.type === "assistant" && message.content.some((part) => part.type === "tool" && part.id === id),
+      )
+      const tool = assistant?.type === "assistant" ? assistant.content.find((part) => part.type === "tool" && part.id === id) : undefined
+      if (tool?.type !== "tool" || (tool.state.status !== "completed" && tool.state.status !== "error"))
+        return undefined
+      return tool.state
+    }
+    const openSuccess = state("ok-open")
+    const openFailure = state("fail-open")
+    const ownedSuccess = state("ok-owned")
+    const ownedFailure = state("fail-owned")
+    const text = (content: ReadonlyArray<{ type: string; text?: string }> | undefined) =>
+      content?.flatMap((item) => (item.type === "text" ? [item.text ?? ""] : [])).join("\n") ?? ""
+    const spilled = (value: string) => value.replace(/\n?\.\.\. \d+ bytes truncated; full content saved to .* \.\.\.$/, "")
+
+    expect(openSuccess?.status).toBe("completed")
+    expect(openFailure?.status).toBe("error")
+    expect(openSuccess?.metadata).toMatchObject({ truncated: true })
+    expect(openFailure?.metadata).toMatchObject({ truncated: true })
+    expect(text(openSuccess?.content)).toContain("truncated")
+    expect(spilled(text(openFailure?.content))).toBe(spilled(text(openSuccess?.content)))
+    expect(text(openFailure?.content)).not.toBe(huge)
+
+    expect(ownedSuccess?.status).toBe("completed")
+    expect(ownedFailure?.status).toBe("error")
+    expect(ownedSuccess?.content).toEqual([{ type: "text", text: huge }])
+    expect(ownedFailure?.content).toEqual(ownedSuccess?.content)
+    expect(ownedSuccess?.metadata).toEqual({ truncated: false })
+    expect(ownedFailure?.metadata).toEqual({ truncated: false })
+  })
+
+  scenario("bounds oversized rich failure text before publishing the failure", function* (s) {
+    const registry = yield* Tool.Service
+    yield* transformTools(
+      registry,
+      {
+        dump: {
+          name: "dump",
+          description: "Fail with a huge transcript",
+          input: Schema.Struct({}),
+          output: Schema.Struct({}),
+          execute: () => new Tool.Error({ message: "dump failed", content: "x".repeat(60 * 1024) }),
+        },
+      },
+      { codemode: false },
+    )
+    yield* s.admit("Dump")
+    yield* s.llm.push(TestLLM.tool("call-dump", "dump", {}), TestLLM.stop())
+    yield* s.resume
+
+    const context = yield* s.context
+    const assistant = context.find((message) => message.type === "assistant" && message.content.some((part) => part.type === "tool"))
+    const tool = assistant?.type === "assistant" ? assistant.content.find((part) => part.type === "tool") : undefined
+    expect(tool?.type === "tool" && tool.state.status).toBe("error")
+    if (tool?.type !== "tool" || tool.state.status !== "error") return
+    expect(tool.state.content?.some((item) => item.type === "text" && item.text.includes("truncated"))).toBe(true)
+    expect(tool.state.error.message).toBe("dump failed")
+  })
+
   scenario("interrupts runner continuation on a decline after settling an ordinary tool error", function* (s) {
     const registry = yield* Tool.Service
     yield* transformTools(

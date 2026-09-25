@@ -57,6 +57,8 @@ Tool filtering is catalog visibility, not execution authorization. A call still 
 
 Built-ins return complete tool responses. `Tool.Snapshot.execute` is the local execution boundary. Generic output bounding is applied by the Session runner after execution.
 
+`Tool.Error.content` is optional canonical failure content, the same text and file blocks as a successful result. The snapshot normalizes its images once, and the runner truncates it with successful output before `failTool`. The call stays failed. MCP `isError` content and native session-UI rendering of failure media are not part of this path.
+
 Producer capture remains local to producers. Shell stores combined process output in its backing file and returns a bounded tail with the full-output path when truncated.
 
 ## Current Gaps
