@@ -50,6 +50,8 @@ export const api: ElectronAPI = {
   browserPane: {
     request: (request) => invoke("BrowserPane", { request }),
     send: (request) => send("BrowserPane", { request }),
+    capture: (bindingID, tabID) =>
+      invoke("BrowserPaneCapture", { bindingID, tabID }).then((data) => (data ? toArrayBuffer(data) : null)),
     onEvent: (callback) => listen("BrowserPaneEvent", (value) => callback(value)),
   },
   wslServers: {
