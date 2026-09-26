@@ -1,8 +1,9 @@
-import { autocomplete, intro, log, outro, select, spinner, text } from "@clack/prompts"
+import { intro, log, outro, select, spinner, text } from "@clack/prompts"
 import { Effect, Option } from "effect"
 import type { FormAnswer, IntegrationInfo, OpenCodeClient } from "@opencode/client"
 import { Commands } from "../../commands"
 import { Runtime } from "../../../framework/runtime"
+import { selectIntegration, type IntegrationChoice } from "../../../ui/integration-picker"
 import { handlePromptErrors, openUrl, prompt, requireInteractive } from "../../../ui/prompt"
 import { answerForm, secret } from "./form"
 import {
@@ -21,10 +22,8 @@ const integrationPriority = new Map([
   ["opencode", 1],
   ["openai", 2],
   ["github-copilot", 3],
-  ["google", 4],
-  ["anthropic", 5],
-  ["openrouter", 6],
-  ["vercel", 7],
+  ["anthropic", 4],
+  ["google", 5],
 ])
 
 export default Runtime.handler(
@@ -74,30 +73,35 @@ const findIntegration = Effect.fn("cli.auth.login.integration")(function* (clien
   }
   const integrations = yield* loadIntegrations(client)
   if (target) return yield* resolveIntegration(integrations, target)
-  const available = integrations
+  const choices = loginChoices(integrations)
+  if (choices.length === 0) return yield* Effect.fail(new Error("No authentication integrations are available"))
+  const id = yield* prompt<string>(() => selectIntegration(choices))
+  return yield* resolveIntegration(integrations, id)
+})
+
+export function loginChoices(integrations: IntegrationInfo[]): IntegrationChoice[] {
+  return integrations
     .filter((integration) => connectMethods(integration).length > 0)
     .toSorted(
       (a, b) =>
+        Number(b.metadata?.source === "mcp") - Number(a.metadata?.source === "mcp") ||
         (integrationPriority.get(a.id) ?? integrationPriority.size) -
           (integrationPriority.get(b.id) ?? integrationPriority.size) ||
         a.name.localeCompare(b.name) ||
         a.id.localeCompare(b.id),
     )
-  if (available.length === 0) return yield* Effect.fail(new Error("No authentication integrations are available"))
-  const id = yield* prompt<string>(() =>
-    autocomplete({
-      message: "Select integration",
-      maxItems: 8,
-      options: available.map((integration) => {
-        const option = { value: integration.id, label: integration.name, hint: integration.id }
-        if (integration.connections.length > 0) return { ...option, hint: "connected" }
-        if (integration.id === "opencode") return { ...option, hint: "recommended" }
-        return option
-      }),
-    }),
-  )
-  return yield* resolveIntegration(available, id)
-})
+    .map((integration) => ({
+      value: integration.id,
+      label: integration.name,
+      category:
+        integration.metadata?.source === "mcp"
+          ? "MCP"
+          : integrationPriority.has(integration.id)
+            ? "Popular"
+            : "Services",
+      connected: integration.connections.length > 0,
+    }))
+}
 
 const chooseMethod = Effect.fn("cli.auth.login.method")(function* (methods: ConnectMethod[], target?: string) {
   if (target) return yield* resolveMethod(methods, target)
@@ -143,17 +147,18 @@ const keyLogin = Effect.fn("cli.auth.login.key")(function* (
   )
 })
 
-const oauthLogin = Effect.fn("cli.auth.login.oauth")(function* (
+export const oauthLogin = Effect.fn("cli.auth.login.oauth")(function* (
   client: OpenCodeClient,
   integration: IntegrationInfo,
   method: Extract<ConnectMethod, { type: "oauth" }>,
   answer?: FormAnswer,
+  label?: string,
 ) {
   const progress = spinner()
   progress.start("Starting authorization...")
   const started = yield* request((signal) =>
     client.integration.oauth.connect(
-      { integrationID: integration.id, methodID: method.id, answer, location },
+      { integrationID: integration.id, methodID: method.id, answer, label, location },
       { signal },
     ),
   ).pipe(Effect.tapCause(() => Effect.sync(() => progress.stop("Authentication failed", 1))))
