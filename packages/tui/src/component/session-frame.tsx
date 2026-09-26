@@ -86,6 +86,16 @@ export function SessionFrame(props: { sessionID: string; verticalTabsWidth: numb
   const [sessionWidth, setSessionWidth] = createSignal<number>()
   const [activePane, setActivePane] = createSignal<"session" | "right">("session")
   const [restoreTerminalFocus, setRestoreTerminalFocus] = createSignal(false)
+  createEffect(
+    on(
+      () => props.sessionID,
+      () => {
+        setActivePane("session")
+        setRestoreTerminalFocus(false)
+      },
+      { defer: true },
+    ),
+  )
   let focusTerminal: (() => void) | undefined
   let showTerminals: (() => void) | undefined
   let sessionScroll: ScrollBoxRenderable | undefined
@@ -303,18 +313,23 @@ export function SessionFrame(props: { sessionID: string; verticalTabsWidth: numb
           setSessionWidth(this.width)
         }}
       >
-        <InteractivityProvider enabled={activePane() === "session" && !fullscreen()}>
-          <Session
-            scrollRef={(value) => (sessionScroll = value)}
-            verticalTabsWidth={props.verticalTabsWidth}
-            promptMuted={activePane() !== "session"}
-            sidebarVisible={rightPane() === "sidebar"}
-            onToggleSidebar={toggleSidebar}
-            visibleTerminalID={rightPane() === "terminal" ? selectedTerminal()?.id : undefined}
-            onTerminalPicker={(show) => (showTerminals = show)}
-            width={sessionWidth()}
-          />
-        </InteractivityProvider>
+        {/* Reset chat-local state on navigation without remounting sidebar extensions. */}
+        <Show keyed when={props.sessionID}>
+          {(_) => (
+            <InteractivityProvider enabled={activePane() === "session" && !fullscreen()}>
+              <Session
+                scrollRef={(value) => (sessionScroll = value)}
+                verticalTabsWidth={props.verticalTabsWidth}
+                promptMuted={activePane() !== "session"}
+                sidebarVisible={rightPane() === "sidebar"}
+                onToggleSidebar={toggleSidebar}
+                visibleTerminalID={rightPane() === "terminal" ? selectedTerminal()?.id : undefined}
+                onTerminalPicker={(show) => (showTerminals = show)}
+                width={sessionWidth()}
+              />
+            </InteractivityProvider>
+          )}
+        </Show>
         <Show when={activePane() === "right"}>
           <box
             position="absolute"

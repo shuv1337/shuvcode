@@ -1,6 +1,7 @@
 import { Plugin } from "@opencode/plugin/tui"
 import type { SessionInfo } from "@opencode/client"
 import { createMemo, For, Show } from "solid-js"
+import { isShallowEqual } from "remeda"
 import { displayLabel } from "@opencode/util/session-title-fallback"
 import { Locale } from "../../util/locale"
 import { sessionFamily } from "../../util/session"
@@ -12,14 +13,18 @@ export function SidebarSubagents(props: { context: Plugin.Context; sessionID: st
   const [collapsed, setCollapsed] = props.context.storage.store<Collapsed>("collapsed", {
     initial: { root: false },
   })
-  const related = createMemo(() => {
-    const sessions = props.context.data.session.list()
-    const current = props.context.data.session.get(props.sessionID)
-    const items = current?.parentID
-      ? sessionFamily(sessions, props.sessionID).map(({ session }) => session)
-      : sessions.filter((session) => session.parentID === props.sessionID)
-    return items.toSorted((a, b) => a.time.created - b.time.created)
-  })
+  const related = createMemo(
+    () => {
+      const sessions = props.context.data.session.list()
+      const current = props.context.data.session.get(props.sessionID)
+      const items = current?.parentID
+        ? sessionFamily(sessions, props.sessionID).map(({ session }) => session)
+        : sessions.filter((session) => session.parentID === props.sessionID)
+      return items.toSorted((a, b) => a.time.created - b.time.created)
+    },
+    undefined,
+    { equals: isShallowEqual },
+  )
   const groups = createMemo(() => {
     const map = new Map<string, SessionInfo[]>()
     related().forEach((session) => {
@@ -44,7 +49,7 @@ export function SidebarSubagents(props: { context: Plugin.Context; sessionID: st
 
   return (
     <Show when={related().length > 0}>
-      <box>
+      <box id="sidebar-subagents">
         <box
           flexDirection="row"
           gap={1}

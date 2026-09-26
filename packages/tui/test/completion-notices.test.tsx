@@ -158,6 +158,12 @@ test.each([40, 120, 160])("subagent completion notices navigate to the child ses
     if (url.pathname === "/api/session") return json({ data: [parent, child, sibling], cursor: {} })
     if (url.pathname === `/api/session/${parent.id}`) return json({ data: parent })
     if (url.pathname === `/api/session/${child.id}`) return json({ data: child })
+    if (url.pathname === `/api/session/${sibling.id}`) return json({ data: sibling })
+    if (url.pathname === `/api/session/${sibling.id}/message`)
+      return json({
+        data: [{ id: "sibling-user", type: "user", text: "Review completed work", time: { created: 0 } }],
+        cursor: {},
+      })
     if (url.pathname === `/api/session/${parent.id}/message`) return json({ data: messages.toReversed(), cursor: {} })
     if (url.pathname === `/api/session/${child.id}/message`)
       return json({ data: childMessages.toReversed(), cursor: {} })
@@ -183,6 +189,8 @@ test.each([40, 120, 160])("subagent completion notices navigate to the child ses
   try {
     await setup.waitForFrame((frame) => frame.includes("General finished"))
     await setup.waitForVisualIdle()
+    const sidebar = setup.renderer.root.findDescendantById("session-sidebar-scroll")
+    const subagents = setup.renderer.root.findDescendantById("sidebar-subagents")
     const lines = setup.captureCharFrame().split("\n")
     const y = lines.findIndex((line) => line.includes("General finished"))
     const x = lines[y].indexOf("General finished")
@@ -190,6 +198,18 @@ test.each([40, 120, 160])("subagent completion notices navigate to the child ses
     await setup.waitForFrame((frame) => frame.includes("Investigate authentication"))
     if (width > 120) {
       await setup.waitForFrame((frame) => frame.includes("Subagents") && frame.includes("Review the fix"))
+      expect(sidebar).toBeDefined()
+      expect(sidebar?.isDestroyed).toBe(false)
+      expect(setup.renderer.root.findDescendantById("session-sidebar-scroll")).toBe(sidebar)
+      const rows = setup.captureCharFrame().split("\n")
+      const row = rows.findIndex((line) => line.includes("Review the fix"))
+      await setup.mockMouse.click(rows[row].indexOf("Review the fix") + 1, row)
+      await setup.waitForFrame((frame) => frame.includes("Review completed work"))
+      expect(setup.captureCharFrame()).not.toContain("Investigate authentication")
+      expect(sidebar?.isDestroyed).toBe(false)
+      expect(subagents).toBeDefined()
+      expect(subagents?.isDestroyed).toBe(false)
+      expect(setup.renderer.root.findDescendantById("sidebar-subagents") === subagents).toBe(true)
     }
   } finally {
     setup.renderer.destroy()

@@ -1,6 +1,6 @@
 import { Plugin } from "@opencode/plugin/tui"
 import { QuotaRpc } from "@shuvcode/quota-plugin/rpc"
-import { createMemo, createSignal, For, onCleanup, onMount, Show } from "solid-js"
+import { createEffect, createMemo, createSignal, For, on, onCleanup, onMount, Show } from "solid-js"
 
 /** Client poll interval. The server caches for longer; this only picks up fresh snapshots. */
 const POLL_MS = 60 * 1000
@@ -43,8 +43,8 @@ export function SidebarQuota(props: { context: Plugin.Context; sessionID: string
   const theme = props.context.theme
   const rpc = props.context.client.rpc(QuotaRpc.Definition)
   const session = createMemo(() => props.context.data.session.get(props.sessionID))
-  // Session navigation remounts the sidebar; keeping the last snapshot in memory
-  // prevents the section from collapsing and shifting everything below it.
+  // Keep the last snapshot when the sidebar is hidden and shown again so the
+  // section doesn't collapse while its next request is pending.
   const [state, setState] = props.context.storage.memory<State>("snapshot", {
     initial: { providers: [], loaded: false, unavailable: false },
   })
@@ -85,8 +85,14 @@ export function SidebarQuota(props: { context: Plugin.Context; sessionID: string
     bump = setTimeout(() => void load(refresh), BUMP_MS)
   }
 
+  createEffect(
+    on(
+      () => JSON.stringify(session()?.location),
+      () => void load(),
+    ),
+  )
+
   onMount(() => {
-    void load()
     const poll = setInterval(() => void load(), POLL_MS)
     const tick = setInterval(() => setNow(Date.now()), 30_000)
     const offUpdated = props.context.data.on("credential.updated", () => schedule(true))

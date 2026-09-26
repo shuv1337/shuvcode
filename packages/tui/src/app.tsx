@@ -1365,10 +1365,10 @@ function App() {
                   <Home />
                 </Match>
                 <Match when={route.data.type === "session"}>
-                  <Show when={route.data.type === "session" ? route.data.sessionID : undefined} keyed>
+                  <Show when={route.data.type === "session" ? route.data.sessionID : undefined}>
                     {(sessionID) => (
                       <SessionFrame
-                        sessionID={sessionID}
+                        sessionID={sessionID()}
                         verticalTabsWidth={verticalTabsVisible() ? tabsResize.size() : 0}
                       />
                     )}

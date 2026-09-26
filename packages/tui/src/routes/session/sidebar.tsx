@@ -49,6 +49,7 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean; width?: n
           </title_shimmer>
         </box>
         <scrollbox
+          id="session-sidebar-scroll"
           flexGrow={1}
           minHeight={0}
           scrollAcceleration={scrollAcceleration()}
