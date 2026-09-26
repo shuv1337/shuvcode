@@ -28,6 +28,7 @@ import { moveSelection, reconcileSelectionWindow, revealSelectionOffset } from "
 import { directoryAutocomplete, slashArgumentAutocomplete } from "../../prompt/directory-completion"
 import { usePlugin } from "../../plugin/context"
 import type { PromptAutocompleteProvider } from "@opencode/plugin/tui/context"
+import { skillDollarActive } from "../../feature-plugins/prompt/skill-dollar"
 
 export type AutocompleteRef = {
   onInput: (value: string) => void
@@ -76,6 +77,21 @@ export type AutocompleteOption = {
   queueable?: boolean
 }
 
+export function referenceMentionOptions(input: {
+  terminal: AutocompleteOption[]
+  skills: AutocompleteOption[]
+  references: AutocompleteOption[]
+  agents: AutocompleteOption[]
+  providers: ReadonlyArray<{ readonly id: string; readonly provider: Pick<PromptAutocompleteProvider, "trigger"> }>
+}): AutocompleteOption[] {
+  return [
+    ...input.terminal,
+    ...(skillDollarActive(input.providers) ? [] : input.skills),
+    ...input.references,
+    ...input.agents,
+  ]
+}
+
 type AutocompleteResults = {
   options: AutocompleteOption[]
   failed: boolean
@@ -98,6 +114,7 @@ export function Autocomplete(props: {
   agentStyleId: number
   skillStyleId: number
   hasSkill: (id: string) => boolean
+  hasTerminal: () => boolean
   promptPartTypeId: () => number
 }) {
   const editor = useEditorContext()
@@ -283,6 +300,30 @@ export function Autocomplete(props: {
 
     input.deleteRange(startCursor.row, startCursor.col, endCursor.row, endCursor.col)
     input.insertText(trigger + value + (needsSpace ? " " : ""))
+  }
+
+  function insertTerminal() {
+    if (props.hasTerminal()) return
+    const input = props.input()
+    const cursor = input.cursorOffset
+    input.cursorOffset = store.index
+    const start = input.logicalCursor
+    input.cursorOffset = cursor
+    const end = input.logicalCursor
+    input.deleteRange(start.row, start.col, end.row, end.col)
+    input.insertText("@terminal" + (displayCharAt(props.value, cursor) === " " ? "" : " "))
+    const mention = { start: store.index, end: store.index + stringWidth("@terminal"), text: "@terminal" }
+    const extmark = input.extmarks.create({
+      start: mention.start,
+      end: mention.end,
+      virtual: true,
+      styleId: props.fileStyleId,
+      typeId: props.promptPartTypeId(),
+    })
+    props.setPrompt((draft) => {
+      draft.terminal = { mention }
+      props.setExtmark({ type: "terminal", index: 0 }, extmark)
+    })
   }
 
   function createFilePart(
@@ -486,7 +527,7 @@ export function Autocomplete(props: {
 
   const referenceAliases = createMemo(() =>
     references()
-      .filter((reference) => !reference.hidden)
+      .filter((reference) => !reference.hidden && (!props.sessionID || reference.name !== "terminal"))
       .map(
         (reference): AutocompleteOption => ({
           display: "@" + reference.name,
@@ -598,17 +639,27 @@ export function Autocomplete(props: {
       return [...supplemental, ...fileSearch.options.filter((item) => !paths.has(item.absolute))]
     }
 
-    if (store.visible === "reference" && referenceMatchValue) {
-      return referenceAliasesValue.filter((item) => item.display === `@${referenceMatchValue.name}`)
-    }
-
     // Files come from fff already fuzzy ranked and filtered
     // it shouldn't be additionally sorted by fuzzysort as it will loose the results
     const fileOptions: AutocompleteOption[] = store.visible === "reference" ? fileSearch.options : []
+    const terminalOptions: AutocompleteOption[] =
+      store.visible === "reference" && props.sessionID && !props.hasTerminal()
+        ? [{ display: "@terminal", description: "Current session terminal snapshot", onSelect: insertTerminal }]
+        : []
+    if (store.visible === "reference" && referenceMatchValue) {
+      if (referenceMatchValue.name === "terminal" && terminalOptions.length) return terminalOptions
+      return referenceAliasesValue.filter((item) => item.display === `@${referenceMatchValue.name}`)
+    }
     const nonFileOptions: AutocompleteOption[] = pluginMode
       ? pluginOptionsValue
       : store.visible === "reference"
-        ? [...skillOptions(), ...referenceAliasesValue, ...agentsValue]
+        ? referenceMentionOptions({
+            terminal: terminalOptions,
+            skills: skillOptions(),
+            references: referenceAliasesValue,
+            agents: agentsValue,
+            providers: plugins.autocomplete(),
+          })
         : store.index === 0
           ? [...commandsValue]
           : []
@@ -914,12 +965,7 @@ export function Autocomplete(props: {
       if (fileSearch.failed) return "Could not search directories. Keep typing to try again."
       return "No matching directories"
     }
-    if (
-      store.visible &&
-      store.visible !== "reference" &&
-      store.visible !== "command" &&
-      store.visible !== "directory"
-    )
+    if (store.visible && store.visible !== "reference" && store.visible !== "command" && store.visible !== "directory")
       return "No matching items"
     if (files.loading) return "Searching…"
     if (fileSearch.failed) return "Could not search files. Keep typing to try again."

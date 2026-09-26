@@ -1,12 +1,41 @@
 import { expect, test } from "bun:test"
-import SkillDollar, { skillDollarOptions } from "../../src/feature-plugins/prompt/skill-dollar"
+import SkillDollar, { skillDollarActive, skillDollarOptions } from "../../src/feature-plugins/prompt/skill-dollar"
 import { builtins } from "../../src/plugin/builtins"
+import { referenceMentionOptions } from "../../src/component/prompt/autocomplete"
 
 const skill = (id: string, description?: string) => ({ id, description })
 
 test("ships as the skill dollar builtin", () => {
   expect(SkillDollar.id).toBe("shuv.skill-dollar")
   expect(builtins).toContain(SkillDollar)
+})
+
+test("hides @ skills only while the dollar skill provider is active", () => {
+  expect(skillDollarActive([])).toBe(false)
+  expect(skillDollarActive([{ id: "another-plugin", provider: { trigger: "$" } }])).toBe(false)
+  expect(skillDollarActive([{ id: "shuv.skill-dollar", provider: { trigger: "@" } }])).toBe(false)
+  expect(skillDollarActive([{ id: "shuv.skill-dollar", provider: { trigger: "$" } }])).toBe(true)
+})
+
+test("@ autocomplete restores skills after the dollar provider is removed and preserves other mentions", () => {
+  const options = {
+    terminal: [{ display: "@terminal" }],
+    skills: [{ display: "@research" }],
+    references: [{ display: "@docs" }],
+    agents: [{ display: "@build" }],
+  }
+  const active = [{ id: "shuv.skill-dollar", provider: { trigger: "$" } }]
+  expect(referenceMentionOptions({ ...options, providers: active }).map((item) => item.display)).toEqual([
+    "@terminal",
+    "@docs",
+    "@build",
+  ])
+  expect(referenceMentionOptions({ ...options, providers: [] }).map((item) => item.display)).toEqual([
+    "@terminal",
+    "@research",
+    "@docs",
+    "@build",
+  ])
 })
 
 test("filters and ranks skill matches", () => {

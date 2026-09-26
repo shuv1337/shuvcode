@@ -141,6 +141,19 @@ test("validates terminal copy behavior", () => {
   expect(setting?.default).toBe(process.platform === "win32" ? "manual" : "select")
 })
 
+test("configures the built-in terminal shell independently of the agent shell", () => {
+  expect(decodeInfo({ terminal: { shell: "zsh" } })).toEqual({ terminal: { shell: "zsh" } })
+  expect(decodeInfo({ terminal: { shell: "/usr/local/bin/zsh" } })).toEqual({
+    terminal: { shell: "/usr/local/bin/zsh" },
+  })
+  expect(() => decodeInfo({ terminal: { shell: 3 } })).toThrow()
+  expect(settings.find((setting) => setting.path.join(".") === "terminal.shell")).toMatchObject({
+    category: "Terminal",
+    default: "system",
+    values: ["system", "zsh", "bash", "fish"],
+  })
+})
+
 test("uses command IDs as keybind keys", () => {
   const config = resolve({ keybinds: { "session.list": "ctrl+l" } }, { terminalSuspend: true })
 

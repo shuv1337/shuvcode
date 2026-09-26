@@ -65,6 +65,12 @@ describe("prompt history", () => {
     expect(parsePromptHistory(JSON.stringify(value))).toEqual([value])
   })
 
+  test("retains the terminal mention without persisting snapshot output", () => {
+    const value = { ...entry("check @terminal"), terminal: { mention: { start: 6, end: 15, text: "@terminal" } } }
+    expect(parsePromptHistory(JSON.stringify(value))).toEqual([value])
+    expect(appendPrompt(entry("before"), value).terminal?.mention).toEqual({ start: 14, end: 23, text: "@terminal" })
+  })
+
   test("appends a prompt on a new line and shifts its ranges by display width", () => {
     const output = appendPrompt(
       { ...entry("日本"), pasted: [{ text: "long", source: { start: 0, end: 4, text: "日本" } }] },

@@ -69,6 +69,7 @@ import { directoryRecentValue } from "../../prompt/directory-completion"
 import { useWorkingDirectoryActions } from "../../ui/working-directory-actions"
 import { truncateFilePath } from "../../ui/file-path"
 import { PromptMetadataRow } from "./metadata"
+import { TERMINAL_SNAPSHOT_LINES, terminalSnapshotAttachment } from "./terminal-attachment"
 
 export type PromptProps = {
   sessionID?: string
@@ -778,6 +779,9 @@ export function Prompt(props: PromptProps) {
         ref: { type: "skill" as const, index },
         styleId: skillStyleId,
       })),
+      ...(prompt.terminal
+        ? [{ mention: prompt.terminal.mention, ref: { type: "terminal" as const, index: 0 }, styleId: fileStyleId }]
+        : []),
       ...prompt.pasted.map((part, index) => ({
         mention: part.source,
         ref: { type: "pasted" as const, index },
@@ -813,6 +817,7 @@ export function Prompt(props: PromptProps) {
         const agents: NonNullable<PromptInfo["agents"]> = []
         const skills: NonNullable<PromptInfo["skills"]> = []
         const pasted: PromptInfo["pasted"] = []
+        let terminal: PromptInfo["terminal"]
 
         for (const extmark of allExtmarks) {
           const ref = draft.extmarkToPart.get(extmark.id)
@@ -846,6 +851,14 @@ export function Prompt(props: PromptProps) {
             newMap.set(extmark.id, { type: "skill", index })
             continue
           }
+          if (ref.type === "terminal") {
+            if (!draft.prompt.terminal) continue
+            draft.prompt.terminal.mention.start = extmark.start
+            draft.prompt.terminal.mention.end = extmark.end
+            terminal = draft.prompt.terminal
+            newMap.set(extmark.id, ref)
+            continue
+          }
           const part = draft.prompt.pasted[ref.index]
           if (!part) continue
           part.source.start = extmark.start
@@ -871,6 +884,7 @@ export function Prompt(props: PromptProps) {
         draft.prompt.agents = agents
         draft.prompt.skills = skills
         draft.prompt.pasted = pasted
+        draft.prompt.terminal = terminal
       }),
     )
   }
@@ -1180,6 +1194,10 @@ export function Prompt(props: PromptProps) {
     // (which may have absorbed mid-flight typing). Failure paths restore the
     // snapshot unless the user has started typing something new.
     const currentMode = store.mode
+    if (store.prompt.terminal && (currentMode === "shell" || !props.sessionID)) {
+      toast.show({ message: "@terminal needs an existing session in normal prompt mode", variant: "warning" })
+      return false
+    }
     const entry = { ...store.prompt, mode: currentMode }
     if (trimmed) {
       resetComposer()
@@ -1300,6 +1318,17 @@ export function Prompt(props: PromptProps) {
       })
       return true
     }
+    const terminalFile = entry.terminal
+      ? await client.api.experimental.persistentPty
+          .read({ sessionID: target, lines: TERMINAL_SNAPSHOT_LINES })
+          .then(terminalSnapshotAttachment)
+          .catch((error) => {
+            fail("Failed to attach terminal", error)
+            return undefined
+          })
+      : undefined
+    if (entry.terminal && !terminalFile) return false
+    const files = terminalFile ? [...(entry.files ?? []), terminalFile] : entry.files
     history.append(entry)
     if (currentMode === "shell") {
       move.startSubmit()
@@ -1315,7 +1344,7 @@ export function Prompt(props: PromptProps) {
           sessionID: target,
           name: slashHead.name,
           text: slashHead.arguments,
-          files: entry.files,
+          files,
           agents: entry.agents,
           skills: entry.skills?.length ? entry.skills : undefined,
           delivery,
@@ -1356,7 +1385,7 @@ export function Prompt(props: PromptProps) {
         .prompt({
           sessionID: target,
           text: inputText,
-          files: entry.files,
+          files,
           agents: entry.agents,
           skills: entry.skills?.length ? entry.skills : undefined,
           delivery,
@@ -2009,6 +2038,7 @@ export function Prompt(props: PromptProps) {
         agentStyleId={agentStyleId}
         skillStyleId={skillStyleId}
         hasSkill={(id) => store.prompt.skills?.some((skill) => skill.id === id) ?? false}
+        hasTerminal={() => !!store.prompt.terminal}
         promptPartTypeId={() => promptPartTypeId}
       />
     </>

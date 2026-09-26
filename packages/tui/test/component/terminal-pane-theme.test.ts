@@ -25,7 +25,7 @@ test.each(["light", "dark"] as const)("builds the %s ANSI palette from semantic 
     ...normal.slice(0, -1).map((color) => theme.decrease(color)),
     brightWhite,
   ]
-  const output = terminalPalette(theme, mode, theme.background.raised.base).toString()
+  const output = terminalPalette(theme, mode, theme.background.base).toString()
   const palette = [...output.matchAll(/\]4;(\d+);(#[0-9a-f]+)/g)]
 
   expect(palette).toHaveLength(16)
@@ -34,7 +34,7 @@ test.each(["light", "dark"] as const)("builds the %s ANSI palette from semantic 
     expect(palette[index]?.[2]).toBe(hex(color))
   })
   expect(output).toContain(`]10;${hex(theme.text.base)}`)
-  expect(output).toContain(`]11;${hex(theme.background.raised.base)}`)
+  expect(output).toContain(`]11;${hex(theme.background.base)}`)
 })
 
 test("falls back to accent when no hue is confidently blue or magenta", () => {
@@ -46,7 +46,7 @@ test("falls back to accent when no hue is confidently blue or magenta", () => {
   } as typeof resolved.hue
   const theme = { ...resolved, hue }
   const palette = [
-    ...terminalPalette(theme, "dark", theme.background.raised.base)
+    ...terminalPalette(theme, "dark", theme.background.base)
       .toString()
       .matchAll(/\]4;(\d+);(#[0-9a-f]+)/g),
   ]

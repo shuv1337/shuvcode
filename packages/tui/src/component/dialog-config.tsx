@@ -308,6 +308,15 @@ export const settings: Setting[] = [
     keywords: ["selection", "clipboard"],
   },
   {
+    title: "Built-in terminal shell",
+    category: "Terminal",
+    path: ["terminal", "shell"],
+    default: "system",
+    values: ["system", "zsh", "bash", "fish"],
+    labels: ["system default", "zsh", "bash", "fish"],
+    keywords: ["pane", "shell", "zsh", "bash", "fish"],
+  },
+  {
     title: "Developer tools",
     category: "Debug",
     path: ["debug", "devtools"],

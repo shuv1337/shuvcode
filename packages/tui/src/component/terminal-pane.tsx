@@ -156,7 +156,7 @@ export function TerminalPane(props: {
 
   createEffect(() => {
     const tokens = themes.currentTokens()
-    terminalTheme = terminalPalette(tokens, themes.mode(), tokens.background.raised.base)
+    terminalTheme = terminalPalette(tokens, themes.mode(), tokens.background.base)
     applyTerminalTheme()
   })
 
@@ -284,7 +284,7 @@ export function TerminalPane(props: {
       minWidth={0}
       minHeight={0}
       overflow="hidden"
-      backgroundColor={themes.currentTokens().background.raised.base}
+      backgroundColor={themes.currentTokens().background.base}
       onSizeChange={function () {
         size = { cols: Math.max(1, this.width - 2), rows: this.height }
         if (controller && restored) interact()

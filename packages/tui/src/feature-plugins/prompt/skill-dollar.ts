@@ -1,7 +1,13 @@
 import { Plugin } from "@opencode/plugin/tui"
-import type { PromptAutocompleteOption } from "@opencode/plugin/tui/context"
+import type { PromptAutocompleteOption, PromptAutocompleteProvider } from "@opencode/plugin/tui/context"
 
 type SkillOption = { readonly id: string; readonly description?: string }
+
+export function skillDollarActive(
+  providers: ReadonlyArray<{ readonly id: string; readonly provider: Pick<PromptAutocompleteProvider, "trigger"> }>,
+) {
+  return providers.some((entry) => entry.id === "shuv.skill-dollar" && entry.provider.trigger === "$")
+}
 
 export function skillDollarOptions(skills: readonly SkillOption[], query: string): PromptAutocompleteOption[] {
   const needle = query.toLowerCase()

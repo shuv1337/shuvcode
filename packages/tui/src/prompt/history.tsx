@@ -19,11 +19,12 @@ export type PastedText = {
 
 export type PromptInfo = Types.DeepMutable<Pick<PromptInput.Prompt, "text" | "files" | "agents" | "skills">> & {
   pasted: PastedText[]
+  terminal?: { mention: { start: number; end: number; text: string } }
   mode?: "normal" | "shell"
 }
 
 export type PromptPartRef = {
-  type: "file" | "agent" | "skill" | "pasted"
+  type: "file" | "agent" | "skill" | "pasted" | "terminal"
   index: number
 }
 
@@ -50,6 +51,11 @@ export function appendPrompt(prompt: PromptInfo, following: PromptInfo): PromptI
     files: mentions(prompt.files, following.files),
     agents: mentions(prompt.agents, following.agents),
     skills: mentions(prompt.skills, following.skills),
+    ...(following.terminal
+      ? { terminal: { mention: shift(following.terminal.mention, offset) } }
+      : prompt.terminal
+        ? { terminal: { mention: shift(prompt.terminal.mention, 0) } }
+        : {}),
     pasted: [
       ...prompt.pasted.map((part) => ({ ...part, source: shift(part.source, 0) })),
       ...following.pasted.map((part) => ({ ...part, source: shift(part.source, offset) })),
