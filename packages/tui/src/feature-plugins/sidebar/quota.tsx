@@ -8,7 +8,8 @@ const POLL_MS = 60 * 1000
 const BUMP_MS = 4 * 1000
 
 type Provider = QuotaRpc.Provider
-type State = { readonly providers: readonly Provider[]; readonly loaded: boolean; readonly unavailable: boolean }
+// Mutable: storage.memory mutations edit a draft of this shape in place.
+type State = { providers: readonly Provider[]; loaded: boolean; unavailable: boolean }
 // Mutable: storage.store mutations edit a draft of this shape in place.
 type Collapsed = { root: boolean; providers: Record<string, boolean> }
 
@@ -38,11 +39,15 @@ function bar(remaining: number, width: number) {
   return "█".repeat(filled) + "░".repeat(width - filled)
 }
 
-function View(props: { context: Plugin.Context; sessionID: string }) {
+export function SidebarQuota(props: { context: Plugin.Context; sessionID: string }) {
   const theme = props.context.theme
   const rpc = props.context.client.rpc(QuotaRpc.Definition)
   const session = createMemo(() => props.context.data.session.get(props.sessionID))
-  const [state, setState] = createSignal<State>({ providers: [], loaded: false, unavailable: false })
+  // Session navigation remounts the sidebar; keeping the last snapshot in memory
+  // prevents the section from collapsing and shifting everything below it.
+  const [state, setState] = props.context.storage.memory<State>("snapshot", {
+    initial: { providers: [], loaded: false, unavailable: false },
+  })
   const [now, setNow] = createSignal(Date.now())
   const [collapsed, setCollapsed] = props.context.storage.store<Collapsed>("collapsed", {
     initial: { root: false, providers: {} },
@@ -55,12 +60,21 @@ function View(props: { context: Plugin.Context; sessionID: string }) {
     try {
       const result = await rpc.list({ refresh }, location ? { location } : undefined)
       if (current !== generation) return
-      setState({ providers: result.providers, loaded: true, unavailable: false })
+      setState((draft) => {
+        draft.providers = result.providers
+        draft.loaded = true
+        draft.unavailable = false
+      })
     } catch (error) {
       if (current !== generation) return
-      if (isUnavailable(error)) setState({ providers: [], loaded: true, unavailable: true })
-      // Other failures keep the last snapshot; the next poll retries.
-      else setState((prev) => ({ ...prev, loaded: true }))
+      const unavailable = isUnavailable(error)
+      setState((draft) => {
+        draft.loaded = true
+        // Other failures keep the last snapshot; the next poll retries.
+        if (!unavailable) return
+        draft.providers = []
+        draft.unavailable = true
+      })
     }
     setNow(Date.now())
   }
@@ -83,6 +97,8 @@ function View(props: { context: Plugin.Context; sessionID: string }) {
       schedule(true)
     })
     onCleanup(() => {
+      // The snapshot outlives this view; drop its in-flight result.
+      generation++
       clearInterval(poll)
       clearInterval(tick)
       if (bump) clearTimeout(bump)
@@ -99,15 +115,13 @@ function View(props: { context: Plugin.Context; sessionID: string }) {
   }
 
   const lowest = createMemo(() => {
-    const values = state()
-      .providers.flatMap((provider) => provider.windows)
-      .map((window) => window.remaining)
+    const values = state.providers.flatMap((provider) => provider.windows).map((window) => window.remaining)
     return values.length ? Math.min(...values) : undefined
   })
-  const errors = createMemo(() => state().providers.filter((provider) => provider.status === "error").length)
+  const errors = createMemo(() => state.providers.filter((provider) => provider.status === "error").length)
   // Fits the 42-cell sidebar: "(7% min, 1 error)" rather than listing providers.
   const summary = createMemo(() => {
-    const count = state().providers.length
+    const count = state.providers.length
     const min = lowest()
     const parts = [min === undefined ? `${count} provider${count === 1 ? "" : "s"}` : `${Math.round(min)}% min`]
     if (errors() > 0) parts.push(`${errors()} error${errors() > 1 ? "s" : ""}`)
@@ -120,7 +134,7 @@ function View(props: { context: Plugin.Context; sessionID: string }) {
     void setCollapsed((draft) => void (draft.providers[id] = !(draft.providers[id] === true)))
 
   return (
-    <Show when={state().loaded && !state().unavailable && state().providers.length > 0}>
+    <Show when={state.loaded && !state.unavailable && state.providers.length > 0}>
       <box>
         <box flexDirection="row" gap={1} minWidth={0} onMouseDown={toggleRoot}>
           <text fg={theme.text.base} flexShrink={0}>
@@ -134,7 +148,7 @@ function View(props: { context: Plugin.Context; sessionID: string }) {
           </text>
         </box>
         <Show when={rootOpen()}>
-          <For each={state().providers}>
+          <For each={state.providers}>
             {(provider) => {
               const min = createMemo(() =>
                 provider.windows.length ? Math.min(...provider.windows.map((window) => window.remaining)) : undefined,
@@ -189,7 +203,14 @@ function View(props: { context: Plugin.Context; sessionID: string }) {
                       {(window) => (
                         <box paddingLeft={4} minWidth={0}>
                           <box flexDirection="row" gap={1} minWidth={0}>
-                            <text fg={theme.text.base} wrapMode="none" truncate flexGrow={1} flexShrink={1} minWidth={0}>
+                            <text
+                              fg={theme.text.base}
+                              wrapMode="none"
+                              truncate
+                              flexGrow={1}
+                              flexShrink={1}
+                              minWidth={0}
+                            >
                               {window.label}
                             </text>
                             <text fg={color(window.remaining)} wrapMode="none" flexShrink={0}>
@@ -225,7 +246,7 @@ export default Plugin.define({
   setup(context) {
     context.ui.slot({
       prepend: "sidebar.content",
-      render: (props) => <View context={context} sessionID={props.sessionID} />,
+      render: (props) => <SidebarQuota context={context} sessionID={props.sessionID} />,
     })
   },
 })
