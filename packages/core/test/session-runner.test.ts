@@ -4609,17 +4609,18 @@ describe("SessionRunnerLLM", () => {
 
     expect(yield* s.context).toMatchObject([
       Expected.user("Capture"),
-      Expected.assistant({}, [
-        Expected.failedTool({ id: "call-shot" }, { error: { message: "snapshot failed" } }),
-      ]),
+      Expected.assistant({}, [Expected.failedTool({ id: "call-shot" }, { error: { message: "snapshot failed" } })]),
       { type: "assistant", finish: "stop" },
     ])
-    const stored = (yield* s.context).find((message) => message.type === "assistant" && message.content.some((part) => part.type === "tool" && part.id === "call-shot"))
+    const stored = (yield* s.context).find(
+      (message) =>
+        message.type === "assistant" && message.content.some((part) => part.type === "tool" && part.id === "call-shot"),
+    )
     const storedTool = stored?.type === "assistant" ? stored.content.find((part) => part.type === "tool") : undefined
     expect(storedTool?.type === "tool" && storedTool.state.status).toBe("error")
-    expect(storedTool?.type === "tool" && storedTool.state.status === "error" ? storedTool.state.content : undefined).toEqual(
-      expect.arrayContaining([{ type: "text", text: "could not capture" }]),
-    )
+    expect(
+      storedTool?.type === "tool" && storedTool.state.status === "error" ? storedTool.state.content : undefined,
+    ).toEqual(expect.arrayContaining([{ type: "text", text: "could not capture" }]))
     const replay = s.requests[1]
     const failed = replay?.messages
       .flatMap((message) => message.content)
@@ -4690,9 +4691,13 @@ describe("SessionRunnerLLM", () => {
     const context = yield* s.context
     const state = (id: string) => {
       const assistant = context.find(
-        (message) => message.type === "assistant" && message.content.some((part) => part.type === "tool" && part.id === id),
+        (message) =>
+          message.type === "assistant" && message.content.some((part) => part.type === "tool" && part.id === id),
       )
-      const tool = assistant?.type === "assistant" ? assistant.content.find((part) => part.type === "tool" && part.id === id) : undefined
+      const tool =
+        assistant?.type === "assistant"
+          ? assistant.content.find((part) => part.type === "tool" && part.id === id)
+          : undefined
       if (tool?.type !== "tool" || (tool.state.status !== "completed" && tool.state.status !== "error"))
         return undefined
       return tool.state
@@ -4742,13 +4747,17 @@ describe("SessionRunnerLLM", () => {
     yield* s.resume
 
     const context = yield* s.context
-    const assistant = context.find((message) => message.type === "assistant" && message.content.some((part) => part.type === "tool"))
+    const assistant = context.find(
+      (message) => message.type === "assistant" && message.content.some((part) => part.type === "tool"),
+    )
     const tool = assistant?.type === "assistant" ? assistant.content.find((part) => part.type === "tool") : undefined
     expect(tool?.type === "tool" && tool.state.status).toBe("error")
     if (tool?.type !== "tool" || tool.state.status !== "error") return
     expect(tool.state.metadata).toMatchObject({ truncated: true })
     expect(
-      tool.state.content?.some((item) => item.type === "text" && /^\[showing .+; full output saved to .+\]$/.test(item.text)),
+      tool.state.content?.some(
+        (item) => item.type === "text" && /^\[showing .+; full output saved to .+\]$/.test(item.text),
+      ),
     ).toBe(true)
     expect(tool.state.content?.some((item) => item.type === "text" && item.text.length >= 60 * 1024)).toBe(false)
     expect(tool.state.error.message).toBe("dump failed")
