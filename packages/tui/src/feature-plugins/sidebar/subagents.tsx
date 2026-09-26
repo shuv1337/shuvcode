@@ -1,6 +1,6 @@
 import { Plugin } from "@opencode/plugin/tui"
 import type { SessionInfo } from "@opencode/client"
-import { createMemo, For, Show } from "solid-js"
+import { createMemo, For, onCleanup, Show } from "solid-js"
 import { isShallowEqual } from "remeda"
 import { displayLabel } from "@opencode/util/session-title-fallback"
 import { Locale } from "../../util/locale"
@@ -10,6 +10,17 @@ type Collapsed = { root: boolean }
 
 export function SidebarSubagents(props: { context: Plugin.Context; sessionID: string }) {
   const theme = props.context.theme
+  let navigation = 0
+  onCleanup(() => navigation++)
+  const navigate = async (sessionID: string) => {
+    const request = ++navigation
+    const previous = props.sessionID
+    // Context rows depend on messages. Load them before changing the sidebar's
+    // session so a first visit cannot collapse and re-expand those rows.
+    await Promise.all([props.context.data.session.sync(sessionID), props.context.data.session.message.sync(sessionID)])
+    if (request !== navigation || props.sessionID !== previous) return
+    props.context.ui.router.navigate({ type: "session", sessionID })
+  }
   const [collapsed, setCollapsed] = props.context.storage.store<Collapsed>("collapsed", {
     initial: { root: false },
   })
@@ -92,7 +103,14 @@ export function SidebarSubagents(props: { context: Plugin.Context; sessionID: st
                         gap={1}
                         paddingLeft={2}
                         minWidth={0}
-                        onMouseUp={() => props.context.ui.router.navigate({ type: "session", sessionID: session.id })}
+                        onMouseUp={() =>
+                          void navigate(session.id).catch(() =>
+                            props.context.ui.toast.show({
+                              variant: "error",
+                              message: "Unable to load subagent session",
+                            }),
+                          )
+                        }
                       >
                         <text flexShrink={0} fg={glyphColor(theme, session, status)}>
                           {glyph(session, status)}

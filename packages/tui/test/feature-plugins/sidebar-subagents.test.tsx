@@ -31,6 +31,7 @@ function context(input?: {
   status?: Record<string, "idle" | "running">
   collapsed?: boolean
   navigate?: (route: unknown) => void
+  loadMessages?: (id: string) => Promise<void>
 }) {
   const collapsed = { root: input?.collapsed === true }
   return {
@@ -55,6 +56,8 @@ function context(input?: {
     },
     data: {
       session: {
+        sync: async () => {},
+        message: { sync: input?.loadMessages ?? (async () => {}) },
         get: (id: string) => input?.sessions?.find((session) => session.id === id),
         list: () => input?.sessions ?? [],
         status: (id: string) => input?.status?.[id] ?? "idle",
@@ -219,6 +222,49 @@ test("sidebar click navigates to the child session", async () => {
     expect(row).toBeGreaterThanOrEqual(0)
     await app.mockMouse.click(8, row)
     expect(navigated).toEqual([{ type: "session", sessionID: "child-1" }])
+  } finally {
+    app.renderer.destroy()
+  }
+})
+
+test("sidebar waits for first-visit messages and only follows the latest click", async () => {
+  const first = Promise.withResolvers<void>()
+  const second = Promise.withResolvers<void>()
+  const navigated: unknown[] = []
+  const app = await testRender(
+    () => (
+      <SidebarSubagents
+        context={context({
+          sessions: [
+            child({ id: "first", parentID: "session", title: "First child" }),
+            child({ id: "second", parentID: "session", title: "Second child" }),
+          ],
+          loadMessages: (id) => (id === "first" ? first.promise : second.promise),
+          navigate: (route) => navigated.push(route),
+        })}
+        sessionID="session"
+      />
+    ),
+    { width: 42, height: 8 },
+  )
+  try {
+    await app.renderOnce()
+    const lines = app.captureCharFrame().split("\n")
+    await app.mockMouse.click(
+      8,
+      lines.findIndex((line) => line.includes("First child")),
+    )
+    expect(navigated).toEqual([])
+    await app.mockMouse.click(
+      8,
+      lines.findIndex((line) => line.includes("Second child")),
+    )
+    second.resolve()
+    await app.renderOnce()
+    expect(navigated).toEqual([{ type: "session", sessionID: "second" }])
+    first.resolve()
+    await app.renderOnce()
+    expect(navigated).toHaveLength(1)
   } finally {
     app.renderer.destroy()
   }
