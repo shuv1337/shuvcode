@@ -4703,13 +4703,14 @@ describe("SessionRunnerLLM", () => {
     const ownedFailure = state("fail-owned")
     const text = (content: ReadonlyArray<{ type: string; text?: string }> | undefined) =>
       content?.flatMap((item) => (item.type === "text" ? [item.text ?? ""] : [])).join("\n") ?? ""
-    const spilled = (value: string) => value.replace(/\n?\.\.\. \d+ bytes truncated; full content saved to .* \.\.\.$/, "")
+    // Each result spills to its own file, so compare everything except the saved path.
+    const spilled = (value: string) => value.replace(/; full output saved to [^\]]+\]$/, "]")
 
     expect(openSuccess?.status).toBe("completed")
     expect(openFailure?.status).toBe("error")
     expect(openSuccess?.metadata).toMatchObject({ truncated: true })
     expect(openFailure?.metadata).toMatchObject({ truncated: true })
-    expect(text(openSuccess?.content)).toContain("truncated")
+    expect(text(openSuccess?.content)).toMatch(/\[showing .+ of \d+; full output saved to .+\]$/)
     expect(spilled(text(openFailure?.content))).toBe(spilled(text(openSuccess?.content)))
     expect(text(openFailure?.content)).not.toBe(huge)
 
@@ -4745,7 +4746,11 @@ describe("SessionRunnerLLM", () => {
     const tool = assistant?.type === "assistant" ? assistant.content.find((part) => part.type === "tool") : undefined
     expect(tool?.type === "tool" && tool.state.status).toBe("error")
     if (tool?.type !== "tool" || tool.state.status !== "error") return
-    expect(tool.state.content?.some((item) => item.type === "text" && item.text.includes("truncated"))).toBe(true)
+    expect(tool.state.metadata).toMatchObject({ truncated: true })
+    expect(
+      tool.state.content?.some((item) => item.type === "text" && /^\[showing .+; full output saved to .+\]$/.test(item.text)),
+    ).toBe(true)
+    expect(tool.state.content?.some((item) => item.type === "text" && item.text.length >= 60 * 1024)).toBe(false)
     expect(tool.state.error.message).toBe("dump failed")
   })
 

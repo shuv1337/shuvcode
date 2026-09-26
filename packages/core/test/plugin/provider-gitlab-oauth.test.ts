@@ -321,9 +321,10 @@ describe("GitLabPlugin OAuth", () => {
   it.effect("reports a revoked refresh token with a sign-in-again hint instead of authorization-code hints", () =>
     Effect.gen(function* () {
       const test = yield* fixture()
-      // Rejections are not shared, so discovery and this resolve may each send one refresh.
+      // Rejections are not shared and refreshes of one credential serialize, so the initial
+      // discovery, the switch-triggered discovery, and this resolve may each send one refresh.
       const revoked = () => new Response(JSON.stringify({ error: "invalid_grant" }), { status: 400 })
-      test.replies.push(revoked(), revoked())
+      test.replies.push(revoked(), revoked(), revoked())
       const saved = yield* test.credentials.create({
         integrationID,
         value: expired({ instanceUrl: "https://gitlab.com", clientID: bundledClientID }),

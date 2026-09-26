@@ -1139,7 +1139,8 @@ test.each([
 test.each([80, 160])("file titles stick to the viewport and hand off while scrolling at %i columns", async (width) => {
   const viewer = await renderDiffViewer(
     Array.from({ length: 4 }, (_, index) => ({ ...hunkDiff[0], file: `src/file${index}.txt` })),
-    { width, height: 18 },
+    // The fork default (nightowl) paints raised surfaces and diff context alike; use a theme that separates them.
+    { width, height: 18, theme: "opencode" },
   )
   try {
     await viewer.app.waitForFrame((frame) => frame.includes("const first"))
@@ -1383,6 +1384,8 @@ test.each([
     height: 40,
     kittyKeyboard: true,
     mode: input.mode,
+    // The fork default (nightowl) paints the menu and the source tab alike; use a theme that separates them.
+    theme: "opencode",
   })
   try {
     await viewer.app.waitForFrame((frame) => frame.includes("const first"))
@@ -1795,6 +1798,7 @@ async function renderDiffViewer(
     initialRoute?: Route
     fail?: boolean
     mode?: "dark" | "light"
+    theme?: string
     single?: boolean
     readImage?: (file: string, signal: AbortSignal) => Promise<Uint8Array>
     onSessionTab?: () => void
@@ -1821,7 +1825,11 @@ async function renderDiffViewer(
   let imageReadInput: unknown
   let shortcut: (command: string) => string | undefined = () => undefined
   const stored: { info: Info } = {
-    info: { keybinds: options.keybinds, diffs: { source: options.source, single: options.single } },
+    info: {
+      keybinds: options.keybinds,
+      diffs: { source: options.source, single: options.single },
+      ...(options.theme ? { theme: { name: options.theme } } : {}),
+    },
   }
   const writes: Info[] = []
   const baseRequests: URL[] = []

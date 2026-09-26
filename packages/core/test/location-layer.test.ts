@@ -485,6 +485,14 @@ describe("LocationServiceMap", () => {
           expect(blockedTools.filter((name) => name !== "execute").sort()).toEqual([
             "edit",
             "glob",
+            // Built-in GPT-Live voice-call tools register unconditionally in every location.
+            "gptlive_end_call",
+            "gptlive_main_permission_reply",
+            "gptlive_main_permissions",
+            "gptlive_main_read",
+            "gptlive_main_send",
+            "gptlive_main_status",
+            "gptlive_main_stop",
             "grep",
             "patch",
             "question",
@@ -504,6 +512,13 @@ describe("LocationServiceMap", () => {
           expect(allowedTools.filter((name) => name !== "execute").sort()).toEqual([
             "edit",
             "glob",
+            "gptlive_end_call",
+            "gptlive_main_permission_reply",
+            "gptlive_main_permissions",
+            "gptlive_main_read",
+            "gptlive_main_send",
+            "gptlive_main_status",
+            "gptlive_main_stop",
             "grep",
             "patch",
             "question",
