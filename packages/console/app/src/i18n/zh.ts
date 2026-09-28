@@ -643,7 +643,8 @@ export const dict = {
   "workspace.black.time.fewSeconds": "几秒钟",
   "workspace.black.subscription.title": "订阅",
   "workspace.black.subscription.message": "您已订阅 OpenCode Black，价格为每月 ${{plan}}。",
-  "workspace.black.subscription.ending": "OpenCode Black 将在当前计费周期结束时终止，不会续订。我们会将你迁移到新的控制台。",
+  "workspace.black.subscription.ending":
+    "OpenCode Black 将在当前计费周期结束时终止，不会续订。我们会将你迁移到新的控制台。",
   "workspace.black.subscription.rollingUsage": "5 小时用量",
   "workspace.black.subscription.weeklyUsage": "每周用量",
   "workspace.black.subscription.resetsIn": "重置于",

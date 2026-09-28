@@ -669,7 +669,8 @@ export const dict = {
   "workspace.black.time.fewSeconds": "et par sekunder",
   "workspace.black.subscription.title": "Abonnement",
   "workspace.black.subscription.message": "Du abonnerer på OpenCode Black for ${{plan}} om måneden.",
-  "workspace.black.subscription.ending": "OpenCode Black slutter med din nuværende faktureringsperiode og fornyes ikke. Vi flytter dig til den nye konsol.",
+  "workspace.black.subscription.ending":
+    "OpenCode Black slutter med din nuværende faktureringsperiode og fornyes ikke. Vi flytter dig til den nye konsol.",
   "workspace.black.subscription.rollingUsage": "5-timers brug",
   "workspace.black.subscription.weeklyUsage": "Ugentlig brug",
   "workspace.black.subscription.resetsIn": "Nulstiller i",
