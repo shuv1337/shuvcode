@@ -10,9 +10,9 @@ export const email = `mailto:${config.email}`
 
 OpenCode Go 让你能够稳定访问流行的开源编程模型，并提供两种月度方案：
 
-| 方案 | 价格 | 包含的用量 |
-| ---- | ----- | -------------- |
-| **Go** | **$10/月** | 以较低成本访问下列模型 |
+| 方案        | 价格       | 包含的用量                   |
+| ----------- | ---------- | ---------------------------- |
+| **Go**      | **$10/月** | 以较低成本访问下列模型       |
 | **Go Plus** | **$40/月** | 下列模型均享有更高的用量限制 |
 
 Go 的工作方式与 OpenCode 中的其他提供商一样。订阅 OpenCode Go 后，你将获得 API 密钥。它是**完全可选**的，并非使用 OpenCode 所必需。
@@ -104,26 +104,26 @@ OpenCode Go 适用于 [OpenCode](https://opencode.ai) 以及其他会产生类�
 
 除 OpenCode 外，以下客户端已通过验证，能够正常使用 OpenCode Go。但我们无法保证它们未来仍能正常使用。
 
-| 客户端            | 会话支持                                                                                                                                                                                                                             |
-| ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Hermes**        | 包含 [PR #101864](https://github.com/NousResearch/hermes-agent/pull/101864) 的构建版本会在主要和辅助 OpenCode 请求中发送该请求头。此修复在 v0.21.0 发布后才合并，因此该版本本身并不包含此修复。                 |
-| **Claude Code**   | Go 能识别其原生会话请求头，无需自定义请求头封装。                                                                                                                                                                |
-| **Codex**         | Go 能识别其原生会话请求头。某些版本和代理配置仍会遗漏该请求头；转发请求时请保留会话请求头。                                                                                                |
-| **ZCode**         | Go 能识别其原生会话请求头。我们[请求支持 `x-opencode-session`](https://github.com/zai-org/feedback/issues/492) 仍处于开放状态，但已不再需要发送这一特定请求头。                                   |
-| **Pi**            | 当前构建版本会为 OpenCode 发送会话信息。请更新旧版安装。                                                                                                                                                           |
-| **jcode**         | 请更新至 **v0.81.6 或更高版本**，其中包含[会话请求头修复](https://github.com/1jehuang/jcode/issues/1167)。                                                                                                                     |
+| 客户端            | 会话支持                                                                                                                                                                                                                    |
+| ----------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Hermes**        | 包含 [PR #101864](https://github.com/NousResearch/hermes-agent/pull/101864) 的构建版本会在主要和辅助 OpenCode 请求中发送该请求头。此修复在 v0.21.0 发布后才合并，因此该版本本身并不包含此修复。                             |
+| **Claude Code**   | Go 能识别其原生会话请求头，无需自定义请求头封装。                                                                                                                                                                           |
+| **Codex**         | Go 能识别其原生会话请求头。某些版本和代理配置仍会遗漏该请求头；转发请求时请保留会话请求头。                                                                                                                                 |
+| **ZCode**         | Go 能识别其原生会话请求头。我们[请求支持 `x-opencode-session`](https://github.com/zai-org/feedback/issues/492) 仍处于开放状态，但已不再需要发送这一特定请求头。                                                             |
+| **Pi**            | 当前构建版本会为 OpenCode 发送会话信息。请更新旧版安装。                                                                                                                                                                    |
+| **jcode**         | 请更新至 **v0.81.6 或更高版本**，其中包含[会话请求头修复](https://github.com/1jehuang/jcode/issues/1167)。                                                                                                                  |
 | **Kilo Code CLI** | 包含 [PR #13752](https://github.com/Kilo-Org/kilocode/pull/13752) 的构建版本恢复了 OpenCode 会话请求头。此修复仅适用于 CLI，不适用于 VS Code 扩展。参见 [issue #13723](https://github.com/Kilo-Org/kilocode/issues/13723)。 |
 
 ### 已知存在问题的客户端
 
 在我们调查的版本中，以下客户端缺少会话支持，或支持不完整。相关报告链接可用于跟踪修复进展和临时解决方案。
 
-| 客户端                  | 状态与跟踪                                                                                                                                                                                                                                    |
-| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 客户端                  | 状态与跟踪                                                                                                                                                                                           |
+| ----------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **DeepSeek Harness**    | 某些模型调用路径会传递会话信息，但其他路径中缺失。我们能识别其原生请求头；剩余工作是在所有适配器中发送该请求头。参见[讨论 #5495](https://github.com/deepseek-ai/deepseek-harness/discussions/5495)。 |
-| **GitHub Copilot Chat** | [VS Code issue #334186](https://github.com/microsoft/vscode/issues/334186) 已提出自动发送会话请求头的支持请求。                                                                                                                           |
-| **Kimi Code**           | [issue #3506](https://github.com/MoonshotAI/kimi-code/issues/3506) 已提出自动发送会话请求头的支持请求。                                                                                                                                   |
-| **MiMo Code**           | [Issue #2317](https://github.com/XiaomiMiMo/MiMo-Code/issues/2317) 已有拟议修复 [PR #2327](https://github.com/XiaomiMiMo/MiMo-Code/pull/2327)，但尚未合并。                                                                      |
+| **GitHub Copilot Chat** | [VS Code issue #334186](https://github.com/microsoft/vscode/issues/334186) 已提出自动发送会话请求头的支持请求。                                                                                      |
+| **Kimi Code**           | [issue #3506](https://github.com/MoonshotAI/kimi-code/issues/3506) 已提出自动发送会话请求头的支持请求。                                                                                              |
+| **MiMo Code**           | [Issue #2317](https://github.com/XiaomiMiMo/MiMo-Code/issues/2317) 已有拟议修复 [PR #2327](https://github.com/XiaomiMiMo/MiMo-Code/pull/2327)，但尚未合并。                                          |
 
 ## 使用限制
 
@@ -381,7 +381,7 @@ Token 价格按每 1M tokens 计算。
 
 你也可以通过以下 API 端点访问 Go 模型。
 
-| 模型                         | 模型 ID                      | 端点                                             | AI SDK 包              |
+| 模型                         | 模型 ID                      | 端点                                             | AI SDK 包                   |
 | ---------------------------- | ---------------------------- | ------------------------------------------------ | --------------------------- |
 | Grok 4.7                     | grok-4.7                     | `https://opencode.ai/zen/go/v1/responses`        | `@ai-sdk/openai`            |
 | Grok 4.6                     | grok-4.6                     | `https://opencode.ai/zen/go/v1/responses`        | `@ai-sdk/openai`            |
@@ -431,37 +431,37 @@ https://opencode.ai/zen/go/v1/models
 ## 隐私保护
 
 | 模型                         | 模型训练 | 数据留存 |
-| ---------------------------- | -------------- | -------------- |
-| Grok 4.7                     | 不使用         | 30 天        |
-| Grok 4.6                     | 不使用         | 30 天        |
-| GPT 6 Luna                   | 不使用         | 30 天        |
-| GPT 5.6 Luna                 | 不使用         | 30 天        |
-| GLM-5.3-Flash                | 不使用         | 0 天         |
-| GLM-5.3                      | 不使用         | 0 天         |
-| GLM-5.2                      | 不使用         | 0 天         |
-| Kimi K3                      | 不使用         | 0 天         |
-| Kimi K2.7 Code               | 不使用         | 0 天         |
-| Kimi K2.6                    | 不使用         | 0 天         |
-| LongCat-2.0                  | 不使用         | 0 天         |
-| MiMo-V2.6-Pro                | 不使用         | 0 天         |
-| MiMo-V2.6-Flash              | 不使用         | 0 天         |
-| MiMo-V2.5-Pro                | 不使用         | 0 天         |
-| MiMo-V2.5                    | 不使用         | 0 天         |
-| Qwen3.8 Max                  | 不使用         | 0 天         |
-| Qwen3.8 Flash                | 不使用         | 0 天         |
-| Qwen3.7 Plus                 | 不使用         | 0 天         |
-| MiniMax M3                   | 不使用         | 0 天         |
-| MiniMax M2.7                 | 不使用         | 0 天         |
-| Muse Spark 1.3 Contributor   | 是             | 非 ZDR        |
-| Muse Spark 1.2 Contributor   | 是             | 非 ZDR        |
-| DeepSeek V4.1 Flash          | 不使用         | 0 天\*       |
-| DeepSeek V4 Pro              | 不使用         | 0 天\*       |
-| DeepSeek V4 Flash            | 不使用         | 0 天\*       |
-| DeepSeek V4 Flash Vision Exp | 不使用         | 0 天\*       |
-| Hy4 preview                  | 不使用         | 0 天         |
-| Hy3                          | 不使用         | 0 天         |
-| Space Bunny Free             | 不使用         | 0 天         |
-| LongCat 2.5 Preview Free     | 不使用         | 0 天         |
+| ---------------------------- | -------- | -------- |
+| Grok 4.7                     | 不使用   | 30 天    |
+| Grok 4.6                     | 不使用   | 30 天    |
+| GPT 6 Luna                   | 不使用   | 30 天    |
+| GPT 5.6 Luna                 | 不使用   | 30 天    |
+| GLM-5.3-Flash                | 不使用   | 0 天     |
+| GLM-5.3                      | 不使用   | 0 天     |
+| GLM-5.2                      | 不使用   | 0 天     |
+| Kimi K3                      | 不使用   | 0 天     |
+| Kimi K2.7 Code               | 不使用   | 0 天     |
+| Kimi K2.6                    | 不使用   | 0 天     |
+| LongCat-2.0                  | 不使用   | 0 天     |
+| MiMo-V2.6-Pro                | 不使用   | 0 天     |
+| MiMo-V2.6-Flash              | 不使用   | 0 天     |
+| MiMo-V2.5-Pro                | 不使用   | 0 天     |
+| MiMo-V2.5                    | 不使用   | 0 天     |
+| Qwen3.8 Max                  | 不使用   | 0 天     |
+| Qwen3.8 Flash                | 不使用   | 0 天     |
+| Qwen3.7 Plus                 | 不使用   | 0 天     |
+| MiniMax M3                   | 不使用   | 0 天     |
+| MiniMax M2.7                 | 不使用   | 0 天     |
+| Muse Spark 1.3 Contributor   | 是       | 非 ZDR   |
+| Muse Spark 1.2 Contributor   | 是       | 非 ZDR   |
+| DeepSeek V4.1 Flash          | 不使用   | 0 天\*   |
+| DeepSeek V4 Pro              | 不使用   | 0 天\*   |
+| DeepSeek V4 Flash            | 不使用   | 0 天\*   |
+| DeepSeek V4 Flash Vision Exp | 不使用   | 0 天\*   |
+| Hy4 preview                  | 不使用   | 0 天     |
+| Hy3                          | 不使用   | 0 天     |
+| Space Bunny Free             | 不使用   | 0 天     |
+| LongCat 2.5 Preview Free     | 不使用   | 0 天     |
 
 - **Grok 4.7/4.6:** ZDR 会禁用依赖所存储数据的重要 API 功能，包括有状态的 Responses API、Files and Collections 和 Batch API。[了解更多](https://docs.x.ai/developers/faq/security#what-is-zero-data-retention-zdr)。
 - **GPT 6 Luna / GPT 5.6 Luna:** 所有 API 功能的使用都会生成滥用监控日志，并最多保留 30 天。[了解更多](https://developers.openai.com/api/docs/guides/your-data#data-retention-controls-for-abuse-monitoring)。

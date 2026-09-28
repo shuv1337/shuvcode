@@ -10,9 +10,9 @@ export const email = `mailto:${config.email}`
 
 OpenCode Go, iki aylık planla popüler açık kodlama modellerine güvenilir erişim sağlar:
 
-| Plan | Fiyat | Dahil edilen kullanım |
-| ---- | ----- | -------------- |
-| **Go** | **aylık $10** | Aşağıdaki modellere daha düşük maliyetli erişim |
+| Plan        | Fiyat         | Dahil edilen kullanım                               |
+| ----------- | ------------- | --------------------------------------------------- |
+| **Go**      | **aylık $10** | Aşağıdaki modellere daha düşük maliyetli erişim     |
 | **Go Plus** | **aylık $40** | Aşağıdaki modellerde daha yüksek kullanım limitleri |
 
 Go, OpenCode içindeki diğer sağlayıcılar gibi çalışır. OpenCode Go'ya abone olur ve
@@ -119,14 +119,14 @@ kötüye kullanımlara karşı izlenir.
 OpenCode dışında aşağıdaki istemcilerin düzgün çalıştığı doğrulanmıştır
 OpenCode Go ile. Ancak gelecekte çalışmaya devam edeceklerini garanti etmiyoruz.
 
-| İstemci           | Oturum desteği                                                                                                                                                                                                                             |
-| ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Hermes**        | [PR #101864](https://github.com/NousResearch/hermes-agent/pull/101864) içeren derlemeler ana ve yardımcı OpenCode isteklerinde başlığı gönderir. Düzeltme v0.21.0 sonrasında birleştirilmiştir; bu sürüm tek başına düzeltmeyi içermez. |
-| **Claude Code**   | Go, yerel oturum başlığını tanır. Özel başlık sarmalayıcısı gerekmez. |
-| **Codex**         | Go, yerel oturum başlığını tanır. Bazı sürümler ve proxy yapılandırmaları hâlâ başlığı atlar; istekleri iletirken oturum başlığını koruyun. |
-| **ZCode**         | Go, yerel oturum başlığını tanır. [`x-opencode-session` talebimiz](https://github.com/zai-org/feedback/issues/492) hâlâ açıktır ancak artık özellikle bu başlığı göndermek gerekmez. |
-| **Pi**            | Güncel derlemeler OpenCode için oturum bilgisi gönderir. Eski kurulumları güncelleyin. |
-| **jcode**         | [Oturum başlığı düzeltmesini](https://github.com/1jehuang/jcode/issues/1167) içeren **v0.81.6 veya sonraki bir sürüme** güncelleyin. |
+| İstemci           | Oturum desteği                                                                                                                                                                                                                                        |
+| ----------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Hermes**        | [PR #101864](https://github.com/NousResearch/hermes-agent/pull/101864) içeren derlemeler ana ve yardımcı OpenCode isteklerinde başlığı gönderir. Düzeltme v0.21.0 sonrasında birleştirilmiştir; bu sürüm tek başına düzeltmeyi içermez.               |
+| **Claude Code**   | Go, yerel oturum başlığını tanır. Özel başlık sarmalayıcısı gerekmez.                                                                                                                                                                                 |
+| **Codex**         | Go, yerel oturum başlığını tanır. Bazı sürümler ve proxy yapılandırmaları hâlâ başlığı atlar; istekleri iletirken oturum başlığını koruyun.                                                                                                           |
+| **ZCode**         | Go, yerel oturum başlığını tanır. [`x-opencode-session` talebimiz](https://github.com/zai-org/feedback/issues/492) hâlâ açıktır ancak artık özellikle bu başlığı göndermek gerekmez.                                                                  |
+| **Pi**            | Güncel derlemeler OpenCode için oturum bilgisi gönderir. Eski kurulumları güncelleyin.                                                                                                                                                                |
+| **jcode**         | [Oturum başlığı düzeltmesini](https://github.com/1jehuang/jcode/issues/1167) içeren **v0.81.6 veya sonraki bir sürüme** güncelleyin.                                                                                                                  |
 | **Kilo Code CLI** | [PR #13752](https://github.com/Kilo-Org/kilocode/pull/13752) içeren derlemeler OpenCode oturum başlıklarını geri getirir. Düzeltme CLI'ı kapsar, VS Code uzantısını kapsamaz. Bkz. [issue #13723](https://github.com/Kilo-Org/kilocode/issues/13723). |
 
 ### Sorunlu Olduğu Bilinen İstemciler
@@ -134,12 +134,12 @@ OpenCode Go ile. Ancak gelecekte çalışmaya devam edeceklerini garanti etmiyor
 Bu istemcilerin incelediğimiz sürümlerinde oturum desteği eksik veya tamamlanmamıştır.
 Bağlantılı bildirimlerden düzeltmeler ve geçici çözümler izlenebilir.
 
-| İstemci                 | Durum ve takip                                                                                                                                                                                                                                    |
-| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| İstemci                 | Durum ve takip                                                                                                                                                                                                                           |
+| ----------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **DeepSeek Harness**    | Oturum bilgisi bazı model yollarında gelirken diğerlerinde eksiktir. Go yerel başlığı tanır; kalan iş, başlığın tüm adaptörlerden gönderilmesidir. [Discussion #5495](https://github.com/deepseek-ai/deepseek-harness/discussions/5495). |
-| **GitHub Copilot Chat** | Otomatik oturum başlığı desteği [VS Code issue #334186](https://github.com/microsoft/vscode/issues/334186) içinde talep edilmiştir. |
-| **Kimi Code**           | Otomatik oturum başlığı desteği [issue #3506](https://github.com/MoonshotAI/kimi-code/issues/3506) içinde talep edilmiştir. |
-| **MiMo Code**           | [Issue #2317](https://github.com/XiaomiMiMo/MiMo-Code/issues/2317) için [PR #2327](https://github.com/XiaomiMiMo/MiMo-Code/pull/2327) içinde henüz birleştirilmemiş bir düzeltme önerilmiştir. |
+| **GitHub Copilot Chat** | Otomatik oturum başlığı desteği [VS Code issue #334186](https://github.com/microsoft/vscode/issues/334186) içinde talep edilmiştir.                                                                                                      |
+| **Kimi Code**           | Otomatik oturum başlığı desteği [issue #3506](https://github.com/MoonshotAI/kimi-code/issues/3506) içinde talep edilmiştir.                                                                                                              |
+| **MiMo Code**           | [Issue #2317](https://github.com/XiaomiMiMo/MiMo-Code/issues/2317) için [PR #2327](https://github.com/XiaomiMiMo/MiMo-Code/pull/2327) içinde henüz birleştirilmemiş bir düzeltme önerilmiştir.                                           |
 
 ## Kullanım limitleri
 
@@ -407,7 +407,7 @@ Bu modellerde yine de sağlayıcılara doğrudan ödeme yapmaya göre biraz daha
 
 Go modellerine aşağıdaki API uç noktalarından da erişebilirsiniz.
 
-| Model                        | Model ID                     | Uç Nokta                                         | AI SDK Paketi              |
+| Model                        | Model ID                     | Uç Nokta                                         | AI SDK Paketi               |
 | ---------------------------- | ---------------------------- | ------------------------------------------------ | --------------------------- |
 | Grok 4.7                     | grok-4.7                     | `https://opencode.ai/zen/go/v1/responses`        | `@ai-sdk/openai`            |
 | Grok 4.6                     | grok-4.6                     | `https://opencode.ai/zen/go/v1/responses`        | `@ai-sdk/openai`            |
@@ -459,37 +459,37 @@ https://opencode.ai/zen/go/v1/models
 ## Gizlilik
 
 | Model                        | Model eğitimi | Veri saklama |
-| ---------------------------- | -------------- | -------------- |
-| Grok 4.7                     | Kullanılmaz       | 30 gün        |
-| Grok 4.6                     | Kullanılmaz       | 30 gün        |
-| GPT 6 Luna                   | Kullanılmaz       | 30 gün        |
-| GPT 5.6 Luna                 | Kullanılmaz       | 30 gün        |
-| GLM-5.3-Flash                | Kullanılmaz       | 0 gün         |
-| GLM-5.3                      | Kullanılmaz       | 0 gün         |
-| GLM-5.2                      | Kullanılmaz       | 0 gün         |
-| Kimi K3                      | Kullanılmaz       | 0 gün         |
-| Kimi K2.7 Code               | Kullanılmaz       | 0 gün         |
-| Kimi K2.6                    | Kullanılmaz       | 0 gün         |
-| LongCat-2.0                  | Kullanılmaz       | 0 gün         |
-| MiMo-V2.6-Pro                | Kullanılmaz       | 0 gün         |
-| MiMo-V2.6-Flash              | Kullanılmaz       | 0 gün         |
-| MiMo-V2.5-Pro                | Kullanılmaz       | 0 gün         |
-| MiMo-V2.5                    | Kullanılmaz       | 0 gün         |
-| Qwen3.8 Max                  | Kullanılmaz       | 0 gün         |
-| Qwen3.8 Flash                | Kullanılmaz       | 0 gün         |
-| Qwen3.7 Plus                 | Kullanılmaz       | 0 gün         |
-| MiniMax M3                   | Kullanılmaz       | 0 gün         |
-| MiniMax M2.7                 | Kullanılmaz       | 0 gün         |
-| Muse Spark 1.3 Contributor   | Evet            | ZDR değil        |
-| Muse Spark 1.2 Contributor   | Evet            | ZDR değil        |
-| DeepSeek V4.1 Flash          | Kullanılmaz       | 0 gün\*       |
-| DeepSeek V4 Pro              | Kullanılmaz       | 0 gün\*       |
-| DeepSeek V4 Flash            | Kullanılmaz       | 0 gün\*       |
-| DeepSeek V4 Flash Vision Exp | Kullanılmaz       | 0 gün\*       |
-| Hy4 preview                  | Kullanılmaz       | 0 gün         |
-| Hy3                          | Kullanılmaz       | 0 gün         |
-| Space Bunny Free             | Kullanılmaz       | 0 gün         |
-| LongCat 2.5 Preview Free     | Kullanılmaz       | 0 gün         |
+| ---------------------------- | ------------- | ------------ |
+| Grok 4.7                     | Kullanılmaz   | 30 gün       |
+| Grok 4.6                     | Kullanılmaz   | 30 gün       |
+| GPT 6 Luna                   | Kullanılmaz   | 30 gün       |
+| GPT 5.6 Luna                 | Kullanılmaz   | 30 gün       |
+| GLM-5.3-Flash                | Kullanılmaz   | 0 gün        |
+| GLM-5.3                      | Kullanılmaz   | 0 gün        |
+| GLM-5.2                      | Kullanılmaz   | 0 gün        |
+| Kimi K3                      | Kullanılmaz   | 0 gün        |
+| Kimi K2.7 Code               | Kullanılmaz   | 0 gün        |
+| Kimi K2.6                    | Kullanılmaz   | 0 gün        |
+| LongCat-2.0                  | Kullanılmaz   | 0 gün        |
+| MiMo-V2.6-Pro                | Kullanılmaz   | 0 gün        |
+| MiMo-V2.6-Flash              | Kullanılmaz   | 0 gün        |
+| MiMo-V2.5-Pro                | Kullanılmaz   | 0 gün        |
+| MiMo-V2.5                    | Kullanılmaz   | 0 gün        |
+| Qwen3.8 Max                  | Kullanılmaz   | 0 gün        |
+| Qwen3.8 Flash                | Kullanılmaz   | 0 gün        |
+| Qwen3.7 Plus                 | Kullanılmaz   | 0 gün        |
+| MiniMax M3                   | Kullanılmaz   | 0 gün        |
+| MiniMax M2.7                 | Kullanılmaz   | 0 gün        |
+| Muse Spark 1.3 Contributor   | Evet          | ZDR değil    |
+| Muse Spark 1.2 Contributor   | Evet          | ZDR değil    |
+| DeepSeek V4.1 Flash          | Kullanılmaz   | 0 gün\*      |
+| DeepSeek V4 Pro              | Kullanılmaz   | 0 gün\*      |
+| DeepSeek V4 Flash            | Kullanılmaz   | 0 gün\*      |
+| DeepSeek V4 Flash Vision Exp | Kullanılmaz   | 0 gün\*      |
+| Hy4 preview                  | Kullanılmaz   | 0 gün        |
+| Hy3                          | Kullanılmaz   | 0 gün        |
+| Space Bunny Free             | Kullanılmaz   | 0 gün        |
+| LongCat 2.5 Preview Free     | Kullanılmaz   | 0 gün        |
 
 - **Grok 4.7/4.6:** ZDR, durum bilgisi tutan Responses API, Files and Collections ve Batch API dahil saklanan verilere bağlı önemli API özelliklerini devre dışı bırakır. [Daha fazla bilgi](https://docs.x.ai/developers/faq/security#what-is-zero-data-retention-zdr).
 - **GPT 6 Luna / GPT 5.6 Luna:** Tüm API özelliklerinin kullanımı için kötüye kullanım izleme günlükleri oluşturulur ve 30 güne kadar saklanır. [Daha fazla bilgi](https://developers.openai.com/api/docs/guides/your-data#data-retention-controls-for-abuse-monitoring).

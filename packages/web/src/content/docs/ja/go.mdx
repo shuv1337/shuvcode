@@ -10,10 +10,10 @@ export const email = `mailto:${config.email}`
 
 OpenCode Goでは、人気のオープンなコーディングモデルに安定してアクセスできる2つの月額プランを提供しています。
 
-| プラン | 料金 | 含まれる利用枠 |
-| ------ | ---- | -------------- |
-| **Go** | **月額$10** | 以下のモデルを低コストで利用可能 |
-| **Go Plus** | **月額$40** | 以下のモデルをより多く利用可能 |
+| プラン      | 料金        | 含まれる利用枠                   |
+| ----------- | ----------- | -------------------------------- |
+| **Go**      | **月額$10** | 以下のモデルを低コストで利用可能 |
+| **Go Plus** | **月額$40** | 以下のモデルをより多く利用可能   |
 
 GoはOpenCodeの他のプロバイダーと同様に機能します。OpenCode Goをサブスクライブして
 APIキーを取得します。これは**完全に任意**であり、OpenCodeを使用するために
@@ -372,7 +372,6 @@ Plusの推定値は、各モデルのより高い利用上限に応じて増加�
 
 Zen残高にクレジットがある場合は、コンソールで**Use balance**オプションを有効にできます。有効にすると、利用制限に達した後、リクエストをブロックする代わりにGoはZen残高から利用するようになります。
 
-
 ---
 
 ### 一部のモデルの利用枠が少ない理由
@@ -391,7 +390,7 @@ Goでは、含まれる月間利用枠がモデルによって異なります。
 
 以下のAPIエンドポイントを通じて、Goモデルにアクセスすることもできます。
 
-| モデル                        | モデル ID                     | エンドポイント                                         | AI SDKパッケージ              |
+| モデル                       | モデル ID                    | エンドポイント                                   | AI SDKパッケージ            |
 | ---------------------------- | ---------------------------- | ------------------------------------------------ | --------------------------- |
 | Grok 4.7                     | grok-4.7                     | `https://opencode.ai/zen/go/v1/responses`        | `@ai-sdk/openai`            |
 | Grok 4.6                     | grok-4.6                     | `https://opencode.ai/zen/go/v1/responses`        | `@ai-sdk/openai`            |
@@ -427,7 +426,6 @@ Goでは、含まれる月間利用枠がモデルによって異なります。
 OpenCode設定の[model id](/docs/config/#models)は、`opencode-go/<model-id>`という形式を使用します。Kimi K3の場合は、設定で
 `opencode-go/kimi-k3`を使用します。
 
-
 ---
 
 ### モデル
@@ -442,38 +440,38 @@ https://opencode.ai/zen/go/v1/models
 
 ## プライバシー
 
-| モデル                        | モデルのトレーニング | データ保持 |
-| ---------------------------- | -------------- | -------------- |
-| Grok 4.7                     | 使用なし       | 30日        |
-| Grok 4.6                     | 使用なし       | 30日        |
-| GPT 6 Luna                   | 使用なし       | 30日        |
-| GPT 5.6 Luna                 | 使用なし       | 30日        |
-| GLM-5.3-Flash                | 使用なし       | 0日         |
-| GLM-5.3                      | 使用なし       | 0日         |
-| GLM-5.2                      | 使用なし       | 0日         |
-| Kimi K3                      | 使用なし       | 0日         |
-| Kimi K2.7 Code               | 使用なし       | 0日         |
-| Kimi K2.6                    | 使用なし       | 0日         |
-| LongCat-2.0                  | 使用なし       | 0日         |
-| MiMo-V2.6-Pro                | 使用なし       | 0日         |
-| MiMo-V2.6-Flash              | 使用なし       | 0日         |
-| MiMo-V2.5-Pro                | 使用なし       | 0日         |
-| MiMo-V2.5                    | 使用なし       | 0日         |
-| Qwen3.8 Max                  | 使用なし       | 0日         |
-| Qwen3.8 Flash                | 使用なし       | 0日         |
-| Qwen3.7 Plus                 | 使用なし       | 0日         |
-| MiniMax M3                   | 使用なし       | 0日         |
-| MiniMax M2.7                 | 使用なし       | 0日         |
-| Muse Spark 1.3 Contributor   | はい            | ZDRではない        |
-| Muse Spark 1.2 Contributor   | はい            | ZDRではない        |
-| DeepSeek V4.1 Flash          | 使用なし       | 0日\*       |
-| DeepSeek V4 Pro              | 使用なし       | 0日\*       |
-| DeepSeek V4 Flash            | 使用なし       | 0日\*       |
-| DeepSeek V4 Flash Vision Exp | 使用なし       | 0日\*       |
-| Hy4 preview                  | 使用なし       | 0日         |
-| Hy3                          | 使用なし       | 0日         |
-| Space Bunny Free             | 使用なし       | 0日         |
-| LongCat 2.5 Preview Free     | 使用なし       | 0日         |
+| モデル                       | モデルのトレーニング | データ保持  |
+| ---------------------------- | -------------------- | ----------- |
+| Grok 4.7                     | 使用なし             | 30日        |
+| Grok 4.6                     | 使用なし             | 30日        |
+| GPT 6 Luna                   | 使用なし             | 30日        |
+| GPT 5.6 Luna                 | 使用なし             | 30日        |
+| GLM-5.3-Flash                | 使用なし             | 0日         |
+| GLM-5.3                      | 使用なし             | 0日         |
+| GLM-5.2                      | 使用なし             | 0日         |
+| Kimi K3                      | 使用なし             | 0日         |
+| Kimi K2.7 Code               | 使用なし             | 0日         |
+| Kimi K2.6                    | 使用なし             | 0日         |
+| LongCat-2.0                  | 使用なし             | 0日         |
+| MiMo-V2.6-Pro                | 使用なし             | 0日         |
+| MiMo-V2.6-Flash              | 使用なし             | 0日         |
+| MiMo-V2.5-Pro                | 使用なし             | 0日         |
+| MiMo-V2.5                    | 使用なし             | 0日         |
+| Qwen3.8 Max                  | 使用なし             | 0日         |
+| Qwen3.8 Flash                | 使用なし             | 0日         |
+| Qwen3.7 Plus                 | 使用なし             | 0日         |
+| MiniMax M3                   | 使用なし             | 0日         |
+| MiniMax M2.7                 | 使用なし             | 0日         |
+| Muse Spark 1.3 Contributor   | はい                 | ZDRではない |
+| Muse Spark 1.2 Contributor   | はい                 | ZDRではない |
+| DeepSeek V4.1 Flash          | 使用なし             | 0日\*       |
+| DeepSeek V4 Pro              | 使用なし             | 0日\*       |
+| DeepSeek V4 Flash            | 使用なし             | 0日\*       |
+| DeepSeek V4 Flash Vision Exp | 使用なし             | 0日\*       |
+| Hy4 preview                  | 使用なし             | 0日         |
+| Hy3                          | 使用なし             | 0日         |
+| Space Bunny Free             | 使用なし             | 0日         |
+| LongCat 2.5 Preview Free     | 使用なし             | 0日         |
 
 - **Grok 4.7/4.6:** ZDRでは、保存データに依存する重要なAPI機能（ステートフルなResponses API、Files and Collections、Batch APIなど）が無効になります。 [詳しく見る](https://docs.x.ai/developers/faq/security#what-is-zero-data-retention-zdr).
 - **GPT 6 Luna / GPT 5.6 Luna:** 不正使用監視ログはすべてのAPI機能の使用時に生成され、最大30日間保持されます。 [詳しく見る](https://developers.openai.com/api/docs/guides/your-data#data-retention-controls-for-abuse-monitoring).

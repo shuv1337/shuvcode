@@ -10,9 +10,9 @@ export const email = `mailto:${config.email}`
 
 O OpenCode Go oferece acesso confiável a modelos abertos de programação populares, com dois planos mensais:
 
-| Plano | Preço | Uso incluído |
-| ---- | ----- | -------------- |
-| **Go** | **$10/mês** | Acesso de menor custo aos modelos abaixo |
+| Plano       | Preço       | Uso incluído                                     |
+| ----------- | ----------- | ------------------------------------------------ |
+| **Go**      | **$10/mês** | Acesso de menor custo aos modelos abaixo         |
 | **Go Plus** | **$40/mês** | Limites de uso mais altos para os modelos abaixo |
 
 O Go funciona como qualquer outro provedor no OpenCode. Você assina o OpenCode Go e
@@ -120,14 +120,14 @@ Seu cliente deve:
 Além do OpenCode, os clientes a seguir foram validados para funcionar corretamente
 com o OpenCode Go. No entanto, não garantimos que continuarão funcionando no futuro.
 
-| Cliente           | Suporte a sessões                                                                                                                                                                                                                             |
-| ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Hermes**        | As builds que contêm [PR #101864](https://github.com/NousResearch/hermes-agent/pull/101864) enviam o header nas requisições principais e auxiliares do OpenCode. A correção foi incorporada após a v0.21.0; essa versão por si só não a inclui.                 |
-| **Claude Code**   | O Go reconhece seu header de sessão nativo. Não é necessário usar um wrapper para headers personalizados.                                                                                                                                                                |
-| **Codex**         | O Go reconhece seu header de sessão nativo. Algumas versões e configurações de proxy ainda o omitem; preserve o header de sessão ao encaminhar requisições.                                                                                                |
-| **ZCode**         | O Go reconhece seu header de sessão nativo. Nossa [solicitação de `x-opencode-session`](https://github.com/zai-org/feedback/issues/492) continua aberta, mas não é mais necessário enviar especificamente esse header.                         |
-| **Pi**            | As builds atuais enviam informações de sessão para o OpenCode. Atualize instalações mais antigas.                                                                                                                                                           |
-| **jcode**         | Atualize para a versão **v0.81.6 ou posterior**, que inclui a [correção do header de sessão](https://github.com/1jehuang/jcode/issues/1167).                                                                                                          |
+| Cliente           | Suporte a sessões                                                                                                                                                                                                                                                   |
+| ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Hermes**        | As builds que contêm [PR #101864](https://github.com/NousResearch/hermes-agent/pull/101864) enviam o header nas requisições principais e auxiliares do OpenCode. A correção foi incorporada após a v0.21.0; essa versão por si só não a inclui.                     |
+| **Claude Code**   | O Go reconhece seu header de sessão nativo. Não é necessário usar um wrapper para headers personalizados.                                                                                                                                                           |
+| **Codex**         | O Go reconhece seu header de sessão nativo. Algumas versões e configurações de proxy ainda o omitem; preserve o header de sessão ao encaminhar requisições.                                                                                                         |
+| **ZCode**         | O Go reconhece seu header de sessão nativo. Nossa [solicitação de `x-opencode-session`](https://github.com/zai-org/feedback/issues/492) continua aberta, mas não é mais necessário enviar especificamente esse header.                                              |
+| **Pi**            | As builds atuais enviam informações de sessão para o OpenCode. Atualize instalações mais antigas.                                                                                                                                                                   |
+| **jcode**         | Atualize para a versão **v0.81.6 ou posterior**, que inclui a [correção do header de sessão](https://github.com/1jehuang/jcode/issues/1167).                                                                                                                        |
 | **Kilo Code CLI** | As builds que contêm [PR #13752](https://github.com/Kilo-Org/kilocode/pull/13752) restauram os headers de sessão do OpenCode. Essa correção abrange a CLI, não a extensão do VS Code. Consulte a [issue #13723](https://github.com/Kilo-Org/kilocode/issues/13723). |
 
 ### Clientes com problemas conhecidos
@@ -135,12 +135,12 @@ com o OpenCode Go. No entanto, não garantimos que continuarão funcionando no f
 Esses clientes não têm suporte a sessões ou apresentam suporte incompleto nas versões que
 investigamos. Os relatórios vinculados acompanham correções e soluções alternativas.
 
-| Cliente                 | Status e acompanhamento                                                                                                                                                                                                                                    |
-| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Cliente                 | Status e acompanhamento                                                                                                                                                                                                                                        |
+| ----------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **DeepSeek Harness**    | As informações de sessão chegam por alguns caminhos de modelos, mas não por outros. Reconhecemos seu header nativo; ainda é necessário enviá-lo por todos os adaptadores. [Discussão #5495](https://github.com/deepseek-ai/deepseek-harness/discussions/5495). |
-| **GitHub Copilot Chat** | O suporte automático ao header de sessão foi solicitado na [VS Code issue #334186](https://github.com/microsoft/vscode/issues/334186).                                                                                                                           |
-| **Kimi Code**           | O suporte automático ao header de sessão foi solicitado na [issue #3506](https://github.com/MoonshotAI/kimi-code/issues/3506).                                                                                                                                   |
-| **MiMo Code**           | A [issue #2317](https://github.com/XiaomiMiMo/MiMo-Code/issues/2317) tem uma correção proposta no [PR #2327](https://github.com/XiaomiMiMo/MiMo-Code/pull/2327), que ainda não foi incorporada.                                                        |
+| **GitHub Copilot Chat** | O suporte automático ao header de sessão foi solicitado na [VS Code issue #334186](https://github.com/microsoft/vscode/issues/334186).                                                                                                                         |
+| **Kimi Code**           | O suporte automático ao header de sessão foi solicitado na [issue #3506](https://github.com/MoonshotAI/kimi-code/issues/3506).                                                                                                                                 |
+| **MiMo Code**           | A [issue #2317](https://github.com/XiaomiMiMo/MiMo-Code/issues/2317) tem uma correção proposta no [PR #2327](https://github.com/XiaomiMiMo/MiMo-Code/pull/2327), que ainda não foi incorporada.                                                                |
 
 ## Limites de uso
 
@@ -408,7 +408,7 @@ Para esses modelos, você ainda recebe um pouco mais do que receberia se pagasse
 
 Você também pode acessar os modelos do Go através dos seguintes endpoints de API.
 
-| Modelo                       | ID do modelo                 | Endpoint                                         | Pacote do AI SDK              |
+| Modelo                       | ID do modelo                 | Endpoint                                         | Pacote do AI SDK            |
 | ---------------------------- | ---------------------------- | ------------------------------------------------ | --------------------------- |
 | Grok 4.7                     | grok-4.7                     | `https://opencode.ai/zen/go/v1/responses`        | `@ai-sdk/openai`            |
 | Grok 4.6                     | grok-4.6                     | `https://opencode.ai/zen/go/v1/responses`        | `@ai-sdk/openai`            |
@@ -460,37 +460,37 @@ https://opencode.ai/zen/go/v1/models
 ## Privacidade
 
 | Modelo                       | Treinamento de modelos | Retenção de dados |
-| ---------------------------- | -------------- | -------------- |
-| Grok 4.7                     | Não usado       | 30 dias        |
-| Grok 4.6                     | Não usado       | 30 dias        |
-| GPT 6 Luna                   | Não usado       | 30 dias        |
-| GPT 5.6 Luna                 | Não usado       | 30 dias        |
-| GLM-5.3-Flash                | Não usado       | 0 dias         |
-| GLM-5.3                      | Não usado       | 0 dias         |
-| GLM-5.2                      | Não usado       | 0 dias         |
-| Kimi K3                      | Não usado       | 0 dias         |
-| Kimi K2.7 Code               | Não usado       | 0 dias         |
-| Kimi K2.6                    | Não usado       | 0 dias         |
-| LongCat-2.0                  | Não usado       | 0 dias         |
-| MiMo-V2.6-Pro                | Não usado       | 0 dias         |
-| MiMo-V2.6-Flash              | Não usado       | 0 dias         |
-| MiMo-V2.5-Pro                | Não usado       | 0 dias         |
-| MiMo-V2.5                    | Não usado       | 0 dias         |
-| Qwen3.8 Max                  | Não usado       | 0 dias         |
-| Qwen3.8 Flash                | Não usado       | 0 dias         |
-| Qwen3.7 Plus                 | Não usado       | 0 dias         |
-| MiniMax M3                   | Não usado       | 0 dias         |
-| MiniMax M2.7                 | Não usado       | 0 dias         |
-| Muse Spark 1.3 Contributor   | Sim            | Não é ZDR        |
-| Muse Spark 1.2 Contributor   | Sim            | Não é ZDR        |
-| DeepSeek V4.1 Flash          | Não usado       | 0 dias\*       |
-| DeepSeek V4 Pro              | Não usado       | 0 dias\*       |
-| DeepSeek V4 Flash            | Não usado       | 0 dias\*       |
-| DeepSeek V4 Flash Vision Exp | Não usado       | 0 dias\*       |
-| Hy4 preview                  | Não usado       | 0 dias         |
-| Hy3                          | Não usado       | 0 dias         |
-| Space Bunny Free             | Não usado       | 0 dias         |
-| LongCat 2.5 Preview Free     | Não usado       | 0 dias         |
+| ---------------------------- | ---------------------- | ----------------- |
+| Grok 4.7                     | Não usado              | 30 dias           |
+| Grok 4.6                     | Não usado              | 30 dias           |
+| GPT 6 Luna                   | Não usado              | 30 dias           |
+| GPT 5.6 Luna                 | Não usado              | 30 dias           |
+| GLM-5.3-Flash                | Não usado              | 0 dias            |
+| GLM-5.3                      | Não usado              | 0 dias            |
+| GLM-5.2                      | Não usado              | 0 dias            |
+| Kimi K3                      | Não usado              | 0 dias            |
+| Kimi K2.7 Code               | Não usado              | 0 dias            |
+| Kimi K2.6                    | Não usado              | 0 dias            |
+| LongCat-2.0                  | Não usado              | 0 dias            |
+| MiMo-V2.6-Pro                | Não usado              | 0 dias            |
+| MiMo-V2.6-Flash              | Não usado              | 0 dias            |
+| MiMo-V2.5-Pro                | Não usado              | 0 dias            |
+| MiMo-V2.5                    | Não usado              | 0 dias            |
+| Qwen3.8 Max                  | Não usado              | 0 dias            |
+| Qwen3.8 Flash                | Não usado              | 0 dias            |
+| Qwen3.7 Plus                 | Não usado              | 0 dias            |
+| MiniMax M3                   | Não usado              | 0 dias            |
+| MiniMax M2.7                 | Não usado              | 0 dias            |
+| Muse Spark 1.3 Contributor   | Sim                    | Não é ZDR         |
+| Muse Spark 1.2 Contributor   | Sim                    | Não é ZDR         |
+| DeepSeek V4.1 Flash          | Não usado              | 0 dias\*          |
+| DeepSeek V4 Pro              | Não usado              | 0 dias\*          |
+| DeepSeek V4 Flash            | Não usado              | 0 dias\*          |
+| DeepSeek V4 Flash Vision Exp | Não usado              | 0 dias\*          |
+| Hy4 preview                  | Não usado              | 0 dias            |
+| Hy3                          | Não usado              | 0 dias            |
+| Space Bunny Free             | Não usado              | 0 dias            |
+| LongCat 2.5 Preview Free     | Não usado              | 0 dias            |
 
 - **Grok 4.7/4.6:** O ZDR desativa recursos importantes da API que dependem de dados armazenados, incluindo a Responses API com estado, Files and Collections e a Batch API. [Saiba mais](https://docs.x.ai/developers/faq/security#what-is-zero-data-retention-zdr).
 - **GPT 6 Luna / GPT 5.6 Luna:** Logs de monitoramento de abuso são gerados para todo uso de recursos da API e retidos por até 30 dias. [Saiba mais](https://developers.openai.com/api/docs/guides/your-data#data-retention-controls-for-abuse-monitoring).

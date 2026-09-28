@@ -10,9 +10,9 @@ export const email = `mailto:${config.email}`
 
 OpenCode Go zapewnia niezawodny dostęp do popularnych otwartych modeli do kodowania w ramach dwóch planów miesięcznych:
 
-| Plan | Cena | Użycie w cenie |
-| ---- | ----- | -------------- |
-| **Go** | **$10/miesiąc** | Tańszy dostęp do poniższych modeli |
+| Plan        | Cena            | Użycie w cenie                         |
+| ----------- | --------------- | -------------------------------------- |
+| **Go**      | **$10/miesiąc** | Tańszy dostęp do poniższych modeli     |
 | **Go Plus** | **$40/miesiąc** | Wyższe limity użycia poniższych modeli |
 
 Go działa jak każdy inny dostawca w OpenCode. Subskrybujesz OpenCode Go i
@@ -120,14 +120,14 @@ Twój klient powinien:
 Poza OpenCode zweryfikowano, że poniżsi klienci działają prawidłowo
 z OpenCode Go. Nie gwarantujemy jednak, że będą nadal działać w przyszłości.
 
-| Klient            | Obsługa sesji                                                                                                                                                                                                                             |
-| ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Hermes**        | Kompilacje zawierające [PR #101864](https://github.com/NousResearch/hermes-agent/pull/101864) wysyłają nagłówek w głównych i pomocniczych żądaniach OpenCode. Poprawkę scalono po wersji v0.21.0; samo to wydanie jej nie zawiera.                 |
-| **Claude Code**   | Go rozpoznaje jego natywny nagłówek sesji. Wrapper dodający niestandardowy nagłówek nie jest potrzebny.                                                                                                                                                                |
-| **Codex**         | Go rozpoznaje jego natywny nagłówek sesji. Niektóre wersje i konfiguracje proxy nadal go pomijają; podczas przekazywania żądań należy zachować nagłówek sesji.                                                                                                |
-| **ZCode**         | Go rozpoznaje jego natywny nagłówek sesji. Nasza [prośba o `x-opencode-session`](https://github.com/zai-org/feedback/issues/492) pozostaje otwarta, ale wysyłanie tego konkretnego nagłówka nie jest już konieczne.                              |
-| **Pi**            | Aktualne kompilacje wysyłają informacje o sesji dla OpenCode. Zaktualizuj starsze instalacje.                                                                                                                                                           |
-| **jcode**         | Zaktualizuj do wersji **v0.81.6 lub nowszej**, która zawiera [poprawkę nagłówka sesji](https://github.com/1jehuang/jcode/issues/1167).                                                                                                                |
+| Klient            | Obsługa sesji                                                                                                                                                                                                                                              |
+| ----------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Hermes**        | Kompilacje zawierające [PR #101864](https://github.com/NousResearch/hermes-agent/pull/101864) wysyłają nagłówek w głównych i pomocniczych żądaniach OpenCode. Poprawkę scalono po wersji v0.21.0; samo to wydanie jej nie zawiera.                         |
+| **Claude Code**   | Go rozpoznaje jego natywny nagłówek sesji. Wrapper dodający niestandardowy nagłówek nie jest potrzebny.                                                                                                                                                    |
+| **Codex**         | Go rozpoznaje jego natywny nagłówek sesji. Niektóre wersje i konfiguracje proxy nadal go pomijają; podczas przekazywania żądań należy zachować nagłówek sesji.                                                                                             |
+| **ZCode**         | Go rozpoznaje jego natywny nagłówek sesji. Nasza [prośba o `x-opencode-session`](https://github.com/zai-org/feedback/issues/492) pozostaje otwarta, ale wysyłanie tego konkretnego nagłówka nie jest już konieczne.                                        |
+| **Pi**            | Aktualne kompilacje wysyłają informacje o sesji dla OpenCode. Zaktualizuj starsze instalacje.                                                                                                                                                              |
+| **jcode**         | Zaktualizuj do wersji **v0.81.6 lub nowszej**, która zawiera [poprawkę nagłówka sesji](https://github.com/1jehuang/jcode/issues/1167).                                                                                                                     |
 | **Kilo Code CLI** | Kompilacje zawierające [PR #13752](https://github.com/Kilo-Org/kilocode/pull/13752) przywracają nagłówki sesji OpenCode. Ta poprawka obejmuje CLI, ale nie rozszerzenie VS Code. Zobacz [issue #13723](https://github.com/Kilo-Org/kilocode/issues/13723). |
 
 ### Klienty ze znanymi problemami
@@ -135,12 +135,12 @@ z OpenCode Go. Nie gwarantujemy jednak, że będą nadal działać w przyszłoś
 W badanych przez nas wersjach tych klientów obsługa sesji jest niepełna lub jej brakuje.
 Raporty pod podanymi linkami służą do śledzenia poprawek i obejść.
 
-| Klient                  | Stan i śledzenie                                                                                                                                                                                                                                    |
-| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Klient                  | Stan i śledzenie                                                                                                                                                                                                                                                            |
+| ----------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **DeepSeek Harness**    | Informacje o sesji docierają w niektórych ścieżkach modeli, ale brakuje ich w innych. Rozpoznajemy jego natywny nagłówek; pozostaje zapewnić jego wysyłanie przez wszystkie adaptery. [Discussion #5495](https://github.com/deepseek-ai/deepseek-harness/discussions/5495). |
-| **GitHub Copilot Chat** | Prośbę o automatyczną obsługę nagłówka sesji zgłoszono w [VS Code issue #334186](https://github.com/microsoft/vscode/issues/334186).                                                                                                                           |
-| **Kimi Code**           | Prośbę o automatyczną obsługę nagłówka sesji zgłoszono w [issue #3506](https://github.com/MoonshotAI/kimi-code/issues/3506).                                                                                                                                   |
-| **MiMo Code**           | Dla [issue #2317](https://github.com/XiaomiMiMo/MiMo-Code/issues/2317) zaproponowano poprawkę w [PR #2327](https://github.com/XiaomiMiMo/MiMo-Code/pull/2327), który nie został jeszcze scalony.                                                       |
+| **GitHub Copilot Chat** | Prośbę o automatyczną obsługę nagłówka sesji zgłoszono w [VS Code issue #334186](https://github.com/microsoft/vscode/issues/334186).                                                                                                                                        |
+| **Kimi Code**           | Prośbę o automatyczną obsługę nagłówka sesji zgłoszono w [issue #3506](https://github.com/MoonshotAI/kimi-code/issues/3506).                                                                                                                                                |
+| **MiMo Code**           | Dla [issue #2317](https://github.com/XiaomiMiMo/MiMo-Code/issues/2317) zaproponowano poprawkę w [PR #2327](https://github.com/XiaomiMiMo/MiMo-Code/pull/2327), który nie został jeszcze scalony.                                                                            |
 
 ## Limity użycia
 
@@ -408,7 +408,7 @@ W przypadku tych modeli nadal otrzymujesz nieco więcej, niż płacąc bezpośre
 
 Możesz również uzyskać dostęp do modeli Go za pośrednictwem następujących punktów końcowych API.
 
-| Model                        | ID modelu                    | Punkt końcowy                                    | Pakiet AI SDK              |
+| Model                        | ID modelu                    | Punkt końcowy                                    | Pakiet AI SDK               |
 | ---------------------------- | ---------------------------- | ------------------------------------------------ | --------------------------- |
 | Grok 4.7                     | grok-4.7                     | `https://opencode.ai/zen/go/v1/responses`        | `@ai-sdk/openai`            |
 | Grok 4.6                     | grok-4.6                     | `https://opencode.ai/zen/go/v1/responses`        | `@ai-sdk/openai`            |
@@ -460,37 +460,37 @@ https://opencode.ai/zen/go/v1/models
 ## Prywatność
 
 | Model                        | Trenowanie modelu | Retencja danych |
-| ---------------------------- | -------------- | -------------- |
-| Grok 4.7                     | Niewykorzystywane       | 30 dni        |
-| Grok 4.6                     | Niewykorzystywane       | 30 dni        |
-| GPT 6 Luna                   | Niewykorzystywane       | 30 dni        |
-| GPT 5.6 Luna                 | Niewykorzystywane       | 30 dni        |
-| GLM-5.3-Flash                | Niewykorzystywane       | 0 dni         |
-| GLM-5.3                      | Niewykorzystywane       | 0 dni         |
-| GLM-5.2                      | Niewykorzystywane       | 0 dni         |
-| Kimi K3                      | Niewykorzystywane       | 0 dni         |
-| Kimi K2.7 Code               | Niewykorzystywane       | 0 dni         |
-| Kimi K2.6                    | Niewykorzystywane       | 0 dni         |
-| LongCat-2.0                  | Niewykorzystywane       | 0 dni         |
-| MiMo-V2.6-Pro                | Niewykorzystywane       | 0 dni         |
-| MiMo-V2.6-Flash              | Niewykorzystywane       | 0 dni         |
-| MiMo-V2.5-Pro                | Niewykorzystywane       | 0 dni         |
-| MiMo-V2.5                    | Niewykorzystywane       | 0 dni         |
-| Qwen3.8 Max                  | Niewykorzystywane       | 0 dni         |
-| Qwen3.8 Flash                | Niewykorzystywane       | 0 dni         |
-| Qwen3.7 Plus                 | Niewykorzystywane       | 0 dni         |
-| MiniMax M3                   | Niewykorzystywane       | 0 dni         |
-| MiniMax M2.7                 | Niewykorzystywane       | 0 dni         |
-| Muse Spark 1.3 Contributor   | Tak            | Nie ZDR        |
-| Muse Spark 1.2 Contributor   | Tak            | Nie ZDR        |
-| DeepSeek V4.1 Flash          | Niewykorzystywane       | 0 dni\*       |
-| DeepSeek V4 Pro              | Niewykorzystywane       | 0 dni\*       |
-| DeepSeek V4 Flash            | Niewykorzystywane       | 0 dni\*       |
-| DeepSeek V4 Flash Vision Exp | Niewykorzystywane       | 0 dni\*       |
-| Hy4 preview                  | Niewykorzystywane       | 0 dni         |
-| Hy3                          | Niewykorzystywane       | 0 dni         |
-| Space Bunny Free             | Niewykorzystywane       | 0 dni         |
-| LongCat 2.5 Preview Free     | Niewykorzystywane       | 0 dni         |
+| ---------------------------- | ----------------- | --------------- |
+| Grok 4.7                     | Niewykorzystywane | 30 dni          |
+| Grok 4.6                     | Niewykorzystywane | 30 dni          |
+| GPT 6 Luna                   | Niewykorzystywane | 30 dni          |
+| GPT 5.6 Luna                 | Niewykorzystywane | 30 dni          |
+| GLM-5.3-Flash                | Niewykorzystywane | 0 dni           |
+| GLM-5.3                      | Niewykorzystywane | 0 dni           |
+| GLM-5.2                      | Niewykorzystywane | 0 dni           |
+| Kimi K3                      | Niewykorzystywane | 0 dni           |
+| Kimi K2.7 Code               | Niewykorzystywane | 0 dni           |
+| Kimi K2.6                    | Niewykorzystywane | 0 dni           |
+| LongCat-2.0                  | Niewykorzystywane | 0 dni           |
+| MiMo-V2.6-Pro                | Niewykorzystywane | 0 dni           |
+| MiMo-V2.6-Flash              | Niewykorzystywane | 0 dni           |
+| MiMo-V2.5-Pro                | Niewykorzystywane | 0 dni           |
+| MiMo-V2.5                    | Niewykorzystywane | 0 dni           |
+| Qwen3.8 Max                  | Niewykorzystywane | 0 dni           |
+| Qwen3.8 Flash                | Niewykorzystywane | 0 dni           |
+| Qwen3.7 Plus                 | Niewykorzystywane | 0 dni           |
+| MiniMax M3                   | Niewykorzystywane | 0 dni           |
+| MiniMax M2.7                 | Niewykorzystywane | 0 dni           |
+| Muse Spark 1.3 Contributor   | Tak               | Nie ZDR         |
+| Muse Spark 1.2 Contributor   | Tak               | Nie ZDR         |
+| DeepSeek V4.1 Flash          | Niewykorzystywane | 0 dni\*         |
+| DeepSeek V4 Pro              | Niewykorzystywane | 0 dni\*         |
+| DeepSeek V4 Flash            | Niewykorzystywane | 0 dni\*         |
+| DeepSeek V4 Flash Vision Exp | Niewykorzystywane | 0 dni\*         |
+| Hy4 preview                  | Niewykorzystywane | 0 dni           |
+| Hy3                          | Niewykorzystywane | 0 dni           |
+| Space Bunny Free             | Niewykorzystywane | 0 dni           |
+| LongCat 2.5 Preview Free     | Niewykorzystywane | 0 dni           |
 
 - **Grok 4.7/4.6:** ZDR wyłącza ważne funkcje API zależne od przechowywanych danych, w tym stanowy Responses API, Files and Collections oraz Batch API. [Dowiedz się więcej](https://docs.x.ai/developers/faq/security#what-is-zero-data-retention-zdr).
 - **GPT 6 Luna / GPT 5.6 Luna:** Dzienniki monitorowania nadużyć są generowane dla każdego użycia funkcji API i przechowywane przez maksymalnie 30 dni. [Dowiedz się więcej](https://developers.openai.com/api/docs/guides/your-data#data-retention-controls-for-abuse-monitoring).

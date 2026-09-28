@@ -10,9 +10,9 @@ export const email = `mailto:${config.email}`
 
 OpenCode Go offre un accesso affidabile ai popolari modelli di programmazione aperti, con due piani mensili:
 
-| Piano | Prezzo | Utilizzo incluso |
-| ----- | ------ | ---------------- |
-| **Go** | **$10/mese** | Accesso a costo ridotto ai modelli elencati di seguito |
+| Piano       | Prezzo       | Utilizzo incluso                                                 |
+| ----------- | ------------ | ---------------------------------------------------------------- |
+| **Go**      | **$10/mese** | Accesso a costo ridotto ai modelli elencati di seguito           |
 | **Go Plus** | **$40/mese** | Limiti di utilizzo più elevati per i modelli elencati di seguito |
 
 Go funziona come qualsiasi altro provider in OpenCode. Ti abboni a OpenCode Go e
@@ -386,7 +386,6 @@ Se hai anche dei crediti nel tuo saldo Zen, puoi abilitare l'opzione **Use balan
 nella console. Quando è abilitata, dopo che avrai raggiunto i limiti di utilizzo Go
 utilizzerà il tuo saldo Zen invece di bloccare le richieste.
 
-
 ---
 
 ### Perché alcuni modelli hanno un utilizzo inferiore
@@ -405,7 +404,7 @@ Per questi modelli, ottieni comunque un po’ più di utilizzo rispetto a quanto
 
 Puoi anche accedere ai modelli Go tramite i seguenti endpoint API.
 
-| Modello                        | ID modello                     | Endpoint                                         | Pacchetto AI SDK              |
+| Modello                      | ID modello                   | Endpoint                                         | Pacchetto AI SDK            |
 | ---------------------------- | ---------------------------- | ------------------------------------------------ | --------------------------- |
 | Grok 4.7                     | grok-4.7                     | `https://opencode.ai/zen/go/v1/responses`        | `@ai-sdk/openai`            |
 | Grok 4.6                     | grok-4.6                     | `https://opencode.ai/zen/go/v1/responses`        | `@ai-sdk/openai`            |
@@ -442,7 +441,6 @@ Il [model id](/docs/config/#models) nella tua configurazione OpenCode
 utilizza il formato `opencode-go/<model-id>`. Ad esempio, per Kimi K3, useresti
 `opencode-go/kimi-k3` nella tua configurazione.
 
-
 ---
 
 ### Modelli
@@ -457,38 +455,38 @@ https://opencode.ai/zen/go/v1/models
 
 ## Privacy
 
-| Modello                        | Addestramento del modello | Conservazione dei dati |
-| ---------------------------- | -------------- | -------------- |
-| Grok 4.7                     | Non utilizzato       | 30 giorni        |
-| Grok 4.6                     | Non utilizzato       | 30 giorni        |
-| GPT 6 Luna                   | Non utilizzato       | 30 giorni        |
-| GPT 5.6 Luna                 | Non utilizzato       | 30 giorni        |
-| GLM-5.3-Flash                | Non utilizzato       | 0 giorni         |
-| GLM-5.3                      | Non utilizzato       | 0 giorni         |
-| GLM-5.2                      | Non utilizzato       | 0 giorni         |
-| Kimi K3                      | Non utilizzato       | 0 giorni         |
-| Kimi K2.7 Code               | Non utilizzato       | 0 giorni         |
-| Kimi K2.6                    | Non utilizzato       | 0 giorni         |
-| LongCat-2.0                  | Non utilizzato       | 0 giorni         |
-| MiMo-V2.6-Pro                | Non utilizzato       | 0 giorni         |
-| MiMo-V2.6-Flash              | Non utilizzato       | 0 giorni         |
-| MiMo-V2.5-Pro                | Non utilizzato       | 0 giorni         |
-| MiMo-V2.5                    | Non utilizzato       | 0 giorni         |
-| Qwen3.8 Max                  | Non utilizzato       | 0 giorni         |
-| Qwen3.8 Flash                | Non utilizzato       | 0 giorni         |
-| Qwen3.7 Plus                 | Non utilizzato       | 0 giorni         |
-| MiniMax M3                   | Non utilizzato       | 0 giorni         |
-| MiniMax M2.7                 | Non utilizzato       | 0 giorni         |
-| Muse Spark 1.3 Contributor   | Sì            | Non ZDR        |
-| Muse Spark 1.2 Contributor   | Sì            | Non ZDR        |
-| DeepSeek V4.1 Flash          | Non utilizzato       | 0 giorni\*       |
-| DeepSeek V4 Pro              | Non utilizzato       | 0 giorni\*       |
-| DeepSeek V4 Flash            | Non utilizzato       | 0 giorni\*       |
-| DeepSeek V4 Flash Vision Exp | Non utilizzato       | 0 giorni\*       |
-| Hy4 preview                  | Non utilizzato       | 0 giorni         |
-| Hy3                          | Non utilizzato       | 0 giorni         |
-| Space Bunny Free             | Non utilizzato       | 0 giorni         |
-| LongCat 2.5 Preview Free     | Non utilizzato       | 0 giorni         |
+| Modello                      | Addestramento del modello | Conservazione dei dati |
+| ---------------------------- | ------------------------- | ---------------------- |
+| Grok 4.7                     | Non utilizzato            | 30 giorni              |
+| Grok 4.6                     | Non utilizzato            | 30 giorni              |
+| GPT 6 Luna                   | Non utilizzato            | 30 giorni              |
+| GPT 5.6 Luna                 | Non utilizzato            | 30 giorni              |
+| GLM-5.3-Flash                | Non utilizzato            | 0 giorni               |
+| GLM-5.3                      | Non utilizzato            | 0 giorni               |
+| GLM-5.2                      | Non utilizzato            | 0 giorni               |
+| Kimi K3                      | Non utilizzato            | 0 giorni               |
+| Kimi K2.7 Code               | Non utilizzato            | 0 giorni               |
+| Kimi K2.6                    | Non utilizzato            | 0 giorni               |
+| LongCat-2.0                  | Non utilizzato            | 0 giorni               |
+| MiMo-V2.6-Pro                | Non utilizzato            | 0 giorni               |
+| MiMo-V2.6-Flash              | Non utilizzato            | 0 giorni               |
+| MiMo-V2.5-Pro                | Non utilizzato            | 0 giorni               |
+| MiMo-V2.5                    | Non utilizzato            | 0 giorni               |
+| Qwen3.8 Max                  | Non utilizzato            | 0 giorni               |
+| Qwen3.8 Flash                | Non utilizzato            | 0 giorni               |
+| Qwen3.7 Plus                 | Non utilizzato            | 0 giorni               |
+| MiniMax M3                   | Non utilizzato            | 0 giorni               |
+| MiniMax M2.7                 | Non utilizzato            | 0 giorni               |
+| Muse Spark 1.3 Contributor   | Sì                        | Non ZDR                |
+| Muse Spark 1.2 Contributor   | Sì                        | Non ZDR                |
+| DeepSeek V4.1 Flash          | Non utilizzato            | 0 giorni\*             |
+| DeepSeek V4 Pro              | Non utilizzato            | 0 giorni\*             |
+| DeepSeek V4 Flash            | Non utilizzato            | 0 giorni\*             |
+| DeepSeek V4 Flash Vision Exp | Non utilizzato            | 0 giorni\*             |
+| Hy4 preview                  | Non utilizzato            | 0 giorni               |
+| Hy3                          | Non utilizzato            | 0 giorni               |
+| Space Bunny Free             | Non utilizzato            | 0 giorni               |
+| LongCat 2.5 Preview Free     | Non utilizzato            | 0 giorni               |
 
 - **Grok 4.7/4.6:** ZDR disabilita importanti funzionalità API che dipendono dai dati archiviati, tra cui la Responses API con stato, Files and Collections e Batch API. [Scopri di più](https://docs.x.ai/developers/faq/security#what-is-zero-data-retention-zdr).
 - **GPT 6 Luna / GPT 5.6 Luna:** I log di monitoraggio degli abusi vengono generati per l'utilizzo di tutte le funzionalità API e conservati per un massimo di 30 giorni. [Scopri di più](https://developers.openai.com/api/docs/guides/your-data#data-retention-controls-for-abuse-monitoring).
