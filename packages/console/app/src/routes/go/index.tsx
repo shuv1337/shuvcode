@@ -1,7 +1,7 @@
 import "./index.css"
-import { createAsync, query } from "@solidjs/router"
+import { createAsync, query, useSearchParams } from "@solidjs/router"
 import { Title, Meta } from "@solidjs/meta"
-import { For } from "solid-js"
+import { For, Show } from "solid-js"
 //import { HttpHeader } from "@solidjs/start"
 import goLogoLight from "../../asset/go-ornate-light.svg"
 import goLogoDark from "../../asset/go-ornate-dark.svg"
@@ -61,6 +61,7 @@ export default function Home() {
   const subscribeUrl = "https://opencode.ai/console/go"
   const i18n = useI18n()
   const language = useLanguage()
+  const [searchParams] = useSearchParams()
   return (
     <main data-page="go">
       {/*<HttpHeader name="Cache-Control" value="public, max-age=1, s-maxage=3600, stale-while-revalidate=86400" />*/}
@@ -89,6 +90,12 @@ export default function Home() {
 
         <div data-component="content">
           <section data-component="hero">
+            <Show when={searchParams.ref}>
+              <aside data-component="referral-ended-notice" aria-label={i18n.t("go.referral.ended.label")}>
+                <strong>{i18n.t("go.referral.ended.label")}</strong>
+                <p>{i18n.t("go.referral.ended")}</p>
+              </aside>
+            </Show>
             <div data-component="desktop-app-banner">
               <span data-slot="badge">{i18n.t("home.banner.badge")}</span>
               <div data-slot="content">
