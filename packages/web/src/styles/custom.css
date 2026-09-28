@@ -304,7 +304,7 @@ ol {
   padding-inline-start: 1.5rem !important;
 }
 
-.sl-markdown-content ul {
+.sl-markdown-content ul:not([role="tablist"]) {
   list-style: disc !important;
   padding-inline-start: 1.5rem !important;
 }
