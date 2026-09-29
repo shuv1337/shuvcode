@@ -126,6 +126,26 @@ test("spells Cloudflare AI Gateway variants for their upstream routes", () => {
   ])
 })
 
+test("spells xAI Responses variants with catalog effort levels", () => {
+  const supports: Variant.Support[] = [{ type: "effort", values: ["low", "medium", "high", "xhigh"] }]
+  expect(resolve(model("@opencode/ai/providers/xai", "grok-4.6"), supports)).toEqual(
+    ["low", "medium", "high", "xhigh"].map((effort) => ({
+      id: effort,
+      settings: { reasoningEffort: effort, reasoningSummary: "auto", include: ["reasoning.encrypted_content"] },
+    })),
+  )
+  expect(resolve(model("@opencode/ai/providers/xai", "grok-4.3"), [{ type: "effort", values: ["none", "low"] }])).toEqual([
+    {
+      id: "none",
+      settings: { reasoningEffort: "none", reasoningSummary: "auto", include: ["reasoning.encrypted_content"] },
+    },
+    { id: "low", settings: { reasoningEffort: "low", reasoningSummary: "auto", include: ["reasoning.encrypted_content"] } },
+  ])
+  expect(resolve(model("@opencode/ai/providers/xai", "grok-4.6"), [{ type: "effort" }]).map((item) => item.id)).toEqual([
+    "low", "medium", "high",
+  ])
+})
+
 test("spells Chat Completions variants for direct providers", () => {
   expect(
     resolve(model("@opencode/ai/providers/deepseek", "deepseek-v4-flash"), [
