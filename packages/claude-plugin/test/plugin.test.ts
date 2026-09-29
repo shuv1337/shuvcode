@@ -35,6 +35,7 @@ test("public plugin registers filtered hooks, OAuth/env methods, zero cost and a
             connection: {
               active: () => Effect.succeed({ type: "env" as const, name: "CLAUDE_CODE_OAUTH_TOKEN" }),
               resolve: () => Effect.sync(() => current),
+              status: () => Effect.void,
             },
             transform: (callback) =>
               Effect.sync(() => {
