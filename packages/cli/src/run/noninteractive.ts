@@ -67,6 +67,9 @@ type FormRequest = Extract<V2Event, { type: "form.created" }>["data"]["form"]
 // attached client must not cancel input that may belong to another session.
 const GLOBAL_FORM_SESSION_ID = "global"
 
+const PERMISSION_REJECTED_FEEDBACK =
+  "This non-interactive run cannot ask the user for permission, so the request was rejected. Continue without this action."
+
 export async function runNonInteractivePrompt(input: Input) {
   const controller = new AbortController()
   const stream = input.client.event.subscribe({ signal: controller.signal })[Symbol.asyncIterator]()
@@ -133,9 +136,11 @@ export async function runNonInteractivePrompt(input: Input) {
   }
 
   const replyPermission = async (request: { id: string; action: string; resources: ReadonlyArray<string> }) => {
+    // Nobody can approve here. Outside V1 compatibility, reject with feedback so the tool fails
+    // as ordinary model-visible output and the model continues without the action.
+    const continuing = !input.auto && input.compatibility !== "v1"
     if (!input.auto) {
-      permissionRejected = true
-      if (input.compatibility !== "v1") process.exitCode = 1
+      if (!continuing) permissionRejected = true
       UI.println(
         UI.Style.TEXT_WARNING_BOLD + "!",
         UI.Style.TEXT_NORMAL +
@@ -147,9 +152,10 @@ export async function runNonInteractivePrompt(input: Input) {
         sessionID: input.sessionID,
         requestID: request.id,
         decision: input.auto ? "once" : "reject",
+        ...(continuing ? { message: PERMISSION_REJECTED_FEEDBACK } : {}),
       })
       .catch(() => {})
-    if (!input.auto) {
+    if (!input.auto && !continuing) {
       await input.client.session.interrupt({ sessionID: input.sessionID }).catch(() => {})
     }
   }
