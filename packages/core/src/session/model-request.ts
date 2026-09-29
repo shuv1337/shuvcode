@@ -31,6 +31,7 @@ import { Permission } from "../permission.js"
 import { PluginHooks } from "../plugin/hooks.js"
 import { QuestionTool } from "../tool/plugin/question.js"
 import { Tool } from "../tool.js"
+import { SessionAffinity } from "./affinity.js"
 import { SessionModelTransport } from "./model-transport.js"
 import { SessionProviderContext } from "./provider-context.js"
 import { SessionRunnerModel } from "./runner/model.js"
@@ -270,7 +271,7 @@ export const layer = Layer.effect(
       const entries = Object.entries(shaped.options)
       const generation = Object.fromEntries(entries.filter(([k]) => GENERATION_KEYS.has(k))) as GenerationOptionsFields
       const providerOptions = Object.fromEntries(entries.filter(([k]) => !GENERATION_KEYS.has(k)))
-      const affinity = session.parentID ?? session.fork?.sessionID ?? session.id
+      const affinity = SessionAffinity.get(session)
       const base = LLM.request({
         model: model.model,
         http: {
