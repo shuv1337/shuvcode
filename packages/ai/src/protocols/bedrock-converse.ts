@@ -23,6 +23,7 @@ import { JsonObject, optionalArray, ProviderShared } from "./shared.js"
 import { BedrockAuth } from "./utils/bedrock-auth.js"
 import { BedrockCache } from "./utils/bedrock-cache.js"
 import { BedrockMedia } from "./utils/bedrock-media.js"
+import { supportsThinkingBlockBinding, THINKING_BINDING_BETA } from "./utils/claude-model.js"
 import { Lifecycle } from "./utils/lifecycle.js"
 import { MistralToolID } from "./utils/mistral-tool-id.js"
 import { ToolStream } from "./utils/tool-stream.js"
@@ -443,6 +444,23 @@ const decodeOptions = ProviderShared.validateWith(Schema.decodeUnknownEffect(Opt
 // Claude on Bedrock requires the thinking budget below `maxTokens`, with a minimum of 1,024.
 const MIN_THINKING_BUDGET = 1_024
 
+const isThinkingDisabled = Schema.is(
+  Schema.Struct({
+    additionalModelRequestFields: Schema.Struct({ thinking: Schema.Struct({ type: Schema.Literal("disabled") }) }),
+  }),
+)
+
+// Claude 5.1+ binds each thinking signature to the prefix above it. Ask Bedrock to drop the affected blocks instead of
+// failing when that prefix changes. `http.body` overlays this field by field, so callers can still override it.
+const applyThinkingBindingDefault = (request: LLMRequest, thinking: Readonly<Record<string, unknown>> | undefined) => {
+  if (isThinkingDisabled(request.http?.body)) return thinking
+  if (!supportsThinkingBlockBinding(request.model)) return thinking
+  return {
+    ...(thinking ?? { type: "adaptive" as const }),
+    block_binding: { prefix_mismatch_behavior: "drop_block" },
+  }
+}
+
 const fromRequest = Effect.fn("BedrockConverse.fromRequest")(function* (request: LLMRequest) {
   const toolChoice = request.toolChoice ? yield* lowerToolChoice(request.toolChoice) : undefined
   const flattened = ProviderShared.flattenToolRequest(request)
@@ -450,7 +468,8 @@ const fromRequest = Effect.fn("BedrockConverse.fromRequest")(function* (request:
   const options = yield* decodeOptions(request.providerOptions ?? {})
   const maxTokens =
     isNova2(request.model) && isHighReasoningEffort(request.http?.body) ? undefined : generation?.maxTokens
-  const thinking =
+  const thinking = applyThinkingBindingDefault(
+    request,
     options.thinking === undefined
       ? undefined
       : {
@@ -460,7 +479,8 @@ const fromRequest = Effect.fn("BedrockConverse.fromRequest")(function* (request:
             maxTokens,
             MIN_THINKING_BUDGET,
           ),
-        }
+        },
+  )
   // Bedrock-Claude shares Anthropic's 4-breakpoint cap. Spend the budget in
   // tools → system → messages order to favour the highest-impact prefixes.
   const breakpoints = BedrockCache.breakpoints(request.model.id)
@@ -509,6 +529,8 @@ const fromRequest = Effect.fn("BedrockConverse.fromRequest")(function* (request:
         : {
             ...(generation?.topK === undefined ? {} : { top_k: generation.topK }),
             ...(thinking === undefined ? {} : { thinking }),
+            // Converse takes Anthropic betas in the body, and Bedrock rejects `block_binding` without this one.
+            ...(thinking?.block_binding === undefined ? {} : { anthropic_beta: [THINKING_BINDING_BETA] }),
           },
   }
 })
