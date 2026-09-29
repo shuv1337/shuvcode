@@ -107,6 +107,7 @@ it.effect(
           connection: {
             active: () => Effect.succeed({ type: "credential", id: "fixture", label: "fixture", method: "oauth" }),
             resolve: () => Effect.sync(() => ({ ...imported, access: `fixture-${++resolutions}` })),
+            status: () => Effect.void,
           },
         },
       })
@@ -198,6 +199,7 @@ it.effect("Antigravity fails resolution and invalid request metadata without API
             mode === "error"
               ? Effect.fail(new Error("refresh refused"))
               : Effect.succeed(mode === "missing" ? { ...imported, metadata: {} } : imported),
+          status: () => Effect.void,
         },
       },
     })
