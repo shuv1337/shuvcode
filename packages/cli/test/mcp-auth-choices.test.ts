@@ -50,7 +50,7 @@ test("mcp auth accepts an optional server name and rejects no-name noninteractiv
       stderr: "pipe",
     })
   const help = cli(["--help"])
-  expect(await new Response(help.stdout).text()).toContain("opencode mcp auth [flags] [<name>]")
+  expect(await new Response(help.stdout).text()).toContain("shuvcode mcp auth [flags] [<name>]")
   expect(await help.exited).toBe(0)
 
   const missing = cli([])
