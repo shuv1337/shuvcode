@@ -29,10 +29,27 @@ export const BrowserPaneRequestSchema = Schema.Union([
   Schema.Struct({ type: Schema.Literal("register"), bindingID, target }),
   Schema.Struct({ type: Schema.Literal("layout"), bindingID, layout: Schema.optionalKey(layout) }),
   Schema.Struct({ type: Schema.Literal("command"), bindingID, command: Browser.Action }),
+  Schema.Struct({ type: Schema.Literal("inspect"), bindingID, tabID: Browser.TabID, enabled: Schema.Boolean }),
+  Schema.Struct({
+    type: Schema.Literal("highlight"),
+    bindingID,
+    tabID: Browser.TabID,
+    ref: Schema.optionalKey(Browser.Ref),
+  }),
   Schema.Struct({ type: Schema.Literal("close"), bindingID }),
 ])
 export type BrowserPaneRequest = Schema.Schema.Type<typeof BrowserPaneRequestSchema>
 
+const detail = (maximum: number) => Schema.String.check(Schema.isMaxLength(maximum))
+export const BrowserPaneElementSchema = Schema.Struct({
+  ref: Browser.Ref,
+  selector: detail(2_048),
+  label: detail(512),
+  role: Schema.optionalKey(detail(128)),
+  name: Schema.optionalKey(detail(512)),
+  text: Schema.optionalKey(detail(512)),
+  rect: bounds,
+})
 export const BrowserPaneEventSchema = Schema.Union([
   Schema.Struct({ type: Schema.Literal("focus"), tabID: Browser.TabID }),
   Schema.Struct({ type: Schema.Literal("preview"), path: text(2_048) }),
@@ -40,6 +57,12 @@ export const BrowserPaneEventSchema = Schema.Union([
     type: Schema.Literal("state"),
     state: Schema.NullOr(Browser.State),
     error: Schema.optionalKey(Schema.String),
+  }),
+  Schema.Struct({
+    type: Schema.Literal("inspect"),
+    tabID: Browser.TabID,
+    active: Schema.Boolean,
+    element: Schema.optionalKey(BrowserPaneElementSchema),
   }),
 ])
 export const BrowserPaneRpc = Rpc.make("BrowserPane", { payload: { request: BrowserPaneRequestSchema } })

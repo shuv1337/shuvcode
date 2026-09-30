@@ -16,9 +16,13 @@ import {
 const patterns = [
   /prompt is too long/i,
   /input is too long for requested model/i,
+  // Cloudflare Workers AI reports this as HTTP 413.
+  /exceeded this model context window limit/i,
   /exceeds the context window/i,
   /exceeds (?:the )?(?:model'?s )?maximum context length(?: of [\d,]+ tokens?|\s*\([\d,]+\))/i,
   /input token count.*exceeds the maximum/i,
+  // Amazon Nova on Bedrock reports this as a mid-stream validationException.
+  /number of input tokens exceeds maximum length/i,
   /tokens in request more than max tokens allowed/i,
   /maximum prompt length is \d+/i,
   /reduce the length of the messages/i,

@@ -2,7 +2,7 @@ import { batch, createEffect, createMemo, on } from "solid-js"
 import type { Browser } from "@opencode/plugin-browser/rpc"
 import { createStore } from "solid-js/store"
 import { useLanguage } from "@/runtime/i18n/language"
-import type { BrowserPaneCommand } from "@/runtime/platform/browser-pane"
+import type { BrowserPaneCommand, BrowserPaneEvent } from "@/runtime/platform/browser-pane"
 import { useServer } from "@/runtime/server/current"
 import { useCommand } from "@/shell/commands/command"
 import type { SessionModel } from "../model"
@@ -120,5 +120,24 @@ export function createSessionBrowser(session: SessionModel) {
     close: (tabID: Browser.TabID) => session.layout.tabs().close(sessionBrowserTab(tabID)),
     open,
     command,
+    onInspect(listener: (event: Extract<BrowserPaneEvent, { type: "inspect" }>) => void) {
+      const sessionID = session.identity.sessionID()
+      return sessionID ? attachments.onInspect(server, sessionID, listener) : () => undefined
+    },
+    /** Shows the browser tab that owns a picked element and flashes the element. */
+    reveal(tabID: string, ref?: string) {
+      const sessionID = session.identity.sessionID()
+      const tab = browserTabs().find((tab) => tab.id === tabID)
+      if (!sessionID || !tab) return
+      const view = session.layout.view()
+      if (!view.reviewPanel.opened()) view.reviewPanel.open()
+      session.layout.tabs().setActive(sessionBrowserTab(tab.id))
+      if (ref && isRef(ref)) attachments.highlight(server, sessionID, tab.id, ref)
+    },
   }
+}
+
+// Stored comments keep refs as plain strings; this matches the desktop's ref format.
+function isRef(value: string): value is Browser.Ref {
+  return /^e[1-9][0-9]*$/.test(value)
 }

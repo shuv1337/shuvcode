@@ -1,3 +1,4 @@
+import type { BrowserPaneElement } from "@opencode/app/desktop"
 import { Browser } from "@opencode/plugin-browser/rpc"
 import electron, { type BrowserWindow, type WebContents } from "electron"
 import type { Protocol } from "devtools-protocol"
@@ -33,6 +34,38 @@ const retainedOperations = new Set<Browser.Method>([
   "heap.object",
   "heap.compare",
 ])
+// Input the page receives while the element picker is on would pick an element instead.
+const pointerOperations = new Set<Browser.Method>([
+  "click",
+  "hover",
+  "drag",
+  "fill",
+  "fill_form",
+  "select",
+  "check",
+  "press",
+  "scroll",
+  "files.drop",
+])
+// Chromium DevTools' element picker colors, so the overlay matches the Elements panel.
+const inspectHighlight: Protocol.Overlay.HighlightConfig = {
+  showInfo: true,
+  showStyles: true,
+  showAccessibilityInfo: true,
+  colorFormat: "hex",
+  contrastAlgorithm: "aa",
+  contentColor: { r: 111, g: 168, b: 220, a: 0.66 },
+  paddingColor: { r: 147, g: 196, b: 125, a: 0.55 },
+  borderColor: { r: 255, g: 229, b: 153, a: 0.66 },
+  marginColor: { r: 246, g: 178, b: 107, a: 0.66 },
+  eventTargetColor: { r: 255, g: 196, b: 196, a: 0.66 },
+  shapeColor: { r: 96, g: 82, b: 177, a: 0.8 },
+  shapeMarginColor: { r: 96, g: 82, b: 127, a: 0.6 },
+}
+const pickedHighlight = { ...inspectHighlight, showInfo: false, showStyles: false, showAccessibilityInfo: false }
+// Chromium rejects mode "none" without a config. A rejected call leaves the picker armed, and the
+// next hideHighlight would put its hover tool back.
+const inspectOff = { mode: "none", highlightConfig: inspectHighlight }
 export type BrowserPage = ReturnType<typeof createBrowserPage>
 
 export function createBrowserPage(
@@ -42,6 +75,8 @@ export function createBrowserPage(
     partition: string
     network: BrowserNetwork | null
     publish: (error?: string) => void
+    /** Reports the element picker starting, stopping, or picking an element. */
+    inspect?: (event: { active: boolean; element?: BrowserPaneElement }) => void
     fail: () => void
     popup: (options: Electron.BrowserWindowConstructorOptions) => WebContents
     initialize?: boolean
@@ -80,7 +115,18 @@ export function createBrowserPage(
       contents.reload()
       return
     }
+    if (input.key === "Escape" && inspecting) {
+      event.preventDefault()
+      void toggleInspect(false)
+      return
+    }
     if (input.alt || !(process.platform === "darwin" ? input.meta : input.control)) return
+    // The same chord as Chromium DevTools' element picker.
+    if (input.shift && input.code === "KeyC") {
+      event.preventDefault()
+      void toggleInspect(!inspecting)
+      return
+    }
     const step =
       input.key === "=" || input.key === "+" || input.code === "NumpadAdd"
         ? 0.5
@@ -98,6 +144,13 @@ export function createBrowserPage(
   const diagnostics = createDiagnostics(cdp)
   const profiling = createProfiling(contents, cdp, files, sourceURLs)
   const refs = new Map<string, Element>()
+  // Elements the user picked. Their refs outlive later snapshots, so a comment keeps pointing at
+  // the element until the document changes.
+  const picked = new Map<string, Element>()
+  let inspecting = false
+  // Bumped by every picker toggle and hide, so a pick still being described can tell it was cancelled.
+  let picks = 0
+  let flash: ReturnType<typeof setTimeout> | undefined
   const sessions = new Map<string, string>()
   const parents = new Map<string, string>()
   const contexts = new Map<string, { id: number; sessionID?: string }>()
@@ -141,7 +194,9 @@ export function createBrowserPage(
     generation++
     documents.clear()
     refs.clear()
+    picked.clear()
     diagnostics.clear()
+    if (inspecting) void toggleInspect(false)
     publish()
   }
   const settle = () => {
@@ -264,7 +319,16 @@ export function createBrowserPage(
         },
         sessionId,
       ),
+      ...(inspecting ? [arm(sessionId)] : []),
     ]).catch(() => undefined)
+  })
+  // Each out-of-process frame runs its own picker; the frame under the pointer reports the click.
+  cdp.on("Overlay.inspectNodeRequested", ({ backendNodeId }, sessionID) => {
+    if (!inspecting) return
+    void inspected(backendNodeId, sessionID).catch(() => {
+      void hideHighlight()
+      options.inspect?.({ active: false })
+    })
   })
   cdp.on("Target.detachedFromTarget", ({ sessionId }) => {
     sessions.forEach((id, frameID) => {
@@ -358,6 +422,12 @@ export function createBrowserPage(
       })
     },
     setVisible(value: boolean) {
+      // A hidden page cannot be picked from, and a comment's frozen still already shows the
+      // picked element, so hiding ends the picker, any pick in progress, and the highlight.
+      if (visible && !value) {
+        picks++
+        void (inspecting ? toggleInspect(false) : hideHighlight())
+      }
       visible = value
       updateVisibility()
     },
@@ -367,6 +437,15 @@ export function createBrowserPage(
       const image = await contents.capturePage()
       return image.isEmpty() ? undefined : new Uint8Array(image.toJPEG(90))
     },
+    async inspect(enabled: boolean) {
+      if (closed) return
+      await ready
+      await toggleInspect(enabled)
+    },
+    async highlight(ref?: Browser.Ref) {
+      if (closed) return
+      await highlightPicked(ref).catch(() => undefined)
+    },
     async execute(command: Browser.Command, signal: AbortSignal): Promise<Browser.Result> {
       await ready
       abortError(signal)
@@ -374,6 +453,7 @@ export function createBrowserPage(
         throw new Error(
           "Browser tab was closed. Call browser.tabs.list({}) and choose an existing tabID; do not reuse the closed tab's refs.",
         )
+      if (inspecting && pointerOperations.has(command.action.type)) await toggleInspect(false)
       if (dialog && command.action.type !== "dialog")
         throw new Error(
           'A JavaScript dialog is open. Inspect it with browser.dialog({tabID,action:"get"}), then explicitly accept or dismiss it before continuing.',
@@ -430,11 +510,13 @@ export function createBrowserPage(
     async dispose() {
       if (closed) return
       closed = true
+      clearTimeout(flash)
       detachNetwork?.()
       contents.session.off("will-download", download)
       await profiling.dispose()
       cdp.dispose()
       refs.clear()
+      picked.clear()
       if (!win.isDestroyed()) {
         corners.forEach((corner) => win.contentView.removeChildView(corner))
         win.contentView.removeChildView(view)
@@ -491,25 +573,47 @@ export function createBrowserPage(
       case "find":
         return result({ tab: state(), ...(await snapshot(action)) })
       case "evaluate": {
+        if (action.ref && action.frameID)
+          throw new Error(
+            "Pass either ref or frameID to browser.evaluate, not both. A ref already runs in its element's frame.",
+          )
         const context = action.frameID ? contexts.get(action.frameID) : undefined
         if (action.frameID && !context)
           throw new Error(
             "Frame context is unavailable. Call browser.frames({tabID}) and use a current frameID from this tab, or omit frameID to target the main frame.",
           )
-        const value = await cdp.send(
-          "Runtime.evaluate",
-          {
-            expression: action.script,
-            contextId: context?.id,
-            awaitPromise: true,
-            returnByValue: true,
-            userGesture: true,
-          },
-          context?.sessionID,
-        )
+        const element = action.ref ? target(action.ref) : undefined
+        const objectId = element ? await resolve(element) : undefined
+        // With a ref, the script is a function that receives the element as its argument and as `this`.
+        const value = await (element && objectId
+          ? cdp
+              .send(
+                "Runtime.callFunctionOn",
+                {
+                  objectId,
+                  functionDeclaration: action.script,
+                  arguments: [{ objectId }],
+                  awaitPromise: true,
+                  returnByValue: true,
+                  userGesture: true,
+                },
+                element.sessionID,
+              )
+              .finally(() => cdp.send("Runtime.releaseObject", { objectId }, element.sessionID).catch(() => undefined))
+          : cdp.send(
+              "Runtime.evaluate",
+              {
+                expression: action.script,
+                contextId: context?.id,
+                awaitPromise: true,
+                returnByValue: true,
+                userGesture: true,
+              },
+              context?.sessionID,
+            ))
         if (value.exceptionDetails)
           throw new Error(
-            `Page JavaScript threw an exception. Check the script and frameID; inspect the page before repeating code with side effects. Details: ${(value.exceptionDetails.exception?.description ?? value.exceptionDetails.text).slice(0, 800)}`,
+            `Page JavaScript threw an exception. Check the script and ${action.ref ? "ref" : "frameID"}; inspect the page before repeating code with side effects. Details: ${(value.exceptionDetails.exception?.description ?? value.exceptionDetails.text).slice(0, 800)}`,
           )
         abortError(signal)
         return result({ tab: state(), value: value.result.value ?? null })
@@ -824,7 +928,8 @@ export function createBrowserPage(
   }
 
   function target(ref: Browser.Ref): Element {
-    const value = refs.get(ref.replace(/^@/, ""))
+    const key = ref.replace(/^@/, "")
+    const value = refs.get(key) ?? picked.get(key)
     if (!value)
       throw new Error(
         "Element ref is stale or belongs to another tab. Call browser.snapshot({tabID}) and use a ref from that tab's newest snapshot. Do not reuse refs after navigation or a newer snapshot.",
@@ -859,12 +964,7 @@ export function createBrowserPage(
   }
 
   async function call(element: Element, functionDeclaration: string, args: unknown[] = []) {
-    const object = await cdp.send("DOM.resolveNode", { backendNodeId: element.backendID }, element.sessionID)
-    const objectId = object.object.objectId
-    if (!objectId)
-      throw new Error(
-        "Element is no longer available. Call browser.snapshot({tabID}) and use a fresh ref; the page may have replaced the element.",
-      )
+    const objectId = await resolve(element)
     try {
       const result = await cdp.send(
         "Runtime.callFunctionOn",
@@ -884,6 +984,15 @@ export function createBrowserPage(
     } finally {
       await cdp.send("Runtime.releaseObject", { objectId }, element.sessionID).catch(() => undefined)
     }
+  }
+
+  async function resolve(element: Element) {
+    const object = await cdp.send("DOM.resolveNode", { backendNodeId: element.backendID }, element.sessionID)
+    if (!object.object.objectId)
+      throw new Error(
+        "Element is no longer available. Call browser.snapshot({tabID}) and use a fresh ref; the page may have replaced the element.",
+      )
+    return object.object.objectId
   }
 
   async function rect(element: Element, scroll = false) {
@@ -1079,6 +1188,7 @@ export function createBrowserPage(
         "Element is absent from this frame's accessibility snapshot. Retry browser.snapshot with the same tabID and no ref to refresh the frame, then choose a returned ref.",
       )
     refs.clear()
+    const pinned = new Map(Array.from(picked, ([ref, element]) => [`${element.frameID}:${element.backendID}`, ref]))
     const lines: string[] = []
     let truncated = false
     const walk = async (node: Protocol.Accessibility.AXNode, level: number): Promise<void> => {
@@ -1094,9 +1204,11 @@ export function createBrowserPage(
         const actionable =
           role !== "RootWebArea" &&
           (properties.get("focusable") || /^(button|link|textbox|combobox|checkbox|radio|option)$/.test(role))
-        const ref = actionable && node.backendDOMNodeId ? `e${++nextRef}` : ""
+        // A picked element keeps the ref its comment names, even when it is not otherwise actionable.
+        const known = node.backendDOMNodeId ? pinned.get(`${frameID}:${node.backendDOMNodeId}`) : undefined
+        const ref = known ?? (actionable && node.backendDOMNodeId ? `e${++nextRef}` : "")
         const element = node.backendDOMNodeId ? { backendID: node.backendDOMNodeId, frameID, sessionID } : undefined
-        if (ref && element) refs.set(ref, element)
+        if (ref && element && !known) refs.set(ref, element)
         const flags = (["checked", "disabled", "expanded", "selected"] as const).flatMap((name) =>
           properties.has(name) ? [`${name}=${properties.get(name)}`] : [],
         )
@@ -1123,5 +1235,201 @@ export function createBrowserPage(
       action.type === "find" ? lines.filter((line) => line.toLowerCase().includes(action.text.toLowerCase())) : lines
     ).join("\n")
     return { content: content.slice(0, Browser.MAX_TEXT), truncated: truncated || content.length > Browser.MAX_TEXT }
+  }
+
+  async function toggleInspect(enabled: boolean) {
+    picks++
+    if (enabled !== inspecting) {
+      inspecting = enabled
+      clearTimeout(flash)
+      await Promise.all(
+        [undefined, ...sessions.values()].map((sessionID) =>
+          (enabled ? arm(sessionID) : cdp.send("Overlay.setInspectMode", inspectOff, sessionID)).catch(() => undefined),
+        ),
+      )
+      if (!enabled) await hideHighlight()
+    }
+    // A later toggle may have finished first; report where the picker ended up.
+    options.inspect?.({ active: inspecting })
+  }
+
+  async function arm(sessionID?: string) {
+    // The main target enables DOM at startup; frame targets only need it for the picker.
+    if (sessionID) await cdp.send("DOM.enable", {}, sessionID)
+    await cdp.send("Overlay.enable", {}, sessionID)
+    // The picker may have been turned off while the domains were enabling.
+    if (!inspecting) return
+    await cdp.send("Overlay.setInspectMode", { mode: "searchForNode", highlightConfig: inspectHighlight }, sessionID)
+  }
+
+  async function inspected(backendID: number, sessionID?: string) {
+    inspecting = false
+    const pick = ++picks
+    const navigation = generation
+    await Promise.all(
+      [undefined, ...sessions.values()].map((id) =>
+        cdp.send("Overlay.setInspectMode", inspectOff, id).catch(() => undefined),
+      ),
+    )
+    // Keep the box model on the picked element, without the tooltip, while the renderer freezes the page.
+    await cdp.send("Overlay.highlightNode", { backendNodeId: backendID, highlightConfig: pickedHighlight }, sessionID)
+    const element = { backendID, frameID: await frameOf(backendID, sessionID), sessionID }
+    const [details, box, accessible] = await Promise.all([describe(element), rect(element), accessibility(element)])
+    await painted(sessionID)
+    // Escape, a toggle, hiding, or navigation while the element was described cancels the pick.
+    if (closed) return
+    if (pick !== picks || navigation !== generation) {
+      if (!inspecting) await hideHighlight()
+      options.inspect?.({ active: inspecting })
+      return
+    }
+    const ref = `e${++nextRef}`
+    picked.set(ref, element)
+    const zoom = contents.getZoomFactor()
+    // The pick focused the page; the comment editor opens in the app window. Focus only moves
+    // within a focused window, so synthetic input never raises a background window.
+    if (!win.isDestroyed() && win.isFocused()) win.webContents.focus()
+    options.inspect?.({
+      active: false,
+      element: {
+        ref: Browser.Ref.make(ref),
+        ...details,
+        ...accessible,
+        rect: { x: box.x * zoom, y: box.y * zoom, width: box.width * zoom, height: box.height * zoom },
+      },
+    })
+  }
+
+  async function highlightPicked(ref?: Browser.Ref) {
+    clearTimeout(flash)
+    const element = ref ? picked.get(ref.replace(/^@/, "")) : undefined
+    if (!element) return hideHighlight()
+    await cdp.send("DOM.scrollIntoViewIfNeeded", { backendNodeId: element.backendID }, element.sessionID)
+    await cdp.send(
+      "Overlay.highlightNode",
+      { backendNodeId: element.backendID, highlightConfig: pickedHighlight },
+      element.sessionID,
+    )
+    flash = setTimeout(() => void hideHighlight(), 1_500)
+  }
+
+  async function hideHighlight() {
+    await Promise.all(
+      [undefined, ...sessions.values()].map((sessionID) =>
+        cdp.send("Overlay.hideHighlight", {}, sessionID).catch(() => undefined),
+      ),
+    )
+  }
+
+  // The picker names a node but not its frame. A target owns its root frame plus any same-process
+  // child frames, so match the node's document against each child frame's content document.
+  async function frameOf(backendID: number, sessionID?: string) {
+    const tree = await frames()
+    const owned = tree.filter((frame) => sessionFor(frame.id, tree) === sessionID)
+    const root = owned.find((frame) => !frame.parentID || sessionFor(frame.parentID, tree) !== sessionID) ?? tree[0]
+    const nested = owned.filter((frame) => frame !== root)
+    if (!nested.length) return root.id
+    const node = await cdp.send("DOM.resolveNode", { backendNodeId: backendID }, sessionID)
+    const document = node.object.objectId
+      ? await cdp.send(
+          "Runtime.callFunctionOn",
+          { objectId: node.object.objectId, functionDeclaration: "function() { return this.ownerDocument; }" },
+          sessionID,
+        )
+      : undefined
+    const described = document?.result.objectId
+      ? await cdp.send("DOM.describeNode", { objectId: document.result.objectId }, sessionID)
+      : undefined
+    void Promise.all(
+      [node.object.objectId, document?.result.objectId].flatMap((objectId) =>
+        objectId ? [cdp.send("Runtime.releaseObject", { objectId }, sessionID).catch(() => undefined)] : [],
+      ),
+    )
+    const owners = await Promise.all(
+      nested.map(async (frame) => {
+        const owner = await cdp.send("DOM.getFrameOwner", { frameId: frame.id }, sessionID).catch(() => undefined)
+        const iframe = owner
+          ? await cdp.send("DOM.describeNode", { backendNodeId: owner.backendNodeId }, sessionID).catch(() => undefined)
+          : undefined
+        return { id: frame.id, document: iframe?.node.contentDocument?.backendNodeId }
+      }),
+    )
+    return owners.find((owner) => owner.document === described?.node.backendNodeId)?.id ?? root.id
+  }
+
+  async function describe(element: Element) {
+    return Schema.decodeUnknownSync(
+      Schema.Struct({ label: Schema.String, selector: Schema.String, text: Schema.optionalKey(Schema.String) }),
+    )(
+      await call(
+        element,
+        `function() {
+          const clip = (value, max) => (value.length > max ? value.slice(0, max - 1) + "\u2026" : value)
+          const label = this.localName + (this.id ? "#" + this.id : "") + Array.from(this.classList, (name) => "." + name).join("")
+          // One segment per document or shadow root, outermost first; " >>> " steps into a host's shadow root.
+          const segments = []
+          for (let start = this; start; ) {
+            const root = start.getRootNode()
+            const path = []
+            for (let node = start; node; node = node.parentElement) {
+              if (node.id && root.querySelectorAll("#" + CSS.escape(node.id)).length === 1) {
+                path.unshift("#" + CSS.escape(node.id))
+                break
+              }
+              if (node === node.ownerDocument.body) {
+                path.unshift("body")
+                break
+              }
+              const same = Array.from(node.parentNode?.children ?? []).filter((child) => child.localName === node.localName)
+              path.unshift(CSS.escape(node.localName) + (same.length > 1 ? ":nth-of-type(" + (same.indexOf(node) + 1) + ")" : ""))
+            }
+            segments.unshift(path.join(" > "))
+            start = root instanceof ShadowRoot ? root.host : undefined
+          }
+          const selector = segments.join(" >>> ")
+          const text = clip((this.innerText ?? this.textContent ?? "").replace(/\\s+/g, " ").trim(), 160)
+          // A cut selector is invalid syntax; leave it out rather than pass it off as usable.
+          return { label: clip(label, 200), selector: selector.length > 2000 ? "" : selector, ...(text ? { text } : {}) }
+        }`,
+      ),
+    )
+  }
+
+  async function accessibility(element: Element) {
+    const tree = await cdp
+      .send(
+        "Accessibility.getPartialAXTree",
+        { backendNodeId: element.backendID, fetchRelatives: false },
+        element.sessionID,
+      )
+      .catch(() => undefined)
+    const node = tree?.nodes.find((node) => node.backendDOMNodeId === element.backendID && !node.ignored)
+    const role = String(node?.role?.value ?? "")
+    const name = String(node?.name?.value ?? "")
+      .replace(/\s+/g, " ")
+      .trim()
+      .slice(0, 160)
+    return {
+      ...(role && !["generic", "none", "presentation"].includes(role) ? { role: role.slice(0, 128) } : {}),
+      ...(name ? { name } : {}),
+    }
+  }
+
+  // Wait until the compositor shows the picked highlight without the hover tooltip, so the
+  // renderer's still of the page includes it. A stalled page must not hold the comment back.
+  async function painted(sessionID?: string) {
+    await Promise.race([
+      cdp
+        .send(
+          "Runtime.evaluate",
+          {
+            expression: "new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)))",
+            awaitPromise: true,
+          },
+          sessionID,
+        )
+        .catch(() => undefined),
+      new Promise((resolve) => setTimeout(resolve, 150)),
+    ])
   }
 }
