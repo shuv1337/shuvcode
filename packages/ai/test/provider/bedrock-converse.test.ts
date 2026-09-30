@@ -1347,11 +1347,11 @@ describe("Bedrock Converse route", () => {
           ),
         ),
       )
-      expect(response.events.filter((event) => event.type === "reasoning-delta" && event.text === "").at(-1)).toEqual({
-        type: "reasoning-delta",
+      expect(response.events.filter((event) => event.type === "reasoning-delta")).toEqual([])
+      expect(response.events.find((event) => event.type === "reasoning-start")).toEqual({
+        type: "reasoning-start",
         id: "reasoning-0",
-        text: "",
-        providerMetadata: { bedrock: { redactedData } },
+        providerMetadata: undefined,
       })
       expect(response.events.find((event) => event.type === "reasoning-end")).toEqual({
         type: "reasoning-end",
@@ -1429,6 +1429,13 @@ describe("Bedrock Converse route", () => {
         ),
       )
 
+      expect(response.events.filter((event) => event.type === "reasoning-delta")).toEqual([])
+      expect(response.events.find((event) => event.type === "reasoning-end")).toEqual({
+        type: "reasoning-end",
+        id: "reasoning-0",
+        providerMetadata: { bedrock: { redactedData: "AQID" } },
+        text: undefined,
+      })
       expect(response.message.content).toEqual([
         { type: "reasoning", text: "", providerMetadata: { bedrock: { redactedData: "AQID" } } },
       ])
