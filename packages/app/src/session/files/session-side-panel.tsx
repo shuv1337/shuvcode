@@ -29,6 +29,7 @@ import { SessionContextTab } from "@/session/files/session-context-tab"
 import { SortableTab } from "@/session/files/tab"
 import { OpenInAppButton } from "@/session/files/open-in-app-button"
 import { useCommand } from "@/shell/commands/command"
+import { useComposerState } from "@/composer/persistence"
 import { useFile, type SelectedLineRange } from "@/workspaces/files/model"
 import { useLanguage } from "@/runtime/i18n/language"
 import { useLayout } from "@/shell/state/layout"
@@ -80,6 +81,7 @@ export function SessionSidePanel(props: {
   const layout = useLayout()
   const settings = useSettings()
   const file = useFile()
+  const prompt = useComposerState()
   const language = useLanguage()
   const command = useCommand()
   const sdk = useWorkspaceLocation()
@@ -614,6 +616,10 @@ export function SessionSidePanel(props: {
                           <SessionBrowserPane
                             browser={props.browser}
                             visible={reviewOpen() && isSessionBrowserTab(activeTab())}
+                            mention={{ items: file.searchFilesAndDirectories }}
+                            onComment={(comment) =>
+                              prompt.context.add({ type: "browser", ...comment, commentID: crypto.randomUUID() })
+                            }
                           />
                         </div>
                       </Show>

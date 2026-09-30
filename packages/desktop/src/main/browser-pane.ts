@@ -291,6 +291,12 @@ export function createBrowserPane(storage: StateStore) {
     async capture(win: BrowserWindow, bindingID: string, tabID: Browser.TabID) {
       return (await owned(win, bindingID).pages.get(tabID)?.capture()) ?? null
     },
+    async inspect(win: BrowserWindow, bindingID: string, tabID: Browser.TabID, enabled: boolean) {
+      await owned(win, bindingID).pages.get(tabID)?.inspect(enabled)
+    },
+    async highlight(win: BrowserWindow, bindingID: string, tabID: Browser.TabID, ref?: Browser.Ref) {
+      await owned(win, bindingID).pages.get(tabID)?.highlight(ref)
+    },
     async command(win: BrowserWindow, bindingID: string, command: BrowserPaneCommand) {
       const entry = owned(win, bindingID)
       await execute(entry, { action: command, files: [] }, new AbortController().signal)
@@ -418,6 +424,9 @@ export function createBrowserPane(storage: StateStore) {
       fail,
       publish: (error) => {
         if (entry.pages.has(id)) publishState(entry, error)
+      },
+      inspect: (event) => {
+        if (entry.pages.has(id)) report(entry, { type: "inspect", tabID: id, ...event })
       },
       popup: (popupOptions) => {
         const popup = create(entry, false, popupOptions)

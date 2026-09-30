@@ -1,4 +1,5 @@
 import type {
+  BrowserPaneEvent,
   BrowserPanePlatform,
   BrowserPaneRegistration,
   BrowserPaneState,
@@ -20,6 +21,7 @@ export function createBrowserConnection(input: {
   change: (state: BrowserConnectionState) => void
   focus: (tabID: Browser.TabID) => void
   preview: (path: string) => void
+  inspect: (event: Extract<BrowserPaneEvent, { type: "inspect" }>) => void
 }) {
   const state: BrowserConnectionState = { browser: null, suspended: false }
   let disposed = false
@@ -35,6 +37,7 @@ export function createBrowserConnection(input: {
         if (disposed || state.registration !== registration) return
         if (event.type === "focus") return input.focus(event.tabID)
         if (event.type === "preview") return input.preview(event.path)
+        if (event.type === "inspect") return input.inspect(event)
         if (event.error === "browser.pane.unsupported" || event.error === "browser.pane.replaced") {
           blocked = true
           registration.close()
@@ -71,6 +74,9 @@ export function createBrowserConnection(input: {
     command(command: Browser.Action) {
       register()
       return state.registration?.command(command) ?? Promise.reject(new Error("browser.pane.unavailable"))
+    },
+    highlight(tabID: Browser.TabID, ref?: Browser.Ref) {
+      state.registration?.highlight(tabID, ref)
     },
     dispose() {
       disposed = true

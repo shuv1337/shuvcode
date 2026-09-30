@@ -178,6 +178,7 @@ function SessionScreenContent(props: { session: SessionModel; browser: ReturnTyp
     screen,
     timeline,
     visible: conversationVisible,
+    browser,
   })
   useUsageExceededDialogs()
 
