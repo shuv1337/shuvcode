@@ -144,6 +144,57 @@ describe("buildPromptRequest", () => {
     expect(result.files.some((file) => file.uri === "file:///repo/src/shared.ts")).toBe(true)
   })
 
+  test("sends a browser element comment as a note the browser tools can act on", () => {
+    const result = buildPromptRequest({
+      prompt: [{ type: "text", content: "tidy up", start: 0, end: 7 }],
+      context: [
+        {
+          key: "browser:tab:c=1",
+          type: "browser",
+          tabID: "tab_00000000-0000-4000-8000-000000000000",
+          url: "http://localhost:5173/settings",
+          title: "Settings",
+          element: {
+            ref: "e42",
+            selector: "#settings > button.primary",
+            label: "button.primary",
+            role: "button",
+            name: "Save",
+            text: "Save",
+          },
+          comment: "Match @src/button.css",
+          commentID: "1",
+        },
+      ],
+      images: [],
+      text: "tidy up",
+      sessionDirectory: "/repo",
+    })
+
+    expect(result.text).toBe(
+      'tidy up\nThe user made the following comment regarding the "button.primary" element in browser tab tab_00000000-0000-4000-8000-000000000000 at http://localhost:5173/settings (role button; accessible name "Save"; selector "#settings > button.primary"; browser ref @e42, usable as ref in any browser tool including browser.evaluate until the page navigates): Match @src/button.css',
+    )
+    expect(result.comments).toEqual([
+      {
+        type: "browser",
+        tabID: "tab_00000000-0000-4000-8000-000000000000",
+        url: "http://localhost:5173/settings",
+        title: "Settings",
+        element: {
+          ref: "e42",
+          selector: "#settings > button.primary",
+          label: "button.primary",
+          role: "button",
+          name: "Save",
+          text: "Save",
+        },
+        comment: "Match @src/button.css",
+      },
+    ])
+    // A browser comment has no file of its own; only files it mentions are attached.
+    expect(result.files).toEqual([{ uri: "file:///repo/src/button.css", mime: "text/plain", name: "button.css" }])
+  })
+
   test("handles Windows paths correctly (simulated on macOS)", () => {
     const prompt: Prompt = [{ type: "file", path: "src\\foo.ts", content: "@src\\foo.ts", start: 0, end: 11 }]
 

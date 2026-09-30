@@ -17,6 +17,9 @@ import {
 export { DEFAULT_PROMPT } from "./schema"
 export type {
   AgentPart,
+  BrowserComment,
+  BrowserContextItem,
+  BrowserElement,
   ComposerStore,
   ContentPart,
   ContextItem,
@@ -38,7 +41,7 @@ type InitialPrompt = {
 }
 
 export function isCommentItem(item: ContextItem | (ContextItem & { key: string })) {
-  return item.type === "file" && !!item.comment?.trim()
+  return !!item.comment?.trim()
 }
 
 function createComposerActions(setStore: SetStoreFunction<ComposerStore>) {
@@ -137,7 +140,7 @@ function createComposerStateValue(store: ComposerStore, setStore: SetStoreFuncti
         )
         clearRetry()
       },
-      replaceComments(items: FileContextItem[]) {
+      replaceComments(items: ContextItem[]) {
         setStore("context", "items", (current) => [
           ...current.filter((item) => !isCommentItem(item)),
           ...items.map((item) => ({ ...item, key: contextItemKey(item) })),

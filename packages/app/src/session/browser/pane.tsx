@@ -1,20 +1,36 @@
 import { Icon } from "@opencode/ui/icon"
 import { IconButton } from "@opencode/ui/icon-button"
+import { LineCommentEditor, type LineCommentEditorMention } from "@opencode/ui/line-comment"
 import { Loader } from "@opencode/ui/loader"
 import { Keybind } from "@opencode/ui/keybind"
 import { Tooltip } from "@opencode/ui/tooltip"
 import { useDialog } from "@opencode/ui/context/dialog"
 import { createEventListener } from "@solid-primitives/event-listener"
 import { createResizeObserver } from "@solid-primitives/resize-observer"
-import { createEffect, For, on, onCleanup, Show } from "solid-js"
+import { createEffect, For, on, onCleanup, Show, untrack } from "solid-js"
 import { createStore } from "solid-js/store"
 import { useLanguage } from "@/runtime/i18n/language"
+import type { BrowserPaneElement } from "@/runtime/platform/browser-pane"
 import { usePlatform } from "@/runtime/platform/platform"
-import { useCommand } from "@/shell/commands/command"
+import { formatKeybindParts, useCommand } from "@/shell/commands/command"
 import type { Browser } from "@opencode/plugin-browser/rpc"
 import type { createSessionBrowser } from "./model"
 
-export function SessionBrowserPane(props: { browser: ReturnType<typeof createSessionBrowser>; visible: boolean }) {
+/** A comment on an element the user picked in the page. The ref is absent once the page navigated. */
+export type SessionBrowserComment = {
+  tabID: Browser.TabID
+  url: string
+  title: string
+  element: Omit<BrowserPaneElement, "rect" | "ref"> & { ref?: Browser.Ref }
+  comment: string
+}
+
+export function SessionBrowserPane(props: {
+  browser: ReturnType<typeof createSessionBrowser>
+  visible: boolean
+  onComment?: (comment: SessionBrowserComment) => void
+  mention?: LineCommentEditorMention
+}) {
   const platform = usePlatform()
   const language = useLanguage()
   const dialog = useDialog()
@@ -33,8 +49,91 @@ export function SessionBrowserPane(props: { browser: ReturnType<typeof createSes
     visible: typeof document === "undefined" || document.visibilityState === "visible",
     // A still of the page shown in the DOM while floating content covers the hidden native view.
     snapshot: undefined as { tabID: Browser.TabID; url: string } | undefined,
+    // The tab whose element picker is on.
+    picking: undefined as Browser.TabID | undefined,
+    // A picked element awaiting its comment. The page stays frozen as a still until it closes.
+    comment: undefined as
+      | {
+          tabID: Browser.TabID
+          url: string
+          title: string
+          // The tab's navigation count at the pick; the element's ref dies when it changes.
+          generation: number
+          element: BrowserPaneElement
+          draft: string
+        }
+      | undefined,
+    size: { width: 0, height: 0 },
+    editorHeight: 0,
   })
   const empty = () => !address() && !state()?.loading && !store.navigating
+  const inspectable = () => !!props.onComment && !!address() && !failed() && !props.browser.suspended()
+  const picking = () => !!state() && store.picking === state()?.id
+  const setPicking = (tabID: Browser.TabID, enabled: boolean) => {
+    registration()?.inspect(tabID, enabled)
+    setStore("picking", enabled ? tabID : undefined)
+  }
+  const toggleInspect = () => {
+    const tab = state()
+    if (!tab || !inspectable()) return
+    if (store.comment) closeComment()
+    setPicking(tab.id, !picking())
+  }
+  const closeComment = () => {
+    const current = store.comment
+    if (!current) return
+    registration()?.highlight(current.tabID)
+    setStore("comment", undefined)
+  }
+  const submitComment = (value: string) => {
+    const current = store.comment
+    if (!current) return
+    const tab = state()
+    // The draft outlives a reload or agent navigation, but the ref no longer names anything.
+    const live = tab?.id === current.tabID && tab.generation === current.generation
+    props.onComment?.({
+      tabID: current.tabID,
+      url: current.url,
+      title: current.title,
+      element: {
+        ...(live ? { ref: current.element.ref } : {}),
+        selector: current.element.selector,
+        label: current.element.label,
+        ...(current.element.role ? { role: current.element.role } : {}),
+        ...(current.element.name ? { name: current.element.name } : {}),
+        ...(current.element.text ? { text: current.element.text } : {}),
+      },
+      comment: value,
+    })
+    closeComment()
+  }
+  // The picked element in surface pixels, and the editor anchored below it, above it, or over it.
+  const spotlight = () => {
+    const rect = store.comment?.element.rect
+    if (!rect) return
+    const zoom = platform.webviewZoom?.() ?? 1
+    return { x: rect.x / zoom, y: rect.y / zoom, width: rect.width / zoom, height: rect.height / zoom }
+  }
+  const placement = () => {
+    const rect = spotlight()
+    if (!rect) return
+    const gap = 8
+    const width = Math.max(0, Math.min(400, store.size.width - gap * 2))
+    // The editor scrolls rather than growing past the surface, so its actions stay reachable.
+    const maxHeight = Math.max(0, store.size.height - gap * 2)
+    // Until the editor has been measured once, assume its default three-row height.
+    const height = Math.min(store.editorHeight || 176, maxHeight)
+    const left = Math.min(Math.max(gap, rect.x), Math.max(gap, store.size.width - width - gap))
+    const below = rect.y + rect.height + gap
+    const above = rect.y - gap - height
+    const top =
+      below + height <= store.size.height - gap
+        ? below
+        : above >= gap
+          ? above
+          : Math.max(gap, store.size.height - height - gap)
+    return { left, top, width, maxHeight }
+  }
   let surface: HTMLDivElement | undefined
   let addressDisplay: HTMLDivElement | undefined
   let frame: number | undefined
@@ -65,7 +164,61 @@ export function SessionBrowserPane(props: { browser: ReturnType<typeof createSes
         if (tab) props.browser.command({ type: "reload", tabID: tab.id })
       },
     },
+    // Ctrl+Shift+C copies in the terminal, so only the focused page claims it, as in Chromium.
+    {
+      id: "browser.inspect",
+      title: language.t("command.browser.inspect"),
+      category: language.t("command.category.view"),
+      disabled: !props.visible || !inspectable(),
+      onSelect: toggleInspect,
+    },
   ])
+
+  createEffect(() => {
+    onCleanup(
+      props.browser.onInspect((event) => {
+        if (event.active) {
+          setStore("picking", event.tabID)
+          return
+        }
+        if (store.picking === event.tabID) setStore("picking", undefined)
+        if (!event.element) return
+        const tab = state()
+        if (!props.onComment || tab?.id !== event.tabID || !props.visible || !store.visible) {
+          registration()?.highlight(event.tabID)
+          return
+        }
+        setStore("comment", {
+          tabID: tab.id,
+          url: tab.url,
+          title: tab.title,
+          generation: tab.generation,
+          element: event.element,
+          draft: "",
+        })
+      }),
+    )
+  })
+  // A picker or comment belongs to the page on screen; switching tabs or hiding the pane ends it.
+  createEffect(
+    on([() => state()?.id, () => props.visible && store.visible], ([id, shown]) => {
+      const tabID = untrack(() => store.picking)
+      if (tabID && (tabID !== id || !shown)) setPicking(tabID, false)
+      if (untrack(() => store.comment)?.tabID !== id) closeComment()
+    }),
+  )
+  // The page does not have focus while the picker waits for a hover, so Escape reaches the app.
+  createEventListener(
+    window,
+    "keydown",
+    (event) => {
+      if (event.key !== "Escape" || !store.picking) return
+      event.preventDefault()
+      event.stopPropagation()
+      setPicking(store.picking, false)
+    },
+    { capture: true },
+  )
 
   // The native page always paints above the DOM, so hide it while a floating
   // menu, select, or popover overlaps it. Tooltips are excluded.
@@ -129,7 +282,8 @@ export function SessionBrowserPane(props: { browser: ReturnType<typeof createSes
     // The desktop page hides blank and loading documents itself; only hide here
     // while the pane shows its own empty or failed state over the surface.
     const shown = props.visible && store.visible && !empty() && !failed() && !dialog.active
-    const cover = covered(rect)
+    // A comment on a picked element freezes the page so its editor can float above it.
+    const cover = store.comment?.tabID === tab.id || covered(rect)
     if (shown && cover) freeze(tab.id)
     if (!cover) thaw()
     const visible = shown && !(cover && store.snapshot?.tabID === tab.id)
@@ -202,6 +356,7 @@ export function SessionBrowserPane(props: { browser: ReturnType<typeof createSes
         () => store.visible,
         () => props.visible,
         () => state()?.id,
+        () => store.comment?.tabID,
         empty,
         failed,
         registration,
@@ -220,7 +375,13 @@ export function SessionBrowserPane(props: { browser: ReturnType<typeof createSes
   )
   // ResizeObserver runs after layout in the same frame; measuring here instead of on the next
   // animation frame keeps the native view in step with a pane drag.
-  createResizeObserver(() => surface, measure)
+  createResizeObserver(
+    () => surface,
+    (rect) => {
+      measure()
+      setStore("size", { width: rect.width, height: rect.height })
+    },
+  )
   createEventListener(window, "resize", () => schedule(300))
   // Floating content portals directly into <body>; keep measuring briefly so
   // the positioner has settled before the overlap check runs.
@@ -290,6 +451,39 @@ export function SessionBrowserPane(props: { browser: ReturnType<typeof createSes
             }
           />
         </Tooltip>
+        <Show when={props.onComment}>
+          <Tooltip
+            placement="top"
+            value={
+              <div class="flex flex-col gap-1">
+                <div class="flex items-center gap-2">
+                  <span>{language.t("session.browser.inspect")}</span>
+                  <Show when={command.keybindParts("browser.inspect").length > 0}>
+                    <Keybind keys={command.keybindParts("browser.inspect")} variant="neutral" />
+                  </Show>
+                </div>
+                {/* The page claims Chromium's picker chord itself; the app leaves it to the terminal. */}
+                <div class="flex items-center gap-2">
+                  <span>{language.t("session.browser.inspect.pageShortcut")}</span>
+                  <Keybind keys={formatKeybindParts("mod+shift+c", language.t)} variant="neutral" />
+                </div>
+              </div>
+            }
+          >
+            {/* The ghost variant sets the button color, so the active accent needs precedence over it. */}
+            <IconButton
+              {...button}
+              data-action="browser-inspect"
+              disabled={!inspectable()}
+              state={picking() ? "pressed" : undefined}
+              classList={{ "!text-v2-icon-icon-accent": picking() || !!store.comment }}
+              aria-pressed={picking()}
+              aria-label={language.t("session.browser.inspect")}
+              onClick={toggleInspect}
+              icon={<Icon name="select-element" size="small" />}
+            />
+          </Tooltip>
+        </Show>
         <form
           dir="ltr"
           class="relative min-w-0 flex-1 h-7 rounded-md hover:bg-v2-overlay-simple-overlay-hover focus-within:bg-v2-overlay-simple-overlay-hover text-12-regular"
@@ -378,7 +572,71 @@ export function SessionBrowserPane(props: { browser: ReturnType<typeof createSes
             {language.t("session.browser.suspended")}
           </p>
         </Show>
+        <Show when={store.comment?.tabID === state()?.id && store.comment}>
+          {(current) => (
+            <div
+              data-component="browser-comment"
+              class="absolute inset-0 z-10"
+              onPointerDown={(event) => {
+                // A click beside the editor dismisses it unless it would discard a draft.
+                if (event.target === event.currentTarget && !current().draft.trim()) closeComment()
+              }}
+            >
+              <Show when={spotlight()}>
+                {(rect) => (
+                  <div
+                    data-slot="browser-comment-spotlight"
+                    class="pointer-events-none absolute rounded-[2px]"
+                    style={{
+                      left: `${rect().x}px`,
+                      top: `${rect().y}px`,
+                      width: `${rect().width}px`,
+                      height: `${rect().height}px`,
+                    }}
+                  />
+                )}
+              </Show>
+              <Show when={placement()}>
+                {(position) => (
+                  <div
+                    ref={(element) =>
+                      createResizeObserver(element, (rect) => setStore("editorHeight", Math.ceil(rect.height)))
+                    }
+                    data-slot="browser-comment-editor"
+                    data-prevent-autofocus
+                    class="absolute overflow-y-auto rounded-[6px] shadow-[var(--v2-elevation-raised)]"
+                    style={{
+                      left: `${position().left}px`,
+                      top: `${position().top}px`,
+                      width: `${position().width}px`,
+                      "max-height": `${position().maxHeight}px`,
+                    }}
+                  >
+                    <LineCommentEditor
+                      value={current().draft}
+                      onInput={(value) => setStore("comment", "draft", value)}
+                      onCancel={closeComment}
+                      onSubmit={submitComment}
+                      mention={props.mention}
+                      selection={
+                        <span class="flex min-w-0 items-center gap-1" dir="ltr">
+                          <Icon name="select-element" size="small" class="shrink-0" />
+                          <span class="min-w-0 truncate leading-[var(--line-height-tight)]">
+                            {current().element.label}
+                          </span>
+                        </span>
+                      }
+                    />
+                  </div>
+                )}
+              </Show>
+            </div>
+          )}
+        </Show>
       </div>
+      <p class="sr-only" role="status" aria-live="polite">
+        {picking() ? language.t("session.browser.inspect.active") : ""}
+      </p>
     </aside>
   )
 }

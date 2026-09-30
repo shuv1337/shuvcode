@@ -29,11 +29,14 @@ function fixture() {
   }[] = []
   const endpoint = { url: "http://localhost:4096" }
   const previews: string[] = []
+  const inspections: Extract<BrowserPaneEvent, { type: "inspect" }>[] = []
+  const highlights: (Browser.Ref | undefined)[] = []
   const connection = createBrowserConnection({
     target: () => ({ serverKey: "browser-test", sessionID: "ses_browser", endpoint: { ...endpoint } }),
     change: (state) => states.push(state),
     focus: () => {},
     preview: (path) => previews.push(path),
+    inspect: (event) => inspections.push(event),
     pane: {
       register(target, emit) {
         const call = { target, emit, closed: false, commands: [] as Browser.Action[] }
@@ -46,6 +49,10 @@ function fixture() {
           async capture() {
             return null
           },
+          inspect() {},
+          highlight(_tabID, ref) {
+            highlights.push(ref)
+          },
           close() {
             call.closed = true
           },
@@ -55,8 +62,29 @@ function fixture() {
   })
   connection.wake()
   calls[0].emit({ type: "state", state: browser })
-  return { connection, calls, states, endpoint, previews }
+  return { connection, calls, states, endpoint, previews, inspections, highlights }
 }
+
+test("picked elements reach the session and highlights reach the page without touching connection state", () => {
+  const app = fixture()
+  try {
+    const before = app.states.length
+    const element = {
+      ref: Browser.Ref.make("e4"),
+      selector: "#save",
+      label: "button#save",
+      rect: { x: 1, y: 2, width: 3, height: 4 },
+    }
+    app.calls[0].emit({ type: "inspect", tabID, active: false, element })
+    expect(app.inspections).toEqual([{ type: "inspect", tabID, active: false, element }])
+    app.connection.highlight(tabID, element.ref)
+    app.connection.highlight(tabID)
+    expect(app.highlights).toEqual([element.ref, undefined])
+    expect(app.states).toHaveLength(before)
+  } finally {
+    app.connection.dispose()
+  }
+})
 
 test("preview requests reach the session without touching connection state", () => {
   const app = fixture()

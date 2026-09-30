@@ -2,7 +2,8 @@ import { batch, createEffect, createMemo, createRoot, getOwner, on, onCleanup, r
 import { createStore, reconcile } from "solid-js/store"
 import { createSimpleContext } from "@opencode/ui/context"
 import { useLanguage } from "@/runtime/i18n/language"
-import type { BrowserPaneCommand } from "@/runtime/platform/browser-pane"
+import type { Browser } from "@opencode/plugin-browser/rpc"
+import type { BrowserPaneCommand, BrowserPaneEvent } from "@/runtime/platform/browser-pane"
 import { usePlatform } from "@/runtime/platform/platform"
 import type { useServer } from "@/runtime/server/current"
 import type { SessionStateKey } from "@/runtime/server/scope"
@@ -13,6 +14,7 @@ import { createEventListener } from "@solid-primitives/event-listener"
 import { createBrowserConnection, type BrowserConnectionState } from "./connection"
 
 type Server = ReturnType<typeof useServer>
+type InspectEvent = Extract<BrowserPaneEvent, { type: "inspect" }>
 
 export type BrowserAttachment = BrowserConnectionState
 
@@ -42,6 +44,7 @@ export const { use: useBrowserAttachments, provider: BrowserAttachmentsProvider 
     const [unsupported, setUnsupported] = createStore<Record<string, true | undefined>>({})
     const live = new Map<string, Live>()
     const preview = new Map<string, Set<(path: string) => void>>()
+    const inspect = new Map<string, Set<(event: InspectEvent) => void>>()
     const key = (server: Server, sessionID: string) => `${server.key}\n${sessionID}`
     const enabled = createMemo(() => !!platform.browserPane)
     const close = (id: string) => {
@@ -110,6 +113,7 @@ export const { use: useBrowserAttachments, provider: BrowserAttachmentsProvider 
             })
           },
           preview: (path) => preview.get(id)?.forEach((listener) => listener(path)),
+          inspect: (event) => inspect.get(id)?.forEach((listener) => listener(event)),
           change: (state) => {
             if (state.error === "browser.pane.unsupported") {
               setUnsupported(server.key, true)
@@ -152,20 +156,34 @@ export const { use: useBrowserAttachments, provider: BrowserAttachmentsProvider 
       },
       /** Agent requests to show a file in this session's Review pane. */
       onPreview(server: Server, sessionID: string, listener: (path: string) => void) {
-        const id = key(server, sessionID)
-        const listeners = preview.get(id) ?? new Set()
-        listeners.add(listener)
-        preview.set(id, listeners)
-        return () => {
-          listeners.delete(listener)
-          if (!listeners.size) preview.delete(id)
-        }
+        return subscribe(preview, key(server, sessionID), listener)
+      },
+      /** The page's element picker starting, stopping, or picking an element. */
+      onInspect(server: Server, sessionID: string, listener: (event: InspectEvent) => void) {
+        return subscribe(inspect, key(server, sessionID), listener)
       },
       command(server: Server, sessionID: string, command: BrowserPaneCommand) {
         const connection = live.get(key(server, sessionID))?.connection
         if (!connection) return Promise.reject(new Error("browser.pane.unavailable"))
         return connection.command(command)
       },
+      highlight(server: Server, sessionID: string, tabID: Browser.TabID, ref?: Browser.Ref) {
+        live.get(key(server, sessionID))?.connection.highlight(tabID, ref)
+      },
     }
   },
 })
+
+function subscribe<Value>(
+  listeners: Map<string, Set<(value: Value) => void>>,
+  id: string,
+  listener: (value: Value) => void,
+) {
+  const set = listeners.get(id) ?? new Set()
+  set.add(listener)
+  listeners.set(id, set)
+  return () => {
+    set.delete(listener)
+    if (!set.size) listeners.delete(id)
+  }
+}
