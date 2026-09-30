@@ -608,13 +608,23 @@ export function CurrentContextToolGroup(props: {
     })
     return keys
   })
+  let root: HTMLDivElement | undefined
   const change = (open: boolean) => {
+    // Collapsing from the stuck header would leave the viewport far below the group, so keep the header in place.
+    // Scroll before collapsing because the shorter content would clamp the scroll position first.
+    const trigger = root?.querySelector(':scope > [data-component="collapsible"] > [data-slot="collapsible-trigger"]')
+    const stuck = !open && root && trigger ? trigger.getBoundingClientRect().top - root.getBoundingClientRect().top : 0
+    if (stuck > 0 && root) scrollParent(root)?.scrollBy({ top: -stuck, behavior: "instant" })
     props.onOpenChange(open)
     props.onSizeChange?.()
   }
 
   return (
-    <div data-component="collapsed-tool-group" data-timeline-part-ids={props.parts.map((part) => part.id).join(",")}>
+    <div
+      ref={root}
+      data-component="collapsed-tool-group"
+      data-timeline-part-ids={props.parts.map((part) => part.id).join(",")}
+    >
       <BasicTool
         icon="glasses"
         status={pending() ? "running" : "completed"}
@@ -1032,6 +1042,13 @@ export function CurrentFileToolGroup(props: {
       />
     </div>
   )
+}
+
+function scrollParent(element: HTMLElement): HTMLElement | undefined {
+  const parent = element.parentElement
+  if (!parent) return
+  if (/auto|scroll/.test(getComputedStyle(parent).overflowY)) return parent
+  return scrollParent(parent)
 }
 
 function isFileChangeTool(tool: SessionMessageAssistantTool) {

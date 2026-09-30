@@ -652,8 +652,28 @@
   }
 }
 
-[data-component="collapsed-tool-group"] > [data-component="collapsible"].tool-collapsible {
-  --tool-content-gap: 8px;
+[data-component="collapsed-tool-group"] {
+  --context-group-sticky-top: var(--sticky-accordion-top, 0px);
+
+  > [data-component="collapsible"].tool-collapsible {
+    --tool-content-gap: 8px;
+    gap: 0px;
+
+    > [data-slot="collapsible-trigger"][aria-expanded="true"] {
+      position: sticky;
+      top: var(--context-group-sticky-top);
+      /* Above nested file headers as they scroll out under this row. */
+      z-index: 21;
+      height: calc(28px + var(--tool-content-gap));
+      padding-bottom: var(--tool-content-gap);
+      background-color: var(--v2-background-bg-base);
+    }
+
+    /* Nested sticky file headers stop below the open group header. */
+    > [data-slot="collapsible-content"] {
+      --sticky-accordion-top: calc(var(--context-group-sticky-top) + 28px + var(--tool-content-gap));
+    }
+  }
 }
 
 [data-component="context-tool-group-list"] {
