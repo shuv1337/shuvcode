@@ -67,6 +67,7 @@ test("fresh request resolution, preserved custom URL and headers, response uses 
         resolutions++
         return current
       }),
+    status: () => Effect.void,
   })
   const first = request()
   await Effect.runPromise(http.request(first))
@@ -103,6 +104,7 @@ test("setup token path, non-SSE error/status/header pass-through", async () => {
   const http = hooks({
     active: () => Effect.succeed({ type: "env", name: "ANTHROPIC_API_KEY" }),
     resolve: () => Effect.succeed({ type: "key", key: "sk-ant-oat01-fixture" }),
+    status: () => Effect.void,
   })
   const req = request()
   await Effect.runPromise(http.request(req))
@@ -120,6 +122,7 @@ test("request cancellation signal survives shaping", async () => {
   const http = hooks({
     active: () => Effect.succeed({ type: "env", name: "CLAUDE_CODE_OAUTH_TOKEN" }),
     resolve: () => Effect.succeed(oauth),
+    status: () => Effect.void,
   })
   const abort = new AbortController()
   const req = request(abort.signal)
@@ -133,6 +136,7 @@ test("resolution failure stops the request locally instead of using the stale ke
   const http = hooks({
     active: () => Effect.succeed({ type: "env", name: "CLAUDE_CODE_OAUTH_TOKEN" }),
     resolve: () => Effect.fail(new Error("access-only import expired")),
+    status: () => Effect.void,
   })
   await expect(Effect.runPromise(http.request(request()))).rejects.toThrow("access-only import expired")
 })
