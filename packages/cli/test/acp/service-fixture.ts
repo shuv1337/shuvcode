@@ -184,6 +184,7 @@ export function makeACPFixture(options: FixtureOptions = {}) {
     service,
     requests,
     updates,
+    send: context.send,
     async [Symbol.asyncDispose]() {
       eventController?.close()
       await server.stop(true)
