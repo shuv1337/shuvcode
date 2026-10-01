@@ -18,6 +18,7 @@ import { useWorkspaceLocation } from "@/workspaces/location"
 import { requireServerKey, sessionHref } from "@/shell/routes/session"
 import { useComposerCommands } from "@/composer/commands"
 import { useSessionCommands } from "../commands/use-session-commands"
+import type { createSessionBrowser } from "../browser/model"
 import type { SessionModel } from "../model"
 import type { SessionScreenLayout } from "../screen-layout"
 import { syncPromptModel, syncSessionModel } from "../session-model-helpers"
@@ -34,6 +35,7 @@ export function createActiveSessionRegion(input: {
   screen: SessionScreenLayout
   timeline: SessionTimelineInteraction
   visible: Accessor<boolean>
+  browser: Pick<ReturnType<typeof createSessionBrowser>, "reveal">
 }) {
   const command = useCommand()
   const dialog = useDialog()
@@ -46,6 +48,7 @@ export function createActiveSessionRegion(input: {
   const state = createSessionRequestModel()
   const controls = createComposerControls({
     sessionKey: input.session.identity.sessionKey,
+    browser: { reveal: input.browser.reveal },
   })
   let promptRef: HTMLDivElement | undefined
 

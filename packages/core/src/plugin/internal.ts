@@ -215,7 +215,6 @@ export type InternalPlugin = Plugin<Requirements | Scope.Scope>
 const pre = [
   ToolInputRepairPlugin.Plugin,
   ConfigWorktreePlugin.Plugin,
-  BrowserPlugin,
   ConfigMcpPlugin.Plugin,
   McpCodeModeDefaultsPlugin.Plugin,
   WellKnownPlugin.Plugin,
@@ -254,6 +253,7 @@ const post = [
   ConfigInstructionPlugin.Plugin,
   ConfigReferencePlugin.Plugin,
   ConfigAgentPlugin.Plugin,
+  BrowserPlugin,
   ConfigCommandPlugin.Plugin,
   ConfigCompactionPlugin.Plugin,
   ConfigFormatterPlugin.Plugin,

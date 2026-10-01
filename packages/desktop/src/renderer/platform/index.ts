@@ -50,6 +50,20 @@ export function createDesktopPlatform(
             ready
               .then(() => api.browserPane.capture(bindingID, tabID))
               .then((data) => data && new Blob([data], { type: "image/jpeg" })),
+          inspect(tabID, enabled) {
+            if (!closed)
+              void ready
+                .then(() => api.browserPane.send({ type: "inspect", bindingID, tabID, enabled }))
+                .catch(() => undefined)
+          },
+          highlight(tabID, ref) {
+            if (!closed)
+              void ready
+                .then(() =>
+                  api.browserPane.send({ type: "highlight", bindingID, tabID, ...(ref === undefined ? {} : { ref }) }),
+                )
+                .catch(() => undefined)
+          },
           close() {
             if (closed) return
             closed = true

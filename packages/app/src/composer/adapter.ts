@@ -30,6 +30,10 @@ export type ComposerControls = {
       opened: () => boolean
       open: () => void
     }
+    /** Present in sessions with a desktop browser pane. */
+    browser?: {
+      reveal: (tabID: string, ref?: string) => void
+    }
   }
 }
 

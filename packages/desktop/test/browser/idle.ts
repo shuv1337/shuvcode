@@ -75,6 +75,8 @@ async function main() {
             ready
               .then(() => pane.capture(win, bindingID, tabID))
               .then((data) => data && new Blob([data], { type: "image/jpeg" })),
+          inspect: (tabID, enabled) => void ready.then(() => pane.inspect(win, bindingID, tabID, enabled)),
+          highlight: (tabID, ref) => void ready.then(() => pane.highlight(win, bindingID, tabID, ref)),
           close: () => {
             listeners.delete(bindingID)
             void ready.then(() => pane.close(win, bindingID)).catch(() => {})

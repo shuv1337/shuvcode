@@ -5,6 +5,7 @@ export { loadLocaleDict, normalizeLocale, type Locale, useLanguage } from "./run
 export { type FatalRendererErrorLog, type Platform, PlatformProvider } from "./runtime/platform/platform"
 export type {
   BrowserPaneCommand,
+  BrowserPaneElement,
   BrowserPaneEndpoint,
   BrowserPaneEvent,
   BrowserPaneLayout,
