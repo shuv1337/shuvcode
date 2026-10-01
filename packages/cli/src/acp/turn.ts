@@ -22,10 +22,12 @@ import {
   Scope,
   Stream,
 } from "effect"
+import { access, constants } from "node:fs/promises"
+import { fileURLToPath } from "node:url"
 import { builtinCommands, type ACPCatalog, type Catalog } from "./catalog"
 import { currentModel } from "./config-option"
 import type { ACPConnection } from "./connection"
-import { promptContentToParts } from "./content"
+import { linkReference, promptContentToParts, type PromptPart } from "./content"
 import { ACPElicitation } from "./elicitation"
 import { ACPError } from "./error"
 import { ACPPermission } from "./permission"
@@ -372,7 +374,10 @@ export const make = Effect.fnUntraced(function* (input: {
       const attached = yield* input.sessions.require(params.sessionId)
       const catalog = yield* input.catalog.get(attached.cwd)
       const childUpdates = (yield* Ref.get(input.capabilities)).childSessionUpdates
-      const prompt = preparePrompt(catalog, params.prompt, SessionMessage.ID.create())
+      const parts = yield* Effect.forEach(promptContentToParts(params.prompt), referenceUnreadableFile, {
+        concurrency: "unbounded",
+      })
+      const prompt = preparePrompt(catalog, parts, SessionMessage.ID.create())
       // Check and register in one synchronous step.
       const turn = yield* Effect.withFiber((fiber) => {
         if (FiberMap.hasUnsafe(turns, attached.id)) {
@@ -414,8 +419,7 @@ function aborted(signal: AbortSignal) {
   })
 }
 
-function preparePrompt(catalog: Catalog, prompt: PromptRequest["prompt"], messageID: string): PreparedPrompt {
-  const parts = promptContentToParts(prompt)
+function preparePrompt(catalog: Catalog, parts: readonly PromptPart[], messageID: string): PreparedPrompt {
   const visible = parts.filter((part) => part.type !== "text" || (!part.synthetic && !part.ignored))
   const synthetic = parts.flatMap((part) => (part.type === "text" && part.synthetic ? [part.text] : []))
   const text = visible.flatMap((part) => (part.type === "text" ? [part.text] : [])).join("\n")
@@ -424,6 +428,15 @@ function preparePrompt(catalog: Catalog, prompt: PromptRequest["prompt"], messag
   const command = slash ? catalog.commands.find((item) => item.name === slash.name) : undefined
   const start = turnStart(messageID, slash)
   return { start, text, files, synthetic, slash, command }
+}
+
+// Covers only missing or permission-denied targets; the server still rejects oversized, non-regular, or unlistable ones.
+function referenceUnreadableFile(part: PromptPart) {
+  if (part.type !== "file" || !part.url.startsWith("file://")) return Effect.succeed(part)
+  return Effect.tryPromise(() => access(fileURLToPath(part.url), constants.R_OK)).pipe(
+    Effect.as(part),
+    Effect.orElseSucceed(() => linkReference(part.filename, part.url)),
+  )
 }
 
 function turnStart(messageID: string, slash: PreparedPrompt["slash"]): ACPTranslate.TurnStart {

@@ -2,6 +2,10 @@ import { describe, expect, test } from "bun:test"
 import type { StopReason } from "@agentclientprotocol/sdk"
 import type { OpenCodeEvent } from "@opencode/client/promise"
 import { Schema } from "effect"
+import { mkdir } from "node:fs/promises"
+import path from "node:path"
+import { pathToFileURL } from "node:url"
+import { tmpdir } from "../fixture/tmpdir"
 import {
   childCreated,
   delivered,
@@ -80,12 +84,15 @@ describe("acp prompt turns over the wire", () => {
   })
 
   test("submits assistant-only context as synthetic input before the visible prompt", async () => {
+    await using dir = await tmpdir()
+    const readme = pathToFileURL(path.join(dir.path, "README.md")).href
+    await Bun.write(path.join(dir.path, "README.md"), "# readme\n")
     await using acp = await startSession()
 
     await acp.prompt(acp.sessionId, [
       { type: "text", text: "visible" },
       { type: "text", text: "hidden context", annotations: { audience: ["assistant"] } },
-      { type: "resource_link", uri: "file:///workspace/README.md", name: "README.md", mimeType: "text/markdown" },
+      { type: "resource_link", uri: readme, name: "README.md", mimeType: "text/markdown" },
     ])
 
     expect(acp.server.submissions).toEqual([
@@ -100,7 +107,37 @@ describe("acp prompt turns over the wire", () => {
       expect.objectContaining({
         kind: "prompt",
         text: "visible",
-        files: [{ uri: "file:///workspace/README.md", name: "README.md" }],
+        files: [{ uri: readme, name: "README.md" }],
+      }),
+    ])
+  })
+
+  test("attaches readable file links and references unreadable ones in place", async () => {
+    await using dir = await tmpdir()
+    const file = pathToFileURL(path.join(dir.path, "notes.md")).href
+    const folder = pathToFileURL(path.join(dir.path, "src")).href
+    const missing = pathToFileURL(path.join(dir.path, "missing.md")).href
+    await Bun.write(path.join(dir.path, "notes.md"), "# notes\n")
+    await mkdir(path.join(dir.path, "src"))
+    await using acp = await startSession()
+
+    const response = await acp.prompt(acp.sessionId, [
+      { type: "text", text: "compare" },
+      { type: "resource_link", uri: file, name: "notes.md" },
+      { type: "resource_link", uri: missing, name: "missing.md" },
+      { type: "resource_link", uri: folder, name: "src" },
+      { type: "text", text: "please" },
+    ])
+
+    expect(response.stopReason).toBe("end_turn")
+    expect(acp.server.submissions).toEqual([
+      expect.objectContaining({
+        kind: "prompt",
+        text: `compare\n[missing.md](${missing})\nplease`,
+        files: [
+          { uri: file, name: "notes.md" },
+          { uri: folder, name: "src" },
+        ],
       }),
     ])
   })
