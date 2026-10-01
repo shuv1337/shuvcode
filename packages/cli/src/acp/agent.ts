@@ -8,10 +8,9 @@ import {
   type AgentRequestMethod,
   type Stream,
 } from "@agentclientprotocol/sdk"
-import { ClientError, type OpenCodeClient } from "@opencode/client/promise"
-import { Cause, Effect, type Scope } from "effect"
+import type { OpenCodeClient } from "@opencode/client/promise"
+import { Cause, Deferred, Effect, type Scope } from "effect"
 import { ACPCatalog } from "./catalog"
-import { ACPConnection } from "./connection"
 import { ACPError } from "./error"
 import { ACPService } from "./service"
 
@@ -19,11 +18,18 @@ import { ACPService } from "./service"
 export const connect = Effect.fnUntraced(function* (client: OpenCodeClient, stream: Stream) {
   const run = Effect.runPromiseWith(yield* Effect.context<Scope.Scope>())
   const catalog = yield* ACPCatalog.make(client)
+  // Requests can dispatch once the stream's read loop yields, which may be before the service below is built.
+  const ready = yield* Deferred.make<ACPService.Interface>()
   const handle =
-    <Params, A>(call: (ctx: AgentHandlerContext<Params>) => Effect.Effect<A, ACPError.Error | RequestError>) =>
+    <Params, A>(
+      call: (service: ACPService.Interface, ctx: AgentHandlerContext<Params>) => Effect.Effect<A, ACPService.Failure>,
+    ) =>
     (name: string) => {
       const handler = Effect.fn(name)(
-        call,
+        (ctx: AgentHandlerContext<Params>) =>
+          Deferred.await(ready).pipe(Effect.flatMap((service) => call(service, ctx))),
+        // Catalog failures arrive typed and are classified like promise rejections.
+        Effect.catch(ACPError.classify),
         Effect.mapError((error) => (error instanceof RequestError ? error : ACPError.toRequestError(error))),
         Effect.tapCauseIf(Cause.hasDies, (cause) => Effect.logError("ACP request failed", cause)),
         Effect.catchDefect((defect) => Effect.fail(ACPError.toRequestError(ACPError.fromUnknown(defect)))),
@@ -42,78 +48,63 @@ export const connect = Effect.fnUntraced(function* (client: OpenCodeClient, stre
 
   request(
     "initialize",
-    handle((ctx) => promise(() => service.initialize(ctx.params))),
+    handle((service, ctx) => service.initialize(ctx.params)),
   )
   request(
     "authenticate",
-    handle((ctx) => promise(() => service.authenticate(ctx.params))),
+    handle((service, ctx) => service.authenticate(ctx.params)),
   )
   request(
     "session/new",
-    handle((ctx) => promise(() => service.newSession(ctx.params))),
+    handle((service, ctx) => service.newSession(ctx.params)),
   )
   request(
     "session/load",
-    handle((ctx) => promise(() => service.loadSession(ctx.params))),
+    handle((service, ctx) => service.loadSession(ctx.params)),
   )
   request(
     "session/list",
-    handle((ctx) => promise(() => service.listSessions(ctx.params))),
+    handle((service, ctx) => service.listSessions(ctx.params)),
   )
   request(
     "session/delete",
-    handle((ctx) => promise(() => service.deleteSession(ctx.params))),
+    handle((service, ctx) => service.deleteSession(ctx.params)),
   )
   request(
     "session/resume",
-    handle((ctx) => promise(() => service.resumeSession(ctx.params))),
+    handle((service, ctx) => service.resumeSession(ctx.params)),
   )
   request(
     "session/close",
-    handle((ctx) => promise(() => service.closeSession(ctx.params))),
+    handle((service, ctx) => ACPError.promise(() => service.closeSession(ctx.params))),
   )
   request(
     "session/fork",
-    handle((ctx) => promise(() => service.forkSession(ctx.params))),
+    handle((service, ctx) => service.forkSession(ctx.params)),
   )
   request(
     "session/set_config_option",
-    handle((ctx) => promise(() => service.setSessionConfigOption(ctx.params))),
+    handle((service, ctx) => service.setSessionConfigOption(ctx.params)),
   )
   request(
     "session/set_mode",
-    handle((ctx) => promise(() => service.setSessionMode(ctx.params))),
+    handle((service, ctx) => service.setSessionMode(ctx.params)),
   )
   // The SDK signal is passed through rather than interrupting the fiber: a cancelled turn still resolves with
   // `stopReason: "cancelled"`.
   request(
     "session/prompt",
-    handle((ctx) => promise(() => service.prompt(ctx.params, ctx.signal))),
+    handle((service, ctx) => ACPError.promise(() => service.prompt(ctx.params, ctx.signal))),
   )
   notification(
     "session/cancel",
-    handle((ctx) => promise(() => service.cancel(ctx.params))),
+    handle((service, ctx) => ACPError.promise(() => service.cancel(ctx.params))),
   )
   const connection = app.connect(stream)
-  // Inbound dispatch starts after the stream's async read loop yields, so handlers never observe this before assignment.
-  const service = ACPService.make({ client, connection: ACPConnection.make(connection), catalog, run })
+  yield* Deferred.succeed(ready, yield* ACPService.make({ client, connection, catalog, run }))
   return connection
 })
 
 const spanName = (method: string) => `cli.acp.${method.replaceAll("/", ".")}`
-
-const promise = <A>(evaluate: () => Promise<A>) =>
-  Effect.tryPromise({
-    try: evaluate,
-    // A catalog load failure is classified by the client error that caused it.
-    catch: (cause) => (cause instanceof ACPCatalog.LoadError ? cause.cause : cause),
-  }).pipe(
-    Effect.catch((cause) => {
-      if (cause instanceof RequestError || ACPError.is(cause)) return Effect.fail(cause)
-      if (cause instanceof ClientError && cause.reason === "Transport")
-        return Effect.fail(new ACPError.ServerUnavailableError())
-      return Effect.die(cause)
-    }),
-  )
 
 export * as ACP from "./agent"

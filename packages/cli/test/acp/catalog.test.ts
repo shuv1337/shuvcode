@@ -136,6 +136,86 @@ describe("acp catalog and config options over the wire", () => {
     expect(agentReads(acp)).toBeGreaterThan(reads)
   })
 
+  test("reloads the catalog once for an unseen model and selects it", async () => {
+    await using acp = await startWire()
+    acp.server.catalog.models = [testModel]
+    await acp.initialize()
+    const session = await acp.newSession()
+    acp.server.catalog.models = [testModel, secondModel]
+    const set = (value: string) =>
+      acp.request("session/set_config_option", { sessionId: session.sessionId, configId: "model", value })
+    const reads = modelReads(acp)
+
+    const selected = await set("test/second-model")
+    expect(modelReads(acp)).toBe(reads + 1)
+    expect(await rpcError(set("test/missing-model"))).toMatchObject({ code: -32602 })
+
+    expect(currentValue(selected, "model")).toBe("test/second-model")
+    expect(modelReads(acp)).toBe(reads + 2)
+    expect(acp.server.selections).toEqual([
+      { sessionID: session.sessionId, model: { providerID: "test", id: secondModel.id } },
+    ])
+  })
+
+  test("stops catalog updates for a closed session while other sessions in the cwd keep them", async () => {
+    await using acp = await startWire()
+    acp.server.catalog.models = [testModel]
+    await acp.initialize()
+    const closed = await acp.newSession()
+    const open = await acp.newSession()
+    await acp.request("session/close", { sessionId: closed.sessionId })
+    const since = acp.updates.length
+
+    await change(acp, open.sessionId, "config_option_update", () => {
+      acp.server.catalog.models = [testModel, secondModel]
+      acp.server.send(ephemeralEvent("model.updated", {}))
+    })
+    await change(acp, open.sessionId, "available_commands_update", () => {
+      acp.server.catalog.commands = [reviewCommand, { name: "ship", description: "Ship it" }]
+      acp.server.send(ephemeralEvent("command.updated", {}, { directory: "/workspace" }))
+    })
+    await change(acp, open.sessionId, "config_option_update", () => {
+      acp.server.catalog.agents = [buildAgent]
+      acp.server.send(ephemeralEvent("agent.updated", {}, { directory: "/workspace" }))
+    })
+
+    expect(updateKinds(acp, since)).toEqual([
+      [open.sessionId, "config_option_update"],
+      [open.sessionId, "available_commands_update"],
+      [open.sessionId, "config_option_update"],
+    ])
+  })
+
+  test.each(["session/load", "session/resume"] as const)(
+    "pushes one update per catalog change after %s re-attaches a session",
+    async (method) => {
+      await using acp = await startSession()
+      const params = { cwd: "/workspace", sessionId: acp.sessionId, mcpServers: [] }
+      await acp.request(method, params)
+      await acp.request(method, params)
+      const since = acp.updates.length
+
+      await change(acp, acp.sessionId, "config_option_update", () => {
+        acp.server.catalog.models = [testModel]
+        acp.server.send(ephemeralEvent("model.updated", {}))
+      })
+      await change(acp, acp.sessionId, "available_commands_update", () => {
+        acp.server.catalog.commands = [reviewCommand, { name: "ship", description: "Ship it" }]
+        acp.server.send(ephemeralEvent("command.updated", {}, { directory: "/workspace" }))
+      })
+      await change(acp, acp.sessionId, "config_option_update", () => {
+        acp.server.catalog.agents = [buildAgent]
+        acp.server.send(ephemeralEvent("agent.updated", {}, { directory: "/workspace" }))
+      })
+
+      expect(updateKinds(acp, since)).toEqual([
+        [acp.sessionId, "config_option_update"],
+        [acp.sessionId, "available_commands_update"],
+        [acp.sessionId, "config_option_update"],
+      ])
+    },
+  )
+
   test.each(["empty", "missing the default"])(
     "retries when the model list is %s but the default is ready",
     async (initial) => {
@@ -230,6 +310,21 @@ describe("acp catalog and config options over the wire", () => {
     expect(acp.server.submissions.map((item) => item.kind)).toEqual(["compact"])
   })
 })
+
+// Each change waits on a catalog reload over HTTP, so a stray update for an earlier change lands before the next one.
+async function change(acp: Wire, sessionId: string, kind: string, trigger: () => void) {
+  const seen = acp.updates.filter((item) => item.sessionId === sessionId && item.update.sessionUpdate === kind).length
+  trigger()
+  await acp.until(
+    () =>
+      acp.updates.filter((item) => item.sessionId === sessionId && item.update.sessionUpdate === kind).length > seen,
+    kind,
+  )
+}
+
+function updateKinds(acp: Wire, since: number) {
+  return acp.updates.slice(since).map((item) => [item.sessionId, item.update.sessionUpdate])
+}
 
 function commandNames(item: SessionNotification) {
   if (item.update.sessionUpdate !== "available_commands_update") return undefined

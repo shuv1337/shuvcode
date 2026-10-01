@@ -1,16 +1,9 @@
-import { isDeepStrictEqual } from "node:util"
-import {
-  isSessionNotFoundError,
-  type CommandInfo,
-  type ModelRef,
-  type OpenCodeClient,
-  type SessionInfo,
-  type SessionMessageInfo,
-} from "@opencode/client/promise"
+import { isSessionNotFoundError, type CommandInfo, type ModelRef, type OpenCodeClient } from "@opencode/client/promise"
 import { FSUtil } from "@opencode/util/fs-util"
-import type { Effect, Scope } from "effect"
+import { Effect, Option, Ref, Stream, type Scope } from "effect"
 import { withTimestampedFallback } from "@opencode/util/session-title-fallback"
 import type {
+  AgentConnection,
   AuthenticateRequest,
   AuthenticateResponse,
   AuthMethod,
@@ -27,11 +20,11 @@ import type {
   ListSessionsResponse,
   LoadSessionRequest,
   LoadSessionResponse,
-  McpServer,
   NewSessionRequest,
   NewSessionResponse,
   PromptRequest,
   PromptResponse,
+  RequestError,
   ResumeSessionRequest,
   ResumeSessionResponse,
   SetSessionConfigOptionRequest,
@@ -41,9 +34,9 @@ import type {
 } from "@agentclientprotocol/sdk"
 import { OPENCODE_VERSION } from "../version"
 import { SessionMessage } from "@opencode/schema/session-message"
-import { ACPCatalog, type Catalog } from "./catalog"
-import { buildConfigOptions, DEFAULT_VARIANT_VALUE, parseModelSelection } from "./config-option"
-import type { ACPConnection } from "./connection"
+import type { ACPCatalog, Catalog } from "./catalog"
+import { DEFAULT_VARIANT_VALUE, parseModelSelection } from "./config-option"
+import { ACPConnection } from "./connection"
 import { promptContentToParts } from "./content"
 import {
   ChildSessionUpdateMethod,
@@ -55,21 +48,9 @@ import {
   type TurnStart,
 } from "./event"
 import { ACPError } from "./error"
+import { ACPSessions, builtinCommands, type Attached } from "./sessions"
 
 export const AuthMethodID = "opencode-login"
-
-// ACP runs these itself; they take precedence over server commands with the same name.
-const builtinCommands = new Map([["compact", { description: "Compact the session", start: "compaction" as const }]])
-
-// Model and mode are unset while the session follows the server defaults.
-type Attached = {
-  readonly id: string
-  readonly cwd: string
-  readonly abort: AbortController
-  readonly catalog: ACPCatalog.Live
-  model?: ModelRef
-  modeID?: string
-}
 
 type PreparedPrompt = {
   readonly start: TurnStart
@@ -80,92 +61,114 @@ type PreparedPrompt = {
   readonly command?: CommandInfo
 }
 
+export type Failure = ACPError.Error | RequestError | ACPCatalog.Error
+
 export interface Interface {
-  initialize(input: InitializeRequest): Promise<InitializeResponse>
-  authenticate(input: AuthenticateRequest): Promise<AuthenticateResponse>
-  newSession(input: NewSessionRequest): Promise<NewSessionResponse>
-  loadSession(input: LoadSessionRequest): Promise<LoadSessionResponse>
-  listSessions(input: ListSessionsRequest): Promise<ListSessionsResponse>
-  deleteSession(input: DeleteSessionRequest): Promise<DeleteSessionResponse>
-  resumeSession(input: ResumeSessionRequest): Promise<ResumeSessionResponse>
+  readonly initialize: (input: InitializeRequest) => Effect.Effect<InitializeResponse>
+  readonly authenticate: (input: AuthenticateRequest) => Effect.Effect<AuthenticateResponse, Failure>
+  readonly newSession: (input: NewSessionRequest) => Effect.Effect<NewSessionResponse, Failure>
+  readonly loadSession: (input: LoadSessionRequest) => Effect.Effect<LoadSessionResponse, Failure>
+  readonly listSessions: (input: ListSessionsRequest) => Effect.Effect<ListSessionsResponse, Failure>
+  readonly deleteSession: (input: DeleteSessionRequest) => Effect.Effect<DeleteSessionResponse, Failure>
+  readonly resumeSession: (input: ResumeSessionRequest) => Effect.Effect<ResumeSessionResponse, Failure>
+  readonly forkSession: (input: ForkSessionRequest) => Effect.Effect<ForkSessionResponse, Failure>
+  readonly setSessionConfigOption: (
+    input: SetSessionConfigOptionRequest,
+  ) => Effect.Effect<SetSessionConfigOptionResponse, Failure>
+  readonly setSessionMode: (input: SetSessionModeRequest) => Effect.Effect<SetSessionModeResponse, Failure>
   closeSession(input: CloseSessionRequest): Promise<CloseSessionResponse>
-  forkSession(input: ForkSessionRequest): Promise<ForkSessionResponse>
-  setSessionConfigOption(input: SetSessionConfigOptionRequest): Promise<SetSessionConfigOptionResponse>
-  setSessionMode(input: SetSessionModeRequest): Promise<SetSessionModeResponse>
   prompt(input: PromptRequest, signal?: AbortSignal): Promise<PromptResponse>
   cancel(input: CancelNotification): Promise<void>
 }
 
-export function make(input: {
+export const make = Effect.fnUntraced(function* (input: {
   readonly client: OpenCodeClient
-  readonly connection: ACPConnection.Connection
+  readonly connection: AgentConnection
   readonly catalog: ACPCatalog.Interface
   readonly run: <A, E>(effect: Effect.Effect<A, E, Scope.Scope>) => Promise<A>
-}): Interface {
-  const sessions = new Map<string, Attached>()
-  const registeredMcp = new Map<string, Set<string>>()
+}) {
+  const connection = ACPConnection.service(input.connection)
+  // The turn still runs on promises.
+  const turnConnection = ACPConnection.make(input.connection)
+  const sessions = yield* ACPSessions.make({ client: input.client, connection, catalog: input.catalog })
+  const capabilities = yield* Ref.make({ childSessionUpdates: false })
   const active = new Map<string, { readonly control: TurnControl; readonly turn: Promise<PromptResponse> }>()
-  const capabilities = { childSessionUpdates: false }
 
-  const catalogs = ACPCatalog.promise({
-    catalog: input.catalog,
-    run: input.run,
-    changed: (live, previous) =>
-      Promise.all(
-        Array.from(sessions.values())
-          .filter((state) => state.catalog === live)
-          .map(async (state) => {
-            const options = configOptions(state)
-            if (!isDeepStrictEqual(options, configOptions(state, previous))) {
-              await input.connection.sessionUpdate({
-                sessionId: state.id,
-                update: { sessionUpdate: "config_option_update", configOptions: options },
-              })
-            }
-            if (!isDeepStrictEqual(live.current.commands, previous.commands)) await sendCommands(state)
-          }),
-      ),
+  const configOptions = Effect.fnUntraced(function* (attached: Attached) {
+    const catalog = yield* input.catalog.get(attached.cwd)
+    return ACPSessions.configOptions(catalog, yield* Ref.get(attached.selection))
   })
 
-  const sendCommands = (state: Attached) =>
-    input.connection.sessionUpdate({
-      sessionId: state.id,
+  // A selection the catalog has not seen may be new on the server, so reload once before rejecting it.
+  const withReload = <A>(attached: Attached, select: Effect.Effect<A, Failure>) => {
+    const retry = () => input.catalog.reload(attached.cwd).pipe(Effect.andThen(select))
+    return select.pipe(
+      Effect.catchTags({ ACPInvalidModelError: retry, ACPInvalidModeError: retry, ACPInvalidEffortError: retry }),
+    )
+  }
+
+  const selectOption = Effect.fnUntraced(function* (attached: Attached, configId: string, value: string) {
+    if (configId === "mode") return yield* selectMode(attached, value)
+    if (configId !== "model" && configId !== "effort") return yield* new ACPError.InvalidConfigOptionError({ configId })
+    const catalog = yield* input.catalog.get(attached.cwd)
+    const current = ACPSessions.currentModel(catalog, yield* Ref.get(attached.selection))
+    const model =
+      configId === "model"
+        ? yield* requireModel(catalog, value, current)
+        : yield* requireEffort(catalog, value, current)
+    yield* Ref.update(attached.selection, (selection) => ({ ...selection, model }))
+    yield* ACPError.promise(() => input.client.session.switchModel({ sessionID: attached.id, model }))
+  })
+
+  const selectMode = Effect.fnUntraced(function* (attached: Attached, modeID: string) {
+    const catalog = yield* input.catalog.get(attached.cwd)
+    if (!catalog.modes.some((mode) => mode.id === modeID)) return yield* new ACPError.InvalidModeError({ mode: modeID })
+    yield* Ref.update(attached.selection, (selection) => ({ ...selection, modeID }))
+    yield* ACPError.promise(() => input.client.session.switchAgent({ sessionID: attached.id, agent: modeID }))
+  })
+
+  const getSession = Effect.fnUntraced(function* (sessionID: string, cwd: string) {
+    const session = yield* ACPError.promise(() => input.client.session.get({ sessionID }).catch(notFound(sessionID)))
+    if (FSUtil.resolve(cwd) !== FSUtil.resolve(session.location.directory))
+      return yield* new ACPError.SessionDirectoryMismatchError({ sessionId: sessionID, cwd })
+    return session
+  })
+
+  const replay = (attached: Attached) =>
+    Stream.paginate(Option.none<string>(), (cursor) =>
+      ACPError.promise(() =>
+        Option.isSome(cursor)
+          ? input.client.message.list({ sessionID: attached.id, limit: 200, cursor: cursor.value })
+          : input.client.message.list({ sessionID: attached.id, limit: 200, order: "asc" }),
+      ).pipe(
+        Effect.map(
+          (page) => [page.data, Option.fromNullishOr(page.cursor.next).pipe(Option.map(Option.some))] as const,
+        ),
+      ),
+    ).pipe(
+      Stream.runCollect,
+      Effect.flatMap((messages) =>
+        ACPError.promise(() => replayMessages(turnConnection, attached.id, attached.cwd, messages)),
+      ),
+    )
+
+  const sendUsageUpdate = Effect.fnUntraced(function* (attached: Attached, used: number | undefined) {
+    if (!used) return
+    const catalog = yield* input.catalog.get(attached.cwd)
+    const current = ACPSessions.currentModel(catalog, yield* Ref.get(attached.selection))
+    const model = catalog.models.find((item) => item.providerID === current.providerID && item.id === current.id)
+    if (!model?.limit.context) return
+    const info = yield* ACPError.promise(() => input.client.session.get({ sessionID: attached.id }))
+    yield* connection.sessionUpdate({
+      sessionId: attached.id,
       update: {
-        sessionUpdate: "available_commands_update",
-        availableCommands: [
-          ...state.catalog.current.commands
-            .filter((command) => !builtinCommands.has(command.name))
-            .map((command) => ({ name: command.name, description: command.description ?? "" })),
-          ...Array.from(builtinCommands, ([name, command]) => ({ name, description: command.description })),
-        ],
+        sessionUpdate: "usage_update",
+        used,
+        size: model.limit.context,
+        cost: { amount: info.cost, currency: "USD" },
       },
     })
-
-  const withReload = <A>(state: Attached, select: () => Promise<A>) =>
-    select().catch(async (error: unknown) => {
-      if (
-        !(
-          error instanceof ACPError.InvalidModelError ||
-          error instanceof ACPError.InvalidModeError ||
-          error instanceof ACPError.InvalidEffortError
-        )
-      )
-        throw error
-      await catalogs.reload(state.catalog)
-      return select()
-    })
-
-  const requireSession = async (sessionID: string) => {
-    const current = sessions.get(sessionID)
-    if (current) return current
-    throw new ACPError.SessionNotFoundError({ sessionId: sessionID })
-  }
-
-  const detach = (sessionID: string) => {
-    sessions.get(sessionID)?.abort.abort()
-    sessions.delete(sessionID)
-    registeredMcp.delete(sessionID)
-  }
+  })
 
   const cancelTurn = (sessionID: string) => {
     const turn = active.get(sessionID)
@@ -176,41 +179,11 @@ export function make(input: {
     return input.client.session.interrupt({ sessionID })
   }
 
-  const attach = async (session: SessionInfo, cwd: string, mcpServers: readonly McpServer[]) => {
-    const catalog = await catalogs.get(cwd)
-    sessions.get(session.id)?.abort.abort()
-    const state: Attached = {
-      id: session.id,
-      cwd,
-      abort: new AbortController(),
-      catalog,
-      model: session.model,
-      modeID: session.agent,
-    }
-    sessions.set(session.id, state)
-    await registerMcpServers(input.client, registeredMcp, state, mcpServers)
-    await sendCommands(state)
-    return state
-  }
-
-  const replay = async (state: Attached) => {
-    await replayMessages(input.connection, state.id, state.cwd, await messages(input.client, state.id))
-  }
-
-  const configOptions = (state: Attached, catalog = state.catalog.current) => {
-    const model = currentModel(state, catalog)
-    return buildConfigOptions({
-      providers: catalog.providers,
-      currentModel: { providerID: model.providerID, modelID: model.id },
-      currentVariant: model.variant,
-      modes: catalog.modes,
-      currentModeId: state.modeID ?? catalog.defaultModeID,
-    })
-  }
-
   return {
-    initialize: async (params) => {
-      capabilities.childSessionUpdates = params.clientCapabilities?._meta?.[ChildSessionUpdatesCapability] === true
+    initialize: Effect.fnUntraced(function* (params) {
+      yield* Ref.set(capabilities, {
+        childSessionUpdates: params.clientCapabilities?._meta?.[ChildSessionUpdatesCapability] === true,
+      })
       const authMethod: AuthMethod = {
         description: "Run `opencode auth login` in the terminal",
         name: "Login with opencode",
@@ -233,32 +206,37 @@ export function make(input: {
         authMethods: [authMethod],
         agentInfo: { name: "OpenCode", version: OPENCODE_VERSION },
       }
-    },
-    authenticate: async (params) => {
-      if (params.methodId !== AuthMethodID) throw new ACPError.UnknownAuthMethodError({ methodId: params.methodId })
+    }),
+    authenticate: Effect.fnUntraced(function* (params) {
+      if (params.methodId !== AuthMethodID)
+        return yield* new ACPError.UnknownAuthMethodError({ methodId: params.methodId })
       return {}
-    },
-    newSession: async (params) => {
+    }),
+    newSession: Effect.fnUntraced(function* (params) {
       // Load before creating so a catalog failure leaves no session behind. Agent and model stay unset
       // so the server resolves its defaults after plugins activate.
-      await catalogs.get(params.cwd)
-      const created = await input.client.session.create({ location: { directory: params.cwd } })
-      const state = await attach(created, params.cwd, params.mcpServers)
-      return { sessionId: state.id, configOptions: configOptions(state) }
-    },
-    loadSession: async (params) => {
-      const session = await getSession(input.client, params.sessionId, params.cwd)
-      const state = await attach(session, session.location.directory, params.mcpServers)
-      await replay(state)
-      return { configOptions: configOptions(state) }
-    },
-    listSessions: async (params) => {
-      const page = await input.client.session.list({
-        ...(params.cwd ? { directory: params.cwd } : {}),
-        order: "desc",
-        limit: 100,
-        ...(params.cursor ? { cursor: params.cursor } : {}),
-      })
+      yield* input.catalog.get(params.cwd)
+      const created = yield* ACPError.promise(() =>
+        input.client.session.create({ location: { directory: params.cwd } }),
+      )
+      const attached = yield* sessions.attach(created, params.cwd, params.mcpServers)
+      return { sessionId: attached.id, configOptions: yield* configOptions(attached) }
+    }),
+    loadSession: Effect.fnUntraced(function* (params) {
+      const session = yield* getSession(params.sessionId, params.cwd)
+      const attached = yield* sessions.attach(session, session.location.directory, params.mcpServers)
+      yield* replay(attached)
+      return { configOptions: yield* configOptions(attached) }
+    }),
+    listSessions: Effect.fnUntraced(function* (params) {
+      const page = yield* ACPError.promise(() =>
+        input.client.session.list({
+          ...(params.cwd ? { directory: params.cwd } : {}),
+          order: "desc",
+          limit: 100,
+          ...(params.cursor ? { cursor: params.cursor } : {}),
+        }),
+      )
       return {
         sessions: page.data.map((session) => ({
           sessionId: session.id,
@@ -268,74 +246,59 @@ export function make(input: {
         })),
         ...(page.cursor.next ? { nextCursor: page.cursor.next } : {}),
       }
-    },
-    deleteSession: async (params) => {
-      await input.client.session.remove({ sessionID: params.sessionId }).catch((error) => {
-        if (!isSessionNotFoundError(error)) throw error
-      })
-      detach(params.sessionId)
+    }),
+    deleteSession: Effect.fnUntraced(function* (params) {
+      yield* ACPError.promise(() =>
+        input.client.session.remove({ sessionID: params.sessionId }).catch(notFound(params.sessionId)),
+      ).pipe(Effect.catchTag("ACPSessionNotFoundError", () => Effect.void))
+      yield* sessions.detach(params.sessionId)
       return {}
-    },
-    resumeSession: async (params) => {
-      const session = await getSession(input.client, params.sessionId, params.cwd)
-      const state = await attach(session, session.location.directory, params.mcpServers ?? [])
-      return { configOptions: configOptions(state) }
-    },
+    }),
+    resumeSession: Effect.fnUntraced(function* (params) {
+      const session = yield* getSession(params.sessionId, params.cwd)
+      const attached = yield* sessions.attach(session, session.location.directory, params.mcpServers ?? [])
+      return { configOptions: yield* configOptions(attached) }
+    }),
+    forkSession: Effect.fnUntraced(function* (params) {
+      const forked = yield* ACPError.promise(() => input.client.session.fork({ sessionID: params.sessionId }))
+      const attached = yield* sessions.attach(forked, forked.location.directory, params.mcpServers ?? [])
+      yield* replay(attached)
+      return { sessionId: attached.id, configOptions: yield* configOptions(attached) }
+    }),
+    setSessionConfigOption: Effect.fnUntraced(function* (params) {
+      const attached = yield* sessions.require(params.sessionId)
+      const value = params.value
+      if (typeof value !== "string") return yield* new ACPError.InvalidConfigOptionError({ configId: params.configId })
+      yield* withReload(attached, selectOption(attached, params.configId, value))
+      return { configOptions: yield* configOptions(attached) }
+    }),
+    setSessionMode: Effect.fnUntraced(function* (params) {
+      const attached = yield* sessions.require(params.sessionId)
+      yield* withReload(attached, selectMode(attached, params.modeId))
+      return {}
+    }),
     closeSession: async (params) => {
       const turn = active.get(params.sessionId)
       await cancelTurn(params.sessionId).catch((error) => {
         if (!isSessionNotFoundError(error)) throw error
       })
       await turn?.turn.catch(() => {})
-      detach(params.sessionId)
-      return {}
-    },
-    forkSession: async (params) => {
-      const forked = await input.client.session.fork({
-        sessionID: params.sessionId,
-      })
-      const state = await attach(forked, forked.location.directory, params.mcpServers ?? [])
-      await replay(state)
-      return { sessionId: state.id, configOptions: configOptions(state) }
-    },
-    setSessionConfigOption: async (params) => {
-      const state = await requireSession(params.sessionId)
-      const value = params.value
-      if (typeof value !== "string") throw new ACPError.InvalidConfigOptionError({ configId: params.configId })
-      await withReload(state, async () => {
-        switch (params.configId) {
-          case "model": {
-            const selected = requireModel(state.catalog.current, value, currentModel(state))
-            state.model = selected
-            await input.client.session.switchModel({ sessionID: state.id, model: selected })
-            return
-          }
-          case "effort": {
-            const current = currentModel(state)
-            const model = state.catalog.current.models.find(
-              (item) => item.providerID === current.providerID && item.id === current.id,
-            )
-            if (!model || (value !== DEFAULT_VARIANT_VALUE && !model.variants.some((variant) => variant.id === value)))
-              throw new ACPError.InvalidEffortError({ effort: value })
-            state.model = { ...current, variant: value }
-            await input.client.session.switchModel({ sessionID: state.id, model: state.model })
-            return
-          }
-          case "mode":
-            return selectMode(input.client, state, value)
-          default:
-            throw new ACPError.InvalidConfigOptionError({ configId: params.configId })
-        }
-      })
-      return { configOptions: configOptions(state) }
-    },
-    setSessionMode: async (params) => {
-      const state = await requireSession(params.sessionId)
-      await withReload(state, () => selectMode(input.client, state, params.modeId))
+      await input.run(sessions.detach(params.sessionId))
       return {}
     },
     prompt: async (params, signal) => {
-      const state = await requireSession(params.sessionId)
+      // Read everything first so the active check and registration below stay synchronous.
+      const resolved = await input.run(
+        Effect.gen(function* () {
+          const attached = yield* sessions.require(params.sessionId)
+          return {
+            attached,
+            catalog: yield* input.catalog.get(attached.cwd),
+            childSessionUpdates: (yield* Ref.get(capabilities)).childSessionUpdates,
+          }
+        }),
+      )
+      const state = resolved.attached
       if (active.has(state.id)) {
         throw new ACPError.ServiceFailureError({
           safeMessage: `Session already has an active ACP prompt: ${state.id}`,
@@ -343,30 +306,30 @@ export function make(input: {
         })
       }
       const messageID = SessionMessage.ID.create()
-      const prepared = preparePrompt(state.catalog.current, params.prompt, messageID)
+      const prepared = preparePrompt(resolved.catalog, params.prompt, messageID)
       const control: TurnControl = { cancelled: false, admission: new AbortController() }
-      const extNotification = input.connection.extNotification
+      const extNotification = turnConnection.extNotification
       const childSessionUpdate =
-        capabilities.childSessionUpdates && extNotification
+        resolved.childSessionUpdates && extNotification
           ? (update: ChildSessionUpdate) => extNotification(ChildSessionUpdateMethod, update).then(() => {})
           : undefined
       // A `$/cancel_request` for this prompt behaves like `session/cancel` for its turn.
       const cancel = () => void cancelTurn(state.id).catch(() => {})
       const turn = streamTurn({
         client: input.client,
-        connection: input.connection,
+        connection: turnConnection,
         sessionID: state.id,
         cwd: state.cwd,
         start: prepared.start,
         action: prepared.command !== undefined,
         control,
-        connectionSignal: input.connection.signal,
-        sessionSignal: state.abort.signal,
+        connectionSignal: turnConnection.signal,
+        sessionSignal: state.signal,
         submit: (signal) => submitPrompt(input.client, state, prepared, signal),
         ...(childSessionUpdate ? { childSessionUpdate } : {}),
       })
         .then(async (result) => {
-          await sendUsageUpdate(input.client, input.connection, state, result.contextTokens).catch(() => {})
+          await input.run(sendUsageUpdate(state, result.contextTokens)).catch(() => {})
           return result.response
         })
         .finally(() => {
@@ -382,6 +345,12 @@ export function make(input: {
     cancel: async (params) => {
       await cancelTurn(params.sessionId).catch(() => {})
     },
+  } satisfies Interface
+})
+
+function notFound(sessionID: string) {
+  return (error: unknown): never => {
+    throw isSessionNotFoundError(error) ? new ACPError.SessionNotFoundError({ sessionId: sessionID }) : error
   }
 }
 
@@ -432,14 +401,14 @@ function turnStart(messageID: string, slash: PreparedPrompt["slash"]): TurnStart
   return { type: "input", id: messageID }
 }
 
-function requireModel(catalog: Catalog, modelID: string, current: ModelRef): ModelRef {
+const requireModel = Effect.fnUntraced(function* (catalog: Catalog, modelID: string, current: ModelRef) {
   const selected = parseModelSelection(modelID, catalog.providers)
   const model = catalog.models.find(
     (item) => item.providerID === selected.model.providerID && item.id === selected.model.modelID,
   )
-  if (!model) throw new ACPError.InvalidModelError({ providerId: selected.model.providerID, modelId: modelID })
+  if (!model) return yield* new ACPError.InvalidModelError({ providerId: selected.model.providerID, modelId: modelID })
   if (selected.variant && !model.variants.some((variant) => variant.id === selected.variant))
-    throw new ACPError.InvalidEffortError({ effort: selected.variant })
+    return yield* new ACPError.InvalidEffortError({ effort: selected.variant })
   const variant =
     selected.variant ??
     (current.providerID === model.providerID &&
@@ -447,117 +416,15 @@ function requireModel(catalog: Catalog, modelID: string, current: ModelRef): Mod
     (current.variant === DEFAULT_VARIANT_VALUE || model.variants.some((variant) => variant.id === current.variant))
       ? current.variant
       : undefined)
-  return { providerID: model.providerID, id: model.id, variant }
-}
+  return { providerID: model.providerID, id: model.id, variant } satisfies ModelRef
+})
 
-function currentModel(state: Attached, catalog = state.catalog.current) {
-  return state.model ?? catalog.defaultModel
-}
-
-async function selectMode(client: OpenCodeClient, state: Attached, modeID: string) {
-  if (!state.catalog.current.modes.some((mode) => mode.id === modeID))
-    throw new ACPError.InvalidModeError({ mode: modeID })
-  state.modeID = modeID
-  await client.session.switchAgent({ sessionID: state.id, agent: modeID })
-}
-
-async function getSession(client: OpenCodeClient, sessionID: string, cwd: string) {
-  const session = await client.session.get({ sessionID }).catch((error) => {
-    if (isSessionNotFoundError(error)) throw new ACPError.SessionNotFoundError({ sessionId: sessionID })
-    throw error
-  })
-  if (FSUtil.resolve(cwd) !== FSUtil.resolve(session.location.directory)) {
-    throw new ACPError.SessionDirectoryMismatchError({ sessionId: sessionID, cwd })
-  }
-  return session
-}
-
-async function messages(client: OpenCodeClient, sessionID: string) {
-  const result: SessionMessageInfo[] = []
-  let cursor: string | undefined
-  do {
-    const page = cursor
-      ? await client.message.list({ sessionID, limit: 200, cursor })
-      : await client.message.list({ sessionID, limit: 200, order: "asc" })
-    result.push(...page.data)
-    cursor = page.cursor.next ?? undefined
-  } while (cursor)
-  return result
-}
-
-async function registerMcpServers(
-  client: OpenCodeClient,
-  registered: Map<string, Set<string>>,
-  session: Attached,
-  servers: readonly McpServer[],
-) {
-  const current = registered.get(session.id) ?? new Set<string>()
-  registered.set(session.id, current)
-  await Promise.all(
-    servers.flatMap((server) => {
-      const config = mcpConfig(server)
-      const key = `${server.name}:${stableStringify(config)}`
-      if (current.has(key)) return []
-      current.add(key)
-      return [
-        client.mcp.add({ server: server.name, location: { directory: session.cwd }, config }).catch((error) => {
-          current.delete(key)
-          throw error
-        }),
-      ]
-    }),
-  )
-}
-
-function mcpConfig(server: McpServer) {
-  if ("type" in server) {
-    if (server.type === "acp") throw new Error("MCP-over-ACP is not supported")
-    return {
-      type: "remote" as const,
-      url: server.url,
-      headers: Object.fromEntries(server.headers.map((header) => [header.name, header.value])),
-      oauth: false as const,
-    }
-  }
-  return {
-    type: "local" as const,
-    command: [server.command, ...server.args],
-    environment: Object.fromEntries(server.env.map((entry) => [entry.name, entry.value])),
-  }
-}
-
-function stableStringify(value: unknown): string {
-  if (Array.isArray(value)) return `[${value.map(stableStringify).join(",")}]`
-  if (!value || typeof value !== "object") return JSON.stringify(value)
-  return `{${Object.entries(value)
-    .toSorted(([a], [b]) => a.localeCompare(b))
-    .map(([key, item]) => `${JSON.stringify(key)}:${stableStringify(item)}`)
-    .join(",")}}`
-}
-
-async function sendUsageUpdate(
-  client: OpenCodeClient,
-  connection: ACPConnection.Connection,
-  session: Attached,
-  used?: number,
-) {
-  if (!used) return
-  const current = currentModel(session)
-  const model = session.catalog.current.models.find(
-    (item) => item.providerID === current.providerID && item.id === current.id,
-  )
-  if (!model?.limit.context) return
-  const info = await client.session.get({ sessionID: session.id })
-  await connection.sessionUpdate({
-    sessionId: session.id,
-    update: {
-      sessionUpdate: "usage_update",
-      used,
-      size: model.limit.context,
-      cost: { amount: info.cost, currency: "USD" },
-    },
-  })
-}
+const requireEffort = Effect.fnUntraced(function* (catalog: Catalog, effort: string, current: ModelRef) {
+  const model = catalog.models.find((item) => item.providerID === current.providerID && item.id === current.id)
+  if (!model || (effort !== DEFAULT_VARIANT_VALUE && !model.variants.some((variant) => variant.id === effort)))
+    return yield* new ACPError.InvalidEffortError({ effort })
+  return { ...current, variant: effort } satisfies ModelRef
+})
 
 function detectSlashCommand(text: string): { readonly name: string; readonly args: string } | undefined {
   const value = text.trim()

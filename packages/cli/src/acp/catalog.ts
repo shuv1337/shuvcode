@@ -1,6 +1,6 @@
 import type { CommandInfo, ModelInfo, ModelRef, OpenCodeClient, OpenCodeEvent } from "@opencode/client/promise"
 import { FSUtil } from "@opencode/util/fs-util"
-import { Context, Deferred, Effect, Exit, Schedule, Schema, Scope, Semaphore, Stream, SubscriptionRef } from "effect"
+import { Context, Deferred, Effect, Exit, Schedule, Schema, Semaphore, Stream, SubscriptionRef } from "effect"
 import type { ConfigOptionProvider } from "./config-option"
 
 export type Catalog = {
@@ -132,52 +132,6 @@ export const make = Effect.fnUntraced(function* (client: OpenCodeClient) {
     changes: (cwd) => Stream.unwrap(entry(cwd).pipe(Effect.map((loaded) => SubscriptionRef.changes(loaded.catalog)))),
   })
 })
-
-export type Live = {
-  readonly cwd: string
-  readonly current: Catalog
-}
-
-/** Temporary adapter for the promise-based `ACPService` until sessions consume the service directly. */
-export function promise(input: {
-  readonly catalog: Interface
-  readonly run: <A, E>(effect: Effect.Effect<A, E, Scope.Scope>) => Promise<A>
-  readonly changed: (live: Live, previous: Catalog) => Promise<unknown>
-}) {
-  const lives = new Map<string, Live>()
-  return {
-    get: (cwd: string) =>
-      input.run(
-        Effect.gen(function* () {
-          const current = yield* input.catalog.get(cwd)
-          const key = FSUtil.resolve(cwd)
-          const existing = lives.get(key)
-          if (existing) return existing
-          const live: Live = {
-            cwd,
-            // A loaded entry's read never suspends.
-            get current() {
-              return Effect.runSync(input.catalog.get(cwd))
-            },
-          }
-          lives.set(key, live)
-          yield* input.catalog.changes(cwd).pipe(
-            Stream.runFoldEffect(
-              () => current,
-              (previous, next) =>
-                next === previous
-                  ? Effect.succeed(previous)
-                  : Effect.promise(() => input.changed(live, previous).catch(() => {})).pipe(Effect.as(next)),
-            ),
-            Effect.ignore,
-            Effect.forkScoped({ startImmediately: true }),
-          )
-          return live
-        }),
-      ),
-    reload: (live: Live) => input.run(input.catalog.reload(live.cwd)),
-  }
-}
 
 const load = (client: OpenCodeClient, cwd: string) =>
   read(client, cwd).pipe(
