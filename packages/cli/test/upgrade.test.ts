@@ -46,7 +46,10 @@ describe("upgrade command", () => {
     const result = await cli([], { UPGRADE_TEST_METHOD: "unknown" })
     expect(result.exitCode).toBe(1)
     expect(result.events).toEqual(["method"])
-    expect(result.stdout).toContain("Pass --method")
+    expect(result.stdout).toContain("Could not detect the installation method")
+    expect(result.stdout).toContain(process.execPath)
+    expect(result.stdout).toContain("npm install --global shuvcode")
+    expect(result.stdout).toContain("--method")
   })
 
   test("rejects unsupported methods before attempting an upgrade", async () => {

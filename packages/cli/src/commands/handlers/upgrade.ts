@@ -16,7 +16,13 @@ export default Runtime.handler(
       const method = Option.getOrUndefined(input.method) ?? (yield* updater.method())
       if (!method)
         return yield* Effect.fail(
-          new Error("Could not detect the installation method. Pass --method to choose how to upgrade Shuvcode."),
+          new Updater.UpgradeError({
+            title: "Could not detect the installation method",
+            detail: `${process.execPath} is not listed as a global npm, pnpm, Bun, or Yarn package.`,
+            command: `npm install --global ${Updater.packageName}`,
+            retry:
+              "If this is a standalone binary, run that command and use the new copy instead; --method alone leaves this binary in place. If a package manager installed it, pass --method with its name.",
+          }),
         )
 
       log.info(`Using method: ${method}`)
