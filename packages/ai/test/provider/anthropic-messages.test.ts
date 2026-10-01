@@ -314,6 +314,9 @@ describe("Anthropic Messages route", () => {
         "claude-haiku-5-1",
         "claude-fable-6",
         "anthropic/claude-mythos-7.2",
+        "claude-sonnet-5-5",
+        "claude-opus-4-8@20260101",
+        "claude-nova-6",
       ]
 
       const prepared = yield* Effect.forEach(ids, (id) =>
