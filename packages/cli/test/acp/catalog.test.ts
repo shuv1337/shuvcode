@@ -37,7 +37,7 @@ describe("acp catalog and config options over the wire", () => {
       [other.sessionId]: "/other",
     })
     await acp.until(() => acp.updates.filter((item) => commandNames(item)).length === 3, "commands for each session")
-    expect(acp.updates.map(commandNames)).toEqual([["review"], ["review"], ["review"]])
+    expect(acp.updates.map(commandNames)).toEqual(Array.from({ length: 3 }, () => ["review", "compact"]))
   })
 
   test("follows server defaults and refreshes the catalog when location plugins finish activating", async () => {
@@ -57,12 +57,26 @@ describe("acp catalog and config options over the wire", () => {
       currentValue: "copilot-build",
       options: ["copilot-build", "build", "plan"],
     })
-    const commands = await acp.waitForUpdate((item) => commandNames(item)?.length === 2)
-    expect(commandNames(commands)).toEqual(["review", "ship"])
+    const commands = await acp.waitForUpdate((item) => commandNames(item)?.length === 3)
+    expect(commandNames(commands)).toEqual(["review", "ship", "compact"])
     expect(agentReads(acp)).toBe(reads + 1)
 
     const second = await acp.newSession()
     expect(currentValue(second, "mode")).toBe("copilot-build")
+  })
+
+  test("defaults the mode to the first selectable agent the server lists", async () => {
+    const configured = { ...buildAgent, id: "review", name: "Review", mode: "all" as const }
+    await using acp = await startWire()
+    acp.server.catalog.agents = [configured, buildAgent, planAgent]
+    await acp.initialize()
+
+    const session = await acp.newSession()
+
+    expect(modeOption(session.configOptions ?? [])).toEqual({
+      currentValue: "review",
+      options: ["review", "build", "plan"],
+    })
   })
 
   test("pushes config options on model.updated and commands on command.updated", async () => {
@@ -81,7 +95,7 @@ describe("acp catalog and config options over the wire", () => {
 
     acp.server.catalog.commands = [reviewCommand, { name: "ship", description: "Ship it" }]
     acp.server.send(ephemeralEvent("command.updated", {}, { directory: "/workspace" }))
-    const commands = await acp.waitForUpdate((item) => commandNames(item)?.length === 2)
+    const commands = await acp.waitForUpdate((item) => commandNames(item)?.length === 3)
     expect(commands).toEqual({
       sessionId: session.sessionId,
       update: {
@@ -89,6 +103,7 @@ describe("acp catalog and config options over the wire", () => {
         availableCommands: [
           { name: "review", description: "Review changes" },
           { name: "ship", description: "Ship it" },
+          { name: "compact", description: "Compact the session" },
         ],
       },
     })
@@ -193,15 +208,27 @@ describe("acp catalog and config options over the wire", () => {
     })
   })
 
-  test.todo(
-    "advertises the built-in compact command (https://github.com/anomalyco/opencode/issues/37229)",
-    async () => {
-      await using acp = await startSession()
+  test("advertises and runs the built-in compact over a server command (https://github.com/anomalyco/opencode/issues/37229)", async () => {
+    await using acp = await startSession()
+    const advertised = await acp.waitForUpdate((item) => commandNames(item) !== undefined)
 
-      const commands = await acp.waitForUpdate((item) => commandNames(item) !== undefined)
-      expect(commandNames(commands)).toContain("compact")
-    },
-  )
+    acp.server.catalog.commands = [reviewCommand, { name: "compact", description: "Server compact" }]
+    acp.server.send(ephemeralEvent("command.updated", {}, { directory: "/workspace" }))
+    const replaced = await acp.waitForUpdate((item) => item !== advertised && commandNames(item) !== undefined)
+    const compacted = await acp.prompt(acp.sessionId, "/compact")
+
+    expect([advertised, replaced].map((item) => item.update)).toEqual(
+      Array.from({ length: 2 }, () => ({
+        sessionUpdate: "available_commands_update",
+        availableCommands: [
+          { name: "review", description: "Review changes" },
+          { name: "compact", description: "Compact the session" },
+        ],
+      })),
+    )
+    expect(compacted.stopReason).toBe("end_turn")
+    expect(acp.server.submissions.map((item) => item.kind)).toEqual(["compact"])
+  })
 })
 
 function commandNames(item: SessionNotification) {

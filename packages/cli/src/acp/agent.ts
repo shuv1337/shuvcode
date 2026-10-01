@@ -9,14 +9,16 @@ import {
   type Stream,
 } from "@agentclientprotocol/sdk"
 import { ClientError, type OpenCodeClient } from "@opencode/client/promise"
-import { Cause, Effect } from "effect"
+import { Cause, Effect, type Scope } from "effect"
+import { ACPCatalog } from "./catalog"
 import { ACPConnection } from "./connection"
 import { ACPError } from "./error"
 import { ACPService } from "./service"
 
 // Untraced so request spans parent to the caller's span instead of a setup span that has already ended.
 export const connect = Effect.fnUntraced(function* (client: OpenCodeClient, stream: Stream) {
-  const run = Effect.runPromiseWith(yield* Effect.context<never>())
+  const run = Effect.runPromiseWith(yield* Effect.context<Scope.Scope>())
+  const catalog = yield* ACPCatalog.make(client)
   const handle =
     <Params, A>(call: (ctx: AgentHandlerContext<Params>) => Effect.Effect<A, ACPError.Error | RequestError>) =>
     (name: string) => {
@@ -94,14 +96,18 @@ export const connect = Effect.fnUntraced(function* (client: OpenCodeClient, stre
   )
   const connection = app.connect(stream)
   // Inbound dispatch starts after the stream's async read loop yields, so handlers never observe this before assignment.
-  const service = ACPService.make({ client, connection: ACPConnection.make(connection) })
+  const service = ACPService.make({ client, connection: ACPConnection.make(connection), catalog, run })
   return connection
 })
 
 const spanName = (method: string) => `cli.acp.${method.replaceAll("/", ".")}`
 
 const promise = <A>(evaluate: () => Promise<A>) =>
-  Effect.tryPromise({ try: evaluate, catch: (cause) => cause }).pipe(
+  Effect.tryPromise({
+    try: evaluate,
+    // A catalog load failure is classified by the client error that caused it.
+    catch: (cause) => (cause instanceof ACPCatalog.LoadError ? cause.cause : cause),
+  }).pipe(
     Effect.catch((cause) => {
       if (cause instanceof RequestError || ACPError.is(cause)) return Effect.fail(cause)
       if (cause instanceof ClientError && cause.reason === "Transport")
