@@ -101,8 +101,8 @@ describe("acp lifecycle subprocess", () => {
   }, 60_000)
 
   // The private server is found with `pgrep`, which Windows lacks.
-  const todoOutsideWindows = process.platform === "win32" ? test.skip : test.todo
-  todoOutsideWindows(
+  const testOutsideWindows = process.platform === "win32" ? test.skip : test
+  testOutsideWindows(
     "exits when the private server process dies (https://github.com/anomalyco/opencode/issues/51716)",
     async () => {
       await using fixture = await createAcpFixture()
@@ -121,7 +121,9 @@ describe("acp lifecycle subprocess", () => {
       const timeout = Promise.withResolvers<"running">()
       const timer = setTimeout(() => timeout.resolve("running"), 10_000)
       const exited = await Promise.race([acp.exited, timeout.promise]).finally(() => clearTimeout(timer))
-      expect(exited).not.toBe("running")
+      expect(exited).toBe(1)
+      await acp[Symbol.asyncDispose]()
+      expect(acp.stderr()).toContain("opencode acp: server exited unexpectedly (signal SIGKILL)")
     },
     60_000,
   )
