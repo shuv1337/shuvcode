@@ -26,6 +26,8 @@ const patterns = [
   /tokens in request more than max tokens allowed/i,
   /maximum prompt length is \d+/i,
   /reduce the length of the messages/i,
+  // DeepInfra
+  /requested input length \d+ exceeds maximum input length/i,
   /maximum context length is \d+ tokens/i,
   /exceeds (?:the )?maximum allowed input length of [\d,]+ tokens?/i,
   /input \(\d+ tokens\) is longer than the model'?s context length \(\d+ tokens\)/i,

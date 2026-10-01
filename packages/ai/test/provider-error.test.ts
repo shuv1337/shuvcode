@@ -7,6 +7,7 @@ describe("provider error classification", () => {
     const messages = [
       "tokens in request more than max tokens allowed",
       "Requested token count exceeds the model's maximum context length of 131072 tokens.",
+      "Requested input length 600010 exceeds maximum input length 131071",
       "Input length (265330) exceeds model's maximum context length (262144).",
       "Input length 131393 exceeds the maximum allowed input length of 131040 tokens.",
       "The input (516368 tokens) is longer than the model's context length (262144 tokens).",
