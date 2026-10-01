@@ -14,7 +14,7 @@ declare const OPENCODE_CLI_NAME: string | undefined
 
 // The fork publishes its own npm packages, so the update target is fixed at build
 // time instead of resolved from an update service.
-const packageName =
+export const packageName =
   typeof OPENCODE_CLI_NAME === "string" && OPENCODE_CLI_NAME === "shuvcode-node" ? OPENCODE_CLI_NAME : "shuvcode"
 
 export const methods = ["npm", "pnpm", "bun", "yarn"] as const
