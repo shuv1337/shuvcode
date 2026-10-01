@@ -51,6 +51,9 @@ export const AuthMethodID = "opencode-login"
 
 export type Failure = ACPError.Error | RequestError | ACPCatalog.Error
 
+/** What the client advertised in `initialize`. */
+export type Capabilities = { readonly childSessionUpdates: boolean; readonly formElicitation: boolean }
+
 export interface Interface {
   readonly initialize: (input: InitializeRequest) => Effect.Effect<InitializeResponse>
   readonly authenticate: (input: AuthenticateRequest) => Effect.Effect<AuthenticateResponse, Failure>
@@ -74,7 +77,7 @@ export function make(input: {
   readonly connection: ACPConnection.Interface
   readonly catalog: ACPCatalog.Interface
   readonly sessions: ACPSessions.Interface
-  readonly capabilities: Ref.Ref<{ readonly childSessionUpdates: boolean }>
+  readonly capabilities: Ref.Ref<Capabilities>
   readonly turn: ACPTurn.Interface
 }): Interface {
   const currentOptions = Effect.fnUntraced(function* (attached: Attached) {
@@ -147,8 +150,10 @@ export function make(input: {
 
   return {
     initialize: Effect.fnUntraced(function* (params) {
+      const elicitation = params.clientCapabilities?.elicitation
       yield* Ref.set(input.capabilities, {
         childSessionUpdates: params.clientCapabilities?._meta?.[ACPTranslate.ChildSessionUpdatesCapability] === true,
+        formElicitation: elicitation?.form !== undefined && elicitation.form !== null,
       })
       const authMethod: AuthMethod = {
         description: "Run `opencode auth login` in the terminal",

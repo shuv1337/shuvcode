@@ -2,6 +2,8 @@ import {
   methods,
   type AgentApp,
   type AnyMessage,
+  type CreateElicitationRequest,
+  type CreateElicitationResponse,
   type JsonRpcId,
   type RequestError,
   type RequestPermissionRequest,
@@ -31,6 +33,10 @@ export interface Interface {
     method: string,
     params: Record<string, unknown>,
   ) => Effect.Effect<void, ACPError.Error | RequestError>
+  /** Interruption cancels the client's request. */
+  readonly createElicitation: (
+    params: CreateElicitationRequest,
+  ) => Effect.Effect<CreateElicitationResponse, ACPError.Error | RequestError>
   /** Tracks an incoming request from now on and returns its `Responded`. */
   readonly responded: (requestId: JsonRpcId) => Effect.Effect<void>
 }
@@ -65,6 +71,10 @@ export function make(app: AgentApp, stream: Stream) {
           agent.client.request(methods.client.session.requestPermission, params, { cancellationSignal: signal }),
         ),
       extNotification: (method, params) => ACPPromise.promise(() => agent.client.notify(method, params)),
+      createElicitation: (params) =>
+        ACPPromise.promise((signal) =>
+          agent.client.request(methods.client.elicitation.create, params, { cancellationSignal: signal }),
+        ),
       responded: (requestId) => {
         const responded = Deferred.makeUnsafe<void>()
         responses.set(requestId, responded)

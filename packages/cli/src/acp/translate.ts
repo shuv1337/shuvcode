@@ -75,6 +75,8 @@ export type TurnState = {
   readonly compactions: ReadonlyMap<string, string>
   readonly children: ReadonlyMap<string, ChildSession>
   readonly openChildren: ReadonlySet<string>
+  /** Forms asked of the client that the server has not yet answered or cancelled. */
+  readonly forms: ReadonlySet<string>
   readonly finish?: SessionMessageAssistant["finish"]
   readonly usage?: { readonly turn: TokenUsageInfo; readonly last: TokenUsageInfo }
   readonly stepError?: SessionStructuredError
@@ -82,6 +84,7 @@ export type TurnState = {
 }
 
 type PermissionEvent = Extract<EventSubscribeOutput, { type: "permission.asked" }>
+type FormEvent = Extract<EventSubscribeOutput, { type: "form.created" }>
 
 export type Output =
   | { readonly _tag: "SessionUpdate"; readonly update: SessionUpdate }
@@ -92,7 +95,14 @@ export type Output =
       readonly tool?: Tool
       readonly child?: ChildSession
     }
-  | { readonly _tag: "FormCancel"; readonly sessionID: string; readonly formID: string }
+  | {
+      readonly _tag: "FormAsk"
+      readonly form: FormEvent["data"]["form"]
+      readonly child?: ChildSession
+      /** Whether the form's session sends its tool calls to the client as `session/update` tool calls. */
+      readonly toolCallSent: boolean
+    }
+  | { readonly _tag: "FormSettled"; readonly formID: string }
 
 export type Step = {
   readonly state: TurnState
@@ -119,6 +129,7 @@ export const initial: TurnState = {
   compactions: new Map(),
   children: new Map(),
   openChildren: new Set(),
+  forms: new Set(),
 }
 
 export function step(state: TurnState, event: EventSubscribeOutput, ctx: Context): Step {
@@ -151,9 +162,21 @@ export function step(state: TurnState, event: EventSubscribeOutput, ctx: Context
   }
   if (event.type === "form.created" && (event.data.form.sessionID === ctx.sessionID || child)) {
     return {
-      state,
-      outputs: [{ _tag: "FormCancel", sessionID: event.data.form.sessionID, formID: event.data.form.id }],
+      state: { ...state, forms: new Set(state.forms).add(event.data.form.id) },
+      outputs: [
+        {
+          _tag: "FormAsk",
+          form: event.data.form,
+          child,
+          toolCallSent: ctx.mode === "turn" && (!child || !ctx.childUpdates),
+        },
+      ],
     }
+  }
+  if ((event.type === "form.replied" || event.type === "form.cancelled") && state.forms.has(event.data.id)) {
+    const forms = new Set(state.forms)
+    forms.delete(event.data.id)
+    return { state: { ...state, forms }, outputs: [{ _tag: "FormSettled", formID: event.data.id }] }
   }
   if (!eventSessionID || (eventSessionID !== ctx.sessionID && !child)) return { state, outputs: [] }
   if (matchesStart(event, ctx.start)) return { state: { ...state, started: true }, outputs: [] }
