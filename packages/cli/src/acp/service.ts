@@ -1,4 +1,5 @@
 import {
+  isInvalidRequestError,
   isSessionNotFoundError,
   type ModelRef,
   type OpenCodeClient,
@@ -117,12 +118,7 @@ export function make(input: {
   })
 
   const getSession = Effect.fnUntraced(function* (sessionID: string, cwd: string) {
-    const session = yield* ACPPromise.promise(() =>
-      input.client.session.get({ sessionID }).catch((error) => {
-        if (isSessionNotFoundError(error)) throw new ACPError.SessionNotFoundError({ sessionId: sessionID })
-        throw error
-      }),
-    )
+    const session = yield* ACPPromise.promise(() => input.client.session.get({ sessionID }))
     if (FSUtil.resolve(cwd) !== FSUtil.resolve(session.location.directory))
       return yield* new ACPError.SessionDirectoryMismatchError({ sessionId: sessionID, cwd })
     return session
@@ -218,9 +214,11 @@ export function make(input: {
       }
     }),
     deleteSession: Effect.fnUntraced(function* (params) {
+      // A malformed ID fails the server's path decode, and the session ID is the only path param.
       yield* ACPPromise.promise(() =>
         input.client.session.remove({ sessionID: params.sessionId }).catch((error) => {
-          if (!isSessionNotFoundError(error)) throw error
+          if (isSessionNotFoundError(error) || (isInvalidRequestError(error) && error.kind === "Params")) return
+          throw error
         }),
       )
       yield* input.sessions.detach(params.sessionId)

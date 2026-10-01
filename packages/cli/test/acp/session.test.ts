@@ -180,11 +180,45 @@ describe("acp session lifecycle over the wire", () => {
     expect(await acp.request("session/delete", { sessionId: acp.sessionId })).toEqual({})
     expect(acp.server.sessions.has(acp.sessionId)).toBe(false)
     expect(await acp.request("session/delete", { sessionId: acp.sessionId })).toEqual({})
+    expect(await acp.request("session/delete", { sessionId: "ses_never_created" })).toEqual({})
+    expect(await acp.request("session/delete", { sessionId: "never-created" })).toEqual({})
     expect(
       await rpcError(
         acp.request("session/set_config_option", { sessionId: acp.sessionId, configId: "effort", value: "high" }),
       ),
     ).toMatchObject({ code: -32602, data: { sessionId: acp.sessionId } })
+  })
+
+  test("rejects malformed session IDs as invalid params", async () => {
+    await using acp = await startWire()
+    await acp.initialize()
+    const params = { cwd: "/workspace", sessionId: "never-created", mcpServers: [] }
+
+    expect(await rpcError(acp.request("session/load", params))).toEqual({
+      code: -32602,
+      message: 'Invalid params: Expected a string starting with "ses"',
+      data: {},
+    })
+    expect(await rpcError(acp.request("session/fork", params))).toEqual({
+      code: -32602,
+      message: "Invalid params: Invalid session ID",
+      data: { field: "sessionID" },
+    })
+    expect(acp.logs).toEqual([])
+  })
+
+  test("rejects forking an unknown session as session not found", async () => {
+    await using acp = await startWire()
+    await acp.initialize()
+
+    expect(
+      await rpcError(acp.request("session/fork", { cwd: "/workspace", sessionId: "ses_unknown", mcpServers: [] })),
+    ).toEqual({
+      code: -32602,
+      message: "Invalid params: session not found: ses_unknown",
+      data: { sessionId: "ses_unknown" },
+    })
+    expect(acp.logs).toEqual([])
   })
 
   test("converts MCP configs and deduplicates registrations per session and config", async () => {
