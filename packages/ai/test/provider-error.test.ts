@@ -11,6 +11,7 @@ describe("provider error classification", () => {
       "Input length (265330) exceeds model's maximum context length (262144).",
       "Input length 131393 exceeds the maximum allowed input length of 131040 tokens.",
       "The input (516368 tokens) is longer than the model's context length (262144 tokens).",
+      "The input is longer than the model's context length trace_id: 39d8c3a5c6c91dbc8dd9055f0b37e084",
       "Prompt has 5,958,968 tokens, but the configured context size is 256,000 tokens",
       "Range of input length should be [1, 129024]",
       "Too many tokens",
