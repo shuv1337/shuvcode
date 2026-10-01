@@ -2,7 +2,7 @@ import type { FileDiffInfo } from "@opencode/client/promise"
 import type { SessionReviewLineComment } from "@opencode/session-ui/session-review"
 import { previewSelectedLines } from "@opencode/session-ui/pierre/selection-bridge"
 import { checksum } from "@opencode/util/encode"
-import { createQuery, skipToken, useQueryClient } from "@tanstack/solid-query"
+import { createQuery, useQueryClient } from "@tanstack/solid-query"
 import { debounce } from "@solid-primitives/scheduled"
 import { createComputed, createEffect, createMemo, on, onCleanup } from "solid-js"
 import { createStore } from "solid-js/store"
@@ -17,7 +17,6 @@ import {
 } from "./kinds"
 
 export type ChangeMode = "git" | "branch" | "turn"
-type VcsMode = "git" | "branch"
 type FileSelection = { startLine: number; endLine: number; startChar: number; endChar: number }
 
 export type Demand = { tree: number; files: number; panel: number; details: number }
@@ -109,11 +108,9 @@ export function createReviewModel(input: { ctx: Context; view: SessionView; dema
     ) {
       list.push("branch")
     }
+    // Turn snapshots are captured only for Git sessions.
+    if (project?.vcs === "git" && view.id) list.push("turn")
     return list
-  })
-  const vcsMode = createMemo<VcsMode | undefined>(() => {
-    const value = mode()
-    return value === "git" || value === "branch" ? value : undefined
   })
   const vcsKey = createMemo(
     () =>
@@ -130,22 +127,25 @@ export function createReviewModel(input: { ctx: Context; view: SessionView; dema
     const demand = input.demand
     return demand.tree + demand.files + demand.panel > 0
   })
-  const vcsQuery = createQuery(() => {
-    const value = vcsMode()
+  const turnKey = () => [ctx.id, view.server.id, "session-turn", view.id] as const
+  const diffQuery = createQuery(() => {
+    const value = mode()
+    const turn = value === "turn"
     return {
-      queryKey: [...vcsKey(), value] as const,
+      queryKey: turn ? turnKey() : ([...vcsKey(), value] as const),
       enabled: view.server.connected && wantsReview() && !!view.project?.vcs,
       refetchOnMount: "always" as const,
-      refetchOnWindowFocus: true,
-      queryFn: value
-        ? () =>
+      // A finished turn does not change on focus or filesystem events; refresh it when the session goes idle.
+      refetchOnWindowFocus: !turn,
+      queryFn: turn
+        ? () => view.server.client.session.diff({ sessionID: view.id })
+        : () =>
             view.server.client.vcs
               .diff({
                 location: { directory: directory() },
                 mode: value === "git" ? "working" : value,
               })
-              .then((result) => result.data)
-        : skipToken,
+              .then((result) => result.data),
     }
   })
   // The summary's changes row: the session directory's working tree, loaded only while the summary shows.
@@ -180,20 +180,17 @@ export function createReviewModel(input: { ctx: Context; view: SessionView; dema
     on(
       () => !layout.narrow() && layout.side.opened(view),
       (open, previous) => {
-        if (!open || previous || vcsQuery.isFetching) return
+        if (!open || previous || diffQuery.isFetching) return
         if (input.demand.tree > 0) {
           refresh()
           return
         }
-        if (vcsMode() && view.server.connected && view.project?.vcs) void vcsQuery.refetch()
+        if (view.server.connected && view.project?.vcs) void diffQuery.refetch()
       },
       { defer: true },
     ),
   )
-  const diffs = (): FileDiffInfo[] => {
-    if (mode() === "git" || mode() === "branch") return vcsQuery.isFetched ? (vcsQuery.data ?? []) : []
-    return []
-  }
+  const diffs = (): FileDiffInfo[] => (diffQuery.isFetched ? (diffQuery.data ?? []) : [])
   const renderable = createMemo(() => diffs().filter(filterRenderableDiff))
   const kinds = createMemo(() => reviewDiffKinds(renderable()))
   const activeFile = () => {
@@ -205,17 +202,12 @@ export function createReviewModel(input: { ctx: Context; view: SessionView; dema
   const count = () => diffs().length
   const hasChanges = () => count() > 0
   const ready = () => {
-    // A project without VCS never enables vcsQuery, so its status stays "pending" forever.
+    // A project without VCS never enables diffQuery, so its status stays "pending" forever.
     const project = view.project
     if (project && !project.vcs) return true
-    if (mode() === "git" || mode() === "branch") return !vcsQuery.isPending
-    return true
+    return !diffQuery.isPending
   }
   const loadDiff = async (path: string, version?: number): Promise<FileDiffInfo | undefined> => {
-    const value = vcsMode()
-    if (!value) return undefined
-    const root = reviewRootDirectory(view.project?.worktree ?? directory())
-    const scoped = reviewDiffDirectory(root, path)
     const source = diffs().find((diff) => diff.file === path)
     const valid = (diff: FileDiffInfo | undefined): FileDiffInfo | undefined => {
       if (!diff || !source) return undefined
@@ -223,6 +215,24 @@ export function createReviewModel(input: { ctx: Context; view: SessionView; dema
       if (reviewDiffNeedsLoad(diff)) return undefined
       return diff
     }
+    const value = mode()
+    // Oversized full-file patches come back empty; bounded context usually fits.
+    if (value === "turn") {
+      return queryClient
+        .fetchQuery({
+          queryKey: [...turnKey(), "bounded", version] as const,
+          staleTime: Number.POSITIVE_INFINITY,
+          retry: 2,
+          queryFn: () => view.server.client.session.diff({ sessionID: view.id, context: 3 }),
+        })
+        .then((result) => valid(result.find((diff) => diff.file === path)))
+        .catch((error: unknown) => {
+          console.debug("[session-review] failed to load bounded turn diff", { path, error })
+          return undefined
+        })
+    }
+    const root = reviewRootDirectory(view.project?.worktree ?? directory())
+    const scoped = reviewDiffDirectory(root, path)
     const request = (scope: string, context?: number) =>
       queryClient
         .fetchQuery({
@@ -376,6 +386,7 @@ export function createReviewModel(input: { ctx: Context; view: SessionView; dema
       (next, previous) => {
         if (next !== "idle" || previous === undefined || previous === "idle") return
         refresh()
+        void queryClient.invalidateQueries({ queryKey: turnKey() })
       },
       { defer: true },
     ),
@@ -416,7 +427,7 @@ export function createReviewModel(input: { ctx: Context; view: SessionView; dema
     count,
     deferRender: () => state.deferRender,
     details: (): FileDiffInfo[] | undefined => (detailsQuery.isFetched ? (detailsQuery.data ?? []) : undefined),
-    diffVersion: () => vcsQuery.dataUpdatedAt,
+    diffVersion: () => diffQuery.dataUpdatedAt,
     diffs,
     renderable,
     kinds,

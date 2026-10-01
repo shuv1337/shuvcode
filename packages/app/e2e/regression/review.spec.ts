@@ -532,6 +532,29 @@ test("restores review state and the side-panel tab per session", async ({ page }
   await expect(review).toHaveAttribute("aria-selected", "true")
 })
 
+test("shows and restores last turn changes from the session diff", async ({ page }) => {
+  const sessionID = "ses_reviewturn"
+  await openSession(page, { name: "ReviewTurn", vcsDiff: [fileDiff("src/alpha.ts")] })
+  await page.route(`**/api/session/${sessionID}/diff**`, (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ data: [fileDiff("src/delta.ts")] }),
+    }),
+  )
+  const panel = page.locator("#review-panel")
+  await page.getByRole("button", { name: "Toggle review" }).click()
+  await page.getByRole("button", { name: "Git changes" }).click()
+  await page.getByRole("option", { name: "Last turn changes" }).click()
+  await expect(page.getByRole("button", { name: "Last turn changes" })).toBeVisible()
+  await expect(panel.locator('[data-slot="session-review-v2-file-name"]')).toHaveText("delta.ts")
+
+  await page.reload()
+  await expectSessionTitle(page, "ReviewTurn")
+  await expect(page.getByRole("button", { name: "Last turn changes" })).toBeVisible()
+  await expect(panel.locator('[data-slot="session-review-v2-file-name"]')).toHaveText("delta.ts")
+})
+
 test("keeps the review state a session stored before extensions", async ({ page }) => {
   const directory = "C:/OpenCode/ReviewLegacy"
   await openSession(page, {

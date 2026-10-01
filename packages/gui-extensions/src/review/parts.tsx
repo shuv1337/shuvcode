@@ -27,7 +27,7 @@ export function ReviewTitle(props: { review: ReviewModel }) {
 
 export function ReviewEmpty(props: { review: ReviewModel; loadingClass: string }) {
   const ctx = useExtension()
-  const loading = () => (props.review.mode() === "git" || props.review.mode() === "branch") && !props.review.ready()
+  const loading = () => !props.review.ready()
   const noGit = () => props.review.noGit()
   const text = () => {
     if (props.review.mode() === "git") return ctx.t("empty.git")
@@ -60,7 +60,7 @@ export function ReviewEmpty(props: { review: ReviewModel; loadingClass: string }
 
 export function ReviewPanelEmpty(props: { review: ReviewModel }) {
   const ctx = useExtension()
-  const loading = () => (props.review.mode() === "git" || props.review.mode() === "branch") && !props.review.ready()
+  const loading = () => !props.review.ready()
   const noGit = () => props.review.noGit()
   return (
     <Switch>
