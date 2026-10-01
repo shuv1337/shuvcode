@@ -1,12 +1,18 @@
+import { Option, Schema } from "effect"
 import type { FileSelection } from "@/workspaces/files/model"
+import { BrowserComment, durableBrowserElement, type ContextItem } from "./schema"
 
-export type PromptComment = {
+export type PromptFileComment = {
+  type?: "file"
   path: string
   selection?: FileSelection
   comment: string
   preview?: string
   origin?: "review" | "file"
 }
+export type PromptComment = PromptFileComment | BrowserComment
+
+const decodeBrowserComment = Schema.decodeUnknownOption(BrowserComment)
 
 /** An attachment the model receives as a path on the server rather than inline bytes. */
 export type PromptAttachmentReference = {
@@ -30,7 +36,7 @@ function selection(selection: unknown) {
   } satisfies FileSelection
 }
 
-export function createCommentMetadata(input: PromptComment) {
+export function createCommentMetadata(input: PromptFileComment) {
   return {
     opencodeComment: {
       path: input.path,
@@ -78,6 +84,7 @@ export function readPromptPresentation(value: unknown) {
     }),
     comments: comments.flatMap((item): PromptComment[] => {
       if (!item || typeof item !== "object") return []
+      if ((item as { type?: unknown }).type === "browser") return Option.toArray(decodeBrowserComment(item))
       const path = (item as { path?: unknown }).path
       const comment = (item as { comment?: unknown }).comment
       if (typeof path !== "string" || typeof comment !== "string") return []
@@ -98,6 +105,39 @@ export function readPromptPresentation(value: unknown) {
 
 export function formatAttachmentReference(input: PromptAttachmentReference) {
   return `Attached file: \`${input.path}\``
+}
+
+export function formatBrowserCommentNote(input: BrowserComment) {
+  const element = input.element
+  // Page-provided strings are quoted so they read as data, not as part of the user's request.
+  const details = [
+    element.role ? `role ${element.role}` : undefined,
+    element.name ? `accessible name ${JSON.stringify(element.name)}` : undefined,
+    element.text && element.text !== element.name ? `text ${JSON.stringify(element.text.slice(0, 80))}` : undefined,
+    // A selector too long to keep is empty rather than cut into invalid syntax.
+    element.selector
+      ? `selector ${JSON.stringify(element.selector)}${element.selector.includes(" >>> ") ? ' (">>>" enters a shadow root)' : ""}`
+      : undefined,
+    element.ref
+      ? `browser ref @${element.ref}, usable as ref in any browser tool including browser.evaluate until the page navigates`
+      : undefined,
+  ].filter((detail) => detail !== undefined)
+  return `The user made the following comment regarding the ${JSON.stringify(element.label)} element in browser tab ${input.tabID} at ${input.url}${details.length ? ` (${details.join("; ")})` : ""}: ${input.comment}`
+}
+
+/** Restores a sent comment to the composer, for example after a revert or fork. */
+export function commentContextItem(comment: PromptComment): ContextItem {
+  // The message may predate the desktop process, so its element ref can no longer be trusted.
+  if (comment.type === "browser")
+    return { ...comment, element: durableBrowserElement(comment.element), commentID: crypto.randomUUID() }
+  return {
+    type: "file",
+    path: comment.path,
+    selection: comment.selection,
+    comment: comment.comment,
+    preview: comment.preview,
+    commentOrigin: comment.origin,
+  }
 }
 
 export function formatCommentNote(input: { path: string; selection?: FileSelection; comment: string }) {

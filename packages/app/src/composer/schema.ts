@@ -134,9 +134,49 @@ export const FileContextItem = Persistence.struct({
   preview: Persistence.optional(Schema.String),
 })
 export type FileContextItem = typeof FileContextItem.Type
-export type ContextItem = FileContextItem
+
+/** An element the user picked in a desktop browser tab. The ref is valid until the page navigates. */
+export const BrowserElement = Persistence.struct({
+  ref: Persistence.optional(Schema.String),
+  selector: Schema.String,
+  label: Schema.String,
+  role: Persistence.optional(Schema.String),
+  name: Persistence.optional(Schema.String),
+  text: Persistence.optional(Schema.String),
+})
+export type BrowserElement = typeof BrowserElement.Type
+
+/**
+ * A ref names an element only inside the desktop process that picked it; a later process can hand
+ * the same ref to another element. Anything that may outlive the pick keeps the description only.
+ */
+export function durableBrowserElement(element: BrowserElement): BrowserElement {
+  return {
+    selector: element.selector,
+    label: element.label,
+    ...(element.role ? { role: element.role } : {}),
+    ...(element.name ? { name: element.name } : {}),
+    ...(element.text ? { text: element.text } : {}),
+  }
+}
+
+const BrowserCommentFields = {
+  type: Schema.Literal("browser"),
+  tabID: Schema.String,
+  url: Schema.String,
+  title: Persistence.optional(Schema.String),
+  element: BrowserElement,
+  comment: Schema.String,
+}
+/** A comment on a browser element as sent in message metadata. */
+export const BrowserComment = Persistence.struct(BrowserCommentFields)
+export type BrowserComment = typeof BrowserComment.Type
+export const BrowserContextItem = Persistence.struct({ ...BrowserCommentFields, commentID: Schema.String })
+export type BrowserContextItem = typeof BrowserContextItem.Type
+export type ContextItem = FileContextItem | BrowserContextItem
 
 export function contextItemKey(item: ContextItem) {
+  if (item.type === "browser") return `browser:${item.tabID}:c=${item.commentID}`
   const key = `${item.type}:${item.path}:${item.selection?.startLine}:${item.selection?.endLine}`
   if (item.commentID) return `${key}:c=${item.commentID}`
   const comment = item.comment?.trim()
@@ -145,12 +185,27 @@ export function contextItemKey(item: ContextItem) {
   return `${key}:c=${digest.slice(0, 8)}`
 }
 
-const ContextEntry = Schema.Struct({ ...FileContextItem.fields, key: Persistence.optional(Schema.String) }).pipe(
+const FileContextEntry = Schema.Struct({ ...FileContextItem.fields, key: Persistence.optional(Schema.String) }).pipe(
   Schema.decodeTo(Persistence.struct({ ...FileContextItem.fields, key: Schema.String }).pipe(Schema.toType), {
     decode: SchemaGetter.transform((item) => ({ ...item, key: contextItemKey(item) })),
     encode: SchemaGetter.transform((item) => item),
   }),
 )
+const BrowserContextEntry = Schema.Struct({
+  ...BrowserContextItem.fields,
+  key: Persistence.optional(Schema.String),
+}).pipe(
+  Schema.decodeTo(Persistence.struct({ ...BrowserContextItem.fields, key: Schema.String }).pipe(Schema.toType), {
+    // A stored draft can outlive the desktop process that picked the element.
+    decode: SchemaGetter.transform((item) => ({
+      ...item,
+      element: durableBrowserElement(item.element),
+      key: contextItemKey(item),
+    })),
+    encode: SchemaGetter.transform((item) => item),
+  }),
+)
+const ContextEntry = Schema.Union([FileContextEntry, BrowserContextEntry])
 
 export const DEFAULT_PROMPT: Prompt = [{ type: "text", content: "", start: 0, end: 0 }]
 

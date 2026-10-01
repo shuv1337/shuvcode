@@ -4,9 +4,9 @@ import { For, Show } from "solid-js"
 import { createStore } from "solid-js/store"
 import { Portal, render } from "solid-js/web"
 import { LanguageProvider, UiI18nBridge } from "../src/runtime/i18n/language"
-import type { BrowserPaneLayout, BrowserPaneRegistration } from "../src/runtime/platform/browser-pane"
+import type { BrowserPaneEvent, BrowserPaneLayout, BrowserPaneRegistration } from "../src/runtime/platform/browser-pane"
 import type { createSessionBrowser } from "../src/session/browser/model"
-import { SessionBrowserPane } from "../src/session/browser/pane"
+import { SessionBrowserPane, type SessionBrowserComment } from "../src/session/browser/pane"
 
 export function mountBrowserPane() {
   const host = document.createElement("main")
@@ -30,9 +30,15 @@ export function mountBrowserPane() {
       covered: false,
       captures: 0,
       holdCapture: false,
+      picker: {} as Record<string, boolean | undefined>,
+      highlights: [] as string[],
+      comments: [] as SessionBrowserComment[],
     })
     // Each capture waits until the fixture releases it, so a spec can observe the pending state.
     const held: (() => void)[] = []
+    const inspectors = new Set<(event: Extract<BrowserPaneEvent, { type: "inspect" }>) => void>()
+    const emitInspect = (event: Extract<BrowserPaneEvent, { type: "inspect" }>) =>
+      inspectors.forEach((listener) => listener(event))
     const tabs = ["Alpha", "Beta"].map((name) => ({
       id: Browser.TabID.make(`tab_${name === "Alpha" ? "11111111" : "22222222"}-1111-1111-1111-111111111111`),
       title: name,
@@ -60,6 +66,12 @@ export function mountBrowserPane() {
             }
             return canvas.convertToBlob()
           },
+          // The desktop confirms each picker change, as the page does once inspect mode is armed.
+          inspect: (tabID, enabled) => {
+            setStore("picker", tab.title, enabled)
+            emitInspect({ type: "inspect", tabID, active: enabled })
+          },
+          highlight: (_tabID, ref) => setStore("highlights", (items) => [...items, ref ?? "clear"]),
           close: () => undefined,
         },
       ]),
@@ -97,7 +109,26 @@ export function mountBrowserPane() {
         }
         if (command.type === "stop") setStore("loading", false)
       },
+      onInspect: (listener) => {
+        inspectors.add(listener)
+        return () => inspectors.delete(listener)
+      },
+      reveal: () => undefined,
     }
+    const pick = () =>
+      emitInspect({
+        type: "inspect",
+        tabID: browser.active().id,
+        active: false,
+        element: {
+          ref: Browser.Ref.make("e7"),
+          selector: "main > button.primary",
+          label: "button.primary",
+          role: "button",
+          name: "Save changes",
+          rect: { x: 48, y: 40, width: 160, height: 36 },
+        },
+      })
     return (
       <>
         <h1 style={{ "font-size": "24px", "margin-bottom": "16px" }}>Browser pane lifecycle</h1>
@@ -137,13 +168,30 @@ export function mountBrowserPane() {
           <button onClick={() => setStore("holdCapture", true)}>Hold capture</button>
           <button onClick={() => held.splice(0).forEach((resolve) => resolve())}>Release capture</button>
           <button onClick={() => setStore("covered", (covered) => !covered)}>Toggle popover</button>
+          <button onClick={pick}>Pick element</button>
         </nav>
         <p>Captures: {store.captures}</p>
+        <p>Picker: {store.picker[store.session] ? "on" : "off"}</p>
+        <p>Highlights: {store.highlights.join(",")}</p>
         <div style={{ position: "relative", width: "640px", height: "360px", border: "1px solid #555" }}>
           <Show when={store.mounted}>
-            <SessionBrowserPane browser={browser} visible={store.visible} />
+            <SessionBrowserPane
+              browser={browser}
+              visible={store.visible}
+              onComment={(comment) => setStore("comments", (items) => [...items, comment])}
+            />
           </Show>
         </div>
+        <ul data-testid="fixture-comments">
+          <For each={store.comments}>
+            {(comment) => (
+              <li>
+                {comment.element.label} {comment.element.ref ? `@${comment.element.ref}` : "(no ref)"}:{" "}
+                {comment.comment}
+              </li>
+            )}
+          </For>
+        </ul>
         <Show when={store.covered}>
           {/* Floating content portals into <body> like a menu or hover card over the page. */}
           <Portal mount={document.body}>

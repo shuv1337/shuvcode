@@ -53,6 +53,28 @@ describe("composer persistence schemas", () => {
     expect(decode({}).prompt).toEqual(DEFAULT_PROMPT)
   })
 
+  test("restores browser element comments without the process-bound element ref", () => {
+    const decode = Schema.decodeUnknownSync(
+      Persistence.withInitial(ComposerStore, { prompt: DEFAULT_PROMPT, context: { items: [] } }),
+    )
+    const browser = {
+      type: "browser" as const,
+      tabID: "tab_00000000-0000-4000-8000-000000000000",
+      url: "http://localhost:5173/",
+      element: { ref: "e42", selector: "#save", label: "button#save", role: 42 },
+      comment: "Rename this",
+      commentID: "note",
+    }
+    const value = decode({ context: { items: [browser, { ...browser, url: null }] } })
+    expect(value.context.items).toEqual([
+      {
+        ...browser,
+        element: { selector: "#save", label: "button#save" },
+        key: "browser:tab_00000000-0000-4000-8000-000000000000:c=note",
+      },
+    ])
+  })
+
   test("drops invalid parts without losing valid mentions or optional field recovery", () => {
     const value = Schema.decodeUnknownSync(
       Persistence.withInitial(ComposerStore, { prompt: DEFAULT_PROMPT, context: { items: [] } }),

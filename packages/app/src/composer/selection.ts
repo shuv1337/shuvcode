@@ -12,7 +12,11 @@ import { cycleModelVariant, getConfiguredAgentVariant, resolveModelVariant } fro
 import { useComposerState } from "./persistence"
 import { useConfiguredModel } from "@/providers/models/configured"
 
-export function createComposerControls(input: { sessionKey: Accessor<string>; model?: ModelSelection }) {
+export function createComposerControls(input: {
+  sessionKey: Accessor<string>
+  model?: ModelSelection
+  browser?: ComposerControls["session"]["browser"]
+}) {
   const layout = useLayout()
   const local = useLocal()
   const sdk = useWorkspaceLocation()
@@ -40,6 +44,7 @@ export function createComposerControls(input: { sessionKey: Accessor<string>; mo
       session: {
         tabs: layout.tabs(input.sessionKey),
         reviewPanel: view.reviewPanel,
+        browser: input.browser,
       },
     }
   })

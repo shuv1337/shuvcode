@@ -42,6 +42,10 @@ export const eventHandlers = EventRpcs.toLayer(
           if (request.type === "register") return target.pane.register(target.win, request.bindingID, request.target)
           if (request.type === "layout") return target.pane.layout(target.win, request.bindingID, request.layout)
           if (request.type === "command") return target.pane.command(target.win, request.bindingID, request.command)
+          if (request.type === "inspect")
+            return target.pane.inspect(target.win, request.bindingID, request.tabID, request.enabled)
+          if (request.type === "highlight")
+            return target.pane.highlight(target.win, request.bindingID, request.tabID, request.ref)
           return target.pane.close(target.win, request.bindingID)
         }).pipe(Effect.orDie),
       BrowserPaneCapture: (request, context) =>

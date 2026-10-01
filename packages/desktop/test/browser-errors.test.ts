@@ -27,6 +27,9 @@ test("native protocol errors keep the cause and give a valid recovery operation"
   expect(protocolError("Runtime.evaluate", new Error("Cannot find context with specified id")).message).toContain(
     "browser.frames({tabID})",
   )
+  expect(
+    protocolError("Runtime.callFunctionOn", new Error("Given expression does not evaluate to a function")).message,
+  ).toContain("(element) => element.textContent")
   const unsupported = protocolError("Target.getBrowserContexts", new Error("Not allowed"))
   expect(unsupported.message).toContain("does not support or allow")
   expect(unsupported.message).toContain("do not retry unchanged")
