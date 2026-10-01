@@ -385,7 +385,7 @@ describe("provider error rawBody classification", () => {
     expect(reason._tag === "InvalidRequest" ? reason.classification : reason._tag).toBe("context-overflow")
   })
 
-  test("classifies Google invalid API keys as authentication failures", () => {
+  test("classifies invalid API keys reported as HTTP 400 as authentication failures", () => {
     const rawBody = JSON.stringify({
       error: {
         code: 400,
@@ -408,6 +408,14 @@ describe("provider error rawBody classification", () => {
     expect(
       classifyProviderFailure({ message: "API key not valid. Please pass a valid API key.", status: 400, rawBody })
         ._tag,
+    ).toBe("Authentication")
+    // xAI
+    expect(
+      classifyProviderFailure({
+        message: "Incorrect API key provided. You can obtain an API key from https://console.x.ai.",
+        status: 400,
+        rawBody: '{"code":"invalid-argument","error":"Incorrect API key provided."}',
+      })._tag,
     ).toBe("Authentication")
   })
 

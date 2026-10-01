@@ -152,6 +152,8 @@ const CONTENT_POLICY_CODES = new Set([
 // OpenCode Zen replaces upstream codes outside its allow-list but keeps the original
 // as a `[code]` label at the start of the rewritten message.
 const GATEWAY_CODE_LABEL = /^[^:\n]+: \[([A-Za-z0-9_.-]+)\]/
+// xAI reports an invalid API key as HTTP 400 with the generic `invalid-argument` code.
+const AUTH_TEXT = /incorrect api key provided/i
 const RATE_LIMIT_TEXT = /rate increased too quickly|rate[-_\s]?limit|too[_\s]?many[_\s]?requests/i
 // Only consulted on 429, where throttles and account caps share a status.
 const QUOTA_TEXT = /insufficient[-_\s]?quota|quota[-_\s]?exceeded|budget exceeded|usage limit/i
@@ -251,7 +253,12 @@ export function classifyProviderFailure(input: ProviderFailure): AIError["reason
     (input.status === 429 && QUOTA_TEXT.test(text))
   )
     return new QuotaExceededError(details)
-  if (input.status === 401 || input.status === 403 || codes.some((code) => AUTH_CODES.has(code)))
+  if (
+    input.status === 401 ||
+    input.status === 403 ||
+    codes.some((code) => AUTH_CODES.has(code)) ||
+    (input.status === 400 && AUTH_TEXT.test(text))
+  )
     return new AuthenticationError(details)
   if (
     input.status === 429 ||
