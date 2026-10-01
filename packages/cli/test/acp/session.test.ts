@@ -26,7 +26,7 @@ describe("acp session lifecycle over the wire", () => {
         loadSession: true,
         mcpCapabilities: { http: true, sse: false },
         promptCapabilities: { embeddedContext: true, image: true },
-        sessionCapabilities: { close: {}, delete: {}, fork: {}, list: {}, resume: {} },
+        sessionCapabilities: { additionalDirectories: {}, close: {}, delete: {}, fork: {}, list: {}, resume: {} },
         _meta: { "opencode/child-session-updates": true },
       },
       agentInfo: { name: "OpenCode" },

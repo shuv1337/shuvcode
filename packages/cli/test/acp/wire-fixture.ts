@@ -61,7 +61,16 @@ const SyntheticBody = Schema.Struct({
   delivery: Delivery,
   resume: Schema.optional(Schema.Boolean),
 })
-const CreateBody = Schema.Struct({ location: Schema.Struct({ directory: Schema.String }) })
+const Permissions = Schema.Array(
+  Schema.Struct({ action: Schema.String, resource: Schema.String, effect: Schema.Literals(["allow", "deny", "ask"]) }),
+)
+const Metadata = Schema.Record(Schema.String, Schema.MutableJson)
+const CreateBody = Schema.Struct({
+  location: Schema.Struct({ directory: Schema.String }),
+  permissions: Schema.optional(Permissions),
+  metadata: Schema.optional(Metadata),
+})
+const UpdateBody = Schema.Struct({ permissions: Schema.optional(Permissions), metadata: Schema.optional(Metadata) })
 const ModelBody = Schema.Struct({
   model: Schema.Struct({ providerID: Schema.String, id: Schema.String, variant: Schema.optional(Schema.String) }),
 })
@@ -712,7 +721,13 @@ function startServer(options: WireOptions, changed: () => void) {
           return Response.json(page(sessions, query, 100))
         }),
         POST: body(CreateBody, (_req, input) =>
-          Response.json({ data: createSession(makeSession("", { cwd: input.location.directory })) }),
+          Response.json({
+            data: createSession({
+              ...makeSession("", { cwd: input.location.directory }),
+              ...(input.permissions ? { permissions: [...input.permissions] } : {}),
+              ...(input.metadata ? { metadata: input.metadata } : {}),
+            }),
+          }),
         ),
       },
       "/api/session/:sessionID": {
@@ -726,6 +741,13 @@ function startServer(options: WireOptions, changed: () => void) {
           const invalid = malformed(req.params.sessionID, pathDecodeError)
           if (invalid) return invalid
           return fake.sessions.delete(req.params.sessionID) ? noContent() : notFound(req.params.sessionID)
+        }),
+        PATCH: body(UpdateBody, (req, input) => {
+          const session = fake.sessions.get(req.params.sessionID)
+          if (!session) return notFound(req.params.sessionID)
+          if (input.permissions) session.permissions = [...input.permissions]
+          if (input.metadata) session.metadata = input.metadata
+          return noContent()
         }),
       },
       "/api/session/:sessionID/fork": {
