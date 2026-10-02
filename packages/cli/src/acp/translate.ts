@@ -599,8 +599,16 @@ function compactionUpdate(marker: CompactionMarker): SessionUpdate {
 
 function projectChildUpdate(update: SessionUpdate, child: ChildSession) {
   const projected = { ...update }
-  projected._meta = {
-    ...projected._meta,
+  projected._meta = { ...projected._meta, ...childSessionMeta(child) }
+  if (projected.sessionUpdate === "tool_call" || projected.sessionUpdate === "tool_call_update") {
+    projected.toolCallId = `${child.id}:${projected.toolCallId}`
+    if (projected.title && child.title) projected.title = `${child.title}: ${projected.title}`
+  }
+  return projected
+}
+
+export function childSessionMeta(child: ChildSession) {
+  return {
     "opencode/child-session": {
       id: child.id,
       parentID: child.parentID,
@@ -608,11 +616,6 @@ function projectChildUpdate(update: SessionUpdate, child: ChildSession) {
       ...(child.title ? { title: child.title } : {}),
     },
   }
-  if (projected.sessionUpdate === "tool_call" || projected.sessionUpdate === "tool_call_update") {
-    projected.toolCallId = `${child.id}:${projected.toolCallId}`
-    if (projected.title && child.title) projected.title = `${child.title}: ${projected.title}`
-  }
-  return projected
 }
 
 function matchesStart(event: EventSubscribeOutput, start: TurnStart) {
