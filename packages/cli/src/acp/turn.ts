@@ -374,6 +374,9 @@ export const make = Effect.fnUntraced(function* (input: {
       const attached = yield* input.sessions.require(params.sessionId)
       const catalog = yield* input.catalog.get(attached.cwd)
       const childUpdates = (yield* Ref.get(input.capabilities)).childSessionUpdates
+      if (params.prompt.some((block) => block.type === "image" && !block.data && !block.uri)) {
+        return yield* new ACPError.InvalidRequestError({ message: "image content has no data or uri", field: "prompt" })
+      }
       const parts = yield* Effect.forEach(promptContentToParts(params.prompt), referenceUnreadableFile, {
         concurrency: "unbounded",
       })
