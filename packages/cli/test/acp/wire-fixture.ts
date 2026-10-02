@@ -569,7 +569,7 @@ function startServer(options: WireOptions, changed: () => void) {
   const selections: Selection[] = []
   const interrupts: string[] = []
   const replies: Array<{ readonly sessionID: string; readonly requestID: string; readonly decision: string }> = []
-  const cancelledForms: Array<{ readonly sessionID: string; readonly formID: string }> = []
+  const cancelledForms: Array<{ readonly sessionID: string; readonly formID: string; readonly message?: string }> = []
   const repliedForms: FormReply[] = []
   const mcp: Array<{ readonly name: string; readonly directory?: string; readonly config: unknown }> = []
   const fake = {
@@ -831,8 +831,8 @@ function startServer(options: WireOptions, changed: () => void) {
         }),
       },
       "/api/session/:sessionID/form/:formID": {
-        DELETE: route(async (req) => {
-          const form = { sessionID: req.params.sessionID, formID: req.params.formID }
+        DELETE: route(async (req, query) => {
+          const form = { sessionID: req.params.sessionID, formID: req.params.formID, message: query.message }
           fake.cancelledForms.push(form)
           await emit(options.onFormCancel?.(form))
           return noContent()

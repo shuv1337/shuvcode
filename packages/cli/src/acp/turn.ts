@@ -161,7 +161,7 @@ export const make = Effect.fnUntraced(function* (input: {
         return Effect.gen(function* () {
           const capabilities = yield* Ref.get(input.capabilities)
           const requestedSchema = ACPElicitation.requestedSchema(output.form, capabilities)
-          if (!requestedSchema) return yield* ACPElicitation.cancel(input.client, output.form)
+          if (!requestedSchema) return yield* ACPElicitation.cancelUnshown(input.client, output.form)
           const settled = yield* Deferred.make<void>()
           subscription.forms.set(output.form.id, settled)
           yield* Queue.offer(
