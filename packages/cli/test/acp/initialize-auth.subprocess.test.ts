@@ -18,7 +18,7 @@ describe("acp initialize/auth subprocess", () => {
     expect(initialized.agentCapabilities?.sessionCapabilities?.fork).toEqual({})
     expect(initialized.agentCapabilities?.sessionCapabilities?.list).toEqual({})
     expect(initialized.agentCapabilities?.sessionCapabilities?.resume).toEqual({})
-    expect(initialized.agentInfo?.name).toBe("OpenCode")
+    expect(initialized.agentInfo?.name).toBe("Shuvcode")
   }, 60_000)
 
   test("auth negotiation is explicit and safe", async () => {

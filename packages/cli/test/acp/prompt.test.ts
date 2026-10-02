@@ -1,8 +1,13 @@
 import { describe, expect, test } from "bun:test"
 import type { StopReason } from "@agentclientprotocol/sdk"
 import type { OpenCodeEvent } from "@opencode/client/promise"
+import { Schema } from "effect"
+import { mkdir } from "node:fs/promises"
+import path from "node:path"
+import { pathToFileURL } from "node:url"
+import { tmpdir } from "../fixture/tmpdir"
 import {
-  assistantMessage,
+  childCreated,
   delivered,
   durableEvent,
   failed,
@@ -14,6 +19,9 @@ import {
   succeeded,
   textDelta,
   tokens,
+  toolCalled,
+  toolFailed,
+  toolStarted,
   turn,
   type Wire,
   type WireOptions,
@@ -32,7 +40,6 @@ describe("acp prompt turns over the wire", () => {
       onPrompt: ({ sessionID, id }) =>
         turn(sessionID, id, textDelta(sessionID, "msg_assistant", "hello"), stepEnded(sessionID, "msg_assistant")),
     })
-    acp.server.messages.set(acp.sessionId, [assistantMessage("msg_assistant")])
 
     const response = await acp.prompt(acp.sessionId, "hi")
 
@@ -77,12 +84,15 @@ describe("acp prompt turns over the wire", () => {
   })
 
   test("submits assistant-only context as synthetic input before the visible prompt", async () => {
+    await using dir = await tmpdir()
+    const readme = pathToFileURL(path.join(dir.path, "README.md")).href
+    await Bun.write(path.join(dir.path, "README.md"), "# readme\n")
     await using acp = await startSession()
 
     await acp.prompt(acp.sessionId, [
       { type: "text", text: "visible" },
       { type: "text", text: "hidden context", annotations: { audience: ["assistant"] } },
-      { type: "resource_link", uri: "file:///workspace/README.md", name: "README.md", mimeType: "text/markdown" },
+      { type: "resource_link", uri: readme, name: "README.md", mimeType: "text/markdown" },
     ])
 
     expect(acp.server.submissions).toEqual([
@@ -97,7 +107,37 @@ describe("acp prompt turns over the wire", () => {
       expect.objectContaining({
         kind: "prompt",
         text: "visible",
-        files: [{ uri: "file:///workspace/README.md", name: "README.md" }],
+        files: [{ uri: readme, name: "README.md" }],
+      }),
+    ])
+  })
+
+  test("attaches readable file links and references unreadable ones in place", async () => {
+    await using dir = await tmpdir()
+    const file = pathToFileURL(path.join(dir.path, "notes.md")).href
+    const folder = pathToFileURL(path.join(dir.path, "src")).href
+    const missing = pathToFileURL(path.join(dir.path, "missing.md")).href
+    await Bun.write(path.join(dir.path, "notes.md"), "# notes\n")
+    await mkdir(path.join(dir.path, "src"))
+    await using acp = await startSession()
+
+    const response = await acp.prompt(acp.sessionId, [
+      { type: "text", text: "compare" },
+      { type: "resource_link", uri: file, name: "notes.md" },
+      { type: "resource_link", uri: missing, name: "missing.md" },
+      { type: "resource_link", uri: folder, name: "src" },
+      { type: "text", text: "please" },
+    ])
+
+    expect(response.stopReason).toBe("end_turn")
+    expect(acp.server.submissions).toEqual([
+      expect.objectContaining({
+        kind: "prompt",
+        text: `compare\n[missing.md](${missing})\nplease`,
+        files: [
+          { uri: file, name: "notes.md" },
+          { uri: folder, name: "src" },
+        ],
       }),
     ])
   })
@@ -114,7 +154,6 @@ describe("acp prompt turns over the wire", () => {
       value: "test/second-model",
     })
     acp.server.sessions.set(acp.sessionId, makeSession(acp.sessionId, { cost: 3.5 }))
-    acp.server.messages.set(acp.sessionId, [assistantMessage("msg_assistant", { tokens: assistantTokens })])
 
     const response = await acp.prompt(acp.sessionId, "hello")
 
@@ -145,7 +184,6 @@ describe("acp prompt turns over the wire", () => {
         return turn(sessionID, id, stepEnded(sessionID, "msg_assistant"))
       },
     })
-    acp.server.messages.set(acp.sessionId, [assistantMessage("msg_assistant")])
 
     expect((await acp.prompt(acp.sessionId, "hello")).stopReason).toBe("end_turn")
   })
@@ -191,14 +229,20 @@ describe("acp prompt turns over the wire", () => {
     expect(await rpcError(acp.prompt(acp.sessionId, "hello"))).toMatchObject({ code: -32000 })
   })
 
-  test("maps an assistant message auth error to auth required", async () => {
+  test("maps an assistant step auth error to auth required", async () => {
     await using acp = await startSession({
       onPrompt: ({ sessionID, id }) =>
-        turn(sessionID, id, textDelta(sessionID, "msg_auth", "partial"), stepEnded(sessionID, "msg_auth")),
+        turn(
+          sessionID,
+          id,
+          textDelta(sessionID, "msg_auth", "partial"),
+          durableEvent("session.step.failed", {
+            sessionID,
+            assistantMessageID: "msg_auth",
+            error: { type: "provider.auth", message: "expired" },
+          }),
+        ),
     })
-    acp.server.messages.set(acp.sessionId, [
-      assistantMessage("msg_auth", { error: { type: "provider.auth", message: "expired" } }),
-    ])
 
     expect(await rpcError(acp.prompt(acp.sessionId, "hello"))).toMatchObject({ code: -32000 })
   })
@@ -290,6 +334,20 @@ describe("acp prompt turns over the wire", () => {
     expect(acp.server.interrupts).toContain(acp.sessionId)
   })
 
+  test("session/cancel before admission returns interrupts the session exactly once", async () => {
+    await using acp = await startSession({
+      onPrompt: ({ signal }) =>
+        new Promise<void>((resolve) => signal.addEventListener("abort", () => resolve(), { once: true })),
+    })
+
+    const prompt = acp.prompt(acp.sessionId, "hello")
+    await acp.until(() => acp.server.submissions.length === 1, "prompt submission")
+    await acp.notify("session/cancel", { sessionId: acp.sessionId })
+
+    expect(await prompt).toEqual({ stopReason: "cancelled", _meta: {} })
+    expect(acp.server.interrupts).toEqual([acp.sessionId])
+  })
+
   test("session/cancel mid-turn interrupts the session once, returns cancelled, and keeps it usable", async () => {
     await using acp = await startSession(held)
 
@@ -300,6 +358,91 @@ describe("acp prompt turns over the wire", () => {
     expect(await prompt).toMatchObject({ stopReason: "cancelled" })
     expect(acp.server.interrupts).toEqual([acp.sessionId])
     expect((await acp.prompt(acp.sessionId, "again")).stopReason).toBe("end_turn")
+  })
+
+  test("session/cancel forwards the server's wind-down before resolving cancelled", async () => {
+    await using acp = await startSession({
+      onPrompt: ({ sessionID, id }) => [
+        delivered(sessionID, id),
+        toolStarted(sessionID, "call_sleep", "shell"),
+        toolCalled(sessionID, "call_sleep", { command: "sleep 60" }),
+        textDelta(sessionID, "msg_held", "working"),
+      ],
+      onInterrupt: ({ sessionID }) => [
+        toolFailed(sessionID, "call_sleep", { error: { type: "aborted", message: "interrupted" } }),
+        durableEvent("session.step.failed", {
+          sessionID,
+          assistantMessageID: "msg_held",
+          error: { type: "aborted", message: "interrupted" },
+          cost: 0,
+          tokens: { ...tokens(), input: 30, output: 3 },
+        }),
+        interrupted(sessionID),
+      ],
+    })
+
+    const prompt = acp.prompt(acp.sessionId, "hello")
+    await admitted(acp, acp.sessionId)
+    await acp.notify("session/cancel", { sessionId: acp.sessionId })
+
+    expect(await prompt).toEqual({
+      stopReason: "cancelled",
+      usage: { inputTokens: 30, outputTokens: 3, totalTokens: 33 },
+      _meta: {},
+    })
+    expect(receivedBeforeResponse(acp)).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ sessionUpdate: "tool_call_update", toolCallId: "call_sleep", status: "failed" }),
+        expect.objectContaining({ sessionUpdate: "usage_update", used: 33 }),
+      ]),
+    )
+    expect(acp.server.interrupts).toEqual([acp.sessionId])
+  })
+
+  test("stops waiting for a wind-down that never ends and fails the tools left running", async () => {
+    await using acp = await startSession({
+      cancelDrainTimeout: "50 millis",
+      onPrompt: ({ sessionID, id }) => [
+        delivered(sessionID, id),
+        toolStarted(sessionID, "call_stuck", "shell"),
+        toolCalled(sessionID, "call_stuck", { command: "sleep 60" }),
+        textDelta(sessionID, "msg_held", "working"),
+      ],
+    })
+
+    const prompt = acp.prompt(acp.sessionId, "hello")
+    await admitted(acp, acp.sessionId)
+    await acp.notify("session/cancel", { sessionId: acp.sessionId })
+
+    expect(await prompt).toEqual({ stopReason: "cancelled", _meta: {} })
+    expect(receivedBeforeResponse(acp)).toContainEqual(
+      expect.objectContaining({
+        sessionUpdate: "tool_call_update",
+        toolCallId: "call_stuck",
+        status: "failed",
+        rawOutput: expect.objectContaining({ error: "Cancelled" }),
+      }),
+    )
+  })
+
+  test("session/close interrupts a slash command still running after its prompt ended", async () => {
+    await using acp = await startSession()
+
+    expect((await acp.prompt(acp.sessionId, "/review now")).stopReason).toBe("end_turn")
+    expect(acp.server.interrupts).toEqual([])
+    await acp.request("session/close", { sessionId: acp.sessionId })
+
+    expect(acp.server.interrupts).toEqual([acp.sessionId])
+  })
+
+  test("fails the prompt as server unavailable when the event stream ends mid-turn", async () => {
+    await using acp = await startSession(held)
+
+    const prompt = acp.prompt(acp.sessionId, "hold")
+    await admitted(acp, acp.sessionId)
+    acp.server.closeEvents()
+
+    expect(await rpcError(prompt)).toMatchObject({ code: -32603, data: { errorName: "ServerUnavailable" } })
   })
 
   test("$/cancel_request on the prompt request cancels the turn like session/cancel", async () => {
@@ -353,27 +496,110 @@ describe("acp prompt turns over the wire", () => {
     expect((await first).stopReason).toBe("cancelled")
   })
 
-  test.todo(
-    "reports usage summed across every step of the turn (https://github.com/anomalyco/opencode/issues/41660)",
-    async () => {
-      await using acp = await startSession({
-        onPrompt: ({ sessionID, id }) =>
-          turn(
+  test("reports usage summed across every step of the turn", async () => {
+    await using acp = await startSession({
+      onPrompt: ({ sessionID, id }) =>
+        turn(
+          sessionID,
+          id,
+          stepEnded(sessionID, "msg_step_1", { finish: "tool-calls", tokens: { ...tokens(), input: 10, output: 5 } }),
+          stepEnded(sessionID, "msg_step_2", { tokens: { ...tokens(), input: 20, output: 7 } }),
+        ),
+    })
+
+    const response = await acp.prompt(acp.sessionId, "hello")
+
+    expect(response.usage).toEqual({ inputTokens: 30, outputTokens: 12, totalTokens: 42 })
+  })
+
+  test("publishes the last step's context usage rather than the turn sum", async () => {
+    await using acp = await startSession({
+      onPrompt: ({ sessionID, id }) =>
+        turn(
+          sessionID,
+          id,
+          stepEnded(sessionID, "msg_step_1", {
+            finish: "tool-calls",
+            tokens: { input: 100, output: 10, reasoning: 0, cache: { read: 0, write: 50 } },
+          }),
+          stepEnded(sessionID, "msg_step_2", {
+            tokens: { input: 20, output: 5, reasoning: 3, cache: { read: 150, write: 0 } },
+          }),
+        ),
+    })
+
+    const response = await acp.prompt(acp.sessionId, "hello")
+
+    expect(response.usage).toEqual({
+      inputTokens: 120,
+      outputTokens: 15,
+      thoughtTokens: 3,
+      cachedReadTokens: 150,
+      cachedWriteTokens: 50,
+      totalTokens: 338,
+    })
+    expect(await acp.waitForUpdate((item) => item.update.sessionUpdate === "usage_update")).toEqual({
+      sessionId: acp.sessionId,
+      update: { sessionUpdate: "usage_update", used: 178, size: 100_000, cost: { amount: 0, currency: "USD" } },
+    })
+  })
+
+  test("counts a failed step's tokens and clears its error when the next step starts", async () => {
+    await using acp = await startSession({
+      onPrompt: ({ sessionID, id }) =>
+        turn(
+          sessionID,
+          id,
+          durableEvent("session.step.failed", {
             sessionID,
-            id,
-            stepEnded(sessionID, "msg_step_1", { finish: "tool-calls", tokens: { ...tokens(), input: 10, output: 5 } }),
-            stepEnded(sessionID, "msg_step_2", { tokens: { ...tokens(), input: 20, output: 7 } }),
-          ),
-      })
-      acp.server.messages.set(acp.sessionId, [
-        assistantMessage("msg_step_2", { tokens: { ...tokens(), input: 20, output: 7 } }),
-      ])
+            assistantMessageID: "msg_1",
+            error: { type: "provider.stream", message: "stream interrupted" },
+            cost: 0,
+            tokens: { ...tokens(), input: 40, output: 4 },
+          }),
+          durableEvent("session.step.started", {
+            sessionID,
+            assistantMessageID: "msg_2",
+            agent: "build",
+            model: { providerID: "test", id: "test-model" },
+            started: 0,
+          }),
+          stepEnded(sessionID, "msg_2", { tokens: { ...tokens(), input: 20, output: 7 } }),
+        ),
+    })
 
-      const response = await acp.prompt(acp.sessionId, "hello")
+    const response = await acp.prompt(acp.sessionId, "hello")
 
-      expect(response.usage).toEqual({ inputTokens: 30, outputTokens: 12, totalTokens: 42 })
-    },
-  )
+    expect(response).toEqual({
+      stopReason: "end_turn",
+      usage: { inputTokens: 60, outputTokens: 11, totalTokens: 71 },
+      _meta: {},
+    })
+    expect(await acp.waitForUpdate((item) => item.update.sessionUpdate === "usage_update")).toMatchObject({
+      update: { used: 27 },
+    })
+  })
+
+  test("excludes child session steps from the turn usage", async () => {
+    await using acp = await startSession({
+      onPrompt: ({ sessionID, id }) =>
+        turn(
+          sessionID,
+          id,
+          childCreated("ses_child", sessionID, "Explore"),
+          stepEnded("ses_child", "msg_child", { tokens: { ...tokens(), input: 500, output: 50 } }),
+          succeeded("ses_child"),
+          stepEnded(sessionID, "msg_root", { tokens: { ...tokens(), input: 20, output: 7 } }),
+        ),
+    })
+
+    const response = await acp.prompt(acp.sessionId, "hello")
+
+    expect(response.usage).toEqual({ inputTokens: 20, outputTokens: 7, totalTokens: 27 })
+    expect(await acp.waitForUpdate((item) => item.update.sessionUpdate === "usage_update")).toMatchObject({
+      update: { used: 27 },
+    })
+  })
 })
 
 // The server answered admission before streaming the chunk, and this request round-trips through the server after it,
@@ -381,6 +607,20 @@ describe("acp prompt turns over the wire", () => {
 async function admitted(acp: Wire, sessionId: string) {
   await acp.waitForUpdate((item) => item.update.sessionUpdate === "agent_message_chunk")
   await acp.request("session/set_mode", { sessionId, modeId: "build" })
+}
+
+const isCancelledResponse = Schema.is(
+  Schema.Struct({ result: Schema.Struct({ stopReason: Schema.Literal("cancelled") }) }),
+)
+
+// Session updates the client received before the cancelled prompt response.
+function receivedBeforeResponse(acp: Wire) {
+  const response = acp.received.findIndex(isCancelledResponse)
+  expect(response).toBeGreaterThan(-1)
+  const count = acp.received
+    .slice(0, response)
+    .filter((message) => "method" in message && message.method === "session/update").length
+  return acp.updates.slice(0, count).map((item) => item.update)
 }
 
 function retryScheduled(sessionID: string, attempt: number, at: number) {
