@@ -1,15 +1,17 @@
 import { isDeepStrictEqual } from "node:util"
-import type { McpServer, RequestError } from "@agentclientprotocol/sdk"
-import type { OpenCodeClient, OpenCodeEvent, SessionInfo } from "@opencode/client/promise"
+import type { McpServer, RequestError, SessionConfigOption } from "@agentclientprotocol/sdk"
+import type { OpenCodeClient, OpenCodeEvent } from "@opencode/client/effect"
+import { Mcp } from "@opencode/schema/mcp"
+import type { Session } from "@opencode/schema/session"
 import { Context, Deferred, Effect, Exit, Queue, Ref, Scope, Stream } from "effect"
 import type { ACPCatalog, Catalog } from "./catalog"
+import { ACPClient } from "./client"
 import { availableCommands, configOptions, type Selection } from "./config-option"
 import { ACPConnection } from "./connection"
 import { ACPError } from "./error"
-import { ACPPromise } from "./promise"
 
 export type Attached = {
-  readonly id: string
+  readonly id: Session.ID
   readonly cwd: string
   readonly selection: Ref.Ref<Selection>
 }
@@ -18,13 +20,16 @@ export interface Interface {
   /**
    * Attaches a session in its own scope, closing any previous attachment of the same ID. Once the attaching request
    * has responded, the scope follows the cwd's catalog and pushes config option and command updates while it is
-   * open. A failed attach leaves the session detached.
+   * open. A failed attach leaves the session detached. Returns the session's config options as of the attach.
    */
   readonly attach: (
-    session: SessionInfo,
+    session: Session.Info,
     cwd: string,
     mcpServers: readonly McpServer[],
-  ) => Effect.Effect<Attached, ACPError.Error | RequestError | ACPCatalog.Error>
+  ) => Effect.Effect<
+    { readonly attached: Attached; readonly configOptions: SessionConfigOption[] },
+    ACPError.Error | RequestError | ACPCatalog.Error
+  >
   /** Closes the session scope. No-op when the session is not attached. */
   readonly detach: (sessionID: string) => Effect.Effect<void>
   readonly require: (sessionID: string) => Effect.Effect<Attached, ACPError.SessionNotFoundError>
@@ -55,7 +60,7 @@ export const make = Effect.fnUntraced(function* (input: {
   const connected = yield* Deferred.make<void>()
 
   // Subscribe before any attach so a switch right after `sessions.set` reaches the session.
-  yield* Stream.fromAsyncIterable(input.client.event.subscribe(), (cause) => cause).pipe(
+  yield* input.client.event.subscribe().pipe(
     Stream.tap((event) => (event.type === "server.connected" ? Deferred.succeed(connected, undefined) : Effect.void)),
     Stream.filter(
       (event): event is SelectedEvent =>
@@ -104,9 +109,8 @@ export const make = Effect.fnUntraced(function* (input: {
             const key = `${server.name}:${stableStringify(config)}`
             if (registered.has(key)) return Effect.void
             registered.add(key)
-            return ACPPromise.promise(() =>
-              input.client.mcp.add({ server: server.name, location: { directory: attached.cwd }, config }),
-            ).pipe(
+            return input.client.mcp.add({ server: server.name, location: { directory: attached.cwd }, config }).pipe(
+              Effect.catch(ACPClient.classify),
               Effect.onError(() => Effect.sync(() => registered.delete(key))),
               Effect.uninterruptible,
             )
@@ -162,7 +166,10 @@ export const make = Effect.fnUntraced(function* (input: {
           ),
         )
       }).pipe(Effect.ignore, Effect.forkIn(entry.scope))
-      return entry.attached
+      return {
+        attached: entry.attached,
+        configOptions: configOptions(current, yield* Ref.get(entry.attached.selection)),
+      }
     }),
     detach: Effect.fn("cli.acp.sessions.detach")(function* (sessionID) {
       const entry = sessions.get(sessionID)
@@ -184,18 +191,18 @@ export const make = Effect.fnUntraced(function* (input: {
 function mcpConfig(server: McpServer) {
   if ("type" in server) {
     if (server.type === "acp") throw new Error("MCP-over-ACP is not supported")
-    return {
-      type: "remote" as const,
+    return new Mcp.RemoteConfig({
+      type: "remote",
       url: server.url,
       headers: Object.fromEntries(server.headers.map((header) => [header.name, header.value])),
-      oauth: false as const,
-    }
+      oauth: false,
+    })
   }
-  return {
-    type: "local" as const,
+  return new Mcp.LocalConfig({
+    type: "local",
     command: [server.command, ...server.args],
     environment: Object.fromEntries(server.env.map((entry) => [entry.name, entry.value])),
-  }
+  })
 }
 
 function stableStringify(value: unknown): string {

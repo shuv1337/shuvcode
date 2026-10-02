@@ -1,11 +1,8 @@
 import type { PromptResponse, SessionUpdate } from "@agentclientprotocol/sdk"
-import type {
-  EventSubscribeOutput,
-  SessionMessageAssistant,
-  SessionMessageInfo,
-  SessionStructuredError,
-  TokenUsageInfo,
-} from "@opencode/client/promise"
+import type { OpenCodeEvent } from "@opencode/client/effect"
+import type { Session } from "@opencode/schema/session"
+import type { SessionError } from "@opencode/schema/session-error"
+import type { SessionMessage } from "@opencode/schema/session-message"
 import { TokenUsage } from "@opencode/schema/token-usage"
 import { ACPCompaction } from "./compaction"
 import { partsToContentChunks, type ReplayPart } from "./content"
@@ -17,12 +14,12 @@ export const ChildSessionUpdatesCapability = "opencode/child-session-updates"
 export const ChildSessionUpdateMethod = "opencode/session/child_update"
 const RetryMeta = "opencode/retry"
 
-export type TurnStart = { readonly type: "input" | "compaction"; readonly id: string }
+export type TurnStart = { readonly type: "input" | "compaction"; readonly id: SessionMessage.ID }
 
 export type Terminal = "succeeded" | "failed" | "interrupted"
 
 export type Context = {
-  readonly sessionID: string
+  readonly sessionID: Session.ID
   readonly cwd: string
   readonly start: TurnStart
   readonly childUpdates: boolean
@@ -43,7 +40,7 @@ type Tool = {
 type RetryStatus = {
   readonly attempt: number
   readonly nextRetryAt: string
-  readonly error: SessionStructuredError
+  readonly error: SessionError.Error
 }
 
 export type ChildSession = {
@@ -78,14 +75,14 @@ export type TurnState = {
   readonly openChildren: ReadonlySet<string>
   /** Forms asked of the client that the server has not yet answered or cancelled. */
   readonly forms: ReadonlySet<string>
-  readonly finish?: SessionMessageAssistant["finish"]
-  readonly usage?: { readonly turn: TokenUsageInfo; readonly last: TokenUsageInfo }
-  readonly stepError?: SessionStructuredError
+  readonly finish?: SessionMessage.Assistant["finish"]
+  readonly usage?: { readonly turn: TokenUsage.Info; readonly last: TokenUsage.Info }
+  readonly stepError?: SessionError.Error
   readonly executionError?: { readonly type: string; readonly message: string }
 }
 
-type PermissionEvent = Extract<EventSubscribeOutput, { type: "permission.asked" }>
-type FormEvent = Extract<EventSubscribeOutput, { type: "form.created" }>
+type PermissionEvent = Extract<OpenCodeEvent, { type: "permission.asked" }>
+type FormEvent = Extract<OpenCodeEvent, { type: "form.created" }>
 
 export type Output =
   | { readonly _tag: "SessionUpdate"; readonly update: SessionUpdate }
@@ -121,7 +118,7 @@ export const initial: TurnState = {
   forms: new Set(),
 }
 
-export function step(state: TurnState, event: EventSubscribeOutput, ctx: Context): Step {
+export function step(state: TurnState, event: OpenCodeEvent, ctx: Context): Step {
   if (event.type === "session.created") {
     const parentID = event.data.parentID
     if (!parentID) return { state, outputs: [] }
@@ -406,9 +403,9 @@ export function abandon(state: TurnState, ctx: Context): Step {
   }
 }
 
-/** Lazy, so a message that fails to translate part way still replays the updates before the failure. */
+/** The updates that replay a stored message. */
 export function* replayMessage(
-  message: SessionMessageInfo,
+  message: SessionMessage.Info,
   cwd: string,
   capabilities: ACPService.Capabilities,
 ): Generator<SessionUpdate> {
@@ -539,7 +536,7 @@ function childEnded(
   }
 }
 
-function recordStep(state: TurnState, tokens: TokenUsageInfo): TurnState {
+function recordStep(state: TurnState, tokens: TokenUsage.Info): TurnState {
   const turn = state.usage?.turn
   return {
     ...state,
@@ -563,7 +560,7 @@ function without<K, V>(map: ReadonlyMap<K, V>, key: K) {
   return next
 }
 
-function sessionIDFromEvent(event: EventSubscribeOutput) {
+function sessionIDFromEvent(event: OpenCodeEvent) {
   if ("sessionID" in event.data && typeof event.data.sessionID === "string") return event.data.sessionID
   if (event.type === "form.created") return event.data.form.sessionID
   return undefined
@@ -594,13 +591,13 @@ export function childSessionMeta(child: ChildSession) {
   }
 }
 
-function matchesStart(event: EventSubscribeOutput, start: TurnStart) {
+function matchesStart(event: OpenCodeEvent, start: TurnStart) {
   return event.type === "session.inbox.delivered" && event.data.inboxID === start.id
 }
 
 function resolveStopReason(input: {
   readonly terminal: Terminal
-  readonly finish: SessionMessageAssistant["finish"]
+  readonly finish: SessionMessage.Assistant["finish"]
   readonly error?: string
 }): PromptResponse["stopReason"] {
   if (input.terminal === "interrupted" || input.error === "aborted") return "cancelled"

@@ -1,13 +1,13 @@
 import { describe, expect, test } from "bun:test"
 import fs from "node:fs/promises"
 import path from "node:path"
-import type { PermissionRule } from "@opencode/client/promise"
+import type { Permission } from "@opencode/schema/permission"
 import { tmpdir } from "../fixture/tmpdir"
 import { makeSession, rpcError, startWire, type Wire } from "./wire-fixture"
 
 const key = "opencode.acp.additionalDirectories"
 
-const grant = (directory: string): PermissionRule => ({
+const grant = (directory: string): Permission.Rule => ({
   action: "external_directory",
   resource: path.join(directory, "*"),
   effect: "allow",
@@ -17,9 +17,9 @@ const sharedLib = path.resolve("/shared/lib")
 const productDocs = path.resolve("/product-docs")
 const old = path.resolve("/old")
 
-const userGrant: PermissionRule = { action: "external_directory", resource: "/x/**", effect: "allow" }
+const userGrant: Permission.Rule = { action: "external_directory", resource: "/x/**", effect: "allow" }
 
-const other: PermissionRule[] = [
+const other: Permission.Rule[] = [
   { action: "read", resource: "*.secret", effect: "deny" },
   { action: "external_directory", resource: "/shared/lib/private/*", effect: "deny" },
 ]
@@ -170,7 +170,7 @@ describe("acp additional directories over the wire", () => {
     await acp.request("session/resume", { cwd: "/workspace", sessionId: "ses_saved", additionalDirectories: [] })
 
     const create = acp.server.requests.find((request) => request.method === "POST" && request.path === "/api/session")
-    expect(create?.body).toEqual({ location: { directory: "/workspace" } })
+    expect(create?.body).toMatchObject({ location: { directory: "/workspace" }, permissions: null, metadata: null })
     expect(acp.server.sessions.get(created.sessionId)?.permissions).toBeUndefined()
     expect(updates(acp)).toEqual([])
     expect(

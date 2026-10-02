@@ -18,24 +18,32 @@ import {
   type SessionNotification,
   type WriteTextFileRequest,
 } from "@agentclientprotocol/sdk"
-import {
-  OpenCode,
-  type AgentInfo,
-  type CommandInfo,
-  type LocationRef,
-  type ModelInfo,
-  type ModelRef,
-  type OpenCodeEvent,
-  type SessionInfo,
-  type SessionMessageInfo,
-  type TokenUsageInfo,
-} from "@opencode/client/promise"
+import { OpenCode } from "@opencode/client/effect"
+import type { OpenCodeEventEncoded } from "@opencode/protocol/groups/event"
+import type { Agent } from "@opencode/schema/agent"
+import type { Command } from "@opencode/schema/command"
 import { Form } from "@opencode/schema/form"
+import type { Location } from "@opencode/schema/location"
+import type { Model } from "@opencode/schema/model"
+import type { Session } from "@opencode/schema/session"
+import type { SessionMessage } from "@opencode/schema/session-message"
+import type { TokenUsage } from "@opencode/schema/token-usage"
 import type { BunRequest } from "bun"
 import { Duration, Effect, Exit, Logger, Option, Schema, Scope } from "effect"
+import { FetchHttpClient } from "effect/unstable/http"
 import { ACP } from "../../src/acp/agent"
 import { ACPTurn } from "../../src/acp/turn"
 
+// The fake server sends and stores the wire form of each value.
+type OpenCodeEvent = OpenCodeEventEncoded
+type AgentInfo = typeof Agent.Info.Encoded
+type CommandInfo = typeof Command.Info.Encoded
+type LocationRef = typeof Location.PublicRef.Encoded
+type ModelInfo = typeof Model.Info.Encoded
+type ModelRef = typeof Model.Ref.Encoded
+type SessionInfo = typeof Session.Info.Encoded
+type SessionMessageInfo = typeof SessionMessage.Info.Encoded
+type TokenUsageInfo = typeof TokenUsage.Info.Encoded
 type DurableEvent = Extract<OpenCodeEvent, { durable: unknown }>
 type EphemeralEvent = Exclude<OpenCodeEvent, DurableEvent>
 type EventData<Type extends OpenCodeEvent["type"]> = Extract<OpenCodeEvent, { type: Type }>["data"]
@@ -261,12 +269,16 @@ export function tokens(value = 1): TokenUsageInfo {
   return { input: value, output: value, reasoning: 0, cache: { read: 0, write: 0 } }
 }
 
-// The fake server stamps ids and sequence numbers when it sends an event.
-function durable<Version extends DurableEvent["durable"]["version"]>(version: Version) {
-  return <Type extends Extract<DurableEvent, { durable: { version: Version } }>["type"]>(
-    type: Type,
-    data: EventData<Type>,
-  ) => ({ id: "", created: 0, type, durable: { aggregateID: "test", seq: 0, version }, data })
+// The fake server stamps ids and sequence numbers when it sends an event. The wire form types every version as a
+// number, so the client's decode is what rejects an event sent under the wrong version.
+function durable(version: number) {
+  return <Type extends DurableEvent["type"]>(type: Type, data: EventData<Type>) => ({
+    id: "",
+    created: 0,
+    type,
+    durable: { aggregateID: "test", seq: 0, version },
+    data,
+  })
 }
 
 export const durableEvent = durable(1)
@@ -387,6 +399,15 @@ export function permissionAsked(
   })
 }
 
+/** The response to a submission the server admitted to the session inbox. */
+export function enqueued(sessionID: string, id: string, type: string, payload: object) {
+  return Response.json({ data: { id, sessionID, time: { created: 0 }, type, payload, delivery: "steer" } })
+}
+
+export function makeClient(baseUrl: string) {
+  return OpenCode.make({ baseUrl }).pipe(Effect.provide(FetchHttpClient.layer))
+}
+
 export async function startWire(options: WireOptions = {}) {
   const waiters = new Set<() => void>()
   const changed = () => waiters.forEach((check) => check())
@@ -411,10 +432,8 @@ export async function startWire(options: WireOptions = {}) {
   const logs: Array<Pick<Logger.Options<unknown>, "message" | "cause">> = []
   const agentScope = Scope.makeUnsafe()
   const agentConnection = await Effect.runPromise(
-    ACP.connect(
-      OpenCode.make({ baseUrl: server.url }),
-      ndJsonStream(agentToClient.writable, clientToAgent.readable),
-    ).pipe(
+    makeClient(server.url).pipe(
+      Effect.flatMap((client) => ACP.connect(client, ndJsonStream(agentToClient.writable, clientToAgent.readable))),
       Scope.provide(agentScope),
       (effect) =>
         options.cancelDrainTimeout === undefined
@@ -655,7 +674,8 @@ function startServer(options: WireOptions, changed: () => void) {
     schema: Schema.Codec<A, unknown>,
     handle: (req: BunRequest<Path>, body: A, query: Record<string, string>) => Response | Promise<Response>,
   ) {
-    const decode = Schema.decodeUnknownOption(Schema.fromJsonString(schema))
+    // The JSON codec reads an explicit null as an absent optional field, as the server's does.
+    const decode = Schema.decodeUnknownOption(Schema.fromJsonString(Schema.toCodecJson(schema)))
     return (req: BunRequest<Path>) =>
       record(req)
         .then((recorded) => {
@@ -749,8 +769,11 @@ function startServer(options: WireOptions, changed: () => void) {
         PATCH: body(UpdateBody, (req, input) => {
           const session = fake.sessions.get(req.params.sessionID)
           if (!session) return notFound(req.params.sessionID)
-          if (input.permissions) session.permissions = [...input.permissions]
-          if (input.metadata) session.metadata = input.metadata
+          fake.sessions.set(session.id, {
+            ...session,
+            ...(input.permissions ? { permissions: input.permissions } : {}),
+            ...(input.metadata ? { metadata: input.metadata } : {}),
+          })
           return noContent()
         }),
       },
@@ -792,7 +815,7 @@ function startServer(options: WireOptions, changed: () => void) {
           fake.submissions.push({ kind: "prompt", sessionID, ...input })
           const hook = options.onPrompt ?? (() => turn(sessionID, input.id))
           await emit(hook({ sessionID, id: input.id, text: input.text, signal: req.signal }))
-          return Response.json({ data: { text: input.text } })
+          return enqueued(sessionID, input.id, "user", { text: input.text })
         }),
       },
       "/api/session/:sessionID/command": {
@@ -805,13 +828,13 @@ function startServer(options: WireOptions, changed: () => void) {
         POST: body(CompactBody, (req, input) => {
           fake.submissions.push({ kind: "compact", sessionID: req.params.sessionID, ...input })
           fake.send(...turn(req.params.sessionID, input.id))
-          return Response.json({ data: {} })
+          return enqueued(req.params.sessionID, input.id, "compaction", {})
         }),
       },
       "/api/session/:sessionID/synthetic": {
         POST: body(SyntheticBody, (req, input) => {
           fake.submissions.push({ kind: "synthetic", sessionID: req.params.sessionID, ...input })
-          return Response.json({ data: {} })
+          return enqueued(req.params.sessionID, "msg_synthetic", "synthetic", { text: input.text })
         }),
       },
       "/api/session/:sessionID/interrupt": {
@@ -860,6 +883,11 @@ function startServer(options: WireOptions, changed: () => void) {
     /** Ends every open event stream while the server keeps answering requests. */
     closeEvents() {
       streams.forEach((stream) => stream.close())
+      streams.clear()
+    },
+    /** Drops the connection of every open event stream while the server keeps answering requests. */
+    dropEvents() {
+      streams.forEach((stream) => stream.error())
       streams.clear()
     },
     async stop() {

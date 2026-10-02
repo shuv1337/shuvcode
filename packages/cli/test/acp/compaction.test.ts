@@ -1,15 +1,16 @@
 import { describe, expect, test } from "bun:test"
 import type { CompactionUpdate, SessionNotification } from "@agentclientprotocol/sdk"
-import { OpenCode, type OpenCodeEvent, type SessionMessageInfo } from "@opencode/client/promise"
-import { Event } from "@opencode/schema/event"
+import type { OpenCodeEventEncoded } from "@opencode/protocol/groups/event"
 import { SessionMessage } from "@opencode/schema/session-message"
-import { Schema } from "effect"
+import { Effect, Exit, Queue, Schema, Scope, Stream } from "effect"
 import {
   assistantMessage,
   childCreated,
   delivered,
   durableEvent,
+  enqueued,
   ephemeralEvent,
+  makeClient,
   interrupted,
   makeSession,
   startSession,
@@ -579,7 +580,7 @@ describe("acp standard compaction updates over the wire", () => {
 
 // Holds the compact response so the test can publish the turn's events while the request is in flight.
 async function compactTurn(
-  events: (sessionID: string, id: string) => OpenCodeEvent[],
+  events: (sessionID: string, id: string) => OpenCodeEventEncoded[],
   capabilities?: InitializeOptions,
 ) {
   const held = Promise.withResolvers<Response>()
@@ -594,24 +595,28 @@ async function compactTurn(
   )
   const id = decodeCompact(request.body).id
   acp.server.send(...turn(acp.sessionId, id, ...events(acp.sessionId, id)))
-  held.resolve(Response.json({ data: {} }))
+  held.resolve(enqueued(acp.sessionId, id, "compaction", {}))
   return { acp, id, response: await response }
 }
 
 // Core derives an automatic compaction's message ID from the event ID the server stamps on publish.
 async function watchEvents(url: string) {
-  const controller = new AbortController()
-  const stream = OpenCode.make({ baseUrl: url }).event.subscribe({ signal: controller.signal })[Symbol.asyncIterator]()
-  await stream.next()
+  const scope = Scope.makeUnsafe()
+  const events = await Effect.runPromise(
+    makeClient(url).pipe(
+      Effect.flatMap((client) => client.event.subscribe().pipe(Stream.toQueue({ capacity: "unbounded" }))),
+      Scope.provide(scope),
+    ),
+  )
+  await Effect.runPromise(Queue.take(events))
   return {
-    async messageID(type: OpenCodeEvent["type"]) {
+    async messageID(type: OpenCodeEventEncoded["type"]) {
       while (true) {
-        const next = await stream.next()
-        if (next.done) throw new Error(`event stream ended before ${type}`)
-        if (next.value.type === type) return SessionMessage.ID.fromEvent(Event.ID.make(next.value.id))
+        const event = await Effect.runPromise(Queue.take(events))
+        if (event.type === type) return SessionMessage.ID.fromEvent(event.id)
       }
     },
-    [Symbol.dispose]: () => controller.abort(),
+    [Symbol.dispose]: () => Effect.runFork(Scope.close(scope, Exit.void)),
   }
 }
 
@@ -654,7 +659,7 @@ function turnUpdates(updates: readonly SessionNotification[]) {
   )
 }
 
-function compactedHistory(): SessionMessageInfo[] {
+function compactedHistory(): Array<typeof SessionMessage.Info.Encoded> {
   return [
     { id: "msg_user", type: "user", text: "hello", time: { created: 1 } },
     {
