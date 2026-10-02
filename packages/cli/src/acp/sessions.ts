@@ -3,12 +3,14 @@ import type { McpServer, RequestError, SessionConfigOption } from "@agentclientp
 import type { OpenCodeClient, OpenCodeEvent } from "@opencode/client/effect"
 import { Mcp } from "@opencode/schema/mcp"
 import type { Session } from "@opencode/schema/session"
-import { Context, Deferred, Effect, Exit, Queue, Ref, Scope, Stream } from "effect"
+import { Cause, Context, Deferred, Effect, Exit, Queue, Ref, Scope, Stream } from "effect"
 import type { ACPCatalog, Catalog } from "./catalog"
 import { ACPClient } from "./client"
 import { availableCommands, configOptions, type Selection } from "./config-option"
 import { ACPConnection } from "./connection"
 import { ACPError } from "./error"
+
+export type SupportedMcpServer = Exclude<McpServer, { readonly type: "acp" | "sse" }>
 
 export type Attached = {
   readonly id: Session.ID
@@ -20,12 +22,13 @@ export interface Interface {
   readonly attach: (
     session: Session.Info,
     cwd: string,
-    mcpServers: readonly McpServer[],
+    mcpServers: readonly SupportedMcpServer[],
   ) => Effect.Effect<
     { readonly attached: Attached; readonly configOptions: SessionConfigOption[] },
     ACPError.Error | RequestError | ACPCatalog.Error
   >
   readonly detach: (sessionID: string) => Effect.Effect<void>
+  readonly release: (attached: Attached) => Effect.Effect<void>
   readonly require: (sessionID: string) => Effect.Effect<Attached, ACPError.SessionNotFoundError>
   readonly fork: (attached: Attached, effect: Effect.Effect<void>) => Effect.Effect<void, ACPError.SessionNotFoundError>
 }
@@ -66,7 +69,9 @@ export const make = Effect.fnUntraced(function* (input: {
         event.type === "session.model.selected" ? { model: event.data.model } : { modeID: event.data.agent },
       )
     }),
-    Effect.ignore,
+    Effect.catchCause((cause) =>
+      Cause.hasInterruptsOnly(cause) ? Effect.void : Effect.logWarning("ACP selection event stream failed", cause),
+    ),
     Effect.ensuring(Deferred.succeed(connected, undefined)),
     Effect.forkScoped,
   )
@@ -89,7 +94,7 @@ export const make = Effect.fnUntraced(function* (input: {
     if (!isDeepStrictEqual(next.commands, previous.commands)) yield* sendCommands(attached.id, next)
   })
 
-  const registerMcp = (attached: Attached, servers: readonly McpServer[]) =>
+  const registerMcp = (attached: Attached, servers: readonly SupportedMcpServer[]) =>
     Effect.suspend(() => {
       const registered = registeredMcp.get(attached.id) ?? new Set<string>()
       registeredMcp.set(attached.id, registered)
@@ -166,6 +171,10 @@ export const make = Effect.fnUntraced(function* (input: {
       const entry = sessions.get(sessionID)
       if (entry) yield* remove(sessionID, entry)
     }),
+    release: Effect.fn("cli.acp.sessions.release")(function* (attached) {
+      const entry = sessions.get(attached.id)
+      if (entry?.attached === attached) yield* remove(attached.id, entry)
+    }),
     require: Effect.fn("cli.acp.sessions.require")(function* (sessionID) {
       const entry = sessions.get(sessionID)
       if (!entry) return yield* new ACPError.SessionNotFoundError({ sessionId: sessionID })
@@ -179,9 +188,8 @@ export const make = Effect.fnUntraced(function* (input: {
   })
 })
 
-function mcpConfig(server: McpServer) {
+function mcpConfig(server: SupportedMcpServer) {
   if ("type" in server) {
-    if (server.type === "acp") throw new Error("MCP-over-ACP is not supported")
     return new Mcp.RemoteConfig({
       type: "remote",
       url: server.url,

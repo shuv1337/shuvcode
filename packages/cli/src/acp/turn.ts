@@ -66,7 +66,7 @@ type Subscription = {
   /** Asks run serially off the event stream. */
   readonly asks: Queue.Queue<Effect.Effect<void, ACPError.Error | RequestError>>
   readonly cancelled: Deferred.Deferred<void>
-  readonly forms: Map<string, Deferred.Deferred<void>>
+  readonly settled: Map<string, Deferred.Deferred<void>>
 }
 
 export const make = Effect.fnUntraced(function* (input: {
@@ -90,7 +90,7 @@ export const make = Effect.fnUntraced(function* (input: {
         .pipe(Stream.toQueue({ capacity: "unbounded" }), Scope.provide(subscriptionScope)),
       asks: yield* Queue.unbounded<Effect.Effect<void, ACPError.Error | RequestError>>(),
       cancelled: yield* Deferred.make<void>(),
-      forms: new Map(),
+      settled: new Map(),
     }
     yield* Queue.take(subscription.asks).pipe(
       Effect.flatten,
@@ -116,7 +116,12 @@ export const make = Effect.fnUntraced(function* (input: {
     yield* Deferred.await(settled)
   })
 
-  const reply = (subscription: Subscription, ctx: ACPTranslate.Context, ask: PermissionAsk) =>
+  const reply = (
+    subscription: Subscription,
+    ctx: ACPTranslate.Context,
+    ask: PermissionAsk,
+    settled: Deferred.Deferred<void>,
+  ) =>
     ACPPermission.reply(
       {
         client: input.client,
@@ -127,6 +132,7 @@ export const make = Effect.fnUntraced(function* (input: {
         cwd: ctx.cwd,
         tool: ask.tool,
         child: ask.child,
+        settled: Deferred.await(settled),
       },
       Deferred.await(subscription.cancelled),
     )
@@ -138,16 +144,26 @@ export const make = Effect.fnUntraced(function* (input: {
       case "ChildUpdate":
         return input.connection
           .extNotification(ACPTranslate.ChildSessionUpdateMethod, output.update)
-          .pipe(Effect.ignoreCause)
+          .pipe(
+            Effect.catchCause((cause) =>
+              Cause.hasInterruptsOnly(cause)
+                ? Effect.void
+                : Effect.logWarning("ACP child session update failed", cause),
+            ),
+          )
       case "PermissionAsk":
-        return Queue.offer(subscription.asks, reply(subscription, ctx, output)).pipe(Effect.asVoid)
+        return Effect.gen(function* () {
+          const settled = yield* Deferred.make<void>()
+          subscription.settled.set(output.event.data.id, settled)
+          yield* Queue.offer(subscription.asks, reply(subscription, ctx, output, settled))
+        })
       case "FormAsk":
         return Effect.gen(function* () {
           const capabilities = yield* Ref.get(input.capabilities)
           const requestedSchema = ACPElicitation.requestedSchema(output.form, capabilities)
           if (!requestedSchema) return yield* ACPElicitation.cancelUnshown(input.client, output.form)
           const settled = yield* Deferred.make<void>()
-          subscription.forms.set(output.form.id, settled)
+          subscription.settled.set(output.form.id, settled)
           yield* Queue.offer(
             subscription.asks,
             ACPElicitation.reply(
@@ -165,10 +181,10 @@ export const make = Effect.fnUntraced(function* (input: {
             ),
           )
         })
-      case "FormSettled":
+      case "AskSettled":
         return Effect.suspend(() => {
-          const settled = subscription.forms.get(output.formID)
-          subscription.forms.delete(output.formID)
+          const settled = subscription.settled.get(output.id)
+          subscription.settled.delete(output.id)
           return settled ? Deferred.succeed(settled, undefined) : Effect.void
         })
     }
@@ -181,8 +197,10 @@ export const make = Effect.fnUntraced(function* (input: {
   ) {
     while (true) {
       const event = yield* take(subscription)
-      const next = ACPTranslate.step(yield* Ref.get(state), event, ctx)
-      yield* Ref.set(state, next.state)
+      const next = yield* Ref.modify(state, (current) => {
+        const step = ACPTranslate.step(current, event, ctx)
+        return [step, step.state]
+      })
       yield* Effect.forEach(next.outputs, (output) => interpret(subscription, ctx, output), { discard: true })
       if (next.terminal) {
         yield* asksSettled(subscription)
@@ -227,7 +245,13 @@ export const make = Effect.fnUntraced(function* (input: {
   })
 
   const interruptServer = (sessionID: Session.ID) =>
-    input.client.session.interrupt({ sessionID }).pipe(Effect.ignoreCause)
+    input.client.session
+      .interrupt({ sessionID })
+      .pipe(
+        Effect.catchCause((cause) =>
+          Cause.hasInterruptsOnly(cause) ? Effect.void : Effect.logWarning("ACP server interrupt failed", cause),
+        ),
+      )
 
   const windDown = Effect.fnUntraced(function* (
     subscription: Subscription,
@@ -238,7 +262,7 @@ export const make = Effect.fnUntraced(function* (input: {
     yield* Deferred.succeed(subscription.cancelled, undefined)
     yield* interruptServer(ctx.sessionID)
     if (!(yield* Ref.get(state)).started) return
-    if (Option.isSome(yield* Fiber.await(events).pipe(Effect.timeoutOption(drainTimeout)))) return
+    if (Option.exists(yield* Fiber.await(events).pipe(Effect.timeoutOption(drainTimeout)), Exit.isSuccess)) return
     yield* Fiber.interrupt(events)
     const abandoned = ACPTranslate.abandon(yield* Ref.get(state), ctx)
     yield* Ref.set(state, abandoned.state)
@@ -323,7 +347,9 @@ export const make = Effect.fnUntraced(function* (input: {
         },
       })
     },
-    (effect) => Effect.ignoreCause(effect),
+    Effect.catchCause((cause) =>
+      Cause.hasInterruptsOnly(cause) ? Effect.void : Effect.logWarning("ACP usage update failed", cause),
+    ),
   )
 
   // Forked uninterruptible: interruption reaches only `execute`, so the fiber still settles with a response.

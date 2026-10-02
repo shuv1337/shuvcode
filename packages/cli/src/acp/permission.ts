@@ -24,6 +24,7 @@ type Input = {
   readonly cwd: string
   readonly tool?: Tool
   readonly child?: ACPTranslate.ChildSession
+  readonly settled: Effect.Effect<void>
 }
 
 const options: PermissionOption[] = [
@@ -37,7 +38,13 @@ const decodeFiles = Schema.decodeUnknownOption(Schema.Array(FileDiff.Info))
 export const reply = Effect.fn("cli.acp.permission.reply")(function* (input: Input, cancelled: Effect.Effect<void>) {
   yield* Effect.uninterruptibleMask((restore) =>
     // The race starts racers in order and stops once one is done, so an earlier cancel never starts the ask.
-    restore(cancelled.pipe(Effect.as("reject" as const), Effect.raceFirst(ask(input)))).pipe(
+    restore(
+      cancelled.pipe(
+        Effect.as("reject" as const),
+        Effect.raceFirst(input.settled.pipe(Effect.as("settled" as const))),
+        Effect.raceFirst(ask(input)),
+      ),
+    ).pipe(
       Effect.tapCauseIf(Cause.hasDies, (cause) => Effect.logWarning("ACP permission ask failed", cause)),
       Effect.catchCause(() => Effect.succeed("reject" as const)),
       Effect.flatMap((decision) => respond(input, decision)),
@@ -76,10 +83,12 @@ const ask = Effect.fnUntraced(function* (input: Input) {
   return selected === "once" || selected === "always" ? selected : "reject"
 })
 
-function respond(input: Input, decision: Permission.Reply) {
-  return input.client.permission
-    .reply({ sessionID: input.sessionID, requestID: input.event.data.id, decision })
-    .pipe(Effect.catch(ACPClient.classify))
+function respond(input: Input, decision: Permission.Reply | "settled") {
+  if (decision === "settled") return Effect.void
+  return input.client.permission.reply({ sessionID: input.sessionID, requestID: input.event.data.id, decision }).pipe(
+    Effect.catchTag("PermissionNotFoundError", () => Effect.void),
+    Effect.catch(ACPClient.classify),
+  )
 }
 
 function prefixedTitle(prefix: string | undefined, title: string | undefined) {
@@ -104,7 +113,7 @@ const permissionPreviews = Effect.fnUntraced(function* (
       Effect.gen(function* () {
         const path = absolutePath(file.file, cwd)
         const oldText = file.status === "added" ? null : yield* Effect.tryPromise(() => Bun.file(path).text())
-        const newText = applyPatch(oldText ?? "", file.patch)
+        const newText = yield* Effect.try(() => applyPatch(oldText ?? "", file.patch))
         return newText === false ? [] : [diff(path, oldText, newText)]
       }),
     { concurrency: "unbounded" },
