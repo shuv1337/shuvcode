@@ -2,6 +2,7 @@ import type { FileDiffInfo } from "@opencode/client/promise"
 import type { SessionReviewLineComment } from "@opencode/session-ui/session-review"
 import { previewSelectedLines } from "@opencode/session-ui/pierre/selection-bridge"
 import { checksum } from "@opencode/util/encode"
+import { showToast } from "@opencode/ui/toast"
 import { createQuery, useQueryClient } from "@tanstack/solid-query"
 import { debounce } from "@solid-primitives/scheduled"
 import { createComputed, createEffect, createMemo, on, onCleanup } from "solid-js"
@@ -46,6 +47,7 @@ export function createReviewModel(input: { ctx: Context; view: SessionView; dema
     scroll: undefined as HTMLDivElement | undefined,
     pendingFile: undefined as string | undefined,
     deferRender: false,
+    initializingGit: false,
     // The filter is transient by design: a persisted filter would silently hide
     // files after a reload.
     filter: "",
@@ -217,6 +219,45 @@ export function createReviewModel(input: { ctx: Context; view: SessionView; dema
     if (project && !project.vcs) return true
     if (!stored()) return false
     return !diffQuery.isPending
+  }
+  const lifetime = { disposed: false }
+  onCleanup(() => {
+    lifetime.disposed = true
+  })
+  const initializeGit = () => {
+    if (state.initializingGit) return
+    const location = view.location
+    if (!location || !view.server.connected) {
+      showToast({ variant: "error", title: ctx.t("common.requestFailed") })
+      return
+    }
+    const key = view.key
+    const sessionID = view.id
+    setState("initializingGit", true)
+    void view.server.client.vcs
+      .init({ location, provider: "git" })
+      .then(async () => {
+        if (lifetime.disposed || ctx.signal.aborted || view.key !== key) return
+        const data = view.server.data
+        data.project.invalidate()
+        data.session.invalidate(sessionID)
+        data.location.invalidate(location)
+        data.location.vcs.invalidate(location)
+        await data.project.sync()
+        await data.session.sync(sessionID)
+        await Promise.all([data.location.syncInfo(location), data.location.vcs.sync(location)])
+      })
+      .catch((error: unknown) => {
+        if (lifetime.disposed || ctx.signal.aborted || view.key !== key) return
+        showToast({
+          variant: "error",
+          title: ctx.t("common.requestFailed"),
+          description: error instanceof Error ? error.message : undefined,
+        })
+      })
+      .finally(() => {
+        if (!lifetime.disposed && !ctx.signal.aborted && view.key === key) setState("initializingGit", false)
+      })
   }
   const loadDiff = async (path: string, version?: number): Promise<FileDiffInfo | undefined> => {
     const source = diffs().find((diff) => diff.file === path)
@@ -445,6 +486,8 @@ export function createReviewModel(input: { ctx: Context; view: SessionView; dema
     kinds,
     focusFile,
     hasChanges,
+    initializeGit,
+    initializingGit: () => state.initializingGit,
     loadDiff,
     mode,
     noGit: createMemo(() => !!view.project && !view.project.vcs),

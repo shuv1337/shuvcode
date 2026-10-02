@@ -8,6 +8,29 @@ import { expectSessionTitle } from "../utils/waits"
 
 test.use({ viewport: { width: 1440, height: 900 } })
 
+for (const view of ["desktop", "mobile"] as const) {
+  test(`offers Git initialization for a project without VCS (${view})`, async ({ page }) => {
+    if (view === "mobile") await page.setViewportSize({ width: 390, height: 844 })
+    const requests: { directory: string; provider?: string }[] = []
+    const workspace = await openSession(page, {
+      name: "ReviewWithoutGit",
+      project: { vcs: undefined },
+      onVcsInit: (input) => requests.push(input),
+    })
+    if (view === "desktop") await page.getByRole("button", { name: "Toggle review" }).click()
+    else await page.getByRole("tablist", { name: "Session view" }).getByRole("tab", { name: "Changes" }).click()
+
+    const panel = view === "desktop" ? page.locator("#review-panel") : page.locator('[data-component="session-review"]')
+    await expect(panel.getByText("Track, review, and undo changes in this project")).toBeVisible()
+    await expect(panel.getByRole("button", { name: "Git changes" })).toHaveCount(0)
+    const init = panel.getByRole("button", { name: "Create Git repository" })
+    await init.click()
+    await expect.poll(() => requests).toEqual([{ directory: workspace.directory, provider: "git" }])
+    await expect(panel.getByRole("button", { name: "Git changes" })).toBeVisible()
+    await expect(init).toHaveCount(0)
+  })
+}
+
 test("open file tab browses, searches, and tracks missing files", async ({ page }) => {
   const searches: { query: string; dirs?: string; limit?: number }[] = []
   const directory = "C:/OpenCode/ReviewOpenFile"

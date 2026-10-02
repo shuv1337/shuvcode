@@ -2742,6 +2742,14 @@ export type WorktreeError = {
 export const isWorktreeError = (value: unknown): value is WorktreeError =>
   typeof value === "object" && value !== null && "_tag" in value && value["_tag"] === "WorktreeError"
 
+export type VcsInitNotSupportedError = {
+  readonly _tag: "VcsInitNotSupportedError"
+  readonly providerID: string
+  readonly message: string
+}
+export const isVcsInitNotSupportedError = (value: unknown): value is VcsInitNotSupportedError =>
+  typeof value === "object" && value !== null && "_tag" in value && value["_tag"] === "VcsInitNotSupportedError"
+
 export type ServerInfoOutput = ServerInfo
 
 export type ServerPairOutput = PairingCode
@@ -6494,6 +6502,19 @@ export type WorktreeRemoveOutput = void
 export type WorktreeRefreshInput = { readonly projectID: { readonly projectID: string }["projectID"] }
 
 export type WorktreeRefreshOutput = void
+
+export type VcsInitInput = {
+  readonly location?: {
+    readonly location?: { readonly directory?: string | undefined } | undefined
+    readonly provider?: string | undefined
+  }["location"]
+  readonly provider?: {
+    readonly location?: { readonly directory?: string | undefined } | undefined
+    readonly provider?: string | undefined
+  }["provider"]
+}
+
+export type VcsInitOutput = void
 
 export type VcsGetInput = {
   readonly location?: { readonly location?: { readonly directory?: string | undefined } | undefined }["location"]
