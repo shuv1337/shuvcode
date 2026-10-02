@@ -53,7 +53,11 @@ export const AuthMethodID = "opencode-login"
 export type Failure = ACPError.Error | RequestError | ACPCatalog.Error
 
 /** What the client advertised in `initialize`. */
-export type Capabilities = { readonly childSessionUpdates: boolean; readonly formElicitation: boolean }
+export type Capabilities = {
+  readonly childSessionUpdates: boolean
+  readonly formElicitation: boolean
+  readonly compaction: boolean
+}
 
 export interface Interface {
   readonly initialize: (input: InitializeRequest) => Effect.Effect<InitializeResponse>
@@ -128,18 +132,24 @@ export function make(input: {
     return session
   })
 
-  const replay = (attached: Attached) =>
-    Stream.paginate(undefined, (cursor: string | undefined) =>
+  const replay = Effect.fnUntraced(function* (attached: Attached) {
+    const capabilities = yield* Ref.get(input.capabilities)
+    yield* Stream.paginate(undefined, (cursor: string | undefined) =>
       ACPPromise.promise(() =>
         cursor
           ? input.client.message.list({ sessionID: attached.id, limit: 200, cursor })
           : input.client.message.list({ sessionID: attached.id, limit: 200, order: "asc" }),
       ).pipe(Effect.map((page) => [page.data, Option.fromNullishOr(page.cursor.next)] as const)),
-    ).pipe(Stream.runForEach((message) => replayMessage(attached, message)))
+    ).pipe(Stream.runForEach((message) => replayMessage(attached, message, capabilities)))
+  })
 
   // A message that fails to translate keeps the updates before the failure and does not stop the replay.
-  const replayMessage = Effect.fnUntraced(function* (attached: Attached, message: SessionMessageInfo) {
-    const updates = ACPTranslate.replayMessage(message, attached.cwd)
+  const replayMessage = Effect.fnUntraced(function* (
+    attached: Attached,
+    message: SessionMessageInfo,
+    capabilities: Capabilities,
+  ) {
+    const updates = ACPTranslate.replayMessage(message, attached.cwd, capabilities)
     while (true) {
       const next = yield* Effect.result(Effect.try(() => updates.next()))
       if (Result.isFailure(next))
@@ -152,9 +162,11 @@ export function make(input: {
   return {
     initialize: Effect.fnUntraced(function* (params) {
       const elicitation = params.clientCapabilities?.elicitation
+      const compaction = params.clientCapabilities?.session?.compaction
       yield* Ref.set(input.capabilities, {
         childSessionUpdates: params.clientCapabilities?._meta?.[ACPTranslate.ChildSessionUpdatesCapability] === true,
         formElicitation: elicitation?.form !== undefined && elicitation.form !== null,
+        compaction: compaction !== undefined && compaction !== null,
       })
       const authMethod: AuthMethod = {
         description: "Run `opencode auth login` in the terminal",
