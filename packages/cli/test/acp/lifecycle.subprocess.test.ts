@@ -17,6 +17,20 @@ describe("acp lifecycle subprocess", () => {
     expect(await acp.close()).toBe(0)
   }, 60_000)
 
+  test("an incoming message over the size limit exits with an error", async () => {
+    await using fixture = await createAcpFixture()
+    const acp = fixture.spawn()
+    await initialize(acp)
+    const [code] = await Promise.all([
+      acp.exited,
+      // The agent stops reading partway through the line, so the write may fail.
+      acp.notify("opencode/oversized", { data: "a".repeat(32 * 1024 * 1024) }).catch(() => undefined),
+    ])
+    await acp[Symbol.asyncDispose]()
+    expect(code).toBe(1)
+    expect(acp.stderr()).toContain("shuvcode acp: incoming message exceeded the 32 MiB limit\n")
+  }, 60_000)
+
   test("close capability and close request", async () => {
     await using fixture = await createAcpFixture()
     const acp = fixture.spawn()
@@ -101,8 +115,8 @@ describe("acp lifecycle subprocess", () => {
   }, 60_000)
 
   // The private server is found with `pgrep`, which Windows lacks.
-  const todoOutsideWindows = process.platform === "win32" ? test.skip : test.todo
-  todoOutsideWindows(
+  const testOutsideWindows = process.platform === "win32" ? test.skip : test
+  testOutsideWindows(
     "exits when the private server process dies (https://github.com/anomalyco/opencode/issues/51716)",
     async () => {
       await using fixture = await createAcpFixture()
@@ -121,7 +135,9 @@ describe("acp lifecycle subprocess", () => {
       const timeout = Promise.withResolvers<"running">()
       const timer = setTimeout(() => timeout.resolve("running"), 10_000)
       const exited = await Promise.race([acp.exited, timeout.promise]).finally(() => clearTimeout(timer))
-      expect(exited).not.toBe("running")
+      expect(exited).toBe(1)
+      await acp[Symbol.asyncDispose]()
+      expect(acp.stderr()).toContain("shuvcode acp: server exited unexpectedly (signal SIGKILL)")
     },
     60_000,
   )

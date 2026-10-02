@@ -1,5 +1,6 @@
 import { Global } from "@opencode/util/global"
 import { AppProcess } from "@opencode/util/process"
+import { EffectFlock } from "@opencode/util/effect-flock"
 import { OPENCODE_CHANNEL, OPENCODE_LOCAL, OPENCODE_VERSION } from "../version"
 import { Context, Duration, Effect, FileSystem, Layer, Ref } from "effect"
 import { ChildProcess } from "effect/unstable/process"
@@ -150,6 +151,7 @@ const make = Effect.gen(function* () {
   const fs = yield* FileSystem.FileSystem
   const global = yield* Global.Service
   const appProcess = yield* AppProcess.Service
+  const flock = yield* EffectFlock.Service
   const installedVersion = yield* Ref.make(OPENCODE_VERSION)
   const installedPackage = yield* Effect.gen(function* () {
     const executable = yield* fs.realPath(process.execPath)
@@ -341,6 +343,9 @@ const make = Effect.gen(function* () {
     }
     yield* Effect.scoped(
       Effect.gen(function* () {
+        // Other Shuvcode processes may be installing at the same time. Wait longer than one
+        // package-manager install.
+        yield* flock.acquire("cli-upgrade", undefined, { timeoutMs: Duration.toMillis("15 minutes") })
         if (method === "bun") {
           // Bun does not prune old versions from its shared package cache.
           yield* fs.makeDirectory(global.cache, { recursive: true })
