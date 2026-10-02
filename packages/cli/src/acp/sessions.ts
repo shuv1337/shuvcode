@@ -1,9 +1,9 @@
 import { isDeepStrictEqual } from "node:util"
-import type { McpServer, RequestError, SessionConfigOption } from "@agentclientprotocol/sdk"
+import type { McpServer, SessionConfigOption } from "@agentclientprotocol/sdk"
 import type { OpenCodeClient, OpenCodeEvent } from "@opencode/client/effect"
 import { Mcp } from "@opencode/schema/mcp"
 import type { Session } from "@opencode/schema/session"
-import { Cause, Context, Deferred, Effect, Exit, Queue, Ref, Scope, Stream } from "effect"
+import { Cause, Deferred, Effect, Exit, Queue, Ref, Scope, Stream } from "effect"
 import type { ACPCatalog, Catalog } from "./catalog"
 import { ACPClient } from "./client"
 import { availableCommands, configOptions, type Selection } from "./config-option"
@@ -23,17 +23,12 @@ export interface Interface {
     session: Session.Info,
     cwd: string,
     mcpServers: readonly SupportedMcpServer[],
-  ) => Effect.Effect<
-    { readonly attached: Attached; readonly configOptions: SessionConfigOption[] },
-    ACPError.Error | RequestError | ACPCatalog.Error
-  >
+  ) => Effect.Effect<{ readonly attached: Attached; readonly configOptions: SessionConfigOption[] }, ACPError.Failure>
   readonly detach: (sessionID: string) => Effect.Effect<void>
   readonly release: (attached: Attached) => Effect.Effect<void>
   readonly require: (sessionID: string) => Effect.Effect<Attached, ACPError.SessionNotFoundError>
   readonly fork: (attached: Attached, effect: Effect.Effect<void>) => Effect.Effect<void, ACPError.SessionNotFoundError>
 }
-
-export class Service extends Context.Service<Service, Interface>()("@opencode/cli/acp/Sessions") {}
 
 type Entry = {
   readonly attached: Attached
@@ -51,7 +46,7 @@ export const make = Effect.fnUntraced(function* (input: {
   const scope = yield* Effect.scope
   const sessions = new Map<string, Entry>()
   // Outlives entries so re-attaching does not re-add servers.
-  const registeredMcp = new Map<string, Set<string>>()
+  const registeredMcpBySession = new Map<string, Map<string, Mcp.ServerConfig>>()
   const connected = yield* Deferred.make<void>()
 
   // Subscribe before any attach so a switch right after `sessions.set` reaches the session.
@@ -96,19 +91,18 @@ export const make = Effect.fnUntraced(function* (input: {
 
   const registerMcp = (attached: Attached, servers: readonly SupportedMcpServer[]) =>
     Effect.suspend(() => {
-      const registered = registeredMcp.get(attached.id) ?? new Set<string>()
-      registeredMcp.set(attached.id, registered)
+      const registered = registeredMcpBySession.get(attached.id) ?? new Map<string, Mcp.ServerConfig>()
+      registeredMcpBySession.set(attached.id, registered)
       return Effect.forEach(
         servers,
         (server) =>
           Effect.suspend(() => {
             const config = mcpConfig(server)
-            const key = `${server.name}:${stableStringify(config)}`
-            if (registered.has(key)) return Effect.void
-            registered.add(key)
+            if (isDeepStrictEqual(registered.get(server.name), config)) return Effect.void
+            registered.set(server.name, config)
             return input.client.mcp.add({ server: server.name, location: { directory: attached.cwd }, config }).pipe(
               Effect.catch(ACPClient.classify),
-              Effect.onError(() => Effect.sync(() => registered.delete(key))),
+              Effect.onError(() => Effect.sync(() => registered.delete(server.name))),
               Effect.uninterruptible,
             )
           }),
@@ -120,12 +114,12 @@ export const make = Effect.fnUntraced(function* (input: {
     Effect.suspend(() => {
       if (sessions.get(sessionID) === entry) {
         sessions.delete(sessionID)
-        registeredMcp.delete(sessionID)
+        registeredMcpBySession.delete(sessionID)
       }
       return Scope.close(entry.scope, Exit.void)
     })
 
-  return Service.of({
+  return {
     attach: Effect.fn("cli.acp.sessions.attach")(function* (session, cwd, mcpServers) {
       yield* Deferred.await(connected)
       const current = yield* input.catalog.get(cwd)
@@ -175,7 +169,7 @@ export const make = Effect.fnUntraced(function* (input: {
       const entry = sessions.get(attached.id)
       if (entry?.attached === attached) yield* remove(attached.id, entry)
     }),
-    require: Effect.fn("cli.acp.sessions.require")(function* (sessionID) {
+    require: Effect.fnUntraced(function* (sessionID) {
       const entry = sessions.get(sessionID)
       if (!entry) return yield* new ACPError.SessionNotFoundError({ sessionId: sessionID })
       return entry.attached
@@ -185,7 +179,7 @@ export const make = Effect.fnUntraced(function* (input: {
       if (entry?.attached !== attached) return yield* new ACPError.SessionNotFoundError({ sessionId: attached.id })
       yield* Effect.forkIn(effect, entry.scope, { startImmediately: true })
     }),
-  })
+  } satisfies Interface
 })
 
 function mcpConfig(server: SupportedMcpServer) {
@@ -202,15 +196,6 @@ function mcpConfig(server: SupportedMcpServer) {
     command: [server.command, ...server.args],
     environment: Object.fromEntries(server.env.map((entry) => [entry.name, entry.value])),
   })
-}
-
-function stableStringify(value: unknown): string {
-  if (Array.isArray(value)) return `[${value.map(stableStringify).join(",")}]`
-  if (!value || typeof value !== "object") return JSON.stringify(value)
-  return `{${Object.entries(value)
-    .toSorted(([a], [b]) => a.localeCompare(b))
-    .map(([key, item]) => `${JSON.stringify(key)}:${stableStringify(item)}`)
-    .join(",")}}`
 }
 
 export * as ACPSessions from "./sessions"

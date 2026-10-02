@@ -1,7 +1,6 @@
 import type { CancelNotification, PromptRequest, PromptResponse, RequestError } from "@agentclientprotocol/sdk"
 import type { OpenCodeClient, OpenCodeEvent } from "@opencode/client/effect"
 import type { Command } from "@opencode/schema/command"
-import type { Session } from "@opencode/schema/session"
 import { SessionMessage } from "@opencode/schema/session-message"
 import { TokenUsage } from "@opencode/schema/token-usage"
 import {
@@ -21,7 +20,9 @@ import {
 } from "effect"
 import { access, constants } from "node:fs/promises"
 import { fileURLToPath } from "node:url"
+import type { Capabilities } from "./capabilities"
 import { builtinCommands, type ACPCatalog, type Catalog } from "./catalog"
+import { ACPChild } from "./child"
 import { ACPClient } from "./client"
 import { currentModel } from "./config-option"
 import type { ACPConnection } from "./connection"
@@ -29,20 +30,15 @@ import { linkReference, promptContentToParts, type PromptPart } from "./content"
 import { ACPElicitation } from "./elicitation"
 import { ACPError } from "./error"
 import { ACPPermission } from "./permission"
-import type { ACPService } from "./service"
 import type { ACPSessions, Attached } from "./sessions"
 import { ACPTranslate } from "./translate"
 
-type Failure = ACPError.Error | RequestError | ACPCatalog.Error
-
 export interface Interface {
-  readonly prompt: (input: PromptRequest, signal: AbortSignal) => Effect.Effect<PromptResponse, Failure>
+  readonly prompt: (input: PromptRequest, signal: AbortSignal) => Effect.Effect<PromptResponse, ACPError.Failure>
   readonly cancel: (input: CancelNotification) => Effect.Effect<void>
   /** Unlike `cancel`, interrupts an idle session too, since server work can outlive its turn. */
   readonly close: (sessionID: string) => Effect.Effect<void, ACPError.Error | RequestError>
 }
-
-export class Service extends Context.Service<Service, Interface>()("@opencode/cli/acp/Turn") {}
 
 /** Core acknowledges an interrupt before its cleanup settles, and its shell tool waits 3s before SIGKILL. */
 export const CancelDrainTimeout = Context.Reference<Duration.Input>("@opencode/cli/acp/Turn/CancelDrainTimeout", {
@@ -74,11 +70,11 @@ export const make = Effect.fnUntraced(function* (input: {
   readonly connection: ACPConnection.Interface
   readonly sessions: ACPSessions.Interface
   readonly catalog: ACPCatalog.Interface
-  readonly capabilities: Ref.Ref<ACPService.Capabilities>
+  readonly capabilities: Ref.Ref<Capabilities>
 }) {
   const scope = yield* Effect.scope
   const drainTimeout = yield* CancelDrainTimeout
-  const turns = yield* FiberMap.make<string, PromptResponse, Failure>()
+  const turns = yield* FiberMap.make<string, PromptResponse, ACPError.Failure>()
 
   const subscribe = Effect.fnUntraced(function* () {
     // Parented to the service scope; the session scope may already be closed.
@@ -143,7 +139,7 @@ export const make = Effect.fnUntraced(function* (input: {
         return input.connection.sessionUpdate({ sessionId: ctx.sessionID, update: output.update })
       case "ChildUpdate":
         return input.connection
-          .extNotification(ACPTranslate.ChildSessionUpdateMethod, output.update)
+          .extNotification(ACPChild.UpdateMethod, output.update)
           .pipe(
             Effect.catchCause((cause) =>
               Cause.hasInterruptsOnly(cause)
@@ -244,23 +240,20 @@ export const make = Effect.fnUntraced(function* (input: {
       .pipe(Effect.catch(ACPClient.classify))
   })
 
-  const interruptServer = (sessionID: Session.ID) =>
-    input.client.session
-      .interrupt({ sessionID })
+  const windDown = Effect.fnUntraced(function* (
+    subscription: Subscription,
+    ctx: ACPTranslate.Context,
+    state: Ref.Ref<ACPTranslate.TurnState>,
+    events: Fiber.Fiber<ACPTranslate.Terminal, ACPError.Failure>,
+  ) {
+    yield* Deferred.succeed(subscription.cancelled, undefined)
+    yield* input.client.session
+      .interrupt({ sessionID: ctx.sessionID })
       .pipe(
         Effect.catchCause((cause) =>
           Cause.hasInterruptsOnly(cause) ? Effect.void : Effect.logWarning("ACP server interrupt failed", cause),
         ),
       )
-
-  const windDown = Effect.fnUntraced(function* (
-    subscription: Subscription,
-    ctx: ACPTranslate.Context,
-    state: Ref.Ref<ACPTranslate.TurnState>,
-    events: Fiber.Fiber<ACPTranslate.Terminal, Failure>,
-  ) {
-    yield* Deferred.succeed(subscription.cancelled, undefined)
-    yield* interruptServer(ctx.sessionID)
     if (!(yield* Ref.get(state)).started) return
     if (Option.exists(yield* Fiber.await(events).pipe(Effect.timeoutOption(drainTimeout)), Exit.isSuccess)) return
     yield* Fiber.interrupt(events)
@@ -300,7 +293,7 @@ export const make = Effect.fnUntraced(function* (input: {
     subscription: Subscription,
     ctx: ACPTranslate.Context,
     state: Ref.Ref<ACPTranslate.TurnState>,
-    exit: Exit.Exit<ACPTranslate.Terminal, Failure>,
+    exit: Exit.Exit<ACPTranslate.Terminal, ACPError.Failure>,
   ) {
     const close = Scope.close(subscription.scope, Exit.void)
     if (Exit.isFailure(exit) && !Cause.hasInterruptsOnly(exit.cause)) return yield* close
@@ -318,7 +311,7 @@ export const make = Effect.fnUntraced(function* (input: {
   const settle = Effect.fnUntraced(function* (
     attached: Attached,
     state: Ref.Ref<ACPTranslate.TurnState>,
-    exit: Exit.Exit<ACPTranslate.Terminal, Failure>,
+    exit: Exit.Exit<ACPTranslate.Terminal, ACPError.Failure>,
   ) {
     if (Exit.isFailure(exit) && !Cause.hasInterrupts(exit.cause)) return yield* Effect.failCause(exit.cause)
     const current = yield* Ref.get(state)
@@ -368,8 +361,8 @@ export const make = Effect.fnUntraced(function* (input: {
     return yield* settle(attached, state, exit)
   })
 
-  return Service.of({
-    prompt: Effect.fn("cli.acp.turn.prompt")(function* (params, signal) {
+  return {
+    prompt: Effect.fnUntraced(function* (params, signal) {
       const attached = yield* input.sessions.require(params.sessionId)
       const catalog = yield* input.catalog.get(attached.cwd)
       if (params.prompt.some((block) => block.type === "image" && !block.data && !block.uri)) {
@@ -397,7 +390,7 @@ export const make = Effect.fnUntraced(function* (input: {
       yield* aborted(signal).pipe(Effect.andThen(Fiber.interrupt(turn)), Effect.forkChild)
       return yield* Fiber.join(turn)
     }),
-    cancel: Effect.fn("cli.acp.turn.cancel")(function* (params) {
+    cancel: Effect.fnUntraced(function* (params) {
       yield* FiberMap.remove(turns, params.sessionId)
     }),
     close: Effect.fn("cli.acp.turn.close")(function* (sessionID) {
@@ -408,7 +401,7 @@ export const make = Effect.fnUntraced(function* (input: {
         Effect.catch(ACPClient.classify),
       )
     }),
-  })
+  } satisfies Interface
 })
 
 function aborted(signal: AbortSignal) {
@@ -427,8 +420,17 @@ function preparePrompt(catalog: Catalog, parts: readonly PromptPart[], messageID
   const files = visible.flatMap((part) => (part.type === "file" ? [{ uri: part.url, name: part.filename }] : []))
   const slash = detectSlashCommand(text)
   const command = slash ? catalog.commands.find((item) => item.name === slash.name) : undefined
-  const start = turnStart(messageID, slash)
-  return { start, text, files, synthetic, slash, command }
+  return {
+    start:
+      slash && builtinCommands.get(slash.name)?.start === "compaction"
+        ? { type: "compaction", id: messageID }
+        : { type: "input", id: messageID },
+    text,
+    files,
+    synthetic,
+    slash,
+    command,
+  }
 }
 
 function referenceUnreadableFile(part: PromptPart) {
@@ -439,12 +441,7 @@ function referenceUnreadableFile(part: PromptPart) {
   )
 }
 
-function turnStart(messageID: SessionMessage.ID, slash: PreparedPrompt["slash"]): ACPTranslate.TurnStart {
-  if (slash && builtinCommands.get(slash.name)?.start === "compaction") return { type: "compaction", id: messageID }
-  return { type: "input", id: messageID }
-}
-
-function detectSlashCommand(text: string): { readonly name: string; readonly args: string } | undefined {
+function detectSlashCommand(text: string) {
   const value = text.trim()
   if (!value.startsWith("/")) return undefined
   const [name, ...rest] = value.slice(1).split(/\s+/)
