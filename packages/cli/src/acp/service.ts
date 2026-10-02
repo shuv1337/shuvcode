@@ -196,7 +196,10 @@ export function make(input: {
         }),
       )
       const attached = yield* input.sessions.attach(created, params.cwd, params.mcpServers)
-      return { sessionId: attached.id, configOptions: yield* currentOptions(attached) }
+      return yield* currentOptions(attached).pipe(
+        Effect.map((configOptions) => ({ sessionId: attached.id, configOptions })),
+        Effect.onError(() => input.sessions.detach(attached.id)),
+      )
     }),
     loadSession: Effect.fnUntraced(function* (params) {
       const directories = yield* ACPDirectories.parse(params.cwd, params.additionalDirectories)
@@ -248,7 +251,10 @@ export function make(input: {
       const session = yield* getSession(params.sessionId, params.cwd)
       yield* ACPDirectories.activate(input.client, session, directories)
       const attached = yield* input.sessions.attach(session, session.location.directory, params.mcpServers ?? [])
-      return { configOptions: yield* currentOptions(attached) }
+      return yield* currentOptions(attached).pipe(
+        Effect.map((configOptions) => ({ configOptions })),
+        Effect.onError(() => input.sessions.detach(attached.id)),
+      )
     }),
     closeSession: Effect.fnUntraced(function* (params) {
       yield* input.turn.close(params.sessionId)
