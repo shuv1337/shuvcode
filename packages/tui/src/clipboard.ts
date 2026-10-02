@@ -6,6 +6,7 @@ import {
   type ClipboardService as CoreClipboardService,
   type RendererClipboardBoundary,
 } from "@opentui/core"
+import { withWlPasteFallback } from "./clipboard-wl-paste"
 import type { ClipboardContent, ClipboardService } from "./context/clipboard"
 
 export type OwnedClipboardService = Required<ClipboardService> & Readonly<{ dispose(): Promise<void> }>
@@ -13,7 +14,10 @@ export type OwnedClipboardService = Required<ClipboardService> & Readonly<{ disp
 export function createTuiClipboard(renderer: RendererClipboardBoundary): OwnedClipboardService {
   return createClipboardAdapter(
     createClipboard({
-      host: createHostClipboard(),
+      host: withWlPasteFallback(
+        createHostClipboard(),
+        process.platform === "linux" && process.env.WAYLAND_DISPLAY ? "wl-paste" : undefined,
+      ),
       terminal: createRendererClipboardAdapter(renderer),
     }),
   )
