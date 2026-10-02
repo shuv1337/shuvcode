@@ -70,10 +70,19 @@ export function createReviewModel(input: { ctx: Context; view: SessionView; dema
         : undefined,
     ),
   )
-  const update = (mutation: (draft: (typeof SessionState)["Type"]) => void) => saved()?.[1](mutation)
+  // Desktop loads the store asynchronously. Until it has, its defaults are not the session's choice: nothing shows
+  // them, requests their diff, or writes over the stored state.
+  const stored = () => {
+    const value = saved()
+    return value?.[2]() ? value[0] : undefined
+  }
+  const update = (mutation: (draft: (typeof SessionState)["Type"]) => void) => {
+    const value = saved()
+    if (value?.[2]()) value[1](mutation)
+  }
   // Memos, so the store a session switch reopens does not recompute the diffs, kinds and tree rows it feeds.
-  const mode = createMemo(() => saved()?.[0].mode ?? "git")
-  const selectedFile = createMemo(() => saved()?.[0].file)
+  const mode = createMemo(() => stored()?.mode ?? "git")
+  const selectedFile = createMemo(() => stored()?.file)
 
   // After a session switch the review renders a frame later, so the switch paints first.
   const generation = { value: 0, disposed: false }
@@ -133,7 +142,8 @@ export function createReviewModel(input: { ctx: Context; view: SessionView; dema
     const turn = value === "turn"
     return {
       queryKey: turn ? turnKey() : ([...vcsKey(), value] as const),
-      enabled: view.server.connected && wantsReview() && !!view.project?.vcs,
+      // Desktop storage loads asynchronously; until this session's mode is known, a request would use the default.
+      enabled: !!stored() && view.server.connected && wantsReview() && !!view.project?.vcs,
       refetchOnMount: "always" as const,
       // A finished turn does not change on focus or filesystem events; refresh it when the session goes idle.
       refetchOnWindowFocus: !turn,
@@ -205,6 +215,7 @@ export function createReviewModel(input: { ctx: Context; view: SessionView; dema
     // A project without VCS never enables diffQuery, so its status stays "pending" forever.
     const project = view.project
     if (project && !project.vcs) return true
+    if (!stored()) return false
     return !diffQuery.isPending
   }
   const loadDiff = async (path: string, version?: number): Promise<FileDiffInfo | undefined> => {
@@ -370,7 +381,7 @@ export function createReviewModel(input: { ctx: Context; view: SessionView; dema
     requestAnimationFrame(() => attempt(0))
   })
   createEffect(() => {
-    if (!saved()?.[2]() || !view.server.connected || !view.project) return
+    if (!stored() || !view.server.connected || !view.project) return
     const list = options()
     const value = mode()
     if (list.includes(value)) return
@@ -406,7 +417,8 @@ export function createReviewModel(input: { ctx: Context; view: SessionView; dema
   return {
     view,
     activeFile,
-    canReview: () => !!view.project,
+    // The mode picker waits for the stored mode.
+    canReview: () => !!view.project && !!stored(),
     comments: {
       actions: commentActions,
       add: addComment,
@@ -438,7 +450,7 @@ export function createReviewModel(input: { ctx: Context; view: SessionView; dema
     noGit: createMemo(() => !!view.project && !view.project.vcs),
     filter: () => state.filter,
     setFilter: (value: string) => setState("filter", value),
-    open: () => saved()?.[0].open ?? [],
+    open: () => stored()?.open ?? [],
     setOpen: (next: string[]) =>
       update((draft) => {
         const unique = Array.from(new Set(next))
