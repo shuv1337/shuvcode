@@ -365,7 +365,7 @@
         "@parcel/watcher": "2.5.1",
         "@silvia-odwyer/photon-node": "0.3.4",
         "@standard-schema/spec": "catalog:",
-        "bun-pty": "0.4.8",
+        "bun-pty": "0.4.9",
         "diff": "catalog:",
         "drizzle-orm": "catalog:",
         "effect": "catalog:",
@@ -3547,7 +3547,7 @@
 
     "bun-ffi-structs": ["bun-ffi-structs@0.3.1", "", { "peerDependencies": { "typescript": "^5" } }, "sha512-3gM7PpVWLyrwxWjcilSiGuhWanhZivvo6l0u573NziPH6f/gwk6McbaYgn7oJWov6pKGRTDbrg94W5DcJsKTtQ=="],
 
-    "bun-pty": ["bun-pty@0.4.8", "", {}, "sha512-rO70Mrbr13+jxHHHu2YBkk2pNqrJE5cJn29WE++PUr+GFA0hq/VgtQPZANJ8dJo6d7XImvBk37Innt8GM7O28w=="],
+    "bun-pty": ["bun-pty@0.4.9", "", {}, "sha512-IUF/B3FANo8vIQ775Zt7Er7lphMpYMhLkes45am2WE8FaVI7KRYtj1rQwliZ18b6GpNzBNWcl7sz9QT5wDFBeQ=="],
 
     "bun-types": ["bun-types@1.4.2", "", { "dependencies": { "@types/node": "*" } }, "sha512-bxV1FgK7yBIzjRe5zBozIM4Bem11ZJcCXSrjWRG3YWLt8yFDePu4cLjpebO8OvPeIE9trbyPF4fuj3Cia4Fj3w=="],
 
