@@ -183,6 +183,9 @@ export const Plugin = {
                 )
               }
 
+              const model = override ?? agent.model ?? parent.model
+              const parentAgent =
+                existing !== undefined || model !== undefined ? undefined : (yield* agents.select(parent.agent)).info
               const child =
                 existing ??
                 (yield* sessions
@@ -191,12 +194,12 @@ export const Plugin = {
                     title: input.description,
                     agent: Agent.ID.make(input.agent),
                     model:
-                      override ??
-                      agent.model ??
-                      parent.model ??
-                      (yield* runnerModels
-                        .resolve(parent, models.available, (yield* agents.select(parent.agent)).info)
-                        .pipe(Effect.mapError((error) => new ToolFailure({ message: error.message, error })))).ref,
+                      model ??
+                      (parentAgent?.model === undefined
+                        ? undefined
+                        : (yield* runnerModels
+                            .resolve(parent, models.available, parentAgent)
+                            .pipe(Effect.mapError((error) => new ToolFailure({ message: error.message, error })))).ref),
                   })
                   .pipe(
                     Effect.mapError(

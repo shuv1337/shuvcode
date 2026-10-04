@@ -207,7 +207,57 @@ const withSubagent = (location: Location.Ref) =>
   })
 
 describe("SubagentTool", () => {
-  productionIt.live("inherits the parent's resolved agent model and variant without a stored model", () =>
+  productionIt.live(
+    "inherits the parent's agent model and variant unless the child agent specifies its own model",
+    () =>
+      Effect.acquireRelease(
+        Effect.promise(() => tmpdir()),
+        (dir) => Effect.promise(() => dir[Symbol.asyncDispose]()),
+      ).pipe(
+        Effect.flatMap((dir) =>
+          Effect.gen(function* () {
+            yield* Effect.promise(() =>
+              Bun.write(
+                path.join(dir.path, "opencode.json"),
+                JSON.stringify({
+                  agents: { build: { model: "test/override#fast" } },
+                  providers: { test: { package: "@opencode/ai/providers/openai/chat", settings: { apiKey: "test" } } },
+                }),
+              ),
+            )
+            const sessions = yield* Session.Service
+            const parent = yield* sessions.create({
+              location: { directory: AbsolutePath.make(dir.path) },
+              agent: Agent.ID.make("build"),
+            })
+            yield* withSubagent(parent.location)
+            expect(parent.model).toBeUndefined()
+            const locations = yield* LocationServiceMap.Service
+            const registry = yield* Tool.Service.pipe(Effect.provide(locations.get(parent.location)))
+            for (const agent of ["explore", "general", "reviewer"]) {
+              const result = yield* executeTool(registry, {
+                sessionID: parent.id,
+                ...toolIdentity,
+                call: {
+                  type: "tool-call",
+                  id: `call-inherit-${agent}`,
+                  name: SubagentTool.name,
+                  input: { agent, description: "inherited model", prompt: "review" },
+                },
+              })
+              expect(result).toMatchObject({ status: "completed" })
+              const child = yield* sessions.get(outputSessionID(result.metadata))
+              expect(child.model).toEqual(
+                agent === "reviewer" ? { ...childModel, variant: Model.VariantID.make("default") } : overrideModel,
+              )
+            }
+            expect((yield* sessions.get(parent.id)).model).toBeUndefined()
+          }),
+        ),
+      ),
+  )
+
+  productionIt.live("keeps catalog-default children model-less and follows later default changes", () =>
     Effect.acquireRelease(
       Effect.promise(() => tmpdir()),
       (dir) => Effect.promise(() => dir[Symbol.asyncDispose]()),
@@ -218,8 +268,14 @@ describe("SubagentTool", () => {
             Bun.write(
               path.join(dir.path, "opencode.json"),
               JSON.stringify({
-                agents: { build: { model: "test/override#fast" } },
-                providers: { test: { package: "@opencode/ai/providers/openai/chat", settings: { apiKey: "test" } } },
+                model: "test/initial",
+                providers: {
+                  test: {
+                    package: "@opencode/ai/providers/openai/chat",
+                    settings: { apiKey: "test" },
+                    models: { initial: {}, later: {} },
+                  },
+                },
               }),
             ),
           )
@@ -229,24 +285,27 @@ describe("SubagentTool", () => {
             agent: Agent.ID.make("build"),
           })
           yield* withSubagent(parent.location)
-          expect(parent.model).toBeUndefined()
           const locations = yield* LocationServiceMap.Service
           const registry = yield* Tool.Service.pipe(Effect.provide(locations.get(parent.location)))
-          for (const agent of ["explore", "general"]) {
-            const result = yield* executeTool(registry, {
-              sessionID: parent.id,
-              ...toolIdentity,
-              call: {
-                type: "tool-call",
-                id: `call-inherit-${agent}`,
-                name: SubagentTool.name,
-                input: { agent, description: "inherited model", prompt: "review" },
-              },
-            })
-            expect(result).toMatchObject({ status: "completed" })
-            const child = yield* sessions.get(outputSessionID(result.metadata))
-            expect(child.model).toEqual(overrideModel)
-          }
+          const result = yield* executeTool(registry, {
+            sessionID: parent.id,
+            ...toolIdentity,
+            call: {
+              type: "tool-call",
+              id: "call-lazy-default",
+              name: SubagentTool.name,
+              input: { agent: "explore", description: "lazy default", prompt: "review" },
+            },
+          })
+          expect(result).toMatchObject({ status: "completed" })
+          const child = yield* sessions.get(outputSessionID(result.metadata))
+          expect(child.model).toBeUndefined()
+          const models = yield* Model.Service.pipe(Effect.provide(locations.get(parent.location)))
+          const runner = yield* SessionRunnerModel.Service.pipe(Effect.provide(locations.get(parent.location)))
+          expect((yield* runner.resolve(child, models.available)).ref.id).toBe(Model.ID.make("initial"))
+          yield* models.transform((editor) => editor.default.set(Provider.ID.make("test"), Model.ID.make("later")))
+          expect((yield* runner.resolve(child, models.available)).ref.id).toBe(Model.ID.make("later"))
+          expect((yield* sessions.get(child.id)).model).toBeUndefined()
           expect((yield* sessions.get(parent.id)).model).toBeUndefined()
         }),
       ),

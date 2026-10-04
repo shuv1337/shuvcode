@@ -218,8 +218,8 @@ JSON configuration also accepts the expanded form:
 }
 ```
 
-- A subagent uses its configured model, or inherits the model the parent session runs on when none is configured,
-  even when the parent has no selected model.
+- A subagent uses its configured model, or inherits the parent's selected model or its agent's configured model,
+  including the variant. When neither is set, the child keeps resolving the catalog default without storing a selection.
 - A session stores its selected model separately. Selecting a primary agent by ID does not change that model.
 - A session without a selected model runs on its primary agent's configured model, including the variant, before
   falling back to the catalog default. If that model is unavailable, the run fails with a model-resolution error.

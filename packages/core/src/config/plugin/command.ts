@@ -101,16 +101,18 @@ export const Plugin = define({
                 if (subagent ?? commandAgent?.mode === "subagent") {
                   const parent = yield* sessions.get(input.sessionID)
                   const selected = yield* agents.select(agent ?? parent.agent)
+                  const selectedModel = model ?? selected.info?.model ?? parent.model
+                  const parentAgent =
+                    selectedModel === undefined ? (yield* agents.select(parent.agent)).info : undefined
                   const child = yield* sessions.create({
                     parentID: parent.id,
                     title: command.description ?? name,
                     agent: selected.id,
                     model:
-                      model ??
-                      selected.info?.model ??
-                      parent.model ??
-                      (yield* runnerModels.resolve(parent, models.available, (yield* agents.select(parent.agent)).info))
-                        .ref,
+                      selectedModel ??
+                      (parentAgent?.model === undefined
+                        ? undefined
+                        : (yield* runnerModels.resolve(parent, models.available, parentAgent)).ref),
                   })
                   yield* sessions.prompt({
                     ...input.prompt,
