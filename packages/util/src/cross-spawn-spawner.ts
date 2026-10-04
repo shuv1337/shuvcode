@@ -14,12 +14,23 @@ import {
 } from "effect/unstable/process/ChildProcessSpawner"
 // ast-grep-ignore: no-star-import
 import * as NodeChildProcess from "node:child_process"
-import { PassThrough } from "node:stream"
+import { PassThrough, type Writable } from "node:stream"
 import launch from "cross-spawn"
 import { makeGlobalNode } from "./effect/app-node.js"
 import { filesystem, path } from "./effect/app-node-platform.js"
 
 const toError = (err: unknown): Error => (err instanceof globalThis.Error ? err : new globalThis.Error(String(err)))
+
+// NodeSink.fromWritable listens for "error" only until the write race settles, then calls end().
+// end() can emit EPIPE from finish/destroy after that listener is gone when the child closes
+// stdin before reading it. Hold a listener until close so the late error stays caught.
+const retainWritableError = (writable: Writable) => {
+  const onError = () => {}
+  writable.on("error", onError)
+  writable.once("close", () => {
+    writable.off("error", onError)
+  })
+}
 
 const toTag = (err: NodeJS.ErrnoException): PlatformError.SystemErrorTag => {
   switch (err.code) {
@@ -187,6 +198,7 @@ const makeCrossSpawnSpawner = Effect.gen(function* () {
         case "input": {
           let sink: Sink.Sink<void, Uint8Array, never, PlatformError.PlatformError> = Sink.drain
           if (node && "write" in node) {
+            retainWritableError(node)
             sink = NodeSink.fromWritable({
               evaluate: () => node,
               onError: (err) => toPlatformError(`fromWritable(fd${x.fd})`, toError(err), command),
@@ -229,6 +241,7 @@ const makeCrossSpawnSpawner = Effect.gen(function* () {
     Effect.suspend(() => {
       let sink: Sink.Sink<void, unknown, never, PlatformError.PlatformError> = Sink.drain
       if (Predicate.isNotNull(proc.stdin)) {
+        retainWritableError(proc.stdin)
         sink = NodeSink.fromWritable({
           evaluate: () => proc.stdin!,
           onError: (err) => toPlatformError("fromWritable(stdin)", toError(err), command),

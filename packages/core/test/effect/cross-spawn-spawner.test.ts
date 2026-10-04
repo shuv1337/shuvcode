@@ -252,6 +252,50 @@ describe("cross-spawn spawner", () => {
         expect(out).toBe("a b c")
       }),
     )
+
+    // Git exits before reading stdin when config is malformed. NodeSink drops its error
+    // listener before end(), so EPIPE used to escape as an uncaught exception while the
+    // exit code stayed 128. One hundred runs makes that race visible.
+    fx.live(
+      "does not emit uncaught EPIPE when git exits before reading stdin",
+      Effect.gen(function* () {
+        const tmp = yield* Effect.acquireRelease(
+          Effect.promise(() => tmpdir()),
+          (dir) => Effect.promise(() => dir[Symbol.asyncDispose]()),
+        )
+        const init = yield* ChildProcess.make("git", ["init"], { cwd: tmp.path })
+        expect(yield* init.exitCode).toBe(ChildProcessSpawner.ExitCode(0))
+        yield* Effect.promise(() => fs.writeFile(path.join(tmp.path, ".git", "config"), "[broken\n"))
+        const uncaught: string[] = []
+        const onUncaught = (err: NodeJS.ErrnoException) => {
+          if (err.code === "EPIPE") uncaught.push(err.code)
+        }
+        process.on("uncaughtException", onUncaught)
+        yield* Effect.addFinalizer(() => Effect.sync(() => process.off("uncaughtException", onUncaught)))
+        const gitDir = path.join(tmp.path, ".git")
+        yield* Effect.forEach(
+          Array.from({ length: 100 }),
+          () =>
+            Effect.scoped(
+              Effect.gen(function* () {
+                const handle = yield* ChildProcess.make(
+                  "git",
+                  ["--git-dir", gitDir, "--work-tree", tmp.path, "check-ignore", "--no-index", "--stdin", "-z"],
+                  { cwd: tmp.path, stdin: Stream.make(Buffer.from("scope/allowed.txt\0scope/ignored name.txt\0")) },
+                )
+                const [code, stderr] = yield* Effect.all([handle.exitCode, decodeByteStream(handle.stderr)], {
+                  concurrency: "unbounded",
+                })
+                expect(code).toBe(ChildProcessSpawner.ExitCode(128))
+                expect(stderr).toContain("bad config line")
+              }),
+            ),
+          { discard: true },
+        )
+        yield* Effect.promise(() => new Promise((resolve) => setTimeout(resolve, 50)))
+        expect(uncaught).toEqual([])
+      }),
+    )
   })
 
   describe("process control", () => {
