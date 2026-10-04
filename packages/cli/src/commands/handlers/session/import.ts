@@ -25,10 +25,7 @@ export default Runtime.handler(
     })
     const data = yield* Schema.decodeUnknownEffect(Schema.fromJsonString(SessionTransfer.Data))(text)
     const encoded = Schema.encodeSync(SessionTransfer.Data)(data)
-    const server = yield* ServerConnection.resolve({
-      server: Option.getOrUndefined(input.server),
-      standalone: input.standalone,
-    })
+    const server = yield* ServerConnection.resolve()
     const client = OpenCode.make({
       baseUrl: server.endpoint.url,
       headers: Service.headers(server.endpoint),

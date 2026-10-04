@@ -12,17 +12,6 @@ export const PrintLogs = GlobalFlag.setting("print-logs")({
 
 declare const OPENCODE_CLI_NAME: string | undefined
 
-const ServerParams = {
-  standalone: Flag.boolean("standalone").pipe(
-    Flag.withDescription("Run with a private server instead of the background service"),
-    Flag.withDefault(false),
-  ),
-  server: Flag.string("server").pipe(
-    Flag.withDescription("Connect to a server URL instead of the background service"),
-    Flag.optional,
-  ),
-}
-
 const PermissionParams = {
   auto: Flag.boolean("auto").pipe(
     Flag.withDescription("Auto-approve permissions that are not explicitly denied"),
@@ -38,7 +27,6 @@ const PermissionParams = {
 const Root = Spec.make(typeof OPENCODE_CLI_NAME === "string" ? OPENCODE_CLI_NAME : "shuvcode", {
   description: "Shuvcode command line interface",
   params: {
-    ...ServerParams,
     ...PermissionParams,
     directory: Argument.string("directory").pipe(
       Argument.withDescription("Directory to start Shuvcode in"),
@@ -100,7 +88,6 @@ const Root = Spec.make(typeof OPENCODE_CLI_NAME === "string" ? OPENCODE_CLI_NAME
     Spec.make("api", {
       description: "Make a request to the running server",
       params: {
-        ...ServerParams,
         request: Argument.string("operation | method path").pipe(
           Argument.withDescription("OpenAPI operation ID, or an HTTP method followed by a path"),
           Argument.variadic({ min: 1, max: 2 }),
@@ -147,7 +134,6 @@ const Root = Spec.make(typeof OPENCODE_CLI_NAME === "string" ? OPENCODE_CLI_NAME
         Spec.make("list", {
           description: "list integrations and credentials",
           params: {
-            ...ServerParams,
             format: Flag.choice("format", ["default", "json"]).pipe(
               Flag.withDescription("Output format"),
               Flag.withDefault("default"),
@@ -157,7 +143,6 @@ const Root = Spec.make(typeof OPENCODE_CLI_NAME === "string" ? OPENCODE_CLI_NAME
         Spec.make("login", {
           description: "connect an integration",
           params: {
-            ...ServerParams,
             target: Argument.string("target").pipe(
               Argument.withDescription("Integration ID, name, or well-known provider URL"),
               Argument.optional,
@@ -172,7 +157,6 @@ const Root = Spec.make(typeof OPENCODE_CLI_NAME === "string" ? OPENCODE_CLI_NAME
         Spec.make("logout", {
           description: "log out of a saved account",
           params: {
-            ...ServerParams,
             target: Argument.string("target").pipe(
               Argument.withDescription("Integration ID or name"),
               Argument.optional,
@@ -186,7 +170,6 @@ const Root = Spec.make(typeof OPENCODE_CLI_NAME === "string" ? OPENCODE_CLI_NAME
         Spec.make("export", {
           description: "print stored credentials, including secrets, as JSON",
           params: {
-            ...ServerParams,
             target: Argument.string("target").pipe(
               Argument.withDescription("Integration ID or name (exports every integration when omitted)"),
               Argument.optional,
@@ -196,7 +179,6 @@ const Root = Spec.make(typeof OPENCODE_CLI_NAME === "string" ? OPENCODE_CLI_NAME
         Spec.make("import", {
           description: "import credentials exported by auth export",
           params: {
-            ...ServerParams,
             file: Argument.string("file").pipe(
               Argument.withDescription("JSON file to import (reads stdin when omitted)"),
               Argument.optional,
@@ -206,7 +188,6 @@ const Root = Spec.make(typeof OPENCODE_CLI_NAME === "string" ? OPENCODE_CLI_NAME
         Spec.make("switch", {
           description: "switch the active account for an integration",
           params: {
-            ...ServerParams,
             target: Argument.string("target").pipe(
               Argument.withDescription("Integration ID or name"),
               Argument.optional,
@@ -304,12 +285,10 @@ const Root = Spec.make(typeof OPENCODE_CLI_NAME === "string" ? OPENCODE_CLI_NAME
     }),
     Spec.make("models", {
       description: "List all available models",
-      params: ServerParams,
     }),
     Spec.make("stats", {
       description: "Show shareable usage statistics",
       params: {
-        ...ServerParams,
         days: Flag.integer("days").pipe(
           Flag.withSchema(Schema.Int.check(Schema.isGreaterThanOrEqualTo(0))),
           Flag.withDescription("Show the last N days; 0 means today"),
@@ -340,7 +319,6 @@ const Root = Spec.make(typeof OPENCODE_CLI_NAME === "string" ? OPENCODE_CLI_NAME
     Spec.make("mini", {
       description: "Start the minimal interactive interface",
       params: {
-        ...ServerParams,
         continue: Flag.boolean("continue").pipe(
           Flag.withAlias("c"),
           Flag.withDescription("Continue the last session"),
@@ -376,7 +354,6 @@ const Root = Spec.make(typeof OPENCODE_CLI_NAME === "string" ? OPENCODE_CLI_NAME
     Spec.make("run", {
       description: "Run Shuvcode with a message",
       params: {
-        ...ServerParams,
         message: Argument.string("message").pipe(
           Argument.withDescription("Message to send"),
           Argument.variadic({ min: 0 }),
@@ -421,7 +398,6 @@ const Root = Spec.make(typeof OPENCODE_CLI_NAME === "string" ? OPENCODE_CLI_NAME
         Spec.make("list", {
           description: "List top-level sessions in the current project, newest first",
           params: {
-            ...ServerParams,
             maxCount: Flag.integer("max-count").pipe(
               Flag.withAlias("n"),
               Flag.withSchema(Schema.Int.check(Schema.isGreaterThanOrEqualTo(1))),
@@ -437,14 +413,12 @@ const Root = Spec.make(typeof OPENCODE_CLI_NAME === "string" ? OPENCODE_CLI_NAME
         Spec.make("delete", {
           description: "Delete a session and its child sessions",
           params: {
-            ...ServerParams,
             sessionID: Argument.string("sessionID").pipe(Argument.withDescription("Session ID to delete")),
           },
         }),
         Spec.make("export", {
           description: "Export session data as JSON",
           params: {
-            ...ServerParams,
             session: Argument.string("session").pipe(
               Argument.withDescription("Session ID to export"),
               Argument.optional,
@@ -458,7 +432,6 @@ const Root = Spec.make(typeof OPENCODE_CLI_NAME === "string" ? OPENCODE_CLI_NAME
         Spec.make("import", {
           description: "Import session data from a JSON file or URL",
           params: {
-            ...ServerParams,
             file: Argument.string("file").pipe(Argument.withDescription("JSON file or URL to import")),
             directory: Flag.string("directory").pipe(
               Flag.withDescription("Directory in which to import the session"),
@@ -512,9 +485,6 @@ const Root = Spec.make(typeof OPENCODE_CLI_NAME === "string" ? OPENCODE_CLI_NAME
     }),
     Spec.make("reload", {
       description: "Reload configuration",
-      params: {
-        ...ServerParams,
-      },
     }),
     Spec.make("pair", {
       description: "Print one-time links to connect a browser or app",
