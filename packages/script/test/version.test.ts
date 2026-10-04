@@ -1,5 +1,9 @@
 import { describe, expect, test } from "bun:test"
-import { nextForkVersion, parseForkVersion, resolveChannel } from "../src/version.js"
+import { $ } from "bun"
+import fs from "fs/promises"
+import os from "os"
+import path from "path"
+import { detachedBranches, nextForkVersion, parseForkVersion, resolveChannel } from "../src/version.js"
 
 describe("resolveChannel", () => {
   test("prefers an explicit channel without reading git", async () => {
@@ -22,8 +26,14 @@ describe("resolveChannel", () => {
       await resolveChannel({ branch: async () => "", detachedBranches: async () => ["integration-v2"] }),
     ).toBe("integration-v2")
     expect(
-      await resolveChannel({ branch: async () => "", detachedBranches: async () => ["zeta", " alpha ", ""] }),
-    ).toBe("alpha")
+      await resolveChannel({ branch: async () => "", detachedBranches: async () => [" integration-v2 ", ""] }),
+    ).toBe("integration-v2")
+  })
+
+  test("fails with the candidates when several branches or bookmarks point at the working copy", async () => {
+    await expect(
+      resolveChannel({ branch: async () => "", detachedBranches: async () => ["zeta", " alpha ", ""] }),
+    ).rejects.toThrow("(zeta, alpha). Set OPENCODE_CHANNEL")
   })
 
   test("resolves a detached GitHub Actions checkout from the workflow ref", async () => {
@@ -55,6 +65,42 @@ describe("resolveChannel", () => {
         detachedBranches: async () => [],
       }),
     ).rejects.toThrow("OPENCODE_CHANNEL")
+  })
+})
+
+describe.skipIf(!Bun.which("jj"))("detachedBranches", () => {
+  const repo = async () => {
+    const dir = await fs.mkdtemp(path.join(os.tmpdir(), "script-channel-"))
+    const jj = (args: string[]) =>
+      $`jj --config user.name=test --config user.email=test@example.com ${args}`.cwd(dir).quiet()
+    await jj(["git", "init", "--colocate"])
+    await jj(["commit", "-m", "base"])
+    await jj(["bookmark", "create", "integration-v2", "-r", "@-"])
+    return { dir, jj }
+  }
+
+  test("reads the working-copy parent bookmark in a jj-colocated checkout", async () => {
+    const { dir } = await repo()
+    expect((await $`git branch --show-current`.cwd(dir).quiet().text()).trim()).toBe("")
+    expect(await resolveChannel({ branch: async () => "", detachedBranches: () => detachedBranches(dir) })).toBe(
+      "integration-v2",
+    )
+  })
+
+  test("prefers a bookmark on the working copy over its parent", async () => {
+    const { dir, jj } = await repo()
+    await jj(["bookmark", "create", "fix-x", "-r", "@"])
+    expect(await resolveChannel({ branch: async () => "", detachedBranches: () => detachedBranches(dir) })).toBe(
+      "fix-x",
+    )
+  })
+
+  test("rejects several bookmarks at the chosen revision", async () => {
+    const { dir, jj } = await repo()
+    await jj(["bookmark", "create", "feature", "-r", "@-"])
+    await expect(
+      resolveChannel({ branch: async () => "", detachedBranches: () => detachedBranches(dir) }),
+    ).rejects.toThrow("(feature, integration-v2). Set OPENCODE_CHANNEL")
   })
 })
 

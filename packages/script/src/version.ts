@@ -1,3 +1,4 @@
+import { $ } from "bun"
 import semver from "semver"
 
 // Fork releases are always `<upstream base>-shuv.<n>`: a fork-only fix (`-shuv.2`)
@@ -21,17 +22,39 @@ export async function resolveChannel(input: {
   // GitHub Actions checks out PRs at a detached merge commit that no local branch points at.
   if (input.github?.headRef?.trim()) return input.github.headRef.trim()
   if (input.github?.refType === "branch" && input.github.refName?.trim()) return input.github.refName.trim()
-  // jj-colocated and other detached-HEAD checkouts have no current branch. When several
-  // branches or bookmarks point at the commit, pick the lexicographically first one so the
-  // channel is deterministic; set OPENCODE_CHANNEL to choose explicitly.
+  // jj-colocated and other detached-HEAD checkouts have no current branch. A single branch or
+  // bookmark at the working copy names the channel; several are ambiguous, so require OPENCODE_CHANNEL.
   const candidates = (await (input.detachedBranches?.() ?? Promise.resolve([])).catch(() => []))
     .map((name) => name.trim())
     .filter((name) => name.length > 0)
-    .toSorted()
-  if (candidates[0]) return candidates[0]
+  if (candidates.length === 1) return candidates[0]
+  if (candidates.length > 1)
+    throw new Error(
+      `Could not determine the build channel: several branches or jj bookmarks point at the working copy (${candidates.join(", ")}). Set OPENCODE_CHANNEL to one of them.`,
+    )
   throw new Error(
     "Could not determine the build channel: no current git branch and no branch or jj bookmark points at the working copy. Set OPENCODE_CHANNEL (for example OPENCODE_CHANNEL=integration-v2).",
   )
+}
+
+/** Local jj bookmarks on `@`, else on `@-`, else git branches at a detached HEAD. */
+export async function detachedBranches(cwd: string) {
+  const bookmarks = async (revision: string) => {
+    const jj =
+      await $`jj log --no-graph --ignore-working-copy -r ${revision} -T 'local_bookmarks.map(|b| b.name()).join("\n")'`
+        .cwd(cwd)
+        .quiet()
+        .nothrow()
+    return jj.exitCode === 0 ? jj.text().split("\n").filter(Boolean) : []
+  }
+  // jj keeps git at a detached HEAD on the working-copy parent, so `@` may carry a newer bookmark.
+  const current = await bookmarks("@")
+  if (current.length) return current
+  const parent = await bookmarks("@-")
+  if (parent.length) return parent
+  return (await $`git branch --points-at HEAD --format='%(refname:short)'`.cwd(cwd).quiet().nothrow().text())
+    .split("\n")
+    .filter((name) => name && !name.startsWith("("))
 }
 
 /** The `<base>` and `<n>` of a `<base>-shuv.<n>` version, or undefined for anything else. */
