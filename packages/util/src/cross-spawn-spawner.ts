@@ -232,7 +232,8 @@ const makeCrossSpawnSpawner = Effect.gen(function* () {
         // A child may exit before reading all of stdin. Its exit code reports that outcome, while the
         // EPIPE from the final flush can arrive after the sink detaches and would otherwise be uncaught.
         proc.stdin.on("error", (error: NodeJS.ErrnoException) => {
-          if (error.code !== "EPIPE") throw error
+          if (error.code === "EPIPE" || proc.stdin!.listenerCount("error") > 1) return
+          throw error
         })
         sink = NodeSink.fromWritable({
           evaluate: () => proc.stdin!,
