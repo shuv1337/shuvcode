@@ -206,7 +206,9 @@ export function Session(props: {
     return familyForms().concat(global)
   })
   const parentWaiting = createMemo(
-    () => !!session()?.parentID && (familyPermissions().length > 0 || familyForms().length > 0),
+    () =>
+      !!session()?.parentID &&
+      ((local.permission.mode !== "autoaccept" && familyPermissions().length > 0) || familyForms().length > 0),
   )
   const pendingUsers = createMemo(() =>
     data.session.pending.list(route.sessionID).flatMap((item) => (item.type === "user" ? [item] : [])),
@@ -1469,14 +1471,8 @@ export function Session(props: {
               </Show>
               <Slot path="session.composer.top" input={{ sessionID: route.sessionID }} />
               <Show when={parentWaiting()}>
-                <box flexDirection="row" gap={2} paddingLeft={2} flexShrink={0}>
+                <box paddingLeft={2} flexShrink={0}>
                   <text fg={theme.text.feedback.warning.base}>Parent is waiting for you</text>
-                  <text
-                    fg={theme.text.action.secondary.base}
-                    onMouseUp={() => navigate({ type: "session", sessionID: rootSessionID() })}
-                  >
-                    Open parent
-                  </text>
                 </box>
               </Show>
               <Composer
