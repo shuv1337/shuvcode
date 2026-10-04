@@ -297,10 +297,9 @@ describe("AppProcess", () => {
         const svc = yield* AppProcess.Service
         // The child closes stdin before input arrives, so the write lands on a closed pipe.
         const late = Stream.fromEffect(Effect.as(Effect.sleep("100 millis"), new TextEncoder().encode("late\n")))
-        const result = yield* svc.run(
-          cmd("-e", "require('fs').closeSync(0); setTimeout(() => process.exit(3), 300)"),
-          { stdin: late },
-        )
+        const result = yield* svc.run(cmd("-e", "require('fs').closeSync(0); setTimeout(() => process.exit(3), 300)"), {
+          stdin: late,
+        })
         expect(result.exitCode).toBe(3)
       }),
     )
