@@ -10,6 +10,7 @@ export async function resolveChannel(input: {
   readonly bump?: string
   readonly version?: string
   readonly branch: () => Promise<string>
+  readonly github?: { readonly headRef?: string; readonly refName?: string; readonly refType?: string }
   readonly detachedBranches?: () => Promise<readonly string[]>
 }) {
   if (input.channel?.trim()) return input.channel.trim()
@@ -17,6 +18,9 @@ export async function resolveChannel(input: {
   if (input.version && !input.version.startsWith("0.0.0-")) return "latest"
   const branch = (await input.branch().catch(() => "")).trim()
   if (branch) return branch
+  // GitHub Actions checks out PRs at a detached merge commit that no local branch points at.
+  if (input.github?.headRef?.trim()) return input.github.headRef.trim()
+  if (input.github?.refType === "branch" && input.github.refName?.trim()) return input.github.refName.trim()
   // jj-colocated and other detached-HEAD checkouts have no current branch. When several
   // branches or bookmarks point at the commit, pick the lexicographically first one so the
   // channel is deterministic; set OPENCODE_CHANNEL to choose explicitly.

@@ -26,6 +26,27 @@ describe("resolveChannel", () => {
     ).toBe("alpha")
   })
 
+  test("resolves a detached GitHub Actions checkout from the workflow ref", async () => {
+    const none = async () => []
+    expect(
+      await resolveChannel({
+        branch: async () => "",
+        github: { headRef: "fix-channel", refName: "12/merge", refType: "branch" },
+        detachedBranches: none,
+      }),
+    ).toBe("fix-channel")
+    expect(
+      await resolveChannel({
+        branch: async () => "",
+        github: { headRef: "", refName: "integration-v2", refType: "branch" },
+        detachedBranches: none,
+      }),
+    ).toBe("integration-v2")
+    await expect(
+      resolveChannel({ branch: async () => "", github: { refName: "v1.0.0", refType: "tag" }, detachedBranches: none }),
+    ).rejects.toThrow("OPENCODE_CHANNEL")
+  })
+
   test("fails instead of producing an empty channel", async () => {
     await expect(resolveChannel({ branch: async () => "" })).rejects.toThrow("OPENCODE_CHANNEL")
     await expect(
