@@ -224,7 +224,9 @@ Each was a failed fork release; none depend on `nextForkVersion`.
 - Artifact download drops executable bits → EACCES (`bf9dfafa5d5d`, `binary-modes.ts`).
 - Draft release not visible immediately after create (`986b8896c977`, 5×1s retry).
 - Asset name set mismatch until sorted after extension (`f7feecfb5f16`).
-- Detached HEAD yields empty channel (`c9813e253b3d`, `resolveChannel` → `"local"`).
+- Detached HEAD yields empty channel (`c9813e253b3d`; `resolveChannel` now
+  falls back to GitHub refs, then a single jj bookmark or git branch at the
+  working copy, and otherwise throws asking for `OPENCODE_CHANNEL`).
 - `notify-discord` must be `workflow_call`; `on: release` never fires for
   `GITHUB_TOKEN` publishes (`172ea305893c`).
 - Upstream: **unverified** — the rewrite's publish workflow is new; re-hit

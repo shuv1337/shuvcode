@@ -1,7 +1,7 @@
 import { $ } from "bun"
 import semver from "semver"
 import path from "path"
-import { nextForkVersion, parseForkVersion, resolveChannel } from "./version.js"
+import { detachedBranches, nextForkVersion, parseForkVersion, resolveChannel } from "./version.js"
 
 const rootPkgPath = path.resolve(import.meta.dir, "../../../package.json")
 const rootPkg = await Bun.file(rootPkgPath).json()
@@ -29,6 +29,12 @@ const CHANNEL = await resolveChannel({
   bump: env.OPENCODE_BUMP,
   version: env.OPENCODE_VERSION,
   branch: () => $`git branch --show-current`.quiet().nothrow().text(),
+  github: {
+    headRef: process.env["GITHUB_HEAD_REF"],
+    refName: process.env["GITHUB_REF_NAME"],
+    refType: process.env["GITHUB_REF_TYPE"],
+  },
+  detachedBranches: () => detachedBranches(process.cwd()),
 })
 const IS_PREVIEW = CHANNEL !== "latest"
 
