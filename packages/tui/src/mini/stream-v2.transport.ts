@@ -1342,7 +1342,7 @@ export async function createSessionTransport(input: StreamInput): Promise<Sessio
       syncBlockers()
       return
     }
-    if (event.type === "permission.replied") {
+    if (event.type === "permission.replied" || event.type === "permission.cancelled") {
       state.permissions = state.permissions.filter((item) => item.id !== event.data.requestID)
       pruneToolSources()
       syncBlockers()
