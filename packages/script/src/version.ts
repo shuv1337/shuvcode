@@ -41,7 +41,7 @@ export async function resolveChannel(input: {
 export async function detachedBranches(cwd: string) {
   const bookmarks = async (revision: string) => {
     const jj =
-      await $`jj log --no-graph --ignore-working-copy -r ${revision} -T 'local_bookmarks.map(|b| b.name()).join("\n")'`
+      await $`jj log --no-graph --ignore-working-copy -r ${revision} -T 'local_bookmarks.map(|b| b.name() ++ "\n").join("")'`
         .cwd(cwd)
         .quiet()
         .nothrow()
