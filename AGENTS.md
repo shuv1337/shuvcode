@@ -27,6 +27,11 @@ identity facts when merging or refactoring:
   (`packages/cli/script/publish.ts`); OpenCode infra trees (`packages/console`,
   `packages/web`, `services/*`, enterprise, stats, desktop) stay in the repo but
   are outside fork CI and publish.
+- Host deploys from a jj merge or other detached working copy must set
+  `OPENCODE_CHANNEL=integration-v2` before `bun run --cwd packages/cli build`.
+  `git branch --show-current` is empty there, and a merge working copy has no
+  single bookmark, so an inferred channel is either ambiguous or empty. An
+  empty channel selects `opencode-.db` and `service-.json`.
 
 ## Live V2 TUI Testing
 
