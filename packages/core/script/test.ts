@@ -3,6 +3,7 @@ import path from "path"
 import { nodeBinDirectory, prependNodeBin } from "./node-bin"
 import { tmpdir } from "../test/fixture/tmpdir"
 
+// Resolve node before the child env below replaces HOME and XDG_STATE_HOME.
 const nodeBin = await nodeBinDirectory(process.env)
 
 await using directory = await tmpdir("oc-")
