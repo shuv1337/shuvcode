@@ -307,18 +307,24 @@ export const SessionHandler = HttpApiBuilder.group(Api, "server.session", (handl
         "session.prompt",
         Effect.fn(function* (ctx) {
           // The payload schema preserves unknown keys so they fail here instead
-          // of being silently dropped. `sessionID` repeats the path parameter.
-          const unknown = Object.keys(ctx.payload).filter(
-            (key) => !Object.hasOwn(SessionPromptPayload.fields, key) && key !== "sessionID",
-          )
+          // of being silently dropped. `sessionID` may repeat the path parameter.
+          const unknown = Object.entries(ctx.payload)
+            .filter(
+              ([key, value]) =>
+                !Object.hasOwn(SessionPromptPayload.fields, key) &&
+                !(key === "sessionID" && value === ctx.params.sessionID),
+            )
+            .map(([key]) => key)
           if (unknown.length > 0)
             return yield* new InvalidRequestError({
               message: unknown
-                .map((key) =>
-                  key === "model"
-                    ? `Unknown key at ["model"]: prompts do not select a model; use session.switchModel or pass model when creating the session`
-                    : `Unknown key at ${JSON.stringify([key])}`,
-                )
+                .map((key) => {
+                  if (key === "model")
+                    return `Unknown key at ["model"]: prompts do not select a model; use session.switchModel or pass model when creating the session`
+                  if (key === "sessionID")
+                    return `Mismatched key at ["sessionID"]: body sessionID must match the path session ${ctx.params.sessionID}`
+                  return `Unknown key at ${JSON.stringify([key])}`
+                })
                 .join("\n"),
               kind: "Payload",
               field: unknown[0],
