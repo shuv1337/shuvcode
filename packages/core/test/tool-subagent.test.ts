@@ -22,7 +22,6 @@ import { Job } from "@opencode/core/job"
 import { KV } from "@opencode/core/kv"
 import { LocationServiceMap } from "@opencode/core/location-service-map"
 import { Session } from "@opencode/core/session"
-import { SessionContext } from "@opencode/core/session/context"
 import { SessionEvent } from "@opencode/core/session/event"
 import { SessionExecution } from "@opencode/core/session/execution"
 import { SessionRestart } from "@opencode/core/session/execution/restart"
@@ -126,7 +125,7 @@ const subagentPluginSupervisor = makeLocationNode({
     Model.node,
     Permission.node,
     Session.node,
-    SessionContext.node,
+    SessionRunnerModel.node,
     Job.node,
     Tool.node,
     PluginHooks.node,

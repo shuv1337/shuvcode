@@ -22,7 +22,7 @@ import { Plugin } from "@opencode/core/plugin"
 import { PluginHooks } from "@opencode/core/plugin/hooks"
 import { Provider } from "@opencode/core/provider"
 import { Session } from "@opencode/core/session"
-import { SessionContext } from "@opencode/core/session/context"
+import { SessionRunnerModel } from "@opencode/core/session/runner/model"
 import { PersistentPty } from "@opencode/core/persistent-pty"
 import { LocationServiceMap } from "@opencode/core/location-service-map"
 import { AppNodeBuilder } from "@opencode/core/effect/app-node-builder"
@@ -90,7 +90,7 @@ export const PluginTestLayer = AppNodeBuilder.build(
     ManagedPolicy.node,
     Mcp.node,
     Session.node,
-    SessionContext.node,
+    SessionRunnerModel.node,
     PersistentPty.node,
     LocationServiceMap.node,
     Permission.node,
