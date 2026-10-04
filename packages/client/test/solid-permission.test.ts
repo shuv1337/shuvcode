@@ -1,4 +1,4 @@
-import { expect, test } from "bun:test"
+import { expect, setSystemTime, test } from "bun:test"
 import { createRoot } from "solid-js"
 import { createData, type CreateDataInput } from "../src/solid"
 import { OpenCode, type OpenCodeEvent, type PermissionRequest, type SessionInfo } from "../src/promise"
@@ -114,6 +114,45 @@ test("root loads missing ancestors and merges the orphan family", async () => {
   }
 })
 
+test("root backs off failed ancestor loads and reports one error for concurrent callers", async () => {
+  const release = Promise.withResolvers<void>()
+  const errors: unknown[] = []
+  const reads: string[] = []
+  const client = fixture(
+    async (url) => {
+      reads.push(url.pathname)
+      await release.promise
+      return Response.json({ error: "ancestor unavailable" }, { status: 500 })
+    },
+    (error) => errors.push(error),
+  )
+  setSystemTime(new Date("2026-10-04T20:00:00Z"))
+  try {
+    client.data.session.remember(info("ses_child", "ses_parent"))
+    for (let index = 0; index < 5; index++) expect(client.data.session.root("ses_child")).toBe("ses_parent")
+    release.resolve()
+    await wait(() => errors.length > 0)
+    expect(errors).toHaveLength(1)
+    for (let index = 0; index < 5; index++) {
+      client.data.session.remember({ ...info("ses_child", "ses_parent"), cost: index })
+      client.data.session.list().forEach((session) => client.data.session.root(session.id))
+    }
+    expect(reads).toEqual(["/api/session/ses_parent"])
+    setSystemTime(new Date("2026-10-04T20:01:00Z"))
+    client.data.session.root("ses_child")
+    await wait(() => errors.length === 2)
+    expect(reads).toEqual(["/api/session/ses_parent", "/api/session/ses_parent"])
+    client.data.session.remember(info("ses_parent", "ses_root"))
+    expect(client.data.session.root("ses_child")).toBe("ses_root")
+    await wait(() => errors.length === 3)
+    expect(reads.at(-1)).toBe("/api/session/ses_root")
+  } finally {
+    setSystemTime()
+    release.resolve()
+    client.dispose()
+  }
+})
+
 test("root does not load an unknown session", async () => {
   const reads: string[] = []
   const client = fixture(async (url) => {
@@ -141,7 +180,10 @@ function info(id: string, parentID?: string): SessionInfo {
   }
 }
 
-function fixture(read: (url: URL) => Promise<Response> = async () => Response.json({ data: [] })) {
+function fixture(
+  read: (url: URL) => Promise<Response> = async () => Response.json({ data: [] }),
+  onError?: CreateDataInput["onError"],
+) {
   const listeners = new Set<Parameters<CreateDataInput["event"]["listen"]>[0]>()
   const api = OpenCode.make({
     baseUrl: "http://opencode.local",
@@ -152,6 +194,7 @@ function fixture(read: (url: URL) => Promise<Response> = async () => Response.js
     data: createData({
       api: () => api,
       directory: "/project",
+      onError,
       event: {
         on: () => () => {},
         listen(handler) {

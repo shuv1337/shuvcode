@@ -254,6 +254,7 @@ export function createData(config: CreateDataInput) {
   let activeUpdates: Map<string, DataSessionStatus | undefined> | undefined
   const pendingUpdates = new Map<string, Map<string, SessionInboxInfo | SessionInbox.Delivery | undefined>>()
   const permissionUpdates = new Map<string, Map<string, PermissionRequest | undefined>>()
+  const ancestorLoads = new Map<string, number>()
 
   function setSessionActive(sessionID: string, status: DataSessionStatus) {
     activeUpdates?.set(sessionID, status)
@@ -1363,12 +1364,21 @@ export function createData(config: CreateDataInput) {
       root(sessionID: string): string {
         const root = resolveRoot(sessionID)
         // A child-only startup may need several ancestor reads to reach the actual root.
-        if (root !== sessionID && !store.session.info[root])
-          refresh(() =>
-            result.session.sync(root).then(() => {
-              result.session.root(sessionID)
-            }),
-          )
+        if (root !== sessionID && !store.session.info[root] && (ancestorLoads.get(root) ?? 0) <= Date.now())
+          refresh(() => {
+            // One observer owns the refresh/error report. Usage updates must not retry a failed ancestor.
+            ancestorLoads.set(root, Infinity)
+            return result.session.sync(root).then(
+              () => {
+                ancestorLoads.delete(root)
+                result.session.root(sessionID)
+              },
+              (error) => {
+                ancestorLoads.set(root, Date.now() + 30_000)
+                throw error
+              },
+            )
+          })
         return root
       },
       family(sessionID: string) {
@@ -1624,6 +1634,7 @@ export function createData(config: CreateDataInput) {
         })
       },
       invalidate(sessionID: string) {
+        ancestorLoads.delete(sessionID)
         sync.invalidate(`session:${sessionID}`)
       },
       message: {
@@ -1955,6 +1966,7 @@ export function createData(config: CreateDataInput) {
   createEffect(() => {
     if (config.connection?.status() === "connected") return
     sync.invalidate()
+    ancestorLoads.clear()
   })
 
   onCleanup(
