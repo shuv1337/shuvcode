@@ -122,3 +122,58 @@ test.each([
     await task.finally(() => server.stop(true))
   }
 })
+
+test("a missing parent is read once while viewing its child", async () => {
+  await using state = await tmpdir()
+  const setup = await createTestRenderer({ width: 100, height: 30, useThread: false, kittyKeyboard: true })
+  setup.renderer.start()
+  const child = {
+    id: "ses_child",
+    title: "Child session",
+    parentID: "ses_parent",
+    projectID: "project",
+    location: { directory },
+    cost: 0,
+    tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
+    time: { created: 0, updated: 0 },
+  }
+  const parentReads: string[] = []
+  const events = createEventStream()
+  const calls = createFetch(async (url) => {
+    if (url.pathname === "/api/session/ses_parent" || url.searchParams.get("parentID") === "ses_parent") {
+      parentReads.push(url.pathname + url.search)
+      return json({ name: "NotFoundError", data: { message: "Session not found" } }, { status: 404 })
+    }
+    if (url.pathname === "/api/session") return json({ data: [], cursor: {} })
+    if (url.pathname === `/api/session/${child.id}`) return json({ data: child })
+    if (/\/permission$/.test(url.pathname) || /\/inbox$/.test(url.pathname)) return json({ data: [] })
+    if (/\/message$/.test(url.pathname))
+      return json({
+        data: [{ id: "msg_child", type: "user", text: "Child transcript", time: { created: 0 } }],
+        cursor: {},
+      })
+    return undefined
+  }, events)
+  const server = Bun.serve({ port: 0, idleTimeout: 0, fetch: (request) => calls.fetch(request) })
+  const { run } = await import("../src/app")
+  const task = Effect.runPromise(
+    run({
+      app: { name: "test", version: "test", channel: "test" },
+      server: { endpoint: { url: server.url.toString() } },
+      config: { get: async () => ({ animations: false, tabs: { mode: "off" } }), update: async () => ({}) },
+      packages: { prepare: async () => ({ directory: "" }) },
+      terminalHandoff: async () => ({ renderer: setup.renderer, mode: "dark", complete: () => {} }),
+      args: { sessionID: child.id, auto: true },
+      log: () => {},
+    }).pipe(Effect.provide(Global.layerWith({ state: state.path })), Effect.provide(FileSystem.layerNoop({}))),
+  )
+  try {
+    await setup.waitForFrame((frame) => frame.includes("Child transcript"))
+    await setup.waitFor(() => parentReads.length > 0)
+    await Bun.sleep(300)
+    expect(parentReads).toEqual(["/api/session/ses_parent"])
+  } finally {
+    if (!setup.renderer.isDestroyed) setup.renderer.destroy()
+    await task.finally(() => server.stop(true))
+  }
+})
