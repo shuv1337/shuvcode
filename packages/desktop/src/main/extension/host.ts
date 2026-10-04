@@ -128,6 +128,7 @@ export function createHost(input: {
   const manager = createManager(
     input.db,
     (id) => id.startsWith("opencode") || definitions.some((definition) => definition.id === id),
+    definitions,
   )
 
   const embeds = createEmbeds()

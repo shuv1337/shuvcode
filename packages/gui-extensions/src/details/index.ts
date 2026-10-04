@@ -7,6 +7,7 @@ const Prefs = Schema.Struct({ projectExpanded: Schema.Boolean, serverExpanded: S
 
 export default Extension.define({
   id: "details",
+  legacy: ["summary"],
   uses: { changes: Changes },
   stores: {
     // Stored under the extension's earlier id `summary`, and before extensions in the app settings.

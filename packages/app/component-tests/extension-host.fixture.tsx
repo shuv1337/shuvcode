@@ -34,6 +34,8 @@ import { Persist, persisted } from "@/runtime/persistence/storage"
 import { ServerScope } from "@/runtime/server/scope"
 import { ExtensionHostProvider, useExtensionHost, type HostApiFactories } from "../src/runtime/extension/host"
 import { createHostApis } from "../src/runtime/extension/host-apis"
+import { createInstalled } from "../src/runtime/extension/installed"
+import { extensionEnabled } from "@opencode/gui-extensions/sdk/bridge"
 import { createRegion, RegionContent } from "../src/runtime/extension/panels"
 import { ExtensionSlot } from "../src/runtime/extension/render"
 import { persistedHandle } from "../src/runtime/extension/stores"
@@ -199,6 +201,7 @@ export function mountExtensionHost() {
 export function mountExtensions(input: {
   definitions: readonly Definition[]
   disabled?: readonly string[]
+  bridge?: Parameters<typeof createInstalled>[0]
   stored?: Readonly<Record<string, Json>>
   /** Shows the production developer settings page for status-label contracts. */
   settings?: boolean
@@ -242,10 +245,24 @@ export function mountExtensions(input: {
   })
 
   function MountedHost() {
+    const installed = input.bridge ? createInstalled(input.bridge) : undefined
+
+    const disabledState = createMemo(() => {
+      if (!installed) return disabled()
+
+      const state = installed.enableState()
+
+      if (!state) return undefined
+
+      return new Set(
+        input.definitions.flatMap((definition) => (extensionEnabled(definition, state) ? [] : [definition.id])),
+      )
+    })
+
     return (
       <ExtensionHostProvider
         definitions={input.definitions}
-        disabled={disabled}
+        disabled={disabledState}
         apis={fakeApis(storage)}
         whenMounted={mounted}
       >

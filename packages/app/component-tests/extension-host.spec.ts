@@ -9,6 +9,7 @@ import type {
   SessionRef,
   SessionScreen,
 } from "@opencode/gui-extensions/sdk"
+import type { Bridge, BridgeMessage, EnableState, Installed } from "@opencode/gui-extensions/sdk/bridge"
 import { expect, sourceURL, story } from "../../storybook/playwright/story"
 
 const fixture = sourceURL(new URL("./extension-host.fixture.tsx", import.meta.url))
@@ -894,4 +895,159 @@ story("declared global stores load before setup, so setup reads the stored value
   }, fixture)
 
   expect(result).toEqual({ held: { status: "loading", seen: [] }, seen: [true] })
+})
+
+story("startup enable state does not wait for the manager, and live updates beat older replies", async ({ page }) => {
+  const result = await page.evaluate(async (fixture) => {
+    const { Contract, mountExtensions, until } = await import(fixture)
+    const Provider: Contract<number, "disabled.value"> = Contract.define("disabled.value")
+    const Dependent: Contract<number, "dependent.value"> = Contract.define("dependent.value")
+    const observed = { read: (): Live<number> => ({ status: "pending" }) }
+    const initial = Promise.withResolvers<readonly EnableState[]>()
+    const reply = Promise.withResolvers<readonly Installed[]>()
+    const listeners = new Set<(message: BridgeMessage) => void>()
+    const setups: string[] = []
+
+    const list = (disabled: readonly string[]): Installed[] =>
+      ["dependent", "enabled", "disabled"].map((id) => ({
+        id,
+        name: id,
+        version: "1",
+        builtin: true,
+        enabled: !disabled.includes(id),
+      }))
+
+    const bridge: Bridge = {
+      packaged: false,
+      call: async () => undefined,
+      subscribe: async () => ({ available: false }),
+      on: (listener) => {
+        listeners.add(listener)
+
+        return () => void listeners.delete(listener)
+      },
+      embed() {},
+      capture: async () => undefined,
+      runMenubarItem() {},
+      configure() {},
+      manager: {
+        initial: initial.promise,
+        list: () => reply.promise,
+        enable: async () => {},
+        disable: async () => {},
+        reload: async () => {},
+        install: async () => {},
+        remove: async () => {},
+        source: async () => "",
+        asset: () => "",
+      },
+    }
+
+    const host = mountExtensions({
+      bridge,
+      // The consumer comes first; the provider's old-id setting arrives asynchronously from the preload.
+      definitions: [
+        {
+          id: "dependent",
+          requires: { provider: Provider },
+          provides: { value: Dependent },
+          renderer: async () => ({
+            default: (ctx: Context) => {
+              setups.push("dependent")
+              ctx.provide(Dependent, 2)
+            },
+          }),
+        },
+        {
+          id: "enabled",
+          uses: { value: Dependent },
+          renderer: async () => ({
+            default: (ctx: Context & { uses: { value: () => Live<number> } }) => {
+              setups.push("enabled")
+              observed.read = ctx.uses.value
+            },
+          }),
+        },
+        {
+          id: "disabled",
+          legacy: ["previous"],
+          provides: { value: Provider },
+          renderer: async () => ({
+            default: (ctx: Context) => {
+              setups.push("disabled")
+              ctx.provide(Provider, 1)
+            },
+          }),
+        },
+      ],
+    })
+
+    await new Promise((resolve) => setTimeout(resolve, 50))
+    const before = [...setups]
+    initial.resolve([{ id: "previous", enabled: false }])
+    await until(() => host.ready())
+
+    const started = {
+      setups: [...setups],
+      status: host.status("disabled"),
+      dependent: host.status("dependent"),
+      live: observed.read(),
+    }
+
+    const unknown: { ready: boolean; setups: string[]; status?: string }[] = []
+
+    // A failed startup reply must not temporarily activate the disabled extension while list() waits.
+    for (const failure of ["unknown", "rejected"]) {
+      const initial = failure === "unknown" ? Promise.resolve(undefined) : Promise.reject(new Error("snapshot failed"))
+      const reply = Promise.withResolvers<readonly Installed[]>()
+
+      const failed = mountExtensions({
+        bridge: { ...bridge, manager: { ...bridge.manager, initial, list: () => reply.promise } },
+        definitions: [{ id: "disabled", renderer: async () => ({ default: () => void setups.push("wrongly enabled") }) }],
+      })
+
+      await new Promise((resolve) => setTimeout(resolve, 50))
+      const blocked = { ready: failed.ready(), setups: [...setups] }
+
+      reply.resolve(list(["disabled"]))
+      await until(() => failed.ready())
+      unknown.push({ ...blocked, status: failed.status("disabled") })
+      failed.unmount()
+    }
+
+    listeners.forEach((listener) => listener({ type: "extensions", list: list(["enabled"]) }))
+    await until(
+      () =>
+        host.status("disabled") === "active" &&
+        host.status("enabled") === "disabled" &&
+        host.status("dependent") === "active",
+    )
+    reply.resolve(list(["disabled"]))
+    await new Promise((resolve) => setTimeout(resolve, 50))
+
+    const updated = {
+      setups: [...setups],
+      status: [host.status("enabled"), host.status("disabled"), host.status("dependent")],
+    }
+
+    host.unmount()
+
+    return { before, started, unknown, updated, listeners: listeners.size }
+  }, fixture)
+
+  expect(result).toEqual({
+    before: [],
+    started: {
+      setups: ["enabled"],
+      status: "disabled",
+      dependent: "blocked",
+      live: { status: "inactive", reason: "blocked" },
+    },
+    unknown: [
+      { ready: false, setups: ["enabled"], status: "disabled" },
+      { ready: false, setups: ["enabled"], status: "disabled" },
+    ],
+    updated: { setups: ["enabled", "disabled", "dependent"], status: ["disabled", "active", "active"] },
+    listeners: 0,
+  })
 })
