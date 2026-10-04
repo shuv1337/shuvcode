@@ -220,6 +220,8 @@ JSON configuration also accepts the expanded form:
 
 - A subagent uses its configured model, or inherits the parent session's model when none is configured.
 - A session stores its selected model separately. Selecting a primary agent by ID does not change that model.
+- A session without a selected model runs on its primary agent's configured model, including the variant, before
+  falling back to the catalog default. If that model is unavailable, the run fails with a model-resolution error.
 
 ### System
 
