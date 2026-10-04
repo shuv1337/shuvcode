@@ -10,11 +10,24 @@ export async function resolveChannel(input: {
   readonly bump?: string
   readonly version?: string
   readonly branch: () => Promise<string>
+  readonly detachedBranches?: () => Promise<readonly string[]>
 }) {
   if (input.channel?.trim()) return input.channel.trim()
   if (input.bump) return "latest"
   if (input.version && !input.version.startsWith("0.0.0-")) return "latest"
-  return (await input.branch().catch(() => "")).trim() || "local"
+  const branch = (await input.branch().catch(() => "")).trim()
+  if (branch) return branch
+  // jj-colocated and other detached-HEAD checkouts have no current branch. When several
+  // branches or bookmarks point at the commit, pick the lexicographically first one so the
+  // channel is deterministic; set OPENCODE_CHANNEL to choose explicitly.
+  const candidates = (await (input.detachedBranches?.() ?? Promise.resolve([])).catch(() => []))
+    .map((name) => name.trim())
+    .filter((name) => name.length > 0)
+    .toSorted()
+  if (candidates[0]) return candidates[0]
+  throw new Error(
+    "Could not determine the build channel: no current git branch and no branch or jj bookmark points at the working copy. Set OPENCODE_CHANNEL (for example OPENCODE_CHANNEL=integration-v2).",
+  )
 }
 
 /** The `<base>` and `<n>` of a `<base>-shuv.<n>` version, or undefined for anything else. */
