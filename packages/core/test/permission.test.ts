@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import { Cause, Deferred, Effect, Fiber, Layer } from "effect"
+import { Cause, Deferred, Effect, Fiber, Layer, References } from "effect"
 import { Agent } from "@opencode/core/agent"
 import { Database } from "@opencode/core/database/database"
 import { AppNodeBuilder } from "@opencode/core/effect/app-node-builder"
@@ -161,6 +161,28 @@ describe("Permission", () => {
         yield* Effect.addFinalizer(() => unsubscribe)
         const pending = yield* waitForRequest()
         yield* pending.service.reply({ requestID: pending.request.id, reply })
+        yield* Fiber.await(pending.fiber)
+        expect(removals).toEqual(["permission.replied"])
+      }),
+    )
+
+    it.effect(`does not cancel an assertion after a ${reply} reply from another fiber`, () =>
+      Effect.gen(function* () {
+        yield* setup()
+        const bus = yield* Bus.Service
+        const removals: string[] = []
+        const unsubscribe = yield* bus.listen((event) =>
+          Effect.sync(() => {
+            if (event.type === "permission.cancelled" || event.type === "permission.replied") removals.push(event.type)
+          }),
+        )
+        yield* Effect.addFinalizer(() => unsubscribe)
+        const pending = yield* waitForRequest()
+        // A live reply fiber can yield to the scheduler right after resuming the waiter, so the
+        // assertion's cleanup runs before reply finishes. A small op budget forces that order.
+        yield* pending.service
+          .reply({ requestID: pending.request.id, reply })
+          .pipe(Effect.provideService(References.MaxOpsBeforeYield, 10), Effect.forkChild, Effect.flatMap(Fiber.join))
         yield* Fiber.await(pending.fiber)
         expect(removals).toEqual(["permission.replied"])
       }),

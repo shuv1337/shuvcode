@@ -270,12 +270,14 @@ const layer = Layer.effect(
             reply: input.reply,
           })
 
+          // Remove each entry before completing it: the resumed assertion's cleanup cancels any
+          // entry still pending, and this fiber may yield to it right after completion.
           if (input.reply === "reject") {
+            pending.delete(input.requestID)
             yield* Deferred.fail(
               existing.deferred,
               input.message ? new CorrectedError({ feedback: input.message }) : new DeclinedError(),
             )
-            pending.delete(input.requestID)
             for (const [id, item] of pending) {
               if (item.request.sessionID !== existing.request.sessionID) continue
               yield* bus.publish(Permission.Event.Replied, {
@@ -283,12 +285,12 @@ const layer = Layer.effect(
                 requestID: item.request.id,
                 reply: "reject",
               })
+              pending.delete(id)
               // Feedback applies to the whole batch, so parallel asks don't end the step.
               yield* Deferred.fail(
                 item.deferred,
                 input.message ? new CorrectedError({ feedback: input.message }) : new DeclinedError(),
               )
-              pending.delete(id)
             }
             return
           }
@@ -300,8 +302,8 @@ const layer = Layer.effect(
               resources: existing.request.save,
             })
           }
-          yield* Deferred.succeed(existing.deferred, undefined)
           pending.delete(input.requestID)
+          yield* Deferred.succeed(existing.deferred, undefined)
           if (input.reply !== "always" || !existing.request.save?.length) return
 
           for (const [id, item] of pending) {
@@ -314,8 +316,8 @@ const layer = Layer.effect(
               requestID: item.request.id,
               reply: "always",
             })
-            yield* Deferred.succeed(item.deferred, undefined)
             pending.delete(id)
+            yield* Deferred.succeed(item.deferred, undefined)
           }
         }),
       ),
