@@ -1,6 +1,7 @@
 export * as PluginInternal from "./internal.js"
 
 import { LLMClient } from "@opencode/ai"
+import { EvaluationClient } from "@opencode/ai/experimental"
 import type { Plugin } from "@opencode/plugin/effect/plugin"
 import { LayerNode } from "@opencode/util/effect/layer-node"
 import { httpClient } from "@opencode/util/effect/app-node-platform"
@@ -13,7 +14,7 @@ import { Provider } from "../provider.js"
 import { Command } from "../command.js"
 import { Config } from "../config.js"
 import { Credential } from "../credential.js"
-import { llmClient } from "../effect/app-node-platform.js"
+import { evaluationClient, llmClient } from "../effect/app-node-platform.js"
 import { ConfigAgentPlugin } from "../config/plugin/agent.js"
 import { ConfigCommandPlugin } from "../config/plugin/command.js"
 import { ConfigCompactionPlugin } from "../config/plugin/compaction.js"
@@ -71,6 +72,7 @@ import { PatchTool } from "../tool/plugin/patch.js"
 import { EditTool } from "../tool/plugin/edit.js"
 import { GlobTool } from "../tool/plugin/glob.js"
 import { GrepTool } from "../tool/plugin/grep.js"
+import { JevTool } from "../tool/plugin/jev.js"
 import { McpResourceTools } from "../tool/plugin/mcp-resource.js"
 import { OpenCodeTools } from "../tool/plugin/opencode.js"
 import { QuestionTool } from "../tool/plugin/question.js"
@@ -116,6 +118,7 @@ const services = [
   Credential.Service,
   Bus.Service,
   Environment.Service,
+  EvaluationClient.Service,
   FileAccess.Service,
   FileMutation.Service,
   Formatter.Service,
@@ -169,6 +172,7 @@ export const requirements = LayerNode.group([
   Credential.node,
   Bus.node,
   Environment.node,
+  evaluationClient,
   FileAccess.node,
   FileMutation.node,
   Formatter.node,
@@ -235,6 +239,7 @@ const pre = [
   EditTool.Plugin,
   GlobTool.Plugin,
   GrepTool.Plugin,
+  JevTool.Plugin,
   OpenCodeTools.Plugin,
   McpResourceTools.Plugin,
   QuestionTool.Plugin,
