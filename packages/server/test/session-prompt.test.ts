@@ -78,6 +78,15 @@ it.live("rejects unknown prompt body keys instead of dropping them", () =>
 
     // shuvbro dispatches workers with this exact body, repeating the path's sessionID.
     expect(yield* prompt({ sessionID, text: "dispatch", delivery: "queue" })).toMatchObject({ status: 200 })
+    expect(yield* prompt({ sessionID: "ses_other", text: "dispatch", delivery: "queue" })).toEqual({
+      status: 400,
+      body: {
+        _tag: "InvalidRequestError",
+        message: `Mismatched key at ["sessionID"]: body sessionID must match the path session ${sessionID}`,
+        kind: "Payload",
+        field: "sessionID",
+      },
+    })
     expect(
       yield* prompt({
         text: "@build hello",
