@@ -50,12 +50,17 @@ export async function resolveChannel(input: {
 
 /** Local jj bookmarks and git branches on `@`, else on `@-`; plain git uses detached HEAD. */
 export async function detachedBranches(cwd: string) {
-  const branches = async (revision: string) =>
-    (await $`git branch --points-at ${revision} --format='%(refname:short)'`.cwd(cwd).quiet().text())
+  const branches = async (revision: string, gitDir?: string) =>
+    (
+      await $`git ${gitDir ? [`--git-dir=${gitDir}`] : []} branch --points-at ${revision} --format='%(refname:short)'`
+        .cwd(cwd)
+        .quiet()
+        .text()
+    )
       .split("\n")
       .filter((name) => name && !name.startsWith("("))
-  const repository = await jjRepository(path.resolve(cwd))
-  if (!repository) return branches("HEAD")
+  if (!(await jjRepository(path.resolve(cwd)))) return branches("HEAD")
+  const gitDir = (await $`jj git root --ignore-working-copy`.cwd(cwd).quiet().text()).trim()
 
   const bookmarks = async (revision: string) => {
     const jj =
@@ -71,7 +76,7 @@ export async function detachedBranches(cwd: string) {
         .filter(Boolean)
         .map(async (line) => {
           const fields = line.split("\t")
-          return [...fields.slice(1).filter(Boolean), ...(repository.colocated ? await branches(fields[0]) : [])]
+          return [...fields.slice(1).filter(Boolean), ...(await branches(fields[0], gitDir))]
         }),
     )
     return [...new Set(names.flat())]
@@ -82,7 +87,7 @@ export async function detachedBranches(cwd: string) {
   return bookmarks("@-")
 }
 
-async function jjRepository(dir: string): Promise<{ readonly colocated: boolean } | undefined> {
+async function jjRepository(dir: string): Promise<boolean> {
   const entries = await Promise.all(
     [".jj", ".git"].map((name) =>
       fs.stat(path.join(dir, name)).catch((error: NodeJS.ErrnoException) => {
@@ -91,9 +96,9 @@ async function jjRepository(dir: string): Promise<{ readonly colocated: boolean 
       }),
     ),
   )
-  if (entries[0]) return { colocated: !!entries[1] }
+  if (entries[0]) return true
   const parent = path.dirname(dir)
-  if (entries[1] || parent === dir) return undefined
+  if (entries[1] || parent === dir) return false
   return jjRepository(parent)
 }
 

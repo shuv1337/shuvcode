@@ -1,12 +1,13 @@
 import { afterEach, describe, expect, test } from "bun:test"
 import { $ } from "bun"
 import fs from "fs/promises"
+import os from "os"
 import path from "path"
 import { detachedBranches, nextForkVersion, parseForkVersion, resolveChannel } from "../src/version.js"
 
 const directories: string[] = []
 const temporaryDirectory = async () => {
-  const dir = await fs.mkdtemp(path.join(import.meta.dir, "script-channel-"))
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), "script-channel-"))
   directories.push(dir)
   return dir
 }
@@ -171,6 +172,20 @@ describe.skipIf(!Bun.which("jj"))("detachedBranches", () => {
     expect(await resolveChannel({ branch: async () => "", detachedBranches: () => detachedBranches(dir) })).toBe(
       "fix-x",
     )
+  })
+
+  test("reads unimported git branches from a secondary jj workspace", async () => {
+    const { dir, jj } = await repo()
+    const workspace = await temporaryDirectory()
+    await fs.rm(workspace, { recursive: true })
+    await jj(["workspace", "add", workspace])
+    const commit = (
+      await $`jj log --ignore-working-copy --no-graph -r @ -T commit_id`.cwd(workspace).quiet().text()
+    ).trim()
+    await $`git branch fix-x ${commit}`.cwd(dir).quiet()
+    expect(
+      await resolveChannel({ branch: async () => "", detachedBranches: () => detachedBranches(workspace) }),
+    ).toBe("fix-x")
   })
 
   test("does not snapshot working-copy edits while looking up a channel", async () => {
