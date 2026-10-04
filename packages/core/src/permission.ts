@@ -130,18 +130,19 @@ const layer = Layer.effect(
     const pending = new Map<ID, Pending>()
     let closed = false
 
+    const cancel = Effect.fnUntraced(function* (item: Pending) {
+      if (!pending.delete(item.request.id)) return
+      yield* bus
+        .publish(Permission.Event.Cancelled, {
+          sessionID: item.request.sessionID,
+          requestID: item.request.id,
+        })
+        .pipe(Effect.ensuring(Deferred.fail(item.deferred, new DeclinedError())))
+    })
+
     const close = Effect.gen(function* () {
       closed = true
-      yield* Effect.forEach(Array.from(pending.values()), (item) =>
-        bus
-          .publish(Permission.Event.Replied, {
-            sessionID: item.request.sessionID,
-            requestID: item.request.id,
-            reply: "reject",
-          })
-          .pipe(Effect.ensuring(Deferred.fail(item.deferred, new DeclinedError()))),
-      )
-      pending.clear()
+      yield* Effect.forEach(Array.from(pending.values()), cancel, { discard: true })
     }).pipe(Effect.uninterruptible)
     yield* Effect.addFinalizer(() => close)
 
@@ -251,11 +252,7 @@ const layer = Layer.effect(
               // WITH feedback (CorrectedError) intentionally stays typed so the leaf can turn
               // it into ToolFailure and the model continues.
               Effect.catchTag("Permission.DeclinedError", (error) => Effect.die(error)),
-              Effect.ensuring(
-                Effect.sync(() => {
-                  pending.delete(item.request.id)
-                }),
-              ),
+              Effect.ensuring(cancel(item)),
             )
           }),
         )

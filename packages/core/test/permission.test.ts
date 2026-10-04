@@ -98,6 +98,75 @@ function waitForRequest(input: Partial<Permission.AssertInput> = {}) {
 }
 
 describe("Permission", () => {
+  it.effect("publishes removal when an assertion is interrupted", () =>
+    Effect.gen(function* () {
+      yield* setup()
+      const bus = yield* Bus.Service
+      const removals: { type: string; data: unknown }[] = []
+      const unsubscribe = yield* bus.listen((event) =>
+        Effect.sync(() => {
+          if (event.type === "permission.cancelled" || event.type === "permission.replied") removals.push(event)
+        }),
+      )
+      yield* Effect.addFinalizer(() => unsubscribe)
+      const pending = yield* waitForRequest()
+      expect(yield* pending.service.forSession(pending.request.sessionID)).toEqual([pending.request])
+      yield* Fiber.interrupt(pending.fiber)
+      expect(yield* pending.service.forSession(pending.request.sessionID)).toEqual([])
+      expect(removals).toEqual([
+        expect.objectContaining({
+          type: "permission.cancelled",
+          data: { sessionID: pending.request.sessionID, requestID: pending.request.id },
+        }),
+      ])
+    }),
+  )
+
+  it.effect("cancels both waiting assertions and standalone asks when closed", () =>
+    Effect.gen(function* () {
+      yield* setup()
+      const bus = yield* Bus.Service
+      const removals: { type: string; data: unknown }[] = []
+      const unsubscribe = yield* bus.listen((event) =>
+        Effect.sync(() => {
+          if (event.type === "permission.cancelled" || event.type === "permission.replied") removals.push(event)
+        }),
+      )
+      yield* Effect.addFinalizer(() => unsubscribe)
+      const pending = yield* waitForRequest()
+      yield* pending.service.ask(assertion({ id: Permission.ID.create("per_standalone") }))
+      yield* pending.service.close
+      yield* Fiber.await(pending.fiber)
+      yield* pending.service.close
+      expect(yield* pending.service.list()).toEqual([])
+      expect(removals.map((event) => event.type)).toEqual(["permission.cancelled", "permission.cancelled"])
+      expect(removals.map((event) => event.data)).toEqual([
+        { sessionID: pending.request.sessionID, requestID: pending.request.id },
+        { sessionID: pending.request.sessionID, requestID: "per_standalone" },
+      ])
+    }),
+  )
+
+  for (const reply of ["once", "always", "reject"] as const) {
+    it.effect(`does not cancel an assertion after a ${reply} reply`, () =>
+      Effect.gen(function* () {
+        yield* setup()
+        const bus = yield* Bus.Service
+        const removals: string[] = []
+        const unsubscribe = yield* bus.listen((event) =>
+          Effect.sync(() => {
+            if (event.type === "permission.cancelled" || event.type === "permission.replied") removals.push(event.type)
+          }),
+        )
+        yield* Effect.addFinalizer(() => unsubscribe)
+        const pending = yield* waitForRequest()
+        yield* pending.service.reply({ requestID: pending.request.id, reply })
+        yield* Fiber.await(pending.fiber)
+        expect(removals).toEqual(["permission.replied"])
+      }),
+    )
+  }
+
   it.effect("returns the evaluated effect and only queues prompts", () =>
     Effect.gen(function* () {
       yield* setup([{ action: "read", resource: "*", effect: "allow" }])
