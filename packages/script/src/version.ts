@@ -1,5 +1,7 @@
 import { $ } from "bun"
 import semver from "semver"
+import fs from "fs/promises"
+import path from "path"
 
 // Fork releases are always `<upstream base>-shuv.<n>`: a fork-only fix (`-shuv.2`)
 // sorts above the previous fork release and below the next upstream base, and a
@@ -24,7 +26,16 @@ export async function resolveChannel(input: {
   if (input.github?.refType === "branch" && input.github.refName?.trim()) return input.github.refName.trim()
   // jj-colocated and other detached-HEAD checkouts have no current branch. A single branch or
   // bookmark at the working copy names the channel; several are ambiguous, so require OPENCODE_CHANNEL.
-  const candidates = (await (input.detachedBranches?.() ?? Promise.resolve([])).catch(() => []))
+  const candidates = (
+    await (input.detachedBranches?.() ?? Promise.resolve([])).catch((cause) => {
+      throw new Error(
+        "Could not determine the build channel: branch or jj bookmark lookup failed. Set OPENCODE_CHANNEL.",
+        {
+          cause,
+        },
+      )
+    })
+  )
     .map((name) => name.trim())
     .filter((name) => name.length > 0)
   if (candidates.length === 1) return candidates[0]
@@ -37,24 +48,53 @@ export async function resolveChannel(input: {
   )
 }
 
-/** Local jj bookmarks on `@`, else on `@-`, else git branches at a detached HEAD. */
+/** Local jj bookmarks and git branches on `@`, else on `@-`; plain git uses detached HEAD. */
 export async function detachedBranches(cwd: string) {
+  const branches = async (revision: string) =>
+    (await $`git branch --points-at ${revision} --format='%(refname:short)'`.cwd(cwd).quiet().text())
+      .split("\n")
+      .filter((name) => name && !name.startsWith("("))
+  const repository = await jjRepository(path.resolve(cwd))
+  if (!repository) return branches("HEAD")
+
   const bookmarks = async (revision: string) => {
     const jj =
-      await $`jj log --no-graph --ignore-working-copy -r ${revision} -T 'local_bookmarks.map(|b| b.name() ++ "\n").join("")'`
+      await $`jj log --no-graph --ignore-working-copy -r ${revision} -T 'commit_id ++ "\t" ++ local_bookmarks.map(|b| b.name()).join("\t") ++ "\n"'`
         .cwd(cwd)
         .quiet()
-        .nothrow()
-    return jj.exitCode === 0 ? jj.text().split("\n").filter(Boolean) : []
+        .text()
+    // --ignore-working-copy avoids snapshotting, but also skips git import. Read git refs
+    // at each actual jj commit, not HEAD (which is the parent in colocated repositories).
+    const names = await Promise.all(
+      jj
+        .split("\n")
+        .filter(Boolean)
+        .map(async (line) => {
+          const fields = line.split("\t")
+          return [...fields.slice(1).filter(Boolean), ...(repository.colocated ? await branches(fields[0]) : [])]
+        }),
+    )
+    return [...new Set(names.flat())]
   }
   // jj keeps git at a detached HEAD on the working-copy parent, so `@` may carry a newer bookmark.
   const current = await bookmarks("@")
   if (current.length) return current
-  const parent = await bookmarks("@-")
-  if (parent.length) return parent
-  return (await $`git branch --points-at HEAD --format='%(refname:short)'`.cwd(cwd).quiet().nothrow().text())
-    .split("\n")
-    .filter((name) => name && !name.startsWith("("))
+  return bookmarks("@-")
+}
+
+async function jjRepository(dir: string): Promise<{ readonly colocated: boolean } | undefined> {
+  const entries = await Promise.all(
+    [".jj", ".git"].map((name) =>
+      fs.stat(path.join(dir, name)).catch((error: NodeJS.ErrnoException) => {
+        if (error.code === "ENOENT") return undefined
+        throw error
+      }),
+    ),
+  )
+  if (entries[0]) return { colocated: !!entries[1] }
+  const parent = path.dirname(dir)
+  if (entries[1] || parent === dir) return undefined
+  return jjRepository(parent)
 }
 
 /** The `<base>` and `<n>` of a `<base>-shuv.<n>` version, or undefined for anything else. */
