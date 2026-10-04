@@ -4,13 +4,15 @@ on:
   push:
     branches:
       - v2
+      - integration-v2
   pull_request:
   workflow_dispatch:
 
 concurrency:
-  # Keep every run on v2 so cancelled checks do not pollute the default branch
-  # commit history. PRs and other branches still share a group and cancel stale runs.
-  group: ${{ case(github.ref == 'refs/heads/v2', format('{0}-{1}', github.workflow, github.run_id), format('{0}-{1}', github.workflow, github.event.pull_request.number || github.ref)) }}
+  # Keep every run on the default branch so cancelled checks do not pollute its
+  # commit history. v2 is upstream's default; integration-v2 is this fork's.
+  # PRs and other branches still share a group and cancel stale runs.
+  group: ${{ case(github.ref == 'refs/heads/v2' || github.ref == 'refs/heads/integration-v2', format('{0}-{1}', github.workflow, github.run_id), format('{0}-{1}', github.workflow, github.event.pull_request.number || github.ref)) }}
   cancel-in-progress: true
 
 permissions:
