@@ -17,7 +17,7 @@ export default Runtime.handler(
         return yield* Effect.fail(new Error("Pipe auth export output into stdin or pass a file to import"))
       const text = yield* request(() => (file ? Bun.file(file).text() : readStdin()))
       const credentials = yield* Schema.decodeUnknownEffect(Schema.fromJsonString(Schema.Array(Credential.Entry)))(text)
-      const client = yield* createClient({ server: Option.getOrUndefined(input.server), standalone: input.standalone })
+      const client = yield* createClient()
       const existing = yield* request((signal) => client.credential.list({ signal }))
       const ids = new Set(existing.map((credential) => credential.id))
       const integrations = new Set(existing.map((credential) => credential.integrationID))
