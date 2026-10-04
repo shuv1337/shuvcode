@@ -320,10 +320,13 @@ export function Session(props: {
   )
 
   createEffect(
-    on([rootSessionID, () => client.connection.status()], ([sessionID, status]) => {
-      if (status !== "connected") return
-      void data.session.sync(sessionID, { children: true }).catch((error) => toast.error(error))
-    }),
+    on(
+      [rootSessionID, () => !!data.session.get(rootSessionID()), () => client.connection.status()],
+      ([sessionID, known, status]) => {
+        if (status !== "connected" || !known || sessionID === route.sessionID) return
+        void data.session.sync(sessionID, { children: true }).catch(() => undefined)
+      },
+    ),
   )
 
   createEffect(
