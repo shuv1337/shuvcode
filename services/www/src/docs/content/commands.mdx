@@ -230,8 +230,8 @@ when the child finishes.
 | `false` | Always use the current session, even when the selected agent has `mode: subagent`. |
 | Omitted | Use a child only when the selected agent has `mode: subagent`. |
 
-The child uses the command model, then the selected agent's model, then the parent's model. Legacy `subtask` remains
-accepted; if both fields are present, `subagent` wins.
+The child uses the command model, then the selected agent's model, then the model the parent session runs on. Legacy
+`subtask` remains accepted; if both fields are present, `subagent` wins.
 
 ```yaml
 subagent: false
