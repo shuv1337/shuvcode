@@ -86,10 +86,12 @@ jobs:
           git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git config --global user.name "github-actions[bot]"
 
-      - name: Install ffmpeg
+      # GitHub-hosted runners, unlike upstream's Blacksmith images, ship without ripgrep, and the core
+      # test harness refuses the network fallback that would download it.
+      - name: Install ffmpeg and ripgrep
         run: |
           sudo apt-get update
-          sudo apt-get install --yes ffmpeg
+          sudo apt-get install --yes ffmpeg ripgrep
 
       - name: Cache Turbo
         uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
