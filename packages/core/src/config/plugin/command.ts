@@ -3,6 +3,7 @@ export * as ConfigCommandPlugin from "./command.js"
 import { define } from "@opencode/plugin/effect/plugin"
 import { Info, type Entry } from "@opencode/schema/config"
 import { ConfigCommand } from "@opencode/schema/config/command"
+import { Model } from "@opencode/schema/model"
 import { Provider } from "@opencode/schema/provider"
 import { AppProcess } from "@opencode/util/process"
 import path from "path"
@@ -11,9 +12,7 @@ import { ChildProcess } from "effect/unstable/process"
 import { Agent } from "../../agent.js"
 import { Config } from "../../config.js"
 import { Location } from "../../location.js"
-import { Model } from "../../model.js"
 import { Session } from "../../session.js"
-import { SessionRunnerModel } from "../../session/runner/model.js"
 import { SubagentJob } from "../../session/subagent-job.js"
 import { ShellSelect } from "../../shell/select.js"
 import { FSUtil } from "@opencode/util/fs-util"
@@ -36,8 +35,6 @@ export const Plugin = define({
     const processes = yield* AppProcess.Service
     const shell = yield* ShellSelect.Service
     const sessions = yield* Session.Service
-    const runnerModels = yield* SessionRunnerModel.Service
-    const models = yield* Model.Service
     const agents = yield* Agent.Service
     const subagents = yield* SubagentJob.make
     const load = Effect.fn("ConfigCommandPlugin.load")(function* () {
@@ -101,18 +98,15 @@ export const Plugin = define({
                 if (subagent ?? commandAgent?.mode === "subagent") {
                   const parent = yield* sessions.get(input.sessionID)
                   const selected = yield* agents.select(agent ?? parent.agent)
-                  const selectedModel = model ?? selected.info?.model ?? parent.model
-                  const parentAgent =
-                    selectedModel === undefined ? (yield* agents.select(parent.agent)).info : undefined
                   const child = yield* sessions.create({
                     parentID: parent.id,
                     title: command.description ?? name,
                     agent: selected.id,
                     model:
-                      selectedModel ??
-                      (parentAgent?.model === undefined
-                        ? undefined
-                        : (yield* runnerModels.resolve(parent, models.available, parentAgent)).ref),
+                      model ??
+                      selected.info?.model ??
+                      parent.model ??
+                      (yield* agents.select(parent.agent)).info?.model,
                   })
                   yield* sessions.prompt({
                     ...input.prompt,

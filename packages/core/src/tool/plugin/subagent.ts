@@ -10,7 +10,6 @@ import { Job } from "../../job.js"
 import { Model } from "../../model.js"
 import { Permission } from "../../permission.js"
 import { Session } from "../../session.js"
-import { SessionRunnerModel } from "../../session/runner/model.js"
 import { SessionSchema } from "../../session/schema.js"
 import { SubagentCompletion } from "../../session/subagent-completion.js"
 import { SubagentJob } from "../../session/subagent-job.js"
@@ -71,7 +70,6 @@ export const Plugin = {
     const config = yield* Config.Service
     const permission = yield* Permission.Service
     const models = yield* Model.Service
-    const runnerModels = yield* SessionRunnerModel.Service
     const subagents = yield* SubagentJob.make
 
     const resolveModel = Effect.fn("SubagentTool.resolveModel")(function* (input: string) {
@@ -184,8 +182,6 @@ export const Plugin = {
               }
 
               const model = override ?? agent.model ?? parent.model
-              const parentAgent =
-                existing !== undefined || model !== undefined ? undefined : (yield* agents.select(parent.agent)).info
               const child =
                 existing ??
                 (yield* sessions
@@ -193,13 +189,7 @@ export const Plugin = {
                     parentID: context.sessionID,
                     title: input.description,
                     agent: Agent.ID.make(input.agent),
-                    model:
-                      model ??
-                      (parentAgent?.model === undefined
-                        ? undefined
-                        : (yield* runnerModels
-                            .resolve(parent, models.available, parentAgent)
-                            .pipe(Effect.mapError((error) => new ToolFailure({ message: error.message, error })))).ref),
+                    model: model ?? (yield* agents.select(parent.agent)).info?.model,
                   })
                   .pipe(
                     Effect.mapError(

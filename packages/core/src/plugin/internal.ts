@@ -62,7 +62,6 @@ import { Ripgrep } from "../ripgrep.js"
 import { Session } from "../session.js"
 import { SessionCompaction } from "../session/compaction.js"
 import { SessionInstructions } from "../session/instructions.js"
-import { SessionRunnerModel } from "../session/runner/model.js"
 import { Shell } from "../shell.js"
 import { ShellSelect } from "../shell/select.js"
 import { Snapshot } from "../snapshot.js"
@@ -148,7 +147,6 @@ const services = [
   Session.Service,
   SessionCompaction.Service,
   SessionInstructions.Service,
-  SessionRunnerModel.Service,
   Shell.Service,
   ShellSelect.Service,
   Snapshot.Service,
@@ -203,7 +201,6 @@ export const requirements = LayerNode.group([
   Session.node,
   SessionCompaction.node,
   SessionInstructions.node,
-  SessionRunnerModel.node,
   Shell.node,
   ShellSelect.node,
   Snapshot.node,
