@@ -103,10 +103,7 @@ export const Plugin = define({
                     title: command.description ?? name,
                     agent: selected.id,
                     model:
-                      model ??
-                      selected.info?.model ??
-                      parent.model ??
-                      (yield* agents.select(parent.agent)).info?.model,
+                      model ?? selected.info?.model ?? parent.model ?? (yield* agents.select(parent.agent)).info?.model,
                   })
                   yield* sessions.prompt({
                     ...input.prompt,
