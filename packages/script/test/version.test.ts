@@ -22,9 +22,9 @@ describe("resolveChannel", () => {
   })
 
   test("resolves a detached HEAD from the branches or bookmarks at the working copy", async () => {
-    expect(
-      await resolveChannel({ branch: async () => "", detachedBranches: async () => ["integration-v2"] }),
-    ).toBe("integration-v2")
+    expect(await resolveChannel({ branch: async () => "", detachedBranches: async () => ["integration-v2"] })).toBe(
+      "integration-v2",
+    )
     expect(
       await resolveChannel({ branch: async () => "", detachedBranches: async () => [" integration-v2 ", ""] }),
     ).toBe("integration-v2")
