@@ -189,12 +189,10 @@ export const SessionsQuery = Schema.Struct({
   cursor: SessionsQueryCursor.pipe(Schema.optional),
 }).annotate({ identifier: "SessionsQuery" })
 
-export const makeSessionGroup = <
-  I extends HttpApiMiddleware.AnyId,
-  S,
-  FormI extends HttpApiMiddleware.AnyId,
-  FormS,
->(sessionLocationMiddleware: Context.Key<I, S>, formLocationMiddleware: Context.Key<FormI, FormS>) =>
+export const makeSessionGroup = <I extends HttpApiMiddleware.AnyId, S, FormI extends HttpApiMiddleware.AnyId, FormS>(
+  sessionLocationMiddleware: Context.Key<I, S>,
+  formLocationMiddleware: Context.Key<FormI, FormS>,
+) =>
   HttpApiGroup.make("server.session")
     .add(
       HttpApiEndpoint.get("session.list", "/api/session", {
@@ -575,9 +573,7 @@ export const makeSessionGroup = <
         error: [SessionNotFoundError, SessionBusyError],
       })
         .middleware(sessionLocationMiddleware)
-        .annotateMerge(
-          OpenApi.annotations({ identifier: "session.revert.commit", summary: "Commit staged revert" }),
-        ),
+        .annotateMerge(OpenApi.annotations({ identifier: "session.revert.commit", summary: "Commit staged revert" })),
     )
     .add(
       HttpApiEndpoint.get("session.context", "/api/session/:sessionID/context", {
