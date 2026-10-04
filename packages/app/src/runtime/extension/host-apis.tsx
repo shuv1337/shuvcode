@@ -282,7 +282,13 @@ export function createHostApis() {
       list: () => current()?.sessions() ?? [],
       current: () => current()?.current(),
     }),
-    screen: () => ({ current: () => current()?.screen() }),
+    screen: () => ({
+      current: () => {
+        const attached = current()
+
+        return attached?.current() ? attached.screen() : undefined
+      },
+    }),
     // Before the interface mounts, reads return what an empty layout holds and writes wait for it.
     layout: (extension) => ({
       narrow,
@@ -545,8 +551,9 @@ export function createExtensionAttachment(apis: HostApis) {
   // The side tabs a mounted session lists right now, plus `adding` as if it were stored; unmounted sessions have none.
   const listed = (session: SessionRef, value: string, adding?: string) => {
     const view = mountedSession(session)
+    const currentScreen = screen()
 
-    if (!view) return []
+    if (!view || !currentScreen) return []
     const all = layout.panel.state(value).all
     const stored = adding && !all.includes(adding) ? [...all, adding] : all
 
@@ -558,7 +565,15 @@ export function createExtensionAttachment(apis: HostApis) {
           const prefix = `${item.extension}:`
           const open = stored.flatMap((key) => (key.startsWith(prefix) ? [key.slice(prefix.length)] : []))
 
-          return item.value.list(view, open).map((tab) => ({ key: `${prefix}${tab.id}`, tab }))
+          return item.value
+            .list({
+              get session() {
+                return mountedSession(session) ?? view
+              },
+              screen: currentScreen,
+              open,
+            })
+            .map((tab) => ({ key: `${prefix}${tab.id}`, tab }))
         }),
     )
   }
@@ -620,8 +635,9 @@ export function createExtensionAttachment(apis: HostApis) {
     const tab = listed(session, value).find((entry) => entry.key === key)?.tab
     layout.panel.close(value, key)
     const view = mountedSession(session)
+    const currentScreen = screen()
 
-    if (view && tab) item?.value.close?.(tab, view)
+    if (view && tab && currentScreen) item?.value.close?.({ tab, session: view, screen: currentScreen })
   }
 
   // The routed session's side region, which knows the fallback selection the stored state lacks.
@@ -803,7 +819,7 @@ export function createExtensionAttachment(apis: HostApis) {
         if (session) selectMobile(session, view)
       },
     },
-    /** A session screen started rendering: `Screen.current` returns it until it unmounts. */
+    /** A screen started rendering: `Screen.current` returns it only while its session matches the route. */
     screen(value: SessionScreen) {
       setScreen(() => value)
 

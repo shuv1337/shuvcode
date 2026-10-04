@@ -11,7 +11,7 @@ import {
   type ParentComponent,
   type ParentProps,
 } from "solid-js"
-import { createStore, produce } from "solid-js/store"
+import { createStore, produce, reconcile } from "solid-js/store"
 import { Portal, render } from "solid-js/web"
 import type { Bridge, BridgeLayout } from "../sdk/bridge"
 import {
@@ -29,11 +29,13 @@ import {
   type Layout,
   type Locale,
   type MountedSession,
+  type Mutable,
   type PanelFrame,
   type PanelTab,
   type Router,
   type Servers,
   type SessionRef,
+  type SessionScreen,
   type Storage,
   type Workspaces,
 } from "../sdk"
@@ -394,7 +396,12 @@ type RegionHost = {
     }>
   >
   useExtensionHost(): { ready(): boolean }
-  createRegion(input: { region: "side"; view: Accessor<MountedSession>; tabs: Accessor<StripTabs> }): {
+  createRegion(input: {
+    region: "side"
+    view: Accessor<MountedSession>
+    screen: SessionScreen
+    tabs: Accessor<StripTabs>
+  }): {
     keys(): readonly string[]
     active(): string | undefined
     entry(key: string): { readonly tab: PanelTab } | undefined
@@ -511,12 +518,10 @@ export function mountBrowserRegion(input: RegionHost) {
     const view = () => views.get(store.session) ?? fallback
 
     // One screen object while the strip mounts, whichever session it routes.
-    const screen = {
-      get session() {
-        return view()
-      },
-      file,
-    }
+    // SAFETY: this fixture draws tab triggers only. Its file model implements the list, normalize and focus paths;
+    // comment, composer and file-view operations are never invoked here.
+    // oxlint-disable-next-line anti-slop/no-chained-type-assertions -- see SAFETY above
+    const screen = { file } as unknown as SessionScreen
 
     const layout = (extension: string): Layout => ({
       narrow: () => false,
@@ -550,17 +555,29 @@ export function mountBrowserRegion(input: RegionHost) {
 
       if (key === "file:tree") setTree(() => value)
 
-      return [value, (mutation: (draft: T) => void) => set(produce(mutation))] as const
+      return {
+        memory: [value, (mutation: (draft: T) => void) => set(produce(mutation))] as const,
+        store: {
+          value,
+          ready: () => true,
+          update: (mutate: (draft: Mutable<T>) => undefined) =>
+            set(
+              produce((draft) => {
+                // SAFETY: keep uses Solid's writable produce draft; readonly schema fields apply only to readers.
+                const returned = mutate(draft as Mutable<T>)
+
+                if (returned !== undefined) throw new Error("Use set(next) to replace the value.")
+              }),
+            ),
+          set: (next: T) => set(reconcile(next)),
+        },
+      }
     }
 
     // Loaded at once.
     const storage = (extension: string): Storage => ({
-      store: (key, options) => {
-        const [value, update] = keep(`${extension}:${key}`, options.initial)
-
-        return { value, ready: () => true, update }
-      },
-      memory: (key, options) => keep(`${extension}:${key}`, options.initial),
+      store: (key, options) => keep(`${extension}:${key}`, options.initial).store,
+      memory: (key, options) => keep(`${extension}:${key}`, options.initial).memory,
       remove() {},
     })
 
@@ -639,6 +656,7 @@ export function mountBrowserRegion(input: RegionHost) {
       const region = input.createRegion({
         region: "side",
         view,
+        screen,
         tabs: () => ({
           all: () => strip(view().key).all,
           active: () => strip(view().key).active,
