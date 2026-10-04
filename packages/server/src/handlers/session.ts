@@ -7,7 +7,7 @@ import { Form } from "@opencode/core/form"
 import { DateTime, Effect, Stream } from "effect"
 import { HttpApiBuilder, HttpApiSchema } from "effect/unstable/httpapi"
 import { Api } from "../api"
-import { SessionsCursor } from "@opencode/protocol/groups/session"
+import { SessionPromptPayload, SessionsCursor } from "@opencode/protocol/groups/session"
 import {
   ConflictError,
   CommandExecutionError,
@@ -306,6 +306,23 @@ export const SessionHandler = HttpApiBuilder.group(Api, "server.session", (handl
       .handle(
         "session.prompt",
         Effect.fn(function* (ctx) {
+          // The payload schema preserves unknown keys so they fail here instead
+          // of being silently dropped. `sessionID` repeats the path parameter.
+          const unknown = Object.keys(ctx.payload).filter(
+            (key) => !Object.hasOwn(SessionPromptPayload.fields, key) && key !== "sessionID",
+          )
+          if (unknown.length > 0)
+            return yield* new InvalidRequestError({
+              message: unknown
+                .map((key) =>
+                  key === "model"
+                    ? `Unknown key at ["model"]: prompts do not select a model; use session.switchModel or pass model when creating the session`
+                    : `Unknown key at ${JSON.stringify([key])}`,
+                )
+                .join("\n"),
+              kind: "Payload",
+              field: unknown[0],
+            })
           return {
             data: yield* session
               .prompt({
