@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import { Cause, Deferred, Effect, Fiber, Layer, References } from "effect"
+import { Cause, Context, Deferred, Effect, Fiber, Layer, References, Schema } from "effect"
 import { Agent } from "@opencode/core/agent"
 import { Database } from "@opencode/core/database/database"
 import { AppNodeBuilder } from "@opencode/core/effect/app-node-builder"
@@ -28,6 +28,51 @@ const it = testEffect(
   AppNodeBuilder.build(
     LayerNode.group([Database.node, Bus.node, SessionStore.node, PermissionSaved.node, Agent.node, Permission.node]),
     [Location.node.replace(current)],
+  ),
+)
+
+const saving = Context.Reference<
+  | {
+      readonly operation: "add" | "list"
+      readonly started: Deferred.Deferred<void>
+      readonly release: Deferred.Deferred<void>
+    }
+  | undefined
+>("test/permission/saving", { defaultValue: () => undefined })
+const savingIt = testEffect(
+  AppNodeBuilder.build(
+    LayerNode.group([Database.node, Bus.node, SessionStore.node, PermissionSaved.node, Agent.node, Permission.node]),
+    [
+      Location.node.replace(current),
+      PermissionSaved.node.replace(
+        PermissionSaved.node.mapLayer((layer) =>
+          Layer.flatMap(layer, (context) => {
+            const saved = Context.get(context, PermissionSaved.Service)
+            return Layer.succeed(PermissionSaved.Service, {
+              ...saved,
+              list: (input) =>
+                Effect.gen(function* () {
+                  const gate = yield* saving
+                  if (gate?.operation === "list") {
+                    yield* Deferred.succeed(gate.started, undefined)
+                    yield* Deferred.await(gate.release)
+                  }
+                  return yield* saved.list(input)
+                }),
+              add: (input) =>
+                Effect.gen(function* () {
+                  const gate = yield* saving
+                  if (gate?.operation === "add") {
+                    yield* Deferred.succeed(gate.started, undefined)
+                    yield* Deferred.await(gate.release)
+                  }
+                  yield* saved.add(input)
+                }),
+            })
+          }),
+        ),
+      ),
+    ],
   ),
 )
 
@@ -98,6 +143,72 @@ function waitForRequest(input: Partial<Permission.AssertInput> = {}) {
 }
 
 describe("Permission", () => {
+  savingIt.effect("does not cancel a replied assertion interrupted while its approval is being saved", () =>
+    Effect.gen(function* () {
+      yield* setup()
+      const bus = yield* Bus.Service
+      const saved = yield* PermissionSaved.Service
+      const removals: string[] = []
+      const unsubscribe = yield* bus.listen((event) =>
+        Effect.sync(() => {
+          if (event.type === "permission.cancelled" || event.type === "permission.replied") removals.push(event.type)
+        }),
+      )
+      yield* Effect.addFinalizer(() => unsubscribe)
+      const gate = { started: yield* Deferred.make<void>(), release: yield* Deferred.make<void>() }
+      const pending = yield* waitForRequest({ save: ["src/*"] })
+      yield* Effect.gen(function* () {
+        const replying = yield* pending.service
+          .reply({ requestID: pending.request.id, reply: "always" })
+          .pipe(Effect.provideService(saving, { ...gate, operation: "add" }), Effect.forkScoped)
+        yield* Deferred.await(gate.started)
+        yield* Fiber.interrupt(pending.fiber)
+        expect(removals).toEqual(["permission.replied"])
+        expect(yield* pending.service.list()).toEqual([])
+        yield* Deferred.succeed(gate.release, undefined)
+        yield* Fiber.join(replying)
+        expect(yield* saved.list()).toMatchObject([{ action: "read", resource: "src/*" }])
+        expect(removals).toEqual(["permission.replied"])
+      }).pipe(Effect.ensuring(Deferred.succeed(gate.release, undefined)))
+    }),
+  )
+
+  savingIt.effect("does not reply to an assertion cancelled while an always batch evaluates it", () =>
+    Effect.gen(function* () {
+      yield* setup()
+      const bus = yield* Bus.Service
+      const removals: { type: string; requestID: string }[] = []
+      const unsubscribe = yield* bus.listen((event) =>
+        Effect.sync(() => {
+          if (event.type === "permission.cancelled" || event.type === "permission.replied")
+            removals.push({
+              type: event.type,
+              requestID: Schema.decodeUnknownSync(Permission.Event.Cancelled.data)(event.data).requestID,
+            })
+        }),
+      )
+      yield* Effect.addFinalizer(() => unsubscribe)
+      const gate = { started: yield* Deferred.make<void>(), release: yield* Deferred.make<void>() }
+      const first = yield* waitForRequest({ save: ["src/*"] })
+      const sibling = yield* waitForRequest({ id: Permission.ID.create("per_sibling") })
+      yield* Effect.gen(function* () {
+        const replying = yield* first.service
+          .reply({ requestID: first.request.id, reply: "always" })
+          .pipe(Effect.provideService(saving, { ...gate, operation: "list" }), Effect.forkScoped)
+        yield* Deferred.await(gate.started)
+        yield* Fiber.interrupt(sibling.fiber)
+        yield* Deferred.succeed(gate.release, undefined)
+        yield* Fiber.join(replying)
+        yield* Fiber.join(first.fiber)
+        expect(removals).toEqual([
+          { type: "permission.replied", requestID: first.request.id },
+          { type: "permission.cancelled", requestID: sibling.request.id },
+        ])
+        expect(yield* first.service.list()).toEqual([])
+      }).pipe(Effect.ensuring(Deferred.succeed(gate.release, undefined)))
+    }),
+  )
+
   it.effect("publishes removal when an assertion is interrupted", () =>
     Effect.gen(function* () {
       yield* setup()

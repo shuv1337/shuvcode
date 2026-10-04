@@ -264,28 +264,28 @@ const layer = Layer.effect(
         Effect.gen(function* () {
           const existing = pending.get(input.requestID)
           if (!existing) return yield* new NotFoundError({ requestID: input.requestID })
+          // Claim the reply before any yield, including publishing and saving an "always" rule.
+          // The assertion may be interrupted meanwhile, but its cleanup must not cancel a replied ask.
+          pending.delete(input.requestID)
           yield* bus.publish(Permission.Event.Replied, {
             sessionID: existing.request.sessionID,
             requestID: existing.request.id,
             reply: input.reply,
           })
 
-          // Remove each entry before completing it: the resumed assertion's cleanup cancels any
-          // entry still pending, and this fiber may yield to it right after completion.
           if (input.reply === "reject") {
-            pending.delete(input.requestID)
             yield* Deferred.fail(
               existing.deferred,
               input.message ? new CorrectedError({ feedback: input.message }) : new DeclinedError(),
             )
             for (const [id, item] of pending) {
               if (item.request.sessionID !== existing.request.sessionID) continue
+              pending.delete(id)
               yield* bus.publish(Permission.Event.Replied, {
                 sessionID: item.request.sessionID,
                 requestID: item.request.id,
                 reply: "reject",
               })
-              pending.delete(id)
               // Feedback applies to the whole batch, so parallel asks don't end the step.
               yield* Deferred.fail(
                 item.deferred,
@@ -302,7 +302,6 @@ const layer = Layer.effect(
               resources: existing.request.save,
             })
           }
-          pending.delete(input.requestID)
           yield* Deferred.succeed(existing.deferred, undefined)
           if (input.reply !== "always" || !existing.request.save?.length) return
 
@@ -310,13 +309,13 @@ const layer = Layer.effect(
             const result = yield* evaluateInput({ ...item.request, agent: item.agent }).pipe(
               Effect.catchTag("Session.NotFoundError", () => Effect.undefined),
             )
-            if (result?.effect !== "allow") continue
+            // Evaluation can yield while the assertion is cancelled or another reply claims it.
+            if (result?.effect !== "allow" || !pending.delete(id)) continue
             yield* bus.publish(Permission.Event.Replied, {
               sessionID: item.request.sessionID,
               requestID: item.request.id,
               reply: "always",
             })
-            pending.delete(id)
             yield* Deferred.succeed(item.deferred, undefined)
           }
         }),
