@@ -5,6 +5,7 @@
 - The default branch in this repo is `integration-v2` (`origin/integration-v2` on `shuv1337/shuvcode`). `v2` is the upstream OpenCode V2 branch (`upstream/v2` on `anomalyco/opencode`); there is no `origin/v2`.
 - Default new branches and worktrees to `integration-v2`, or `origin/integration-v2` when the local `integration-v2` ref is unavailable, and default pull requests to target `integration-v2` on `origin`, not `upstream`. Use another base or target branch when the requester explicitly instructs it.
 - Local `main` ref may not exist; use `integration-v2` or `origin/integration-v2` for diffs. Use `upstream/v2` to compare with or sync from upstream.
+- Before syncing `upstream/v2` into `integration-v2`, run `git branch --no-merged integration-v2`. Ignore `upstream/*`. Merge or explicitly drop every remaining fork fix branch before the sync so its commits are on `integration-v2`.
 
 ## Shuvcode Fork
 
