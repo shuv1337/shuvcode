@@ -170,7 +170,7 @@ const setup: Setup<typeof definition> = (ctx) => {
         {(value) => (
           <Show when={!value().pending(props.session)}>
             <Suspense>
-              <SessionBrowserPane tab={() => props.tab} session={props.session} model={value()} />
+              <SessionBrowserPane tab={() => props.tab} session={props.session} screen={props.screen} model={value()} />
             </Suspense>
           </Show>
         )}
