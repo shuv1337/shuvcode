@@ -1363,7 +1363,7 @@ export function createData(config: CreateDataInput) {
       root(sessionID: string): string {
         const root = resolveRoot(sessionID)
         // A child-only startup may need several ancestor reads to reach the actual root.
-        if (!store.session.info[root])
+        if (root !== sessionID && !store.session.info[root])
           refresh(() =>
             result.session.sync(root).then(() => {
               result.session.root(sessionID)

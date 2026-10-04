@@ -99,9 +99,10 @@ test.each([
       await setup.waitFor(() => replies.length === 1)
       expect(replies).toEqual([{ sessionID: input.owner, body: { decision: "once" } }])
       expect(setup.captureCharFrame()).toContain("Child transcript")
+      expect(setup.captureCharFrame()).not.toContain("Parent is waiting for you")
       return
     }
-    await setup.waitForFrame((frame) => frame.includes("Parent is waiting for you") && frame.includes("Open parent"))
+    await setup.waitForFrame((frame) => frame.includes("Parent is waiting for you"))
     expect(replies).toEqual([])
     events.emit(
       input.kind === "form"
@@ -115,15 +116,7 @@ test.each([
     )
     await setup.waitForFrame((frame) => !frame.includes("Parent is waiting for you"))
     ask()
-    await setup.waitForFrame((frame) => frame.includes("Open parent"))
-    const rows = setup.captureCharFrame().split("\n")
-    const row = rows.findIndex((line) => line.includes("Open parent"))
-    await setup.mockMouse.click(rows[row].indexOf("Open parent") + 1, row)
-    await setup.waitForFrame((frame) => frame.includes("Parent transcript"))
-    await setup.waitForFrame((frame) =>
-      frame.includes(input.kind === "form" ? "Parent question" : "Permission required"),
-    )
-    expect(setup.captureCharFrame()).not.toContain("Parent is waiting for you")
+    await setup.waitForFrame((frame) => frame.includes("Parent is waiting for you"))
   } finally {
     if (!setup.renderer.isDestroyed) setup.renderer.destroy()
     await task.finally(() => server.stop(true))

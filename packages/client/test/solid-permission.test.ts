@@ -114,6 +114,21 @@ test("root loads missing ancestors and merges the orphan family", async () => {
   }
 })
 
+test("root does not load an unknown session", async () => {
+  const reads: string[] = []
+  const client = fixture(async (url) => {
+    reads.push(url.pathname)
+    return Response.json({ data: [] })
+  })
+  try {
+    expect(client.data.session.root("ses_missing")).toBe("ses_missing")
+    await Bun.sleep(10)
+    expect(reads).toEqual([])
+  } finally {
+    client.dispose()
+  }
+})
+
 function info(id: string, parentID?: string): SessionInfo {
   return {
     id,
