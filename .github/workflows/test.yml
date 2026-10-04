@@ -3,14 +3,14 @@ name: test
 on:
   push:
     branches:
-      - v2
+      - integration-v2
   pull_request:
   workflow_dispatch:
 
 concurrency:
-  # Keep every run on v2 so cancelled checks do not pollute the default branch
+  # Keep every run on integration-v2 so cancelled checks do not pollute the default branch
   # commit history. PRs and other branches still share a group and cancel stale runs.
-  group: ${{ case(github.ref == 'refs/heads/v2', format('{0}-{1}', github.workflow, github.run_id), format('{0}-{1}', github.workflow, github.event.pull_request.number || github.ref)) }}
+  group: ${{ case(github.ref == 'refs/heads/integration-v2', format('{0}-{1}', github.workflow, github.run_id), format('{0}-{1}', github.workflow, github.event.pull_request.number || github.ref)) }}
   cancel-in-progress: true
 
 permissions:
@@ -118,17 +118,9 @@ jobs:
         working-directory: packages/codemode
         run: bun run script/publish.ts --dry-run
 
-      - name: Verify packed workerd SDK
-        timeout-minutes: 15
-        run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            bun turbo verify:package --filter=@opencode/sdk
-            exit 0
-          fi
-          bun turbo verify:package --affected --filter=@opencode/sdk
-        env:
-          TURBO_SCM_BASE: ${{ github.event_name == 'pull_request' && format('{0}^1', github.sha) || github.event.before }}
-          TURBO_SCM_HEAD: ${{ github.sha }}
+      # Upstream's "Verify packed workerd SDK" step is omitted: the fork publishes only CLI packages,
+      # and its @opencode/core depends on private, source-only @shuvcode/* plugins that have no
+      # packable build, so `bun turbo verify:package --filter=@opencode/sdk` cannot pass here.
 
       - name: Verify compiled service lifecycle
         if: always()
@@ -161,7 +153,7 @@ jobs:
     needs: affected
     runs-on: ubuntu-latest
     env:
-      E2E_ENABLED: ${{ needs.affected.outputs.app == 'true' && github.ref_name != 'v2' && github.head_ref != 'v2' }}
+      E2E_ENABLED: ${{ needs.affected.outputs.app == 'true' && github.ref_name != 'integration-v2' && github.head_ref != 'integration-v2' }}
       PLAYWRIGHT_BROWSERS_PATH: ${{ github.workspace }}/.playwright-browsers
     defaults:
       run:
