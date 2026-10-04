@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import { isContextOverflow } from "../src/index.js"
+import { AIError, isContextOverflow, isRetryable } from "../src/index.js"
 import { classifyProviderFailure, providerErrorMessage } from "../src/provider-error.js"
 
 describe("provider error classification", () => {
@@ -347,6 +347,44 @@ describe("provider error classification", () => {
         rawBody: JSON.stringify({ error: { code: "1301", message } }),
       })._tag,
     ).toBe("ContentPolicy")
+  })
+
+  test("classifies Google 5h quota exhaustion as non-retryable quota", () => {
+    const message = "You have exhausted your capacity on this model. Your quota will reset after 5h."
+    const quota = classifyProviderFailure({
+      message,
+      status: 429,
+      rawBody: JSON.stringify({
+        error: {
+          code: 429,
+          message,
+          status: "RESOURCE_EXHAUSTED",
+          details: [
+            {
+              "@type": "type.googleapis.com/google.rpc.ErrorInfo",
+              reason: "QUOTA_EXHAUSTED",
+              domain: "cloudcode-pa.googleapis.com",
+            },
+          ],
+        },
+      }),
+    })
+    const throttle = classifyProviderFailure({
+      message: "Resource has been exhausted (e.g. check quota).",
+      status: 429,
+      rawBody: JSON.stringify({
+        error: {
+          code: 429,
+          message: "Resource has been exhausted (e.g. check quota).",
+          status: "RESOURCE_EXHAUSTED",
+          details: [{ "@type": "type.googleapis.com/google.rpc.ErrorInfo", reason: "RATE_LIMIT_EXCEEDED" }],
+        },
+      }),
+    })
+    expect(quota._tag).toBe("QuotaExceeded")
+    expect(isRetryable(new AIError({ reason: quota }))).toBe(false)
+    expect(throttle._tag).toBe("RateLimit")
+    expect(isRetryable(new AIError({ reason: throttle }))).toBe(true)
   })
 
   test("keeps Z.ai throttling and overload retryable", () => {

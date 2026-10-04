@@ -152,9 +152,49 @@ export const GoogleAntigravityPlugin = Plugin.define({
     yield* ctx.session.hook(
       "http.response",
       (evt) =>
-        Effect.sync(() => {
+        Effect.gen(function* () {
           if (evt.model.providerID !== Provider.ID.google || !mapped.has(evt.request)) return
-          if (!evt.response.ok || !evt.response.body) return
+          if (!evt.response.body) return
+          if (!evt.response.ok) {
+            const text = yield* Effect.tryPromise({
+              try: () => evt.response.clone().text(),
+              catch: (cause) => cause,
+            }).pipe(Effect.orElseSucceed(() => ""))
+            const parsed = GoogleAntigravityWire.parseCloudCodeError(text)
+            if (!parsed) return
+            const connection = yield* ctx.integration.connection.active(GoogleAntigravityOAuth.integrationID)
+            const resolved = connection
+              ? yield* ctx.integration.connection.resolve(connection).pipe(Effect.orElseSucceed(() => undefined))
+              : undefined
+            const oauth =
+              resolved?.type === "oauth" && GoogleAntigravityOAuth.isSubscription(resolved) ? resolved : undefined
+            const projectId = oauth ? GoogleAntigravityOAuth.projectId(oauth.metadata) : undefined
+            const summary =
+              evt.response.status === 429 && oauth && projectId
+                ? yield* Effect.tryPromise({
+                    try: (signal) =>
+                      GoogleAntigravityOAuth.fetchQuotaSummary(oauth.access, projectId, undefined, signal),
+                    catch: (cause) => cause,
+                  }).pipe(Effect.orElseSucceed(() => undefined))
+                : undefined
+            const explained = GoogleAntigravityWire.explainCloudCodeError({
+              error: parsed,
+              summary,
+              httpStatus: evt.response.status,
+              modelID: evt.model.id,
+            })
+            if (!explained) return
+            const headers = new Headers(evt.response.headers)
+            headers.delete("content-length")
+            headers.delete("content-encoding")
+            headers.set("content-type", "application/json")
+            evt.response = new Response(explained.body, {
+              status: evt.response.status,
+              statusText: evt.response.statusText,
+              headers,
+            })
+            return
+          }
           const headers = new Headers(evt.response.headers)
           headers.delete("content-length")
           headers.delete("content-encoding")

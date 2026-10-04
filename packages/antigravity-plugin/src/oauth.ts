@@ -301,6 +301,23 @@ export async function fetchAvailableModels(
   )
 }
 
+/** Best-effort quota readout. HTTP failures return undefined so a 429 can still be explained. */
+export async function fetchQuotaSummary(access: string, project: string, request: Fetch = fetch, signal?: AbortSignal) {
+  const response = await request(`${cloudCodeEndpoint}/v1internal:retrieveUserQuotaSummary`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${access}`,
+      "Content-Type": "application/json",
+      "User-Agent": userAgent(),
+    },
+    body: JSON.stringify({ project }),
+    signal: requestSignal(signal),
+  })
+  if (!response.ok) return
+  const body: unknown = await response.json()
+  return body
+}
+
 export async function completeAccount(
   input: AccountTokens | Tokens,
   request: Fetch = fetch,
