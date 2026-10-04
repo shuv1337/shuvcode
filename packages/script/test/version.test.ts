@@ -17,9 +17,23 @@ describe("resolveChannel", () => {
     expect(await resolveChannel({ branch: async () => "v2-rewrite\n" })).toBe("v2-rewrite")
   })
 
-  test("falls back to local without a git branch", async () => {
-    expect(await resolveChannel({ branch: async () => "" })).toBe("local")
-    expect(await resolveChannel({ branch: () => Promise.reject(new Error("not a git repository")) })).toBe("local")
+  test("resolves a detached HEAD from the branches or bookmarks at the working copy", async () => {
+    expect(
+      await resolveChannel({ branch: async () => "", detachedBranches: async () => ["integration-v2"] }),
+    ).toBe("integration-v2")
+    expect(
+      await resolveChannel({ branch: async () => "", detachedBranches: async () => ["zeta", " alpha ", ""] }),
+    ).toBe("alpha")
+  })
+
+  test("fails instead of producing an empty channel", async () => {
+    await expect(resolveChannel({ branch: async () => "" })).rejects.toThrow("OPENCODE_CHANNEL")
+    await expect(
+      resolveChannel({
+        branch: () => Promise.reject(new Error("not a git repository")),
+        detachedBranches: async () => [],
+      }),
+    ).rejects.toThrow("OPENCODE_CHANNEL")
   })
 })
 

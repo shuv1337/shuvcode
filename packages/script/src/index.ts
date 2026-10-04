@@ -29,6 +29,17 @@ const CHANNEL = await resolveChannel({
   bump: env.OPENCODE_BUMP,
   version: env.OPENCODE_VERSION,
   branch: () => $`git branch --show-current`.quiet().nothrow().text(),
+  detachedBranches: async () => {
+    // jj keeps git at a detached HEAD on the working-copy parent; its bookmarks name the branch.
+    const jj = await $`jj log --no-graph --ignore-working-copy -r @- -T 'local_bookmarks.map(|b| b.name()).join("\n")'`
+      .quiet()
+      .nothrow()
+    const bookmarks = jj.exitCode === 0 ? jj.text().split("\n").filter(Boolean) : []
+    if (bookmarks.length) return bookmarks
+    return (await $`git branch --points-at HEAD --format='%(refname:short)'`.quiet().nothrow().text())
+      .split("\n")
+      .filter((name) => name && !name.startsWith("("))
+  },
 })
 const IS_PREVIEW = CHANNEL !== "latest"
 
