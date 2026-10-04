@@ -16,6 +16,7 @@ export async function nodeBinDirectory(env: NodeJS.ProcessEnv) {
     stdin: "ignore",
     stdout: "pipe",
     stderr: "ignore",
+    // A hung version-manager shim should not stall the suite.
     timeout: 15_000,
   })
   if (result.exitCode !== 0) return
