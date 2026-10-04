@@ -6,12 +6,19 @@ export function observeElementOffsetReconnectAware<TScrollElement extends Elemen
   onReconnect?: () => void,
 ) {
   let active = true
+  const element = instance.scrollElement
   const deliver = (offset: number, isScrolling: boolean) => {
     if (!active) return
-    callback(offset, isScrolling)
+    if (isScrolling || !element) return callback(offset, isScrolling)
+    // The idle debounce retains the last scroll event's offset. A prepend or
+    // resize can restore the anchor before the next event, so read its native
+    // position rather than letting that stale callback undo the adjustment.
+    callback(
+      instance.options.horizontal ? element.scrollLeft * (instance.options.isRtl ? -1 : 1) : element.scrollTop,
+      false,
+    )
   }
   const cleanupOffset = observeElementOffset(instance, deliver)
-  const element = instance.scrollElement
   const targetWindow = instance.targetWindow
   const root = element?.closest("main") ?? element?.ownerDocument.body
   if (!element || !targetWindow || !root)
