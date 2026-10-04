@@ -5,11 +5,9 @@ import { DateTime, Deferred, Effect, Fiber, Layer, Option, PubSub, Schema, Strea
 import { advance, drain } from "../lib/clock"
 import { Directory, Document, Event, Info } from "@opencode/schema/config"
 import { Session } from "@opencode/core/session"
-import { SessionRunnerModel } from "@opencode/core/session/runner/model"
 import { SessionExecution } from "@opencode/core/session/execution"
 import { Job } from "@opencode/core/job"
 import { Agent } from "@opencode/core/agent"
-import { Model } from "@opencode/core/model"
 import { SessionInbox } from "@opencode/schema/session-inbox"
 import { SessionMessage } from "@opencode/schema/session-message"
 import { Command } from "@opencode/core/command"
@@ -56,8 +54,6 @@ const it = testEffect(
       Location.node,
       ShellSelect.node,
       Session.node,
-      SessionRunnerModel.node,
-      Model.node,
       Job.node,
       Agent.node,
     ]),
