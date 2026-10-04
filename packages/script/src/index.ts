@@ -29,6 +29,11 @@ const CHANNEL = await resolveChannel({
   bump: env.OPENCODE_BUMP,
   version: env.OPENCODE_VERSION,
   branch: () => $`git branch --show-current`.quiet().nothrow().text(),
+  github: {
+    headRef: process.env["GITHUB_HEAD_REF"],
+    refName: process.env["GITHUB_REF_NAME"],
+    refType: process.env["GITHUB_REF_TYPE"],
+  },
   detachedBranches: async () => {
     // jj keeps git at a detached HEAD on the working-copy parent; its bookmarks name the branch.
     const jj = await $`jj log --no-graph --ignore-working-copy -r @- -T 'local_bookmarks.map(|b| b.name()).join("\n")'`
