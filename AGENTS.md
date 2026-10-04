@@ -197,6 +197,12 @@ const table = sqliteTable("session", {
 - Run `bun run check` from the repository root as the canonical full lint and type-check verification.
 - During focused iteration, run `bun typecheck` from the affected package directory (for example, `packages/core`). Never run `tsc` directly.
 
+## Dependencies
+
+- This workspace uses Bun's isolated linker (`configVersion` 1 in `bun.lock`; `bunfig.toml` does not set `install.linker`). `node_modules` links a package only for the workspace that declares it.
+- Trace an installed package, including a transitive one, with `bun pm why <pkg>` from the repository. `bun pm ls` lists the workspace; `bun pm ls --all` lists the lockfile.
+- Resolve a module from the workspace that declares it: `cd packages/<pkg> && bun -e "console.log(require.resolve('<name>'))"`. `xdg-basedir` is transitive (`lighthouse` → `configstore` in `packages/desktop` and `packages/gui-extensions`). `require.resolve("xdg-basedir")` fails at the repository root and in those directories; resolve `configstore` there, then resolve `xdg-basedir` from that `configstore` module.
+
 ## V2 Session Core
 
 - Keep durable events minimal: record irreducible new facts and do not repeat state derivable by folding the ordered aggregate history. Enrich projections and read models with previous or derived state when consumers need self-contained views.
