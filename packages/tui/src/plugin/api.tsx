@@ -1,6 +1,15 @@
 import { PluginContextProvider } from "@opencode/plugin/tui"
-import { createRoot, getOwner, onCleanup, runWithOwner, untrack, type JSX } from "solid-js"
-import type { Context, Dialog, Page, SlotClaim, SlotMap, SlotPath, Toast } from "@opencode/plugin/tui/context"
+import { createRoot, createUniqueId, getOwner, onCleanup, runWithOwner, untrack, type JSX } from "solid-js"
+import type {
+  Context,
+  Dialog,
+  DialogSelectOptions,
+  Page,
+  SlotClaim,
+  SlotMap,
+  SlotPath,
+  Toast,
+} from "@opencode/plugin/tui/context"
 import type { Placement, PlacementKind } from "./structure"
 import { infoStringToFiletype, type MarkdownCodeBlockRenderer } from "@opentui/core"
 import { useRenderer } from "@opentui/solid"
@@ -375,16 +384,37 @@ export function createDialogApi(
         )
       })
     },
-    select(options) {
-      return new Promise((resolve) => {
-        const done = settle<(typeof options.options)[number]["value"] | undefined>(resolve)
+    select<Value>(options: DialogSelectOptions<Value>) {
+      return new Promise<Value | undefined>((resolve) => {
+        const done = settle<Value | undefined>(resolve)
+        const search = options.search
+        const id = createUniqueId()
         api.show(
           () => (
-            <DialogSelect
+            <DialogSelect<Value>
               title={options.title}
               placeholder={options.placeholder}
               options={options.options.map((option) => ({ ...option }))}
               current={options.current}
+              search={
+                search &&
+                ((query) =>
+                  search(
+                    query,
+                    options.options.filter((option) => !option.disabled),
+                  ))
+              }
+              actions={options.actions?.map((action, index) => {
+                const base = {
+                  command: `plugin.dialog.select.${id}.${index}`,
+                  title: action.title,
+                  side: action.side,
+                  bind: action.bind,
+                }
+                if (action.selection === "none")
+                  return { ...base, selection: action.selection, onTrigger: action.onTrigger }
+                return { ...base, onTrigger: (option) => action.onTrigger(option.value) }
+              })}
               onSelect={(option) => {
                 done(option.value)
                 api.clear()
