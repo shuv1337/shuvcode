@@ -183,9 +183,9 @@ describe.skipIf(!Bun.which("jj"))("detachedBranches", () => {
       await $`jj log --ignore-working-copy --no-graph -r @ -T commit_id`.cwd(workspace).quiet().text()
     ).trim()
     await $`git branch fix-x ${commit}`.cwd(dir).quiet()
-    expect(
-      await resolveChannel({ branch: async () => "", detachedBranches: () => detachedBranches(workspace) }),
-    ).toBe("fix-x")
+    expect(await resolveChannel({ branch: async () => "", detachedBranches: () => detachedBranches(workspace) })).toBe(
+      "fix-x",
+    )
   })
 
   test("does not snapshot working-copy edits while looking up a channel", async () => {
