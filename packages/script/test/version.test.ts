@@ -102,6 +102,16 @@ describe.skipIf(!Bun.which("jj"))("detachedBranches", () => {
       resolveChannel({ branch: async () => "", detachedBranches: () => detachedBranches(dir) }),
     ).rejects.toThrow("(feature, integration-v2). Set OPENCODE_CHANNEL")
   })
+
+  test("rejects bookmarks from several working-copy parents", async () => {
+    const { dir, jj } = await repo()
+    await jj(["new", "root()", "-m", "other"])
+    await jj(["bookmark", "create", "other", "-r", "@"])
+    await jj(["new", "integration-v2", "other"])
+    await expect(
+      resolveChannel({ branch: async () => "", detachedBranches: () => detachedBranches(dir) }),
+    ).rejects.toThrow("Set OPENCODE_CHANNEL to one of them")
+  })
 })
 
 describe("parseForkVersion", () => {
