@@ -22,6 +22,7 @@ import { Job } from "@opencode/core/job"
 import { KV } from "@opencode/core/kv"
 import { LocationServiceMap } from "@opencode/core/location-service-map"
 import { Session } from "@opencode/core/session"
+import { SessionContext } from "@opencode/core/session/context"
 import { SessionEvent } from "@opencode/core/session/event"
 import { SessionExecution } from "@opencode/core/session/execution"
 import { SessionRestart } from "@opencode/core/session/execution/restart"
@@ -119,7 +120,17 @@ const subagentPluginSupervisor = makeLocationNode({
       yield* registerToolPlugin(SubagentTool.Plugin, {}, (name, callback) => hooks.register("tool", name, callback))
     }),
   ),
-  deps: [Agent.node, Config.node, Model.node, Permission.node, Session.node, Job.node, Tool.node, PluginHooks.node],
+  deps: [
+    Agent.node,
+    Config.node,
+    Model.node,
+    Permission.node,
+    Session.node,
+    SessionContext.node,
+    Job.node,
+    Tool.node,
+    PluginHooks.node,
+  ],
 })
 
 const nodes = LayerNode.group([
@@ -197,6 +208,52 @@ const withSubagent = (location: Location.Ref) =>
   })
 
 describe("SubagentTool", () => {
+  productionIt.live("inherits the parent's resolved agent model and variant without a stored model", () =>
+    Effect.acquireRelease(
+      Effect.promise(() => tmpdir()),
+      (dir) => Effect.promise(() => dir[Symbol.asyncDispose]()),
+    ).pipe(
+      Effect.flatMap((dir) =>
+        Effect.gen(function* () {
+          yield* Effect.promise(() =>
+            Bun.write(
+              path.join(dir.path, "opencode.json"),
+              JSON.stringify({
+                agents: { build: { model: "test/override#fast" } },
+                providers: { test: { package: "@opencode/ai/providers/openai/chat", settings: { apiKey: "test" } } },
+              }),
+            ),
+          )
+          const sessions = yield* Session.Service
+          const parent = yield* sessions.create({
+            location: { directory: AbsolutePath.make(dir.path) },
+            agent: Agent.ID.make("build"),
+          })
+          yield* withSubagent(parent.location)
+          expect(parent.model).toBeUndefined()
+          const locations = yield* LocationServiceMap.Service
+          const registry = yield* Tool.Service.pipe(Effect.provide(locations.get(parent.location)))
+          for (const agent of ["explore", "general"]) {
+            const result = yield* executeTool(registry, {
+              sessionID: parent.id,
+              ...toolIdentity,
+              call: {
+                type: "tool-call",
+                id: `call-inherit-${agent}`,
+                name: SubagentTool.name,
+                input: { agent, description: "inherited model", prompt: "review" },
+              },
+            })
+            expect(result).toMatchObject({ status: "completed" })
+            const child = yield* sessions.get(outputSessionID(result.metadata))
+            expect(child.model).toEqual(overrideModel)
+          }
+          expect((yield* sessions.get(parent.id)).model).toBeUndefined()
+        }),
+      ),
+    ),
+  )
+
   completionIt.live("admits one durable completion across live delivery and restart replay", () =>
     Effect.acquireRelease(
       Effect.promise(() => tmpdir()),

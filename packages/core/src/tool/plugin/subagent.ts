@@ -10,6 +10,7 @@ import { Job } from "../../job.js"
 import { Model } from "../../model.js"
 import { Permission } from "../../permission.js"
 import { Session } from "../../session.js"
+import { SessionContext } from "../../session/context.js"
 import { SessionSchema } from "../../session/schema.js"
 import { SubagentCompletion } from "../../session/subagent-completion.js"
 import { SubagentJob } from "../../session/subagent-job.js"
@@ -65,6 +66,7 @@ export const Plugin = {
   id: "opencode.tool.subagent",
   effect: Effect.fn("SubagentTool.Plugin")(function* (ctx: Context) {
     const sessions = yield* Session.Service
+    const sessionContext = yield* SessionContext.Service
     const jobs = yield* Job.Service
     const agents = yield* Agent.Service
     const config = yield* Config.Service
@@ -181,7 +183,6 @@ export const Plugin = {
                 )
               }
 
-              const model = override ?? agent.model ?? parent.model
               const child =
                 existing ??
                 (yield* sessions
@@ -189,7 +190,13 @@ export const Plugin = {
                     parentID: context.sessionID,
                     title: input.description,
                     agent: Agent.ID.make(input.agent),
-                    model,
+                    model:
+                      override ??
+                      agent.model ??
+                      parent.model ??
+                      (yield* sessionContext
+                        .resolveModel(parent)
+                        .pipe(Effect.mapError((error) => new ToolFailure({ message: error.message, error })))).ref,
                   })
                   .pipe(
                     Effect.mapError(

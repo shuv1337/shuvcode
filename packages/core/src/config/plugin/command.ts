@@ -13,6 +13,7 @@ import { Agent } from "../../agent.js"
 import { Config } from "../../config.js"
 import { Location } from "../../location.js"
 import { Session } from "../../session.js"
+import { SessionContext } from "../../session/context.js"
 import { SubagentJob } from "../../session/subagent-job.js"
 import { ShellSelect } from "../../shell/select.js"
 import { FSUtil } from "@opencode/util/fs-util"
@@ -35,6 +36,7 @@ export const Plugin = define({
     const processes = yield* AppProcess.Service
     const shell = yield* ShellSelect.Service
     const sessions = yield* Session.Service
+    const sessionContext = yield* SessionContext.Service
     const agents = yield* Agent.Service
     const subagents = yield* SubagentJob.make
     const load = Effect.fn("ConfigCommandPlugin.load")(function* () {
@@ -102,7 +104,8 @@ export const Plugin = define({
                     parentID: parent.id,
                     title: command.description ?? name,
                     agent: selected.id,
-                    model: model ?? selected.info?.model ?? parent.model,
+                    model:
+                      model ?? selected.info?.model ?? parent.model ?? (yield* sessionContext.resolveModel(parent)).ref,
                   })
                   yield* sessions.prompt({
                     ...input.prompt,

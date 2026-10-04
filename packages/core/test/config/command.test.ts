@@ -5,6 +5,7 @@ import { DateTime, Deferred, Effect, Fiber, Layer, Option, PubSub, Schema, Strea
 import { advance, drain } from "../lib/clock"
 import { Directory, Document, Event, Info } from "@opencode/schema/config"
 import { Session } from "@opencode/core/session"
+import { SessionContext } from "@opencode/core/session/context"
 import { SessionExecution } from "@opencode/core/session/execution"
 import { Job } from "@opencode/core/job"
 import { Agent } from "@opencode/core/agent"
@@ -54,6 +55,7 @@ const it = testEffect(
       Location.node,
       ShellSelect.node,
       Session.node,
+      SessionContext.node,
       Job.node,
       Agent.node,
     ]),
