@@ -51,7 +51,51 @@ const it = testEffect(
 
 const parentModel = Model.Ref.make({ id: Model.ID.make("parent"), providerID: Provider.ID.make("test") })
 
+const inheritanceIt = testEffect(
+  AppNodeBuilder.build(LayerNode.group([Session.node, LocationServiceMap.node]), [
+    Global.node.replace(tempGlobalLayer),
+    offlineModels,
+    Watcher.node.replace(Watcher.configured({ enabled: false })),
+    LayerNodePlatform.llmClient.replace(llmLayer),
+  ]),
+)
+
 describe("command subagents", () => {
+  for (const agent of ["explore", "general"]) {
+    inheritanceIt.live(`inherits the parent's resolved agent model and variant for ${agent}`, () =>
+      Effect.gen(function* () {
+        const tmp = yield* tmpdirScoped()
+        yield* Effect.promise(() =>
+          Bun.write(
+            path.join(tmp.path, "opencode.json"),
+            JSON.stringify({
+              agents: { build: { model: "test/parent#fast" } },
+              providers: {
+                test: {
+                  package: "@opencode/ai/providers/openai/chat",
+                  settings: { apiKey: "test" },
+                  models: { parent: { variants: [{ id: "fast" }] } },
+                },
+              },
+              commands: { review: { subagent: true, agent, template: "Review $ARGUMENTS" } },
+            }),
+          ),
+        )
+        const sessions = yield* Session.Service
+        const parent = yield* sessions.create({
+          location: { directory: AbsolutePath.make(tmp.path) },
+          agent: Agent.ID.make("build"),
+        })
+        expect(parent.model).toBeUndefined()
+        yield* sessions.command({ sessionID: parent.id, command: "review", text: "changes" })
+        const children = (yield* sessions.list({ parentID: parent.id })).data
+        expect(children).toHaveLength(1)
+        expect(children[0]?.model).toEqual({ ...parentModel, variant: Model.VariantID.make("fast") })
+        expect((yield* sessions.get(parent.id)).model).toBeUndefined()
+      }),
+    )
+  }
+
   for (const fixture of [
     {
       name: "native JSON",
