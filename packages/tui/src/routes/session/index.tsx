@@ -2607,11 +2607,9 @@ function useToolPermission(part: () => SessionMessageAssistantTool | undefined) 
 
 function InlineTool(props: {
   icon: string
-  iconColor?: RGBA
   color?: RGBA
   complete: unknown
   pending: string
-  failure?: string
   spinner?: boolean
   running?: boolean
   status?: JSX.Element
@@ -2651,7 +2649,6 @@ function InlineTool(props: {
   return (
     <InlineToolRow
       icon={props.icon}
-      iconColor={props.iconColor}
       color={fg()}
       errorColor={theme.text.feedback.error.base}
       failed={failed()}
@@ -2660,7 +2657,6 @@ function InlineTool(props: {
       errorExpanded={errorExpanded()}
       complete={props.complete}
       pending={props.pending}
-      failure={props.failure}
       spinner={props.spinner}
       status={props.status}
       onMouseOver={() => clickable() && setHover(true)}
