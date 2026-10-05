@@ -1,4 +1,4 @@
-import { appendFile, rename, writeFile } from "node:fs/promises"
+import { appendFile, rename, rm, writeFile } from "node:fs/promises"
 
 const [registration, mode, delay] = process.argv.slice(2)
 if (registration === undefined || mode === undefined) throw new Error("Missing service fixture arguments")
@@ -91,6 +91,10 @@ const server = Bun.serve({
   },
 })
 
+// Install handlers before publishing: a test may signal as soon as the registration appears.
+process.on("SIGTERM", () => void shutdown("SIGTERM"))
+process.on("SIGINT", () => void shutdown("SIGINT"))
+
 await writeFile(
   registration + ".tmp",
   JSON.stringify({
@@ -106,8 +110,12 @@ await rename(registration + ".tmp", registration)
 
 async function shutdown(signal?: NodeJS.Signals) {
   if (signal !== undefined) await writeFile(registration + ".signal", signal)
+  // A lingering server unregisters on SIGTERM but keeps running, and holds its port, until killed.
+  if (mode === "lingering") {
+    await rm(registration, { force: true })
+    await writeFile(registration + ".unregistered", "")
+    await Bun.sleep(Number(delay))
+  }
   server.stop(true)
   process.exit()
 }
-process.on("SIGTERM", () => void shutdown("SIGTERM"))
-process.on("SIGINT", () => void shutdown("SIGINT"))

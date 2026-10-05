@@ -129,7 +129,7 @@ export async function stop(options: StopOptions = {}) {
       ? PtyHandoff.prepare(options.file ?? fallback(), info, defaultEnsureTiming.requestTimeout)
       : PtyHandoff.clear(options.file ?? fallback())
   ).catch((cause: unknown) => console.warn("Failed to prepare persistent terminals for replacement", cause))
-  if (info !== undefined) await terminate(info, options, defaultEnsureTiming)
+  if (info !== undefined) await terminate(info, options, ensureTiming(options))
 }
 
 function fallback() {
@@ -258,9 +258,9 @@ async function terminate(info: Info, options: { readonly file?: string }, timing
   const current = await read(options.file)
   if (current === undefined || !same(current, info)) return
   signal(info.pid, "SIGTERM")
+  // The registration can disappear or change hands before this process exits. Only the PID we
+  // signalled can tell us whether it has stopped, so escalate based on that process.
   if (!(await waitUntilStopped(info.pid, timing))) {
-    const latest = await read(options.file)
-    if (latest === undefined || !same(latest, info)) return
     signal(info.pid, "SIGKILL")
     if (!(await waitUntilStopped(info.pid, timing))) throw new Error(`Server process ${info.pid} is still running`)
   }

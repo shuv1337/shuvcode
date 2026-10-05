@@ -157,10 +157,8 @@ export const stop = Effect.fn("service.stop")(function* (options: StopOptions = 
     options.pty === "handoff" && info !== undefined
       ? PtyHandoff.prepare(options.file ?? fallback(), info, defaultEnsureTiming.requestTimeout)
       : PtyHandoff.clear(options.file ?? fallback()),
-  ).pipe(
-    Effect.catch((cause) => Effect.logWarning("Failed to prepare persistent terminals for replacement", cause)),
-  )
-  if (info !== undefined) yield* terminate(info, options, defaultEnsureTiming)
+  ).pipe(Effect.catch((cause) => Effect.logWarning("Failed to prepare persistent terminals for replacement", cause)))
+  if (info !== undefined) yield* terminate(info, options, ensureTiming(options))
 })
 
 function fallback() {
@@ -298,9 +296,9 @@ const terminate = Effect.fnUntraced(function* (info: Info, options: { readonly f
   if (current === undefined || !same(current, info)) return
   yield* signal(info.pid, "SIGTERM")
   const done = yield* stopped(info.pid).pipe(Effect.retry(poll(timing)), Effect.option)
+  // The registration can disappear or change hands before this process exits. Only the PID we
+  // signalled can tell us whether it has stopped, so escalate based on that process.
   if (Option.isNone(done)) {
-    const latest = yield* read(options.file)
-    if (latest === undefined || !same(latest, info)) return
     yield* signal(info.pid, "SIGKILL")
     yield* stopped(info.pid).pipe(Effect.retry(poll(timing)))
   }
