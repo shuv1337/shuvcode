@@ -203,6 +203,11 @@ const table = sqliteTable("session", {
 - During focused iteration, run `bun typecheck` from the affected package directory (for example, `packages/core`). Never run `tsc` directly.
 - Validate whitespace with plain `git diff --check`, or check formatting with Prettier (`bun run prettier --ignore-unknown --check .`). `jj diff` has no `--check` flag.
 
+## Remote port probes
+
+- Check whether a remote port accepts connections with a timeout-bounded connect. In bash, use `/dev/tcp` under `timeout`. Otherwise use `nc -z` with a connect timeout.
+- Do not use `lsof` for that probe. On macOS a read-only listener precheck can enter uninterruptible sleep and ignore `SIGTERM` and `SIGKILL`.
+
 ## V2 Session Core
 
 - Keep durable events minimal: record irreducible new facts and do not repeat state derivable by folding the ordered aggregate history. Enrich projections and read models with previous or derived state when consumers need self-contained views.
