@@ -25,8 +25,14 @@ test("serve replays durable events after a restart and removes them with the ses
     const body = await log.text()
     const events = logEvents(body)
     expect(log.status, body).toBe(200)
-    expect(events.map((event) => event.type), body).toContain("session.created")
-    expect(events.map((event) => event.type), body).toContain("log.synced")
+    expect(
+      events.map((event) => event.type),
+      body,
+    ).toContain("session.created")
+    expect(
+      events.map((event) => event.type),
+      body,
+    ).toContain("log.synced")
     const createdEvent = events.find((event) => event.type === "session.created")!
     expect(createdEvent.durable?.seq).toBe(0)
 
@@ -56,10 +62,9 @@ test("serve replays durable events after a restart and removes them with the ses
     const replayed = logEvents(await replay.text())
     expect(replayed.filter((event) => event.type !== "log.synced")).toEqual(retained)
     expect(replayed.at(-1)?.type).toBe("log.synced")
-    const resumed = await fetch(
-      new URL(`/api/experimental/session/${session.data.id}/log?after=0`, restartedURL),
-      { headers: { authorization } },
-    )
+    const resumed = await fetch(new URL(`/api/experimental/session/${session.data.id}/log?after=0`, restartedURL), {
+      headers: { authorization },
+    })
     expect(resumed.status).toBe(200)
     expect(logEvents(await resumed.text()).filter((event) => event.type !== "log.synced")).toEqual(retained.slice(1))
 
