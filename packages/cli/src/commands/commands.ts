@@ -208,6 +208,7 @@ const Root = Spec.make(typeof OPENCODE_CLI_NAME === "string" ? OPENCODE_CLI_NAME
         Spec.make("list", { description: "List configured MCP servers and their status" }),
         Spec.make("add", {
           description: "Add an MCP server to your configuration",
+          connectionFlags: "unsupported",
           params: {
             name: Argument.string("name").pipe(Argument.withDescription("Name of the MCP server")),
             command: Argument.string("command").pipe(
@@ -255,6 +256,7 @@ const Root = Spec.make(typeof OPENCODE_CLI_NAME === "string" ? OPENCODE_CLI_NAME
         }),
         Spec.make("add", {
           description: "Install a plugin and add it to the global configuration",
+          connectionFlags: "unsupported",
           params: {
             package: Argument.string("package").pipe(Argument.withDescription("npm registry or Git package specifier")),
           },
@@ -270,6 +272,7 @@ const Root = Spec.make(typeof OPENCODE_CLI_NAME === "string" ? OPENCODE_CLI_NAME
         }),
         Spec.make("update", {
           description: "Update package plugins",
+          connectionFlags: "unsupported",
           params: {
             target: Argument.string("target").pipe(
               Argument.withDescription("Configured package target; omit to update all outdated plugins"),
@@ -279,6 +282,7 @@ const Root = Spec.make(typeof OPENCODE_CLI_NAME === "string" ? OPENCODE_CLI_NAME
         }),
         Spec.make("remove", {
           description: "Remove a plugin from global configuration",
+          connectionFlags: "unsupported",
           params: {
             package: Argument.string("package").pipe(Argument.withDescription("configured package specifier")),
           },

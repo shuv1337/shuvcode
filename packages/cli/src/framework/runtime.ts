@@ -91,8 +91,14 @@ export function run(commands: Spec.Any, handlers: ReadonlyArray<LazyHandler>, op
   ) as Effect.Effect<void, unknown, Command.Environment>
 }
 
-function provide(node: Spec.Any, handlers: ReadonlyArray<LazyHandler>, localCommand?: string): ProvidedCommand {
-  const unsupported = localCommand ?? (node.connectionFlags === "unsupported" ? node.name : undefined)
+function provide(
+  node: Spec.Any,
+  handlers: ReadonlyArray<LazyHandler>,
+  localCommand?: string,
+  parents?: ReadonlyArray<string>,
+): ProvidedCommand {
+  const unsupported =
+    localCommand ?? (node.connectionFlags === "unsupported" ? [...(parents ?? []), node.name].join(" ") : undefined)
   const handler = handlers.find((handler) => handler.spec === node.spec)
   const spec = handler
     ? node.spec.pipe(
@@ -108,10 +114,11 @@ function provide(node: Spec.Any, handlers: ReadonlyArray<LazyHandler>, localComm
     : node.spec
   if (!Object.keys(node.commands).length) return spec as ProvidedCommand
   const children = Object.values(node.commands)
+  const path = parents ? [...parents, node.name] : []
   return spec.pipe(
     Command.withSubcommands([
-      ...children.map((child) => provide(child, handlers, unsupported)),
-      ...children.flatMap((child) => child.aliases.map((alias) => provide(alias, handlers, unsupported))),
+      ...children.map((child) => provide(child, handlers, unsupported, path)),
+      ...children.flatMap((child) => child.aliases.map((alias) => provide(alias, handlers, unsupported, path))),
     ]),
   ) as ProvidedCommand
 }
