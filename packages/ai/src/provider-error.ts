@@ -118,6 +118,8 @@ const QUOTA_CODES = new Set([
   "gousagelimiterror",
   "freeusagelimiterror",
   "creditlimitexceeded",
+  // Google Cloud Code 5h/weekly account caps. Bare RESOURCE_EXHAUSTED stays a throttle.
+  "quota_exhausted",
 ])
 // Google reports an invalid API key as HTTP 400 INVALID_ARGUMENT with this `details[].reason`.
 // Z.ai's Responses API reports account and plan rejections mid-stream as `permission_denied`.

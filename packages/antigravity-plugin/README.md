@@ -23,6 +23,11 @@ There are no Core imports, SDK transport wrappers, or proxy servers.
 - Native Gemini requests resolve the active credential afresh, then use the
   Cloud Code envelope and `metadata.projectId`. Only responses belonging to
   rewritten requests are unwrapped. API-key connections are unchanged.
+- Failed rewritten responses are re-emitted as a Google error with the Cloud
+  Code status, message, and (on 429) a best-effort quota summary readout. Only
+  an explicit `QUOTA_EXHAUSTED` reason, an exhausted 5h bucket in the failed
+  model's own group, or a long-window reset message becomes non-retryable
+  `QUOTA_EXHAUSTED`; other `RESOURCE_EXHAUSTED` errors stay retryable throttles.
 - Browser login is explicit. No HOME, legacy account, or IDE credential discovery
   is performed. Offline credential import belongs to the host's test importer.
 - Credentials marked `metadata.shuvcodeAuthImport: "access-only"` cannot refresh;
