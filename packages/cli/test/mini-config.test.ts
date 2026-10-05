@@ -6,6 +6,7 @@ import { mkdir, rm } from "node:fs/promises"
 import path from "node:path"
 import { Config } from "../src/config"
 import type { MiniCommandInput } from "../src/mini"
+import { ServerSetting } from "../src/services/server-flags"
 import { OPENCODE_VERSION } from "../src/version"
 
 test("mini handler passes resolved CLI keybinds to the runtime", async () => {
@@ -39,8 +40,6 @@ test("mini handler passes resolved CLI keybinds to the runtime", async () => {
   try {
     await Effect.runPromise(
       handler({
-        server: Option.some(server.url.toString()),
-        standalone: false,
         continue: false,
         session: Option.none(),
         fork: false,
@@ -51,6 +50,7 @@ test("mini handler passes resolved CLI keybinds to the runtime", async () => {
         prompt: Option.none(),
         demo: false,
       }).pipe(
+        Effect.provideService(ServerSetting, Option.some(server.url.toString())),
         Effect.provide(Config.layer),
         Effect.provide(Global.layerWith({ config: configDirectory, state: stateDirectory })),
         Effect.provide(NodeFileSystem.layer),

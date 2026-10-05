@@ -4,6 +4,7 @@ import { OPENCODE_VERSION } from "../version"
 import { Cause, Effect, Exit, Redacted } from "effect"
 import { Env } from "../env"
 import { ServiceConfig } from "./service-config"
+import { ServerFlags } from "./server-flags"
 import { Standalone } from "./standalone"
 
 export type Args = {
@@ -19,12 +20,16 @@ export type Resolved = {
 }
 
 export const resolve = Effect.fn("cli.server-connection.resolve")(function* (args: Args = {}) {
-  if (args.server !== undefined && args.standalone)
+  // Omitted overrides follow the global flags. Direct callers still work when those settings are absent.
+  const configured = yield* ServerFlags.read()
+  const standalone = args.standalone ?? configured.standalone
+  const server = args.server ?? configured.server
+  if (server !== undefined && standalone)
     return yield* Effect.fail(new Error("--server and --standalone cannot be combined"))
-  if (args.server !== undefined) {
+  if (server !== undefined) {
     const password = yield* Env.password
     const endpoint = {
-      url: args.server,
+      url: server,
       auth: password ? { type: "basic" as const, username: "opencode", password: Redacted.value(password) } : undefined,
     } satisfies Endpoint
     const client = OpenCode.make({ baseUrl: endpoint.url, headers: Service.headers(endpoint) })
@@ -49,7 +54,7 @@ export const resolve = Effect.fn("cli.server-connection.resolve")(function* (arg
     process.stderr.write(legacySkewWarning(endpoint.url, legacy))
     return { endpoint } satisfies Resolved
   }
-  if (args.standalone || (yield* ServiceConfig.read()).disabled === true) {
+  if (standalone || (yield* ServiceConfig.read()).disabled === true) {
     return { endpoint: yield* Standalone.start() } satisfies Resolved
   }
 

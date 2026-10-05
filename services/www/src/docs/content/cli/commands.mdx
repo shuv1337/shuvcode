@@ -3,7 +3,7 @@ title: "Commands"
 description: "Reference for the opencode command line."
 ---
 
-Every command accepts `--help` for its full flag list, for example `opencode run --help`. Some server-backed commands accept `--standalone` to run a private server or `--server <url>` to target a specific one; check the command's help for its supported flags.
+Every command accepts `--help` for its full flag list, for example `opencode run --help`. `--standalone` (run a private server) and `--server <url>` (target a specific server) are global flags accepted before or after the subcommand. `service`, `pair`, `acp`, `serve`, `mcp add`, and `plugin add`/`update`/`remove` act on the local machine and reject them.
 
 ## run
 
