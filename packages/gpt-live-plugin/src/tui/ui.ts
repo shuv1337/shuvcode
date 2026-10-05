@@ -528,7 +528,7 @@ export class Frames {
   private period = 0
   private readonly stopListening: () => void
 
-  constructor(private readonly voice: VoiceController) {
+  constructor(voice: VoiceController) {
     this.stopListening = voice.onChange(() => this.tick())
   }
 
