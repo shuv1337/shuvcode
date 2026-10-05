@@ -5,6 +5,7 @@ type Options<Config extends Command.Command.Config, Commands extends ReadonlyArr
   readonly aliases?: ReadonlyArray<string>
   readonly params?: Config
   readonly commands?: Commands
+  readonly connectionFlags?: "unsupported"
 }
 
 export interface Node<
@@ -16,6 +17,7 @@ export interface Node<
   readonly spec: Spec
   readonly commands: Commands
   readonly aliases: ReadonlyArray<Any>
+  readonly connectionFlags?: "unsupported"
 }
 
 export type Any = Node<string, Command.Command<any, any, any, any, any>, Children>
@@ -41,13 +43,14 @@ export function make<
     const aliasSpec = options.description
       ? aliasCommand.pipe(Command.withDescription(options.description))
       : aliasCommand
-    return { name: alias, spec: aliasSpec, commands, aliases: [] }
+    return { name: alias, spec: aliasSpec, commands, aliases: [], connectionFlags: options.connectionFlags }
   })
   return {
     name,
     spec,
     commands,
     aliases: extra,
+    connectionFlags: options.connectionFlags,
   }
 }
 

@@ -84,7 +84,7 @@ const Root = Spec.make(typeof OPENCODE_CLI_NAME === "string" ? OPENCODE_CLI_NAME
         ),
       },
     }),
-    Spec.make("acp", { description: "Start an Agent Client Protocol server" }),
+    Spec.make("acp", { description: "Start an Agent Client Protocol server", connectionFlags: "unsupported" }),
     Spec.make("api", {
       description: "Make a request to the running server",
       params: {
@@ -121,7 +121,9 @@ const Root = Spec.make(typeof OPENCODE_CLI_NAME === "string" ? OPENCODE_CLI_NAME
               "log",
               "repos",
             ]).pipe(
-              Argument.withDescription("Print only one path: db, home, data, config, cache, state, tmp, bin, log, repos"),
+              Argument.withDescription(
+                "Print only one path: db, home, data, config, cache, state, tmp, bin, log, repos",
+              ),
               Argument.optional,
             ),
           },
@@ -443,6 +445,7 @@ const Root = Spec.make(typeof OPENCODE_CLI_NAME === "string" ? OPENCODE_CLI_NAME
     }),
     Spec.make("service", {
       description: "Manage the background server",
+      connectionFlags: "unsupported",
       commands: [
         Spec.make("start", { description: "Start the background server" }),
         Spec.make("restart", { description: "Restart the background server" }),
@@ -488,6 +491,7 @@ const Root = Spec.make(typeof OPENCODE_CLI_NAME === "string" ? OPENCODE_CLI_NAME
     }),
     Spec.make("pair", {
       description: "Print one-time links to connect a browser or app",
+      connectionFlags: "unsupported",
       params: {
         url: Flag.string("url").pipe(
           Flag.withDescription("Use an external HTTP(S) server URL in pairing links"),
@@ -506,6 +510,7 @@ const Root = Spec.make(typeof OPENCODE_CLI_NAME === "string" ? OPENCODE_CLI_NAME
     }),
     Spec.make("serve", {
       description: "Start the v2 API and web server",
+      connectionFlags: "unsupported",
       params: {
         hostname: Flag.string("hostname").pipe(Flag.optional),
         port: Flag.integer("port").pipe(Flag.optional),
