@@ -34,7 +34,9 @@ describe("global server flags", () => {
         expect(result.stdout).toContain("GLOBAL FLAGS")
         expect(result.stdout).toContain("Run client commands with a private server")
         expect(result.stdout).toContain("Connect client commands to a server URL")
-        expect(result.stdout).toContain("unsupported by service, pair, acp, and serve")
+        expect(result.stdout).toContain(
+          "unsupported by service, pair, acp, serve, mcp add, and plugin add/update/remove",
+        )
       }
     } finally {
       await fs.rm(root, { recursive: true, force: true })
@@ -92,6 +94,38 @@ describe("global server flags", () => {
       } finally {
         owner.kill("SIGKILL")
         await owner.exited
+        await fs.rm(root, { recursive: true, force: true })
+      }
+    },
+    45_000,
+  )
+
+  test.each(
+    [
+      ["mcp", "add", "fixture", "--url", "http://127.0.0.1:1/mcp"],
+      ["mcp", "add", "fixture", "--url", "http://127.0.0.1:1/mcp", "--global"],
+      ["plugin", "add", "fixture-plugin"],
+      ["plugin", "update", "fixture-plugin"],
+      ["plugin", "remove", "fixture-plugin"],
+    ].map((args) => ({ args })),
+  )(
+    "rejects connection flags before config writes: $args",
+    async ({ args }) => {
+      const root = await fs.mkdtemp(path.join(import.meta.dir, ".server-flags-"))
+      const original = JSON.stringify({ plugin: ["fixture-plugin"], plugins: ["fixture-plugin"] })
+      const files = [path.join(root, "opencode.json"), path.join(root, "config", "opencode.json")]
+      try {
+        await fs.mkdir(path.join(root, "config"), { recursive: true })
+        await Promise.all(files.map((file) => Bun.write(file, original)))
+        for (const flags of [["--server", "http://127.0.0.1:1"], ["--standalone"]]) {
+          for (const placement of placements(args, flags)) {
+            const result = await cli(root, placement)
+            expect(result.exitCode).not.toBe(0)
+            expect(result.stderr).toContain(`${args[0]} ${args[1]} does not support --server or --standalone`)
+            for (const file of files) expect(await Bun.file(file).text()).toBe(original)
+          }
+        }
+      } finally {
         await fs.rm(root, { recursive: true, force: true })
       }
     },
