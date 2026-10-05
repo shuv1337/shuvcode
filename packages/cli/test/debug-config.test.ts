@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test"
 import fs from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
+import { cleanProcessEnv } from "./fixture/clean-env"
 import { OPENCODE_VERSION } from "../src/version"
 import { redactConfig } from "../src/commands/handlers/debug/redact"
 
@@ -119,7 +120,7 @@ test("redacts URL credentials and credential environment variables without mutat
 async function cli(args: string[], cwd = path.join(import.meta.dir, ".."), env?: Record<string, string>) {
   const child = Bun.spawn([process.execPath, "run", path.join(import.meta.dir, "../src/index.ts"), ...args], {
     cwd,
-    env: { ...process.env, ...env },
+    env: { ...cleanProcessEnv(), ...env },
     stdout: "pipe",
     stderr: "pipe",
   })
