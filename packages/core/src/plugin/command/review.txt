@@ -22,8 +22,9 @@ Based on the input provided, determine which type of review to perform:
    - Run: `git diff $ARGUMENTS...HEAD`
 
 4. **PR URL or number** (contains "github.com" or "pull" or looks like a PR number): Review the pull request
-   - Run: `gh pr view $ARGUMENTS` to get PR context
-   - Run: `gh pr diff $ARGUMENTS` to get the diff
+   - In a Git checkout, run `gh pr view $ARGUMENTS` and `gh pr diff $ARGUMENTS`.
+   - A full PR URL already names the repository, so those commands work outside a Git checkout.
+   - In a Jujutsu-only checkout (`.jj` present and no `.git`), `gh` cannot discover the repository. When `$ARGUMENTS` is a number or branch, take `owner/repo` from the `jj git remote list` entry for the remote the PR was opened against (normally `origin`, not `upstream`) and run `gh -R owner/repo pr view $ARGUMENTS` and `gh -R owner/repo pr diff $ARGUMENTS`. Local bookmarks still identify the change under review.
 
 Use best judgement when processing input.
 
