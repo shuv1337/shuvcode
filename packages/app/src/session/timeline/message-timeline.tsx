@@ -26,10 +26,18 @@ import { parseCommentNote, readPromptPresentation } from "@/composer/comment-not
 import { useCommand } from "@/shell/commands/command"
 import { SessionAncestorTrail, SessionProjectMenu, SessionTitleHeader } from "../session-identity-header"
 import { SessionHeaderSpacer } from "@/session/header/session-header"
+import { SessionRunningMenu } from "@/session/header/session-running-menu"
+
+type BlockingTask = { type: "shell" | "subagent"; partID: string; id?: string; label?: string }
 
 type SessionBackground = {
-  blocking: Accessor<{ type: "shell" | "subagent"; partID: string; id?: string; label?: string }[]>
+  blocking: Accessor<BlockingTask[]>
   tasks: Accessor<readonly BackgroundTask[]>
+  running: {
+    sessionID: Accessor<string | undefined>
+    blocking: Accessor<BlockingTask[]>
+    tasks: Accessor<readonly BackgroundTask[]>
+  }
   move: () => Promise<void>
 }
 
@@ -79,6 +87,7 @@ type MessageTimelineProps = {
   anchor: (id: string) => string
   setRevealMessage?: (fn: (id: string, partID?: string) => void) => void
   setScrollToEnd?: (fn: () => void) => void
+  reveal?: { target: () => string | undefined; done: () => void }
   search?: JSX.Element
 }
 
@@ -217,6 +226,7 @@ function MessageTimelineView(
     },
     setRevealMessage: props.setRevealMessage,
     setScrollToEnd: props.setScrollToEnd,
+    reveal: props.reveal,
   })
 
   const VirtualizedTimeline = virtualized.View
@@ -543,6 +553,13 @@ function MessageTimelineView(
                       </Menu>
                     )}
                   </Show>
+                  <SessionRunningMenu
+                    sessionID={sessionID()}
+                    owner={props.background.running.sessionID()}
+                    blocking={props.background.running.blocking()}
+                    tasks={props.background.running.tasks()}
+                    onReveal={virtualized.revealPart}
+                  />
                 </div>
               </div>
               <Show when={sessionID()} keyed>

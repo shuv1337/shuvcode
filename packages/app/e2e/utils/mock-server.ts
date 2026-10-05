@@ -1032,6 +1032,8 @@ function mockHandlers(
               },
             })
           }),
+        // Like the server, which also answers 204 for a shell that already ended.
+        shellRemove: () => noContent,
         ptyList: (ctx) =>
           ptyEnabled.pipe(
             Effect.map(() => {

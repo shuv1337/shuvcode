@@ -220,6 +220,12 @@ const Group = HttpApiGroup.make("mock")
     }),
   )
   .add(
+    HttpApiEndpoint.delete("shellRemove", "/api/shell/:id", {
+      params: { id: Schema.String },
+      success: NoContent,
+    }),
+  )
+  .add(
     HttpApiEndpoint.get("ptyList", "/api/pty", {
       success: Json,
       error: MockNotFound.pipe(HttpApiSchema.status(404)),
