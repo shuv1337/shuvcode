@@ -165,6 +165,8 @@ export function createFetch(override?: FetchHandler, events?: ReturnType<typeof 
     if (url.pathname === "/vcs") return json({ branch: "main" })
     if (url.pathname === "/api/experimental/migration/v1") return json({ status: "completed" })
     if (url.pathname === "/api/rpc/shuvcode.quota/list") return json({ output: { providers: [] } })
+    // Ephemeral Bun.serve listeners share this handler. External scanners GET / and a throw fails the active test.
+    if (request.method === "GET" && url.pathname === "/") return new Response(null, { status: 404 })
     throw new Error(`unexpected request: ${url.pathname}`)
   }
   fetch.preconnect = () => {}
