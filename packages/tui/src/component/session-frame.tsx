@@ -9,7 +9,6 @@ import {
 import { useRenderer, useTerminalDimensions } from "@opentui/solid"
 import { batch, createEffect, createMemo, createResource, createSignal, on, onCleanup, Show } from "solid-js"
 import { useConfig } from "../config"
-import { useData } from "../context/data"
 import { Keymap } from "../context/keymap"
 import { InteractivityProvider } from "../context/interactivity"
 import { useSessionTerminals } from "../context/session-terminals"
@@ -30,7 +29,6 @@ export function SessionFrame(props: { sessionID: string; verticalTabsWidth: numb
   const sessions = useSessionTerminals()
   const prompt = usePromptRef()
   const config = useConfig()
-  const data = useData()
   const toast = useToast()
   const terminalError = () => toast.show({ variant: "error", message: "Unable to load terminal" })
   const renderer = useRenderer()
@@ -103,12 +101,12 @@ export function SessionFrame(props: { sessionID: string; verticalTabsWidth: numb
   let rightNode: BoxRenderable | undefined
   let panelNode: BoxRenderable | undefined
   createResource(
-    () => (config.data.session.terminal ? props.sessionID : undefined),
+    () => (sessions.available() ? props.sessionID : undefined),
     (sessionID) => sessions.refresh(sessionID).catch(() => undefined),
   )
   const session = () => sessions.get(props.sessionID)
   const selectedTerminal = () => {
-    if (!config.data.session.terminal) return
+    if (!sessions.available()) return
     const value = session()
     return value.terminals.find((terminal) => terminal.id === value.selectedTerminalID)
   }
@@ -219,7 +217,7 @@ export function SessionFrame(props: { sessionID: string; verticalTabsWidth: numb
           dialog.clear()
         },
       },
-      ...(config.data.session.terminal
+      ...(sessions.available()
         ? [
             {
               id: "terminal.toggle",
@@ -323,6 +321,7 @@ export function SessionFrame(props: { sessionID: string; verticalTabsWidth: numb
                 promptMuted={activePane() !== "session"}
                 sidebarVisible={rightPane() === "sidebar"}
                 onToggleSidebar={toggleSidebar}
+                terminals={sessions.available()}
                 visibleTerminalID={rightPane() === "terminal" ? selectedTerminal()?.id : undefined}
                 onTerminalPicker={(show) => (showTerminals = show)}
                 width={sessionWidth()}
