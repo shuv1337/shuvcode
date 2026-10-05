@@ -606,52 +606,96 @@ describeNative("LocationWatcher", () => {
     ),
   )
 
-  it.live("publishes .git/HEAD events", () =>
-    withTmp(
-      (directory) =>
-        Effect.gen(function* () {
-          const fs = yield* FSUtil.Service
-          const head = path.join(directory, ".git", "HEAD")
-          const branch = `watch-${Math.random().toString(36).slice(2)}`
-          yield* ready(head)
-          yield* Effect.promise(() => $`git branch ${branch}`.cwd(directory).quiet())
-          expect(
-            yield* nextUpdate((event) => event.file === head, fs.writeFileString(head, `ref: refs/heads/${branch}\n`)),
-          ).toEqual({ file: head, event: "change" })
-        }),
-      { vcs: "git" },
-    ),
+  it.live(
+    "publishes .git/HEAD events",
+    () =>
+      Effect.gen(function* () {
+        const started = yield* Deferred.make<string>()
+        const watcher = Layer.effect(
+          Watcher.Service,
+          Effect.gen(function* () {
+            const service = yield* Watcher.Service
+            return Watcher.Service.of({
+              subscribe: (input, onReady) =>
+                service.subscribe(
+                  input,
+                  Deferred.succeed(started, input.path).pipe(Effect.andThen(onReady ?? Effect.void)),
+                ),
+            })
+          }),
+        ).pipe(Layer.provide(AppNodeBuilder.build(Watcher.node)))
+        return yield* withTmp(
+          (directory) =>
+            Effect.gen(function* () {
+              const fs = yield* FSUtil.Service
+              const head = path.join(directory, ".git", "HEAD")
+              const branch = `watch-${Math.random().toString(36).slice(2)}`
+              // Wait for native acquisition without a probe callback racing the assertion write.
+              expect(yield* Deferred.await(started)).toBe(head)
+              yield* Effect.promise(() => $`git branch ${branch}`.cwd(directory).quiet())
+              expect(
+                yield* nextUpdate(
+                  (event) => event.file === head,
+                  fs.writeFileString(head, `ref: refs/heads/${branch}\n`),
+                ),
+              ).toEqual({ file: head, event: "change" })
+            }),
+          { vcs: "git", watcher },
+        )
+      }),
+    15_000,
   )
 
   const describeSymlink = process.platform !== "win32" ? describe : describe.skip
   describeSymlink("symlinked .git", () => {
-    it.live("publishes .git/HEAD events through a symlinked .git directory", () =>
-      withTmp(
-        (directory) =>
-          Effect.gen(function* () {
-            const afs = yield* FSUtil.Service
-            const actual = path.join(directory, "..", `actual_${path.basename(directory)}`)
-            yield* Effect.addFinalizer(() => Effect.promise(() => fs.rm(actual, { recursive: true, force: true })))
-            const head = path.join(directory, ".git", "HEAD")
-            yield* ready(head, path.join(actual, "HEAD"))
-            const branch = `watch-${Math.random().toString(36).slice(2)}`
-            yield* Effect.promise(() => $`git branch ${branch}`.cwd(directory).quiet())
-            expect(
-              yield* nextUpdate(
-                (event) => event.file === path.join(actual, "HEAD"),
-                afs.writeFileString(head, `ref: refs/heads/${branch}\n`),
-              ),
-            ).toEqual({ file: path.join(actual, "HEAD"), event: "change" })
-          }),
-        {
-          vcs: "git",
-          init: async (directory) => {
-            const actual = path.join(directory, "..", `actual_${path.basename(directory)}`)
-            await fs.rename(path.join(directory, ".git"), actual)
-            await fs.symlink(actual, path.join(directory, ".git"))
-          },
-        },
-      ),
+    it.live(
+      "publishes .git/HEAD events through a symlinked .git directory",
+      () =>
+        Effect.gen(function* () {
+          const started = yield* Deferred.make<string>()
+          const watcher = Layer.effect(
+            Watcher.Service,
+            Effect.gen(function* () {
+              const service = yield* Watcher.Service
+              return Watcher.Service.of({
+                subscribe: (input, onReady) =>
+                  service.subscribe(
+                    input,
+                    Deferred.succeed(started, input.path).pipe(Effect.andThen(onReady ?? Effect.void)),
+                  ),
+              })
+            }),
+          ).pipe(Layer.provide(AppNodeBuilder.build(Watcher.node)))
+          return yield* withTmp(
+            (directory) =>
+              Effect.gen(function* () {
+                const afs = yield* FSUtil.Service
+                const actual = path.join(directory, "..", `actual_${path.basename(directory)}`)
+                yield* Effect.addFinalizer(() => Effect.promise(() => fs.rm(actual, { recursive: true, force: true })))
+                const head = path.join(directory, ".git", "HEAD")
+                // The watch is acquired on the real path even when the write uses the symlink.
+                expect(yield* Deferred.await(started)).toBe(path.join(actual, "HEAD"))
+                const branch = `watch-${Math.random().toString(36).slice(2)}`
+                yield* Effect.promise(() => $`git branch ${branch}`.cwd(directory).quiet())
+                expect(
+                  yield* nextUpdate(
+                    (event) => event.file === path.join(actual, "HEAD"),
+                    afs.writeFileString(head, `ref: refs/heads/${branch}\n`),
+                  ),
+                ).toEqual({ file: path.join(actual, "HEAD"), event: "change" })
+              }),
+            {
+              vcs: "git",
+              watcher,
+              init: async (directory) => {
+                const actual = path.join(directory, "..", `actual_${path.basename(directory)}`)
+                await fs.rename(path.join(directory, ".git"), actual)
+                await fs.symlink(actual, path.join(directory, ".git"))
+              },
+            },
+          )
+        }),
+      15_000,
     )
   })
 
