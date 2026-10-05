@@ -1,3 +1,4 @@
+import { Predicate } from "effect"
 import { base64Encode } from "@opencode/util/encode"
 import type { SessionMessageUser } from "@opencode/client/promise"
 import { Session } from "@opencode/schema/session"
@@ -47,7 +48,10 @@ export function createNewSessionComposerAdapter(props: {
     async start(selection, submission, message) {
       const draftID = props.draftID
       const currentDirectory = location().directory
-      const projectDirectory = data.location.info({ directory: currentDirectory })?.project.canonical ?? currentDirectory
+
+      const projectDirectory =
+        data.location.info({ directory: currentDirectory })?.project.canonical ?? currentDirectory
+
       const worktree = props.worktree()
       const branch = props.branch()
       const mcp = props.mcp.capture()
@@ -163,6 +167,7 @@ export function createNewSessionComposerAdapter(props: {
             shell: (input) => afterCreation(() => serverSDK.api.session.shell(input)),
             switchAgent: (input) => afterCreation(() => serverSDK.api.session.switchAgent(input)),
             switchModel: (input) => afterCreation(() => serverSDK.api.session.switchModel(input)),
+            revert: { commit: (input) => afterCreation(() => serverSDK.api.session.revert.commit(input)) },
           },
           data: {
             location: data.location,
@@ -239,16 +244,16 @@ async function resolveSessionDirectory(input: {
   })
 }
 
-function errorMessage(language: ReturnType<typeof useLanguage>, error: unknown) {
-  if (error && typeof error === "object" && "message" in error && typeof error.message === "string") {
-    return error.message
-  }
+function errorMessage(language: ReturnType<typeof useLanguage>, cause: unknown) {
+  if (Predicate.hasProperty(cause, "message") && Predicate.isString(cause.message)) return cause.message
 
-  if (error && typeof error === "object" && "data" in error) {
-    const data = (error as { data?: { message?: string } }).data
-
-    if (data?.message) return data.message
-  }
+  if (
+    Predicate.hasProperty(cause, "data") &&
+    Predicate.hasProperty(cause.data, "message") &&
+    Predicate.isString(cause.data.message) &&
+    cause.data.message
+  )
+    return cause.data.message
 
   return language.t("common.requestFailed")
 }
