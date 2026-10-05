@@ -5,6 +5,7 @@
 - The default branch in this repo is `integration-v2` (`origin/integration-v2` on `shuv1337/shuvcode`). `v2` is the upstream OpenCode V2 branch (`upstream/v2` on `anomalyco/opencode`); there is no `origin/v2`.
 - Default new branches and worktrees to `integration-v2`, or `origin/integration-v2` when the local `integration-v2` ref is unavailable, and default pull requests to target `integration-v2` on `origin`, not `upstream`. Use another base or target branch when the requester explicitly instructs it.
 - Local `main` ref may not exist; use `integration-v2` or `origin/integration-v2` for diffs. Use `upstream/v2` to compare with or sync from upstream.
+- When a pull request changes more than 300 files, fetch it (`git fetch origin pull/<number>/head`) and review the complete change with `git diff <base>...FETCH_HEAD`. GitHub's diff endpoint returns HTTP 406 past that cap, so `gh pr diff` and Plannotator `--no-local` omit file hunks. Inspect how a merge commit resolved conflicts with `git show --remerge-diff <merge-commit>` (`git log` accepts the same option).
 
 ## Shuvcode Fork
 
