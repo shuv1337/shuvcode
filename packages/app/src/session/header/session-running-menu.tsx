@@ -5,6 +5,7 @@ import { IconButton } from "@opencode/ui/icon-button"
 import { Menu } from "@opencode/ui/menu"
 import { TextShimmer } from "@opencode/ui/text-shimmer"
 import { createMemo, For, Show } from "solid-js"
+import { createStore } from "solid-js/store"
 import { useLanguage } from "@/runtime/i18n/language"
 import { useServerSDK } from "@/runtime/server/client"
 import { useServer } from "@/runtime/server/current"
@@ -35,6 +36,7 @@ export function SessionRunningMenu(props: {
   const openRoute = useOpenSessionRoute()
   const server = useServer()
   const sdk = useServerSDK()
+  const [menu, setMenu] = createStore({ open: false })
   const sessionAgent = (id: string | undefined) => (id ? server.ctx.data.session.get(id)?.agent : undefined)
 
   // Foreground shells stay out: the timeline already shows them at the bottom.
@@ -105,7 +107,7 @@ export function SessionRunningMenu(props: {
 
   return (
     <Show when={items().length > 0}>
-      <Menu gutter={6} placement="bottom-start">
+      <Menu gutter={6} placement="bottom-start" open={menu.open} onOpenChange={(open) => setMenu("open", open)}>
         <Menu.Trigger
           as="button"
           type="button"
@@ -123,7 +125,12 @@ export function SessionRunningMenu(props: {
                   class="group/running-item"
                   classList={{ "!bg-v2-overlay-simple-overlay-hover": viewing(item) }}
                   aria-current={viewing(item) ? "page" : undefined}
-                  onSelect={() => open(item)}
+                  onSelect={() => {
+                    // Close before navigating: the router's transition would hold the close until this
+                    // timeline detaches, and the menu would flash at the viewport origin.
+                    setMenu("open", false)
+                    open(item)
+                  }}
                   onKeyDown={(event) => {
                     if ((event.key !== "Delete" && event.key !== "Backspace") || !stoppable(item)) return
 
