@@ -3933,7 +3933,6 @@ describe("OpenAI Responses route", () => {
 
   it.effect("preserves foreign hosted images as portable image content when storage is enabled", () =>
     Effect.gen(function* () {
-      const item = { type: "image_generation_call", id: "ig_1", status: "completed", result: "AQID" }
       const prepared = yield* compileRequest(
         LLM.request({
           model: xaiModel,
