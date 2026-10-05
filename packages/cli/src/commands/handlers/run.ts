@@ -7,7 +7,14 @@ export default Runtime.handler(Commands.commands.run, (input) =>
   Effect.gen(function* () {
     const { runNonInteractive } = yield* Effect.promise(() => import("../../run/run"))
     const separator = process.argv.indexOf("--", 2)
-    const server = yield* ServerConnection.resolve()
+    const server = yield* ServerConnection.resolve({
+      onStart: (reason) =>
+        process.stderr.write(
+          reason === "version-mismatch"
+            ? "Restarting background server (version mismatch)...\n"
+            : "Starting background server...\n",
+        ),
+    })
     yield* Effect.promise(() =>
       runNonInteractive({
         server,

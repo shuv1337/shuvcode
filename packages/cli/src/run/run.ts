@@ -1,5 +1,5 @@
 import { Service, type Endpoint } from "@opencode/client/effect/service"
-import { OpenCode, type OpenCodeClient, type SessionMessageAssistantTool } from "@opencode/client/promise"
+import { OpenCode, type SessionMessageAssistantTool } from "@opencode/client/promise"
 import { FSUtil } from "@opencode/util/fs-util"
 import { open } from "node:fs/promises"
 import path from "node:path"
@@ -11,6 +11,7 @@ import { runNonInteractivePrompt } from "./noninteractive"
 import { UI } from "./ui"
 import { Env } from "../env"
 import { errorMessage } from "../util/error"
+import { withRunSetupDeadlines } from "./setup"
 
 export type RunCommandInput = {
   server: ServerConnection.Resolved
@@ -73,6 +74,7 @@ async function run(input: RunCommandInput, options: ExecutionOptions) {
   const root = options.root ?? process.env.PWD ?? process.cwd()
   const local = localDirectory(root)
   const directory = options.useServerDirectory ? undefined : (options.directory ?? local)
+  if (!process.stdin.isTTY) process.stderr.write("Reading stdin until EOF (close the pipe to continue)...\n")
   const message = mergeInput(formatMessage(input.message), process.stdin.isTTY ? undefined : await readStdin())
   if (!message?.trim()) fail("You must provide a message")
   const files = await Promise.all(input.file.map((file) => prepareFile(file, root, options)))
@@ -88,9 +90,10 @@ async function execute(input: RunCommandInput, prepared: Prepared, endpoint: End
     fetch: ((request: RequestInfo | URL, init?: RequestInit) =>
       fetch(request, { ...init, timeout: false } as BunFetchRequestInit)) as typeof fetch,
   })
+  const setup = withRunSetupDeadlines(client)
   const explicit = parseRunModel(input.model)
   const target = await resolveSessionTarget({
-    client,
+    client: setup,
     location: prepared.directory ? { directory: prepared.directory } : undefined,
     continue: input.continue,
     session: input.session,
@@ -104,7 +107,7 @@ async function execute(input: RunCommandInput, prepared: Prepared, endpoint: End
       const selected =
         next.model ??
         (options.variant
-          ? await client.model
+          ? await setup.model
               .default({ location: { directory: next.location.directory } })
               .then((result) => result.data)
           : undefined)
@@ -128,7 +131,7 @@ async function execute(input: RunCommandInput, prepared: Prepared, endpoint: End
   const model = target.model ? { providerID: target.model.providerID, modelID: target.model.id } : undefined
   const variant = target.model?.variant
   if (!target.resume && input.title !== undefined) {
-    await client.session.update({
+    await setup.session.update({
       sessionID: target.session.id,
       title: input.title || prepared.message.slice(0, 50) + (prepared.message.length > 50 ? "..." : ""),
     })
@@ -247,6 +250,7 @@ async function renderToolError(part: SessionMessageAssistantTool, directory: str
 /** @internal Used by the V1 command boundary before a Session exists. */
 export function reportRunError(input: Pick<RunCommandInput, "format">, message: string, sessionID?: string) {
   process.exitCode = 1
+  UI.error(message)
   if (input.format === "json") {
     process.stdout.write(
       JSON.stringify({
@@ -258,7 +262,6 @@ export function reportRunError(input: Pick<RunCommandInput, "format">, message: 
     )
     return
   }
-  UI.error(message)
 }
 
 function fail(message: string): never {
