@@ -9,6 +9,7 @@ import os from "node:os"
 import path from "node:path"
 import { ServiceConfig } from "../src/services/service-config"
 import { ServiceRegistration } from "../src/services/service-registration"
+import { cleanProcessEnv } from "./fixture/clean-env"
 import { isolatedEnv } from "./fixture/environment"
 
 test("managed service ports are stable per installation channel", () => {
@@ -232,17 +233,7 @@ test("clean managed service shutdown removes its registration", async () => {
 
 test("concurrent service processes elect one server", async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "opencode-service-election-"))
-  const database = path.join(root, "opencode.db")
-  const env = {
-    ...process.env,
-    HOME: root,
-    OPENCODE_DB: database,
-    OPENCODE_TEST_HOME: root,
-    XDG_CACHE_HOME: path.join(root, "cache"),
-    XDG_CONFIG_HOME: path.join(root, "config"),
-    XDG_DATA_HOME: path.join(root, "data"),
-    XDG_STATE_HOME: path.join(root, "state"),
-  }
+  const env = serviceEnv(root)
   const command = [process.execPath, path.join(import.meta.dir, "../src/index.ts"), "serve", "--service"]
   const registration = path.join(root, "state", "shuvcode", "service-local.json")
   const port = await availablePort()
@@ -547,16 +538,7 @@ test("a failed service stays registered and owns the selected port until stopped
   await fs.mkdir(database)
   await fs.mkdir(path.join(root, "config", "shuvcode"), { recursive: true })
   await fs.writeFile(path.join(root, "config", "shuvcode", "service-local.json"), JSON.stringify({ port }))
-  const env = {
-    ...process.env,
-    HOME: root,
-    OPENCODE_DB: database,
-    OPENCODE_TEST_HOME: root,
-    XDG_CACHE_HOME: path.join(root, "cache"),
-    XDG_CONFIG_HOME: path.join(root, "config"),
-    XDG_DATA_HOME: path.join(root, "data"),
-    XDG_STATE_HOME: path.join(root, "state"),
-  }
+  const env = { ...serviceEnv(root), OPENCODE_DB: database }
   const command = [process.execPath, path.join(import.meta.dir, "../src/index.ts"), "serve", "--service"]
   const registration = path.join(root, "state", "shuvcode", "service-local.json")
   const owner = Bun.spawn(command, { env, stderr: "pipe", stdout: "ignore" })
@@ -619,7 +601,7 @@ async function availablePort() {
 
 function serviceEnv(root: string) {
   return {
-    ...process.env,
+    ...cleanProcessEnv(),
     HOME: root,
     OPENCODE_DB: path.join(root, "opencode.db"),
     OPENCODE_TEST_HOME: root,
