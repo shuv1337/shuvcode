@@ -2,6 +2,7 @@ import type { PersistentPtyInfo } from "@opencode/client"
 import { createSignal, onCleanup } from "solid-js"
 import { createSimpleContext } from "./helper"
 import { useClient } from "./client"
+import { useConfig } from "../config"
 import { useData } from "./data"
 import { useEvent } from "./event"
 import { useStorage } from "./storage"
@@ -14,6 +15,7 @@ export const { use: useSessionTerminals, provider: SessionTerminalsProvider } = 
   name: "SessionTerminals",
   init: () => {
     const client = useClient()
+    const config = useConfig().data
     const data = useData()
     const event = useEvent()
     const [available, setAvailable] = createSignal(false)

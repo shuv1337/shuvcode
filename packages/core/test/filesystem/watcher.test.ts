@@ -533,31 +533,6 @@ function nextUpdate<E>(check: (event: WatcherEvent) => boolean, trigger: Effect.
   })
 }
 
-function eventuallyUpdate<E>(check: (event: WatcherEvent) => boolean, trigger: () => Effect.Effect<void, E>) {
-  return Effect.gen(function* () {
-    while (true) {
-      const result = yield* maybeNextUpdate(check, trigger(), "250 millis")
-      if (Option.isSome(result)) return result.value
-    }
-  }).pipe(
-    Effect.timeoutOrElse({
-      duration: "5 seconds",
-      orElse: () => Effect.fail(new Error("timed out waiting for file watcher readiness")),
-    }),
-  )
-}
-
-function ready(file: string, eventFile = file) {
-  return Effect.gen(function* () {
-    const fs = yield* FSUtil.Service
-    const content = (yield* fs.readFileStringSafe(file)) ?? `ready-${Math.random()}`
-    yield* eventuallyUpdate(
-      (event) => event.file === eventFile,
-      () => fs.writeFileString(file, content),
-    ).pipe(Effect.asVoid)
-  })
-}
-
 describeNative("LocationWatcher", () => {
   it.live("limits file watches to the exact target", () =>
     withTmp((directory) =>

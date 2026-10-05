@@ -397,7 +397,7 @@ const toolLocations = Layer.effect(
             ),
             toolServices,
           ).pipe(Layer.fresh)
-        })() as unknown as Layer.Layer<LocationServices>,
+        })() as unknown as Layer.Layer<LocationServices, FileSystem.DirectoryNotFoundError>,
       { idleTimeToLive: Duration.infinity },
     )
     return {
