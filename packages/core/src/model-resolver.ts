@@ -459,6 +459,7 @@ function usesAPIKeyAuth(packageName: string | undefined) {
     name === "@opencode/ai/providers/groq" ||
     name === "@opencode/ai/providers/mistral" ||
     name === "@opencode/ai/providers/togetherai" ||
+    name === "@opencode/ai/providers/vercel-ai-gateway" ||
     name === "@opencode/ai/providers/xai" ||
     name === "@opencode/ai/providers/openrouter" ||
     name === "@opencode/ai/providers/azure" ||
