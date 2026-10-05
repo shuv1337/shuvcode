@@ -51,7 +51,103 @@ const it = testEffect(
 
 const parentModel = Model.Ref.make({ id: Model.ID.make("parent"), providerID: Provider.ID.make("test") })
 
+const inheritanceIt = testEffect(
+  AppNodeBuilder.build(LayerNode.group([Session.node, LocationServiceMap.node]), [
+    Global.node.replace(tempGlobalLayer),
+    offlineModels,
+    Watcher.node.replace(Watcher.configured({ enabled: false })),
+    LayerNodePlatform.llmClient.replace(llmLayer),
+  ]),
+)
+
 describe("command subagents", () => {
+  for (const agent of ["explore", "general", "reviewer"]) {
+    inheritanceIt.live(
+      agent === "reviewer"
+        ? "prefers the child's configured model over the parent agent model"
+        : `inherits the parent's resolved agent model and variant for ${agent}`,
+      () =>
+        Effect.gen(function* () {
+          const tmp = yield* tmpdirScoped()
+          yield* Effect.promise(() =>
+            Bun.write(
+              path.join(tmp.path, "opencode.json"),
+              JSON.stringify({
+                agents: {
+                  build: { model: "test/parent#fast" },
+                  reviewer: { mode: "subagent", model: "test/child#fast" },
+                },
+                providers: {
+                  test: {
+                    package: "@opencode/ai/providers/openai/chat",
+                    settings: { apiKey: "test" },
+                    models: { parent: { variants: [{ id: "fast" }] }, child: { variants: [{ id: "fast" }] } },
+                  },
+                },
+                commands: { review: { subagent: true, agent, template: "Review $ARGUMENTS" } },
+              }),
+            ),
+          )
+          const sessions = yield* Session.Service
+          const parent = yield* sessions.create({
+            location: { directory: AbsolutePath.make(tmp.path) },
+            agent: Agent.ID.make("build"),
+          })
+          expect(parent.model).toBeUndefined()
+          yield* sessions.command({ sessionID: parent.id, command: "review", text: "changes" })
+          const children = (yield* sessions.list({ parentID: parent.id })).data
+          expect(children).toHaveLength(1)
+          expect(children[0]?.model).toEqual({
+            ...parentModel,
+            id: Model.ID.make(agent === "reviewer" ? "child" : "parent"),
+            variant: Model.VariantID.make("fast"),
+          })
+          expect((yield* sessions.get(parent.id)).model).toBeUndefined()
+        }),
+    )
+  }
+
+  inheritanceIt.live("keeps catalog-default command children model-less and follows later default changes", () =>
+    Effect.gen(function* () {
+      const tmp = yield* tmpdirScoped()
+      yield* Effect.promise(() =>
+        Bun.write(
+          path.join(tmp.path, "opencode.json"),
+          JSON.stringify({
+            model: "test/initial",
+            providers: {
+              test: {
+                package: "@opencode/ai/providers/openai/chat",
+                settings: { apiKey: "test" },
+                models: { initial: {}, later: {} },
+              },
+            },
+            commands: { review: { subagent: true, agent: "general", template: "Review $ARGUMENTS" } },
+          }),
+        ),
+      )
+      const sessions = yield* Session.Service
+      const parent = yield* sessions.create({
+        location: { directory: AbsolutePath.make(tmp.path) },
+        agent: Agent.ID.make("build"),
+      })
+      yield* sessions.command({ sessionID: parent.id, command: "review", text: "changes" })
+      const children = (yield* sessions.list({ parentID: parent.id })).data
+      expect(children).toHaveLength(1)
+      const child = children[0]
+      if (!child) return yield* Effect.die("Expected a child session")
+      expect(child.model).toBeUndefined()
+      const locations = yield* LocationServiceMap.Service
+      const models = yield* Model.Service.pipe(Effect.provide(locations.get(parent.location)))
+      const runner = yield* SessionRunnerModel.Service.pipe(Effect.provide(locations.get(parent.location)))
+      expect((yield* runner.resolve(child, models.available)).ref.id).toBe(Model.ID.make("initial"))
+      yield* models.transform((editor) => editor.default.set(Provider.ID.make("test"), Model.ID.make("later")))
+      expect((yield* runner.resolve(child, models.available)).ref.id).toBe(Model.ID.make("later"))
+      expect((yield* sessions.get(child.id)).model).toBeUndefined()
+      expect((yield* sessions.get(parent.id)).model).toBeUndefined()
+    }),
+  )
+
   for (const fixture of [
     {
       name: "native JSON",
