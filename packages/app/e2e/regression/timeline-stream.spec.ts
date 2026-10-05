@@ -650,6 +650,43 @@ test.describe("Working", () => {
     })
   }
 
+  test("keeps Working while a new read joins a standalone read group", async ({ page }) => {
+    const timeline = await setupTimeline(page, {
+      messages: [
+        userMessage(),
+        assistantMessage(
+          ["one", "two", "three"].map((name) =>
+            toolPart(`prt_read_${name}`, "read", "completed", { path: `src/${name}.ts` }),
+          ),
+          { completed: false },
+        ),
+      ],
+      settings: { timelineDetail: timelinePresets[0].value },
+    })
+
+    const working = page.locator('[data-component="session-working"]')
+    const group = page.locator('[data-component="read-tool-group"]')
+    const shimmer = group.locator('[data-component="text-shimmer"]')
+    await expect(group).toHaveAttribute("data-timeline-part-ids", "prt_read_one,prt_read_two,prt_read_three")
+    await expect(working).toBeVisible()
+
+    await timeline.send(partUpdated(toolPart("prt_read_four", "read", "streaming", { path: "src/four.ts" })))
+    await expect(group).toHaveAttribute(
+      "data-timeline-part-ids",
+      "prt_read_one,prt_read_two,prt_read_three,prt_read_four",
+    )
+    await expect(shimmer).toHaveAttribute("data-active", "true")
+    await expect(working).toBeVisible()
+
+    await timeline.send(partUpdated(toolPart("prt_read_four", "read", "running", { path: "src/four.ts" })))
+    await expect(group.locator('[data-slot="basic-tool-tool-subtitle"]')).toHaveText("one.ts, two.ts, three.ts, four.ts")
+    await expect(working).toBeVisible()
+
+    await timeline.send(partUpdated(toolPart("prt_read_four", "read", "completed", { path: "src/four.ts" })))
+    await expect(shimmer).toHaveAttribute("data-active", "false")
+    await expect(working).toBeVisible()
+  })
+
   for (const grouped of [false, true]) {
     test(`uses ${grouped ? "grouped" : "standalone"} background shell presentation`, async ({ page }) => {
       await setupTimeline(page, {
