@@ -985,6 +985,50 @@ describe("V2 mini transport", () => {
     await transport.close()
   })
 
+  test.each(["ses_1", "ses_child"])("removes cancelled Mini permissions owned by %s", async (sessionID) => {
+    const events = feed()
+    events.push(connected())
+    const client = sdk({
+      streams: [events],
+      sessions: [{ id: "ses_child", parentID: "ses_1", title: "Child", time: { updated: 1 } }],
+    })
+    const ui = footer()
+    const transport = await createSessionTransport({
+      sdk: client,
+      sessionID: "ses_1",
+      thinking: false,
+      footer: ui.api,
+    })
+    try {
+      events.push({
+        id: "evt_permission_asked",
+        created: 1,
+        type: "permission.asked",
+        data: { id: "per_cancelled", sessionID, action: "bash", resources: ["pwd"] },
+      })
+      while (!ui.events.some((event) => event.type === "stream.view" && event.view.type === "permission"))
+        await Bun.sleep(0)
+      const before = ui.events.filter((event) => event.type === "stream.view").length
+      events.push({
+        id: "evt_permission_cancelled",
+        created: 2,
+        type: "permission.cancelled",
+        data: { sessionID, requestID: "per_cancelled" },
+      })
+      while (ui.events.filter((event) => event.type === "stream.view").length === before) await Bun.sleep(0)
+      expect(ui.events.filter((event) => event.type === "stream.view").at(-1)).toEqual({
+        type: "stream.view",
+        view: { type: "prompt" },
+      })
+      if (sessionID === "ses_child")
+        expect(
+          ui.events.flatMap((event) => (event.type === "stream.subagent" ? [event.state] : [])).at(-1)?.permissions,
+        ).toEqual([])
+    } finally {
+      await transport.close()
+    }
+  })
+
   test("waits authoritatively and reconciles the projected terminal suffix", async () => {
     const events = feed()
     events.push(connected())
