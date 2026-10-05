@@ -83,18 +83,17 @@ async function run(input: RunCommandInput, options: ExecutionOptions) {
 }
 
 async function execute(input: RunCommandInput, prepared: Prepared, endpoint: Endpoint, options: ExecutionOptions) {
-  const client = withRunSetupDeadlines(
-    OpenCode.make({
-      baseUrl: endpoint.url,
-      headers: Service.headers(endpoint),
-      // Bun's default five-minute deadline terminates the event stream used by long-running sessions.
-      fetch: ((request: RequestInfo | URL, init?: RequestInit) =>
-        fetch(request, { ...init, timeout: false } as BunFetchRequestInit)) as typeof fetch,
-    }),
-  )
+  const client = OpenCode.make({
+    baseUrl: endpoint.url,
+    headers: Service.headers(endpoint),
+    // Bun's default five-minute deadline terminates the event stream used by long-running sessions.
+    fetch: ((request: RequestInfo | URL, init?: RequestInit) =>
+      fetch(request, { ...init, timeout: false } as BunFetchRequestInit)) as typeof fetch,
+  })
+  const setup = withRunSetupDeadlines(client)
   const explicit = parseRunModel(input.model)
   const target = await resolveSessionTarget({
-    client,
+    client: setup,
     location: prepared.directory ? { directory: prepared.directory } : undefined,
     continue: input.continue,
     session: input.session,
@@ -108,7 +107,7 @@ async function execute(input: RunCommandInput, prepared: Prepared, endpoint: End
       const selected =
         next.model ??
         (options.variant
-          ? await client.model
+          ? await setup.model
               .default({ location: { directory: next.location.directory } })
               .then((result) => result.data)
           : undefined)
@@ -132,7 +131,7 @@ async function execute(input: RunCommandInput, prepared: Prepared, endpoint: End
   const model = target.model ? { providerID: target.model.providerID, modelID: target.model.id } : undefined
   const variant = target.model?.variant
   if (!target.resume && input.title !== undefined) {
-    await client.session.update({
+    await setup.session.update({
       sessionID: target.session.id,
       title: input.title || prepared.message.slice(0, 50) + (prepared.message.length > 50 ? "..." : ""),
     })
