@@ -82,14 +82,17 @@ const client = Layer.mock(LLMClient.Service)({
       return response
     }),
 })
+const resolvedAgents: Array<Agent.Info | undefined> = []
 const models = Layer.mock(SessionRunnerModel.Service)({
-  resolve: () =>
-    Effect.succeed(
-      SessionRunnerModel.resolved(model, {
-        capabilities: { tools: true, input: ["text", "image"], output: ["text"] },
-        cost: [],
-        limit: { context: 200_000, output: 32_000 },
-      }),
+  resolve: (_session, _available, agent) =>
+    Effect.sync(() => resolvedAgents.push(agent)).pipe(
+      Effect.as(
+        SessionRunnerModel.resolved(model, {
+          capabilities: { tools: true, input: ["text", "image"], output: ["text"] },
+          cost: [],
+          limit: { context: 200_000, output: 32_000 },
+        }),
+      ),
     ),
 })
 const builtins = Layer.mock(InstructionBuiltIns.Service, {
@@ -353,6 +356,29 @@ it.effect(
       expect(requests[0]?.toolChoice).toBeUndefined()
       expect(options[0]?.webSocket).toBeUndefined()
       expect(yield* durableState(db, sessionID)).toEqual(before)
+    }),
+  { timeout: 15_000 },
+)
+
+it.effect(
+  "resolves the selected agent's model only when the Session has none",
+  () =>
+    Effect.gen(function* () {
+      const { session } = yield* setup
+      const agents = yield* Agent.Service
+      const context = yield* SessionContext.Service
+      const configured = { providerID: Provider.ID.make("openai"), id: ID.make("agent-model") }
+      yield* agents.transform((editor) =>
+        editor.update(Agent.ID.make("build"), (agent) => {
+          agent.model = configured
+        }),
+      )
+      resolvedAgents.length = 0
+
+      yield* context.resolveModel(session)
+      yield* context.resolveModel({ ...session, model: { providerID: Provider.ID.make("test"), id: ID.make("x") } })
+
+      expect(resolvedAgents.map((agent) => agent?.model)).toEqual([configured, undefined])
     }),
   { timeout: 15_000 },
 )

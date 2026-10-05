@@ -81,6 +81,7 @@ type Subscription = {
   readonly cancelled: Deferred.Deferred<void>
   /** Completed per asked form once the server reports it answered or cancelled. */
   readonly forms: Map<string, Deferred.Deferred<void>>
+  readonly permissions: Map<string, Deferred.Deferred<void>>
 }
 
 export const make = Effect.fnUntraced(function* (input: {
@@ -106,6 +107,7 @@ export const make = Effect.fnUntraced(function* (input: {
       asks: yield* Queue.unbounded<Effect.Effect<void, ACPError.Error | RequestError>>(),
       cancelled: yield* Deferred.make<void>(),
       forms: new Map(),
+      permissions: new Map(),
     }
     yield* Queue.take(subscription.asks).pipe(
       Effect.flatten,
@@ -132,7 +134,12 @@ export const make = Effect.fnUntraced(function* (input: {
     yield* Deferred.await(settled)
   })
 
-  const reply = (subscription: Subscription, ctx: ACPTranslate.Context, ask: PermissionAsk) =>
+  const reply = (
+    subscription: Subscription,
+    ctx: ACPTranslate.Context,
+    ask: PermissionAsk,
+    settled: Deferred.Deferred<void>,
+  ) =>
     ACPPermission.reply(
       {
         client: input.client,
@@ -142,10 +149,11 @@ export const make = Effect.fnUntraced(function* (input: {
         clientSessionID: ctx.sessionID,
         cwd: ctx.cwd,
         tool: ask.tool,
+        settled: Deferred.await(settled),
         ...(ask.child ? { toolCallPrefix: ask.child.id, titlePrefix: ask.child.title } : {}),
       },
       Deferred.await(subscription.cancelled),
-    )
+    ).pipe(Effect.ensuring(Effect.sync(() => subscription.permissions.delete(ask.event.data.id))))
 
   const interpret = (subscription: Subscription, ctx: ACPTranslate.Context, output: ACPTranslate.Output) => {
     switch (output._tag) {
@@ -156,7 +164,17 @@ export const make = Effect.fnUntraced(function* (input: {
           .extNotification(ACPTranslate.ChildSessionUpdateMethod, output.update)
           .pipe(Effect.ignoreCause)
       case "PermissionAsk":
-        return Queue.offer(subscription.asks, reply(subscription, ctx, output)).pipe(Effect.asVoid)
+        return Effect.gen(function* () {
+          const settled = yield* Deferred.make<void>()
+          subscription.permissions.set(output.event.data.id, settled)
+          yield* Queue.offer(subscription.asks, reply(subscription, ctx, output, settled))
+        })
+      case "PermissionSettled":
+        return Effect.suspend(() => {
+          const settled = subscription.permissions.get(output.requestID)
+          subscription.permissions.delete(output.requestID)
+          return settled ? Deferred.succeed(settled, undefined) : Effect.void
+        })
       case "FormAsk":
         return Effect.gen(function* () {
           const capabilities = yield* Ref.get(input.capabilities)

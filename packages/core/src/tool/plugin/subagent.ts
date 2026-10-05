@@ -189,7 +189,7 @@ export const Plugin = {
                     parentID: context.sessionID,
                     title: input.description,
                     agent: Agent.ID.make(input.agent),
-                    model,
+                    model: model ?? (yield* agents.select(parent.agent)).info?.model,
                   })
                   .pipe(
                     Effect.mapError(
