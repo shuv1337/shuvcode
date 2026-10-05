@@ -430,7 +430,10 @@ describe("runNonInteractivePrompt", () => {
     }
     expect(sdk.session.form.cancel).toHaveBeenCalledWith({ sessionID: "global", formID: "frm_live" }, globalOptions)
     expect(sdk.session.form.cancel).toHaveBeenCalledWith({ sessionID: "ses_1", formID: "frm_pending" })
-    expect(sdk.session.form.cancel).toHaveBeenCalledWith({ sessionID: "global", formID: "frm_pending_global" }, globalOptions)
+    expect(sdk.session.form.cancel).toHaveBeenCalledWith(
+      { sessionID: "global", formID: "frm_pending_global" },
+      globalOptions,
+    )
     expect(sdk.form.list).toHaveBeenCalledWith({
       location: { directory: "/work tree" },
     })
@@ -445,7 +448,10 @@ describe("runNonInteractivePrompt", () => {
     })
     expect(sdk.session.form.cancel).toHaveBeenCalledWith({ sessionID: "ses_1", formID: "frm_pending" })
     expect(sdk.form.list).not.toHaveBeenCalled()
-    expect(sdk.session.form.cancel).not.toHaveBeenCalledWith({ sessionID: "global", formID: "frm_live" }, expect.anything())
+    expect(sdk.session.form.cancel).not.toHaveBeenCalledWith(
+      { sessionID: "global", formID: "frm_live" },
+      expect.anything(),
+    )
     expect(sdk.session.form.cancel).not.toHaveBeenCalledWith(
       { sessionID: "global", formID: "frm_pending_global" },
       expect.anything(),
@@ -477,7 +483,9 @@ describe("runNonInteractivePrompt", () => {
         error: { type: "provider.transport", message: "Provider request failed" },
       }),
     ])
-    expect(output.stderr).toBe("")
+    expect(output.stderr).toMatch(
+      /^Connecting event stream\.\.\.\nAdmitting prompt \(session ses_1, request msg_[^)]+\)\.\.\.\n$/,
+    )
     const sdk = await run({ compatibility: "v1", turn: (messageID) => [prompted(messageID), settled()] })
     expect(sdk.session.wait).not.toHaveBeenCalled()
     expect(sdk.message.list).not.toHaveBeenCalled()
@@ -507,7 +515,11 @@ describe("runNonInteractivePrompt", () => {
       ],
     })
 
-    expect(output).toEqual({ stdout: "", stderr: "", exitCode: 0 })
+    expect(output.stdout).toBe("")
+    expect(output.exitCode).toBe(0)
+    expect(output.stderr).toMatch(
+      /^Connecting event stream\.\.\.\nAdmitting prompt \(session ses_1, request msg_[^)]+\)\.\.\.\n$/,
+    )
   })
 
   test("renders a native terminal failure snapshot when live progress was missed", async () => {
@@ -572,6 +584,8 @@ describe("runNonInteractivePrompt", () => {
     expect(events[0].part.state.output).toBeUndefined()
     expect(events[0].part.state.metadata.metadata).toBeUndefined()
     expect(events[0].part.state.metadata.content).toBeUndefined()
-    expect(output.stderr).toBe("")
+    expect(output.stderr).toMatch(
+      /^Connecting event stream\.\.\.\nAdmitting prompt \(session ses_1, request msg_[^)]+\)\.\.\.\n$/,
+    )
   })
 })
