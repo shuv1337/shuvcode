@@ -122,6 +122,60 @@ describe("Cloud Code 429 bodies", () => {
     ])
   })
 
+  test.each([
+    {
+      modelID: "gemini-3.8-flash-high",
+      groups: [{ displayName: "Claude + GPT", buckets: [{ window: "5h", remainingFraction: 0 }] }],
+    },
+    { modelID: "claude-sonnet-4-6", groups: summary.groups },
+    { modelID: "gpt-oss-120b", groups: summary.groups },
+    {
+      modelID: "gemini-3.8-flash-high",
+      groups: [{ displayName: "Unknown models", buckets: [{ window: "5h", remainingFraction: 0 }] }],
+    },
+    { modelID: "gemini-3.8-flash-high", groups: [] },
+    { modelID: "unknown-model", groups: summary.groups },
+    { modelID: undefined, groups: summary.groups },
+  ])("does not borrow quota from an unrelated or missing group: %j", ({ modelID, groups }) => {
+    const explained = GoogleAntigravityWire.explainCloudCodeError({
+      error: {
+        status: "RESOURCE_EXHAUSTED",
+        message: "Resource has been exhausted (e.g. check quota).",
+        reason: "RATE_LIMIT_EXCEEDED",
+      },
+      summary: { groups },
+      httpStatus: 429,
+      modelID,
+    })
+    expect(explained?.quota).toBe(false)
+    expect(JSON.parse(explained?.body ?? "{}").error.details[0].reason).toBe("RATE_LIMIT_EXCEEDED")
+  })
+
+  test.each(["claude-sonnet-4-6", "gpt-oss-120b"])("uses the matching third-party group for %s", (modelID) => {
+    expect(
+      GoogleAntigravityWire.explainCloudCodeError({
+        error: { status: "RESOURCE_EXHAUSTED", message: "Resource exhausted" },
+        summary: { groups: [{ displayName: "Claude + GPT", buckets: [{ window: "5h", remainingFraction: 0 }] }] },
+        httpStatus: 429,
+        modelID,
+      })?.quota,
+    ).toBe(true)
+  })
+
+  test.each([
+    { reason: "QUOTA_EXHAUSTED", message: "Resource exhausted" },
+    { reason: "RATE_LIMIT_EXCEEDED", message: quotaMessage },
+  ])("retains affirmative quota evidence without a matching group: %j", (error) => {
+    expect(
+      GoogleAntigravityWire.explainCloudCodeError({
+        error: { status: "RESOURCE_EXHAUSTED", ...error },
+        summary: { groups: [] },
+        httpStatus: 429,
+        modelID: "unknown-model",
+      })?.quota,
+    ).toBe(true)
+  })
+
   test("ignores success-shaped bodies", () => {
     expect(GoogleAntigravityWire.parseCloudCodeError('data: {"response":{"candidates":[]}}\n\n')).toBeUndefined()
   })
