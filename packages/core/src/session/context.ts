@@ -90,7 +90,11 @@ const layer = Layer.effect(
     const store = yield* SessionStore.Service
     const registry = yield* Tool.Service
 
-    const resolveModel = (session: SessionSchema.Info) => models.resolve(session, model.available)
+    const resolveModel = Effect.fn("SessionContext.resolveModel")(function* (session: SessionSchema.Info) {
+      if (session.model) return yield* models.resolve(session, model.available)
+      const agent = yield* agents.select(session.agent)
+      return yield* models.resolve(session, model.available, agent.info)
+    })
 
     const selectTitle = Effect.fn("SessionContext.selectTitle")(function* (session: SessionSchema.Info) {
       const agent = yield* agents.get(Agent.ID.make("title"))

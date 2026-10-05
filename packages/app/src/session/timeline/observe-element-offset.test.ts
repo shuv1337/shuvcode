@@ -3,6 +3,53 @@ import { type Virtualizer } from "@tanstack/solid-virtual"
 import { Node, Window } from "happy-dom"
 import { observeElementOffsetReconnectAware } from "./observe-element-offset"
 
+test("an idle callback reports the native offset after an anchor write without a scroll event", async () => {
+  const targetWindow = new Window()
+  const viewport = targetWindow.document.createElement("div")
+  targetWindow.document.body.append(viewport)
+  const timers = new Map<number, () => void>()
+  let timerID = 0
+  Object.defineProperty(targetWindow, "setTimeout", {
+    value: (callback: () => void) => {
+      timerID += 1
+      timers.set(timerID, callback)
+      return timerID
+    },
+  })
+  Object.defineProperty(targetWindow, "clearTimeout", { value: (id: number) => timers.delete(id) })
+  const instance = {
+    scrollElement: viewport,
+    targetWindow,
+    scrollOffset: 0,
+    options: { horizontal: false, isRtl: false, isScrollingResetDelay: 150, useScrollendEvent: false },
+  } as unknown as Virtualizer<HTMLDivElement, HTMLDivElement>
+  const calls: [number, boolean][] = []
+  const cleanup = observeElementOffsetReconnectAware(instance, (offset, isScrolling) => {
+    calls.push([offset, isScrolling])
+    instance.scrollOffset = offset
+  })
+  try {
+    viewport.scrollTop = 64
+    viewport.dispatchEvent(new targetWindow.Event("scroll"))
+    expect(calls).toEqual([[64, true]])
+
+    // A prepend restores the anchor before the browser delivers its next scroll event.
+    viewport.scrollTop = 2644
+    instance.scrollOffset = 2644
+    expect(timers.size).toBe(1)
+    timers.forEach((callback) => callback())
+
+    expect(calls).toEqual([
+      [64, true],
+      [2644, false],
+    ])
+    expect(instance.scrollOffset).toBe(2644)
+  } finally {
+    cleanup()
+    await targetWindow.happyDOM.close()
+  }
+})
+
 test("restores a view observed before its first attachment", async () => {
   const targetWindow = new Window()
   const mutations = controlledMutations(targetWindow)

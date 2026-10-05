@@ -993,6 +993,15 @@ export type ReferenceUpdated = {
   data: {}
 }
 
+export type PermissionCancelled = {
+  id: string
+  created: number
+  metadata?: { [x: string]: any }
+  type: "permission.cancelled"
+  location?: LocationRef
+  data: { sessionID: string; requestID: string }
+}
+
 export type PluginUpdated = {
   id: string
   created: number
@@ -2190,6 +2199,7 @@ export type ConfigEntry =
         experimental?: {
           portable_shell_scanner?: boolean
           subagent_depth?: number
+          jev?: boolean
           policies?: Array<{ action: "provider.use" | "permission"; resource: string; effect: "allow" | "deny" }>
         }
       }
@@ -2476,6 +2486,7 @@ export type V2Event =
   | ReferenceUpdated
   | PermissionAsked
   | PermissionReplied
+  | PermissionCancelled
   | PluginUpdated
   | ProjectUpdated
   | WorktreeUpdated
