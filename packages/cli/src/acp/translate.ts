@@ -103,6 +103,7 @@ export type Output =
       readonly toolCallSent: boolean
     }
   | { readonly _tag: "FormSettled"; readonly formID: string }
+  | { readonly _tag: "PermissionSettled"; readonly requestID: string }
 
 export type Step = {
   readonly state: TurnState
@@ -160,6 +161,11 @@ export function step(state: TurnState, event: EventSubscribeOutput, ctx: Context
       : undefined
     return { state, outputs: [{ _tag: "PermissionAsk", event, tool, child }] }
   }
+  if (
+    (event.type === "permission.cancelled" || event.type === "permission.replied") &&
+    (event.data.sessionID === ctx.sessionID || child)
+  )
+    return { state, outputs: [{ _tag: "PermissionSettled", requestID: event.data.requestID }] }
   if (event.type === "form.created" && (event.data.form.sessionID === ctx.sessionID || child)) {
     return {
       state: { ...state, forms: new Set(state.forms).add(event.data.form.id) },

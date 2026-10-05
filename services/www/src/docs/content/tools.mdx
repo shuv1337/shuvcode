@@ -253,6 +253,56 @@ Page content, logs, headers, and response bodies are untrusted data, not agent
 instructions. A `browser` deny rule with resource `*` removes the browser catalog;
 browser operations do not issue individual permission prompts.
 
+## Jev
+
+The experimental `jev` Code Mode namespace asks TypeSafe System One
+(`jev-latest`) structured questions and returns typed answers. It is off by
+default; enable it in `opencode.jsonc`:
+
+```jsonc title="opencode.jsonc"
+{
+  "experimental": {
+    "jev": true,
+  },
+}
+```
+
+Then set `TYPESAFE_API_KEY` before starting OpenCode, or connect TypeSafe from
+the TUI with `/connect`. Without a key, `jev.systemOne` stays available and
+returns a configuration error.
+
+```text
+Use jev.systemOne to check whether this diff changes the public API and which of
+the three migration approaches fits best.
+```
+
+`jev.systemOne` takes the material to evaluate as `state` (text or JSON), a
+`questions` map keyed by IDs you choose, and an optional `model`. A question is
+`boolean` (yes or no), `choice` (one option from `criteria`), or `score` (a
+position on the `criteria` scale, lowest first).
+
+```js
+const { answers } = await tools.jev.systemOne({
+  state: diff,
+  questions: {
+    api: { type: "boolean", instructions: "Does this diff change the public API?" },
+    approach: {
+      type: "choice",
+      instructions: "Which approach fits best?",
+      criteria: { adapter: "Wrap the old API", rewrite: "Replace it", flag: "Gate it behind a flag" },
+    },
+    risk: { type: "score", instructions: "How risky is this change?", criteria: ["Low", "Medium", "High"] },
+  },
+})
+// answers.api      → { type: "boolean", probability: 0.83 }
+// answers.approach → { type: "choice", choice: "adapter", probabilities: { ... } }
+// answers.risk     → { type: "score", score: 1, probabilities: { ... } }
+```
+
+The tool sends `state` and `questions` to TypeSafe; it does not read or edit
+files or run commands. Permission: `jev_systemOne` with the model ID as its
+resource.
+
 ## Extensions
 
 [MCP servers](/mcp-servers) add tools whose names and inputs come from each
