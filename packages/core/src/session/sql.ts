@@ -3,6 +3,7 @@ import { sql } from "drizzle-orm"
 import { directoryColumn, pathColumn } from "../database/path.js"
 import { ProjectTable } from "../project/sql.js"
 import type { SessionMessage } from "./message.js"
+import type { SessionEvent } from "./event.js"
 import type { SessionInbox } from "./inbox.js"
 import type { FileDiff } from "@opencode/schema/file-diff"
 import type { Permission } from "@opencode/schema/permission"
@@ -95,6 +96,26 @@ export const SessionMessageTable = sqliteTable(
     index("session_message_session_time_created_id_idx").on(table.session_id, table.time_created, table.id),
     index("session_message_time_created_idx").on(table.time_created),
   ],
+)
+
+/** Irreducible operation identity survives transcript compaction and revert. */
+export const SubagentOperationTable = sqliteTable(
+  "subagent_operation",
+  {
+    session_id: text()
+      .$type<SessionSchema.ID>()
+      .notNull()
+      .references(() => SessionTable.id, { onDelete: "cascade" }),
+    assistant_message_id: text().$type<SessionMessage.ID>().notNull(),
+    call_id: text().notNull(),
+    child_session_id: text().$type<SessionSchema.ID>().notNull(),
+    inbox_id: text().$type<SessionMessage.ID>().notNull().unique(),
+    input_digest: text().notNull(),
+    agent: text().notNull(),
+    model: text({ mode: "json" }).$type<SessionEvent.Tool.SubagentPrepared["data"]["recovery"]["model"]>(),
+    status: text().$type<"prepared" | "completed" | "failed">().notNull(),
+  },
+  (table) => [primaryKey({ columns: [table.session_id, table.assistant_message_id, table.call_id] })],
 )
 
 export const SessionPendingTable = sqliteTable(

@@ -14,7 +14,7 @@ import { SessionMessageUpdater } from "./message-updater.js"
 import { SessionInbox } from "./inbox.js"
 import { Workspace } from "@opencode/schema/workspace"
 import { InstructionState } from "./instruction-state.js"
-import { SessionInboxTable, SessionMessageTable, SessionTable } from "./sql.js"
+import { SessionInboxTable, SessionMessageTable, SessionTable, SubagentOperationTable } from "./sql.js"
 import { InstructionEntry } from "./instruction-entry.js"
 import { Slug } from "../util/slug.js"
 import { FSUtil } from "@opencode/util/fs-util"
@@ -24,6 +24,7 @@ import { Project } from "@opencode/schema/project"
 import { AbsolutePath, RelativePath } from "../schema.js"
 import type { SessionSchema } from "./schema.js"
 import { ProjectTable } from "../project/sql.js"
+import { SubagentRecovery } from "./subagent-recovery.js"
 
 type DatabaseService = Database.Interface["db"]
 type MessageEvent = Exclude<
@@ -431,6 +432,35 @@ function projectIdle(
   })
 }
 
+function projectToolTerminal(
+  db: DatabaseService,
+  event: typeof SessionEvent.Tool.Success.Type | typeof SessionEvent.Tool.Failed.Type,
+) {
+  return Effect.gen(function* () {
+    const key = and(
+      eq(SubagentOperationTable.session_id, event.data.sessionID),
+      eq(SubagentOperationTable.assistant_message_id, event.data.assistantMessageID),
+      eq(SubagentOperationTable.call_id, event.data.id),
+    )
+    const operation = yield* db
+      .select({ status: SubagentOperationTable.status })
+      .from(SubagentOperationTable)
+      .where(key)
+      .get()
+      .pipe(Effect.orDie)
+    if (operation && operation.status !== "prepared")
+      return yield* Effect.die(new Error(`Subagent operation already settled: ${event.data.id}`))
+    yield* run(db, event)
+    if (operation)
+      yield* db
+        .update(SubagentOperationTable)
+        .set({ status: event.type === SessionEvent.Tool.Success.type ? "completed" : "failed" })
+        .where(key)
+        .run()
+        .pipe(Effect.orDie)
+  })
+}
+
 const layer = Layer.effectDiscard(
   Effect.gen(function* () {
     const bus = yield* Bus.Service
@@ -701,8 +731,80 @@ const layer = Layer.effectDiscard(
     yield* bus.project(SessionEvent.Tool.Input.Started, (event) => run(db, event))
     yield* bus.project(SessionEvent.Tool.Input.Ended, (event) => run(db, event))
     yield* bus.project(SessionEvent.Tool.Called, (event) => run(db, event))
-    yield* bus.project(SessionEvent.Tool.Success, (event) => run(db, event))
-    yield* bus.project(SessionEvent.Tool.Failed, (event) => run(db, event))
+    yield* bus.project(SessionEvent.Tool.SubagentPrepared, (event) =>
+      Effect.gen(function* () {
+        const operation = event.data.recovery
+        const row = yield* db
+          .select()
+          .from(SessionMessageTable)
+          .where(
+            and(
+              eq(SessionMessageTable.session_id, event.data.sessionID),
+              eq(SessionMessageTable.id, event.data.assistantMessageID),
+            ),
+          )
+          .get()
+          .pipe(Effect.orDie)
+        const message = row && decodeMessage({ ...row.data, id: row.id, type: row.type })
+        const call =
+          message?.type === "assistant"
+            ? message.content.find((item) => item.type === "tool" && item.id === event.data.id)
+            : undefined
+        if (
+          call?.type !== "tool" ||
+          call.name !== "subagent" ||
+          call.executed === true ||
+          call.state.status !== "running" ||
+          SubagentRecovery.digest(call.state.input) !== operation.inputDigest
+        )
+          return yield* Effect.die(new Error(`Subagent call is not confirmed: ${event.data.id}`))
+        const key = {
+          session_id: event.data.sessionID,
+          assistant_message_id: event.data.assistantMessageID,
+          call_id: event.data.id,
+        }
+        const inserted = yield* db
+          .insert(SubagentOperationTable)
+          .values({
+            ...key,
+            child_session_id: operation.childSessionID,
+            inbox_id: operation.inboxID,
+            input_digest: operation.inputDigest,
+            agent: operation.agent,
+            model: operation.model,
+            status: "prepared",
+          })
+          .onConflictDoNothing()
+          .returning()
+          .get()
+          .pipe(Effect.orDie)
+        if (!inserted) {
+          const previous = yield* db
+            .select()
+            .from(SubagentOperationTable)
+            .where(
+              and(
+                eq(SubagentOperationTable.session_id, key.session_id),
+                eq(SubagentOperationTable.assistant_message_id, key.assistant_message_id),
+                eq(SubagentOperationTable.call_id, key.call_id),
+              ),
+            )
+            .get()
+            .pipe(Effect.orDie)
+          if (
+            previous?.child_session_id !== operation.childSessionID ||
+            previous.inbox_id !== operation.inboxID ||
+            previous.input_digest !== operation.inputDigest ||
+            previous.agent !== operation.agent ||
+            JSON.stringify(previous.model ?? null) !== JSON.stringify(operation.model ?? null)
+          )
+            return yield* Effect.die(new Error(`Subagent operation identity changed: ${key.call_id}`))
+        }
+        yield* run(db, event)
+      }),
+    )
+    yield* bus.project(SessionEvent.Tool.Success, (event) => projectToolTerminal(db, event))
+    yield* bus.project(SessionEvent.Tool.Failed, (event) => projectToolTerminal(db, event))
     yield* bus.project(SessionEvent.Reasoning.Started, (event) => run(db, event))
     yield* bus.project(SessionEvent.Reasoning.Ended, (event) => run(db, event))
     yield* bus.project(SessionEvent.RetryScheduled, (event) => run(db, event))

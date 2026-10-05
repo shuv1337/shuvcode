@@ -157,6 +157,10 @@ const assistant = (message: SessionMessage.Assistant, model: Model.Ref, provider
   const sameModel = sameProvider && String(message.model.id) === String(model.id)
   const reuseProviderMetadata = sameModel && message.error === undefined
   const content = message.content.flatMap((item): ContentPart[] => {
+    // An interrupted draft was never confirmed by the provider. Keep it in the
+    // durable transcript for diagnosis, but never invent a model-visible call/result.
+    if (item.type === "tool" && item.state.status === "error" && item.state.metadata?.recovery === "unconfirmed")
+      return []
     if (item.type === "text")
       return [
         {
@@ -213,7 +217,12 @@ const assistant = (message: SessionMessage.Assistant, model: Model.Ref, provider
     return part.text !== "" || (part.providerMetadata !== undefined && Object.keys(part.providerMetadata).length > 0)
   })
   const results = message.content
-    .filter((item): item is SessionMessage.AssistantTool => item.type === "tool" && item.executed !== true)
+    .filter(
+      (item): item is SessionMessage.AssistantTool =>
+        item.type === "tool" &&
+        item.executed !== true &&
+        !(item.state.status === "error" && item.state.metadata?.recovery === "unconfirmed"),
+    )
     .map((item) =>
       toolResult(
         item,

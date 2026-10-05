@@ -104,6 +104,67 @@ const automatic = () => {
 }
 
 describe("SessionModelTransport", () => {
+  test.each(["1012", "1006"])("keeps close %s attached to its lost exchange without resending it", async (code) => {
+    const failure = new AIError({
+      reason: new TransportError({
+        message: `closed ${code}`,
+        transport: "websocket",
+        operation: "read",
+        phase: "close",
+        code,
+      }),
+    })
+    let opened = 0
+    const sent: string[] = []
+    const connector: WebSocketConnector = {
+      open: () =>
+        Effect.gen(function* () {
+          opened++
+          const messages = yield* Queue.unbounded<string, AIError>()
+          return {
+            sendText: (message: string) =>
+              Effect.sync(() => {
+                sent.push(message)
+                if (opened === 1) {
+                  Queue.offerUnsafe(messages, "argument")
+                  Queue.failCauseUnsafe(messages, Cause.fail(failure))
+                  return
+                }
+                Queue.offerUnsafe(messages, "complete")
+              }),
+            messages: Stream.fromQueue(messages),
+            close: Queue.shutdown(messages).pipe(Effect.asVoid),
+          }
+        }),
+    }
+    const item = (id: string): WebSocketChannelExchange => ({
+      ...exchange(id),
+      driver: {
+        create: () => Effect.succeed({ message: id, mode: "full" as const }),
+        observe: (_create, frame) =>
+          Effect.succeed<ChannelObservation>(
+            frame === "argument" ? { type: "frame", frame } : { type: "completed", frame },
+          ),
+      },
+    })
+    await run(
+      connector,
+      Effect.gen(function* () {
+        const transport = yield* SessionModelTransport.Service
+        const executor = transport.bind(session)
+        const lost = yield* Effect.result(collect(executor, item("first")))
+        expect(lost).toMatchObject({
+          _tag: "Failure",
+          failure: { reason: { _tag: "Transport", phase: "close", code, delivery: "accepted" } },
+        })
+        expect(sent).toEqual(["first"])
+        expect(yield* collect(executor, item("second"))).toEqual(["complete"])
+        expect(sent).toEqual(["first", "second"])
+        expect(opened).toBe(2)
+      }),
+    )
+  })
+
   test("exposes response metadata once the lazy connection opens", async () => {
     const http = new HttpContext({
       url: "https://provider.test/responses",
