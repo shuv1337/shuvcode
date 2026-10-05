@@ -52,6 +52,7 @@ The configured model becomes the catalog default when it is enabled and its prov
 falls back to the newest available supported model.
 
 - A model already selected for a session takes precedence over the configured default.
+- A session without a selected model uses its agent's configured model first. See [Agents](/agents#model).
 - Switching a session's model does not rewrite the config file.
 - The root `model` currently retains only the default provider and model, not a variant.
 

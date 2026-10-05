@@ -55,6 +55,7 @@ export default Plugin.define({
         notify(context, event.data.sessionID, "Permission needs input", "permission")
       }),
       context.data.on("permission.replied", (event) => permissions.delete(event.data.requestID)),
+      context.data.on("permission.cancelled", (event) => permissions.delete(event.data.requestID)),
       context.data.on("session.execution.started", (event) => started(event.data.sessionID)),
       context.data.on("session.execution.succeeded", (event) => ended(event.data.sessionID)),
       context.data.on("session.execution.interrupted", (event) => ended(event.data.sessionID)),
