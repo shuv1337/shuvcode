@@ -183,6 +183,13 @@ export const make = Effect.gen(function* () {
             : undefined
         const llmFailure = streamFailure instanceof AIError ? streamFailure : unknownFinish
         const llmError = llmFailure && !recorded.providerFailed ? toSessionError(llmFailure) : undefined
+        const recoverableClose =
+          !streamInterrupted &&
+          llmFailure?.reason._tag === "Transport" &&
+          llmFailure.reason.transport === "websocket" &&
+          llmFailure.reason.operation === "read" &&
+          llmFailure.reason.phase === "close" &&
+          (llmFailure.reason.code === "1006" || llmFailure.reason.code === "1012")
         if (
           input.recoverContinuation &&
           llmFailure?.reason._tag === "Transport" &&
@@ -206,6 +213,7 @@ export const make = Effect.gen(function* () {
           yield* publisher.startAssistant()
           return Outcome.Retry({ error: llmError, decision: retry })
         }
+        if (llmError && recoverableClose) yield* publisher.failUnconfirmedTools(llmError)
         if (llmError) yield* publisher.failAssistant(llmError)
 
         for (const decline of tools.declines)

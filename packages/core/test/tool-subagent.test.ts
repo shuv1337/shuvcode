@@ -28,6 +28,7 @@ import { SessionRestart } from "@opencode/core/session/execution/restart"
 import { SessionInbox } from "@opencode/core/session/inbox"
 import { SessionMessage } from "@opencode/core/session/message"
 import { SessionRunnerModel } from "@opencode/core/session/runner/model"
+import { SubagentRecovery } from "@opencode/core/session/subagent-recovery"
 import { SessionStore } from "@opencode/core/session/store"
 import { Plugin } from "@opencode/core/plugin"
 import { PluginHooks } from "@opencode/core/plugin/hooks"
@@ -121,6 +122,7 @@ const subagentPluginSupervisor = makeLocationNode({
   ),
   deps: [
     Agent.node,
+    Bus.node,
     Config.node,
     Model.node,
     Permission.node,
@@ -137,6 +139,7 @@ const nodes = LayerNode.group([
   Bus.node,
   Job.node,
   Session.node,
+  SessionStore.node,
   SessionExecution.node,
   LocationServiceMap.node,
 ])
@@ -207,6 +210,114 @@ const withSubagent = (location: Location.Ref) =>
   })
 
 describe("SubagentTool", () => {
+  it.live("reserves a confirmed call before admission and reuses its child and prompt", () =>
+    Effect.acquireRelease(
+      Effect.promise(() => tmpdir()),
+      (dir) => Effect.promise(() => dir[Symbol.asyncDispose]()),
+    ).pipe(
+      Effect.flatMap((dir) =>
+        Effect.gen(function* () {
+          const sessions = yield* Session.Service
+          const bus = yield* Bus.Service
+          const parent = yield* sessions.create({
+            location: Location.Ref.make({ directory: AbsolutePath.make(dir.path) }),
+            model: parentModel,
+          })
+          yield* withSubagent(parent.location)
+          const locations = yield* LocationServiceMap.Service
+          const registry = yield* Tool.Service.pipe(Effect.provide(locations.get(parent.location)))
+          const messageID = SessionMessage.ID.create()
+          const call = {
+            type: "tool-call" as const,
+            id: "call-confirmed-child",
+            name: SubagentTool.name,
+            input: { agent: "reviewer", description: "review files", prompt: "review this" },
+          }
+          yield* bus.publish(SessionEvent.Step.Started, {
+            sessionID: parent.id,
+            assistantMessageID: messageID,
+            agent: toolIdentity.agent,
+            model: parentModel,
+            started: 0,
+          })
+          yield* bus.publish(SessionEvent.Tool.Input.Started, {
+            sessionID: parent.id,
+            assistantMessageID: messageID,
+            id: call.id,
+            name: call.name,
+          })
+          yield* bus.publish(SessionEvent.Tool.Called, {
+            sessionID: parent.id,
+            assistantMessageID: messageID,
+            id: call.id,
+            input: call.input,
+            executed: false,
+          })
+          const run = () => executeTool(registry, { sessionID: parent.id, ...toolIdentity, messageID, call })
+          const first = yield* run()
+          const second = yield* run()
+          const childID = outputSessionID(first.metadata)
+          expect(outputSessionID(second.metadata)).toBe(childID)
+          const changed = yield* executeTool(registry, {
+            sessionID: parent.id,
+            ...toolIdentity,
+            messageID,
+            call: { ...call, input: { ...call.input, prompt: "different prompt" } },
+          })
+          expect(changed).toMatchObject({
+            status: "error",
+            error: { message: `Subagent operation identity mismatch: ${call.id}` },
+          })
+          expect((yield* sessions.list({ parentID: parent.id })).data).toHaveLength(1)
+          expect(yield* sessions.inbox(childID)).toHaveLength(1)
+          const assistant = yield* sessions.message({ sessionID: parent.id, messageID })
+          expect(assistant).toMatchObject({
+            content: [{ state: { status: "running", metadata: { recovery: { childSessionID: childID } } } }],
+          })
+          yield* bus.publish(SessionEvent.Tool.Success, {
+            sessionID: parent.id,
+            assistantMessageID: messageID,
+            id: call.id,
+            content: [{ type: "text", text: completedOutput(childID) }],
+            metadata: { sessionID: childID, status: "completed" },
+            executed: false,
+          })
+          const terminal = yield* run()
+          expect(terminal.output).toMatchObject({ sessionID: childID, status: "completed", output: childText })
+          expect((yield* sessions.list({ parentID: parent.id })).data).toHaveLength(1)
+          const anotherID = SessionMessage.ID.create()
+          yield* bus.publish(SessionEvent.Step.Started, {
+            sessionID: parent.id,
+            assistantMessageID: anotherID,
+            agent: toolIdentity.agent,
+            model: parentModel,
+            started: 0,
+          })
+          yield* bus.publish(SessionEvent.Tool.Input.Started, {
+            sessionID: parent.id,
+            assistantMessageID: anotherID,
+            id: call.id,
+            name: call.name,
+          })
+          yield* bus.publish(SessionEvent.Tool.Called, {
+            sessionID: parent.id,
+            assistantMessageID: anotherID,
+            id: call.id,
+            input: call.input,
+            executed: false,
+          })
+          const intentional = yield* executeTool(registry, {
+            sessionID: parent.id,
+            ...toolIdentity,
+            messageID: anotherID,
+            call,
+          })
+          expect(outputSessionID(intentional.metadata)).not.toBe(childID)
+          expect((yield* sessions.list({ parentID: parent.id })).data).toHaveLength(2)
+        }),
+      ),
+    ),
+  )
   productionIt.live(
     "inherits the parent's agent model and variant unless the child agent specifies its own model",
     () =>
@@ -382,6 +493,84 @@ describe("SubagentTool", () => {
             messages,
           )
           expect(yield* jobs.pendingBackground).toEqual([])
+        }),
+      ),
+    ),
+  )
+
+  completionIt.live("reconciles a prepared child through its durable admission identity", () =>
+    Effect.acquireRelease(
+      Effect.promise(() => tmpdir()),
+      (dir) => Effect.promise(() => dir[Symbol.asyncDispose]()),
+    ).pipe(
+      Effect.flatMap((dir) =>
+        Effect.gen(function* () {
+          const sessions = yield* Session.Service
+          const store = yield* SessionStore.Service
+          const bus = yield* Bus.Service
+          const parent = yield* sessions.create({
+            location: Location.Ref.make({ directory: AbsolutePath.make(dir.path) }),
+            model: parentModel,
+          })
+          yield* withSubagent(parent.location)
+          const assistantMessageID = SessionMessage.ID.create()
+          const childSessionID = Session.ID.create()
+          const inboxID = SessionMessage.ID.create()
+          const input = { agent: "reviewer", description: "recovery review", prompt: "review this" }
+          yield* bus.publish(SessionEvent.Step.Started, {
+            sessionID: parent.id,
+            assistantMessageID,
+            agent: toolIdentity.agent,
+            model: parentModel,
+            started: 0,
+          })
+          yield* bus.publish(SessionEvent.Tool.Input.Started, {
+            sessionID: parent.id,
+            assistantMessageID,
+            id: "call-recover-child",
+            name: "subagent",
+          })
+          yield* bus.publish(SessionEvent.Tool.Called, {
+            sessionID: parent.id,
+            assistantMessageID,
+            id: "call-recover-child",
+            input,
+            executed: false,
+          })
+          yield* bus.publish(SessionEvent.Tool.SubagentPrepared, {
+            sessionID: parent.id,
+            assistantMessageID,
+            id: "call-recover-child",
+            recovery: {
+              childSessionID,
+              inboxID,
+              inputDigest: SubagentRecovery.digest(input),
+              agent: Agent.ID.make("reviewer"),
+              model: childModel,
+            },
+          })
+          yield* store.claim(parent.id)
+          const restart = yield* SessionRestart.Service
+          yield* restart.resumeSuspendedSessions
+          yield* Effect.sleep("100 millis")
+          expect(yield* (yield* Job.Service).get(childSessionID)).toMatchObject({ status: "completed" })
+          const completed = yield* sessions.message({ sessionID: parent.id, messageID: assistantMessageID })
+          expect(completed).toMatchObject({
+            content: [{ state: { status: "completed", metadata: { sessionID: childSessionID } } }],
+          })
+          expect((yield* sessions.list({ parentID: parent.id })).data).toHaveLength(1)
+          const pending = (yield* sessions.inbox(childSessionID)).filter((item) => item.id === inboxID)
+          const delivered = (yield* sessions.messages({ sessionID: childSessionID })).filter(
+            (message) => message.id === inboxID,
+          )
+          expect(pending.length + delivered.length).toBe(1)
+          yield* restart.resumeSuspendedSessions
+          expect((yield* sessions.list({ parentID: parent.id })).data).toHaveLength(1)
+          expect(
+            (yield* sessions.inbox(childSessionID)).filter((item) => item.id === inboxID).length +
+              (yield* sessions.messages({ sessionID: childSessionID })).filter((message) => message.id === inboxID)
+                .length,
+          ).toBe(1)
         }),
       ),
     ),

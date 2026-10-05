@@ -5986,6 +5986,70 @@ describe("SessionRunnerLLM", () => {
     ])
   })
 
+  for (const [code, fragment] of [
+    ["1012", '{"text":'],
+    ["1006", '{"text":"not confirmed"}'],
+  ] as const) {
+    scenario(`regenerates after ${code} without replaying an unconfirmed tool call`, function* (s) {
+      yield* s.admit("Recover a draft tool call")
+      yield* s.llm.push(
+        TestLLM.failAfter(
+          new AIError({
+            reason: new TransportError({
+              message: `WebSocket closed with code ${code}`,
+              transport: "websocket",
+              operation: "read",
+              phase: "close",
+              code,
+              delivery: "accepted",
+            }),
+          }),
+          LLMEvent.stepStart({ index: 0 }),
+          LLMEvent.toolInputStart({ id: "draft", name: "echo" }),
+          LLMEvent.toolInputDelta({ id: "draft", name: "echo", text: fragment }),
+        ),
+        TestLLM.text("Recovered", "after-draft"),
+      )
+      const scheduled = yield* subscribeRetries(s)
+      const run = yield* s.resume.pipe(Effect.forkChild)
+      yield* Queue.take(scheduled)
+      yield* TestClock.adjust("2400 millis")
+      yield* Fiber.join(run)
+      expect(s.executions).toEqual([])
+      expect(s.requests).toHaveLength(2)
+      expect(
+        s.requests[1]?.messages.flatMap((message) => message.content).some((part) => part.type === "tool-call"),
+      ).toBe(false)
+      const context = yield* s.context
+      expect(context[1]).toMatchObject({
+        content: [{ id: "draft", state: { status: "error", metadata: { recovery: "unconfirmed" } } }],
+      })
+    })
+  }
+
+  scenario("retains a settled sibling while regenerating an interrupted draft", function* (s) {
+    yield* s.admit("Keep the completed call")
+    yield* s.llm.push(
+      TestLLM.failAfter(
+        websocketDisconnected(),
+        LLMEvent.stepStart({ index: 0 }),
+        LLMEvent.toolCall({ id: "settled", name: "echo", input: { text: "once" } }),
+        LLMEvent.toolInputStart({ id: "draft", name: "echo" }),
+        LLMEvent.toolInputDelta({ id: "draft", name: "echo", text: '{"text":"not confirmed"}' }),
+      ),
+      TestLLM.text("Recovered", "after-sibling"),
+    )
+    const scheduled = yield* subscribeRetries(s)
+    const run = yield* s.resume.pipe(Effect.forkChild)
+    yield* Queue.take(scheduled)
+    yield* TestClock.adjust("2400 millis")
+    yield* Fiber.join(run)
+    expect(s.executions).toEqual(["once"])
+    const parts = s.requests[1]?.messages.flatMap((message) => message.content) ?? []
+    expect(parts.filter((part) => part.type === "tool-call").map((part) => part.id)).toEqual(["settled"])
+    expect(parts.filter((part) => part.type === "tool-result").map((part) => part.id)).toEqual(["settled"])
+  })
+
   scenario("continues an incomplete stream after settling a local tool defect", function* (s) {
     yield* s.admit("Continue after tool defect")
     yield* s.llm.push(

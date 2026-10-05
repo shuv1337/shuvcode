@@ -337,6 +337,12 @@ export function update(adapter: Adapter, event: SessionEvent.DurableEvent) {
           }
         })
       },
+      "session.tool.subagent.prepared": (event) =>
+        updateOwnedAssistant(event.data.assistantMessageID, (draft) => {
+          const match = latestTool(draft, event.data.id)
+          if (match?.name === "subagent" && match.state.status === "running")
+            match.state.metadata.recovery = castDraft(event.data.recovery)
+        }),
       // Terminal tool events are self-contained; projection is a direct copy and
       // never reaches into ephemeral progress history.
       "session.tool.success": (event) => {

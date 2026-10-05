@@ -523,4 +523,22 @@ describe("Open Responses basic-item lifecycles", () => {
       ])
     }),
   )
+
+  it.effect("keeps parseable arguments non-executable until the response confirms the call", () =>
+    Effect.gen(function* () {
+      const item = { type: "function_call", id: "fc_unconfirmed", call_id: "call_unconfirmed", name: "lookup" }
+      const input = '{"query":"weather"}'
+      const events = yield* collect(
+        { type: "response.output_item.added", item },
+        { type: "response.function_call_arguments.delta", item_id: item.id, delta: input },
+        { type: "response.function_call_arguments.done", item_id: item.id, arguments: input },
+        {
+          type: "response.incomplete",
+          response: { id: "resp_1", incomplete_details: { reason: "max_output_tokens" } },
+        },
+      )
+      expect(events.filter(LLMEvent.is.toolInputDelta)).toMatchObject([{ input: { query: "weather" } }])
+      expect(events.filter(LLMEvent.is.toolCall)).toEqual([])
+    }),
+  )
 })
