@@ -196,6 +196,7 @@ const table = sqliteTable("session", {
 
 - Run `bun run check` from the repository root as the canonical full lint and type-check verification.
 - During focused iteration, run `bun typecheck` from the affected package directory (for example, `packages/core`). Never run `tsc` directly.
+- Validate whitespace with plain `git diff --check`, or check formatting with Prettier (`bun run prettier --ignore-unknown --check .`). `jj diff` has no `--check` flag.
 
 ## V2 Session Core
 
