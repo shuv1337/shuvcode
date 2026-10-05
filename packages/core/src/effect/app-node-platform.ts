@@ -1,3 +1,4 @@
+import { EvaluationClient } from "@opencode/ai/experimental"
 import { LLMClient, RequestExecutor } from "@opencode/ai/route"
 import { Socket } from "effect/unstable/socket"
 import { makeGlobalNode } from "@opencode/util/effect/app-node"
@@ -11,6 +12,12 @@ export const requestExecutor = makeGlobalNode({
 })
 
 export const llmClient = makeGlobalNode({ service: LLMClient.Service, layer: LLMClient.layer, deps: [requestExecutor] })
+
+export const evaluationClient = makeGlobalNode({
+  service: EvaluationClient.Service,
+  layer: EvaluationClient.layer,
+  deps: [requestExecutor],
+})
 
 export const webSocketConstructor = makeGlobalNode({
   service: Socket.WebSocketConstructor,

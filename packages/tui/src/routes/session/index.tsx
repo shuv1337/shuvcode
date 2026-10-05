@@ -189,24 +189,27 @@ export function Session(props: {
     setEpilogue(sessionEpilogue({ title, sessionID: session()?.id }))
   })
   onCleanup(() => setEpilogue())
-  const descendantSessionIDs = createMemo(() => {
-    if (session()?.parentID) return []
-    return data.session.family(route.sessionID).filter((id) => id !== route.sessionID)
-  })
-  const permissions = createMemo(() => {
-    if (session()?.parentID) return []
-    return [route.sessionID, ...descendantSessionIDs()].flatMap(
-      (sessionID) => data.session.permission.list(sessionID) ?? [],
-    )
-  })
+  const rootSessionID = createMemo(() => data.session.root(route.sessionID))
+  const familySessionIDs = createMemo(() => data.session.family(rootSessionID()))
+  const otherFamilySessionIDs = createMemo(() => familySessionIDs().filter((id) => id !== route.sessionID))
+  const familyPermissions = createMemo(() =>
+    familySessionIDs().flatMap((sessionID) => data.session.permission.list(sessionID) ?? []),
+  )
+  const permissions = createMemo(() => (session()?.parentID ? [] : familyPermissions()))
   const promptedPermissions = createMemo(() => (local.permission.mode === "autoaccept" ? [] : permissions()))
+  const familyForms = createMemo(() =>
+    familySessionIDs().flatMap((sessionID) => data.session.form.list(sessionID) ?? []),
+  )
   const forms = createMemo(() => {
     const global = data.session.form.list("global", location()) ?? []
     if (session()?.parentID) return global
-    return [route.sessionID, ...descendantSessionIDs()]
-      .flatMap((sessionID) => data.session.form.list(sessionID) ?? [])
-      .concat(global)
+    return familyForms().concat(global)
   })
+  const parentWaiting = createMemo(
+    () =>
+      !!session()?.parentID &&
+      ((local.permission.mode !== "autoaccept" && familyPermissions().length > 0) || familyForms().length > 0),
+  )
   const pendingUsers = createMemo(() =>
     data.session.pending.list(route.sessionID).flatMap((item) => (item.type === "user" ? [item] : [])),
   )
@@ -259,7 +262,7 @@ export function Session(props: {
   const autoApproved = new Set<string>()
   createEffect(() => {
     if (local.permission.mode !== "autoaccept") return
-    permissions().forEach((request) => {
+    familyPermissions().forEach((request) => {
       if (autoApproved.has(request.id)) return
       autoApproved.add(request.id)
       void data.session.permission
@@ -317,7 +320,17 @@ export function Session(props: {
   )
 
   createEffect(
-    on([descendantSessionIDs, () => client.connection.status()], ([sessionIDs, status]) => {
+    on(
+      [rootSessionID, () => !!data.session.get(rootSessionID()), () => client.connection.status()],
+      ([sessionID, known, status]) => {
+        if (status !== "connected" || !known || sessionID === route.sessionID) return
+        void data.session.sync(sessionID, { children: true }).catch(() => undefined)
+      },
+    ),
+  )
+
+  createEffect(
+    on([otherFamilySessionIDs, () => client.connection.status()], ([sessionIDs, status]) => {
       if (status !== "connected") return
       void Promise.allSettled(
         sessionIDs.flatMap((sessionID) => [data.session.permission.sync(sessionID), data.session.form.sync(sessionID)]),
@@ -1460,6 +1473,11 @@ export function Session(props: {
                 <QueuedPromptDock prompts={queuedPrompts()} onOpen={openQueuedPrompts} />
               </Show>
               <Slot path="session.composer.top" input={{ sessionID: route.sessionID }} />
+              <Show when={parentWaiting()}>
+                <box paddingLeft={2} flexShrink={0}>
+                  <text fg={theme.text.feedback.warning.base}>Parent is waiting for you</text>
+                </box>
+              </Show>
               <Composer
                 sessionID={route.sessionID}
                 open={composer.open || (!!session()?.parentID && forms().length === 0)}
