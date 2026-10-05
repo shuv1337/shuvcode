@@ -13179,6 +13179,9 @@
                 "type": "integer",
                 "minimum": 0
               },
+              "jev": {
+                "type": "boolean"
+              },
               "policies": {
                 "type": "array",
                 "items": {
