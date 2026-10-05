@@ -30,8 +30,9 @@ identity facts when merging or refactoring:
 - Host deploys from a jj merge or other detached working copy must set
   `OPENCODE_CHANNEL=integration-v2` before `bun run --cwd packages/cli build`.
   `git branch --show-current` is empty there, and a merge working copy has no
-  single bookmark, so an inferred channel is either ambiguous or empty. An
-  empty channel selects `opencode-.db` and `service-.json`.
+  single bookmark, so channel inference can be ambiguous or unavailable. The
+  build fails closed in that case; the explicit channel pins the intended
+  database and service identity.
 
 ## Live V2 TUI Testing
 
