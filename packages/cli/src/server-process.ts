@@ -123,6 +123,9 @@ const processEffect = Effect.fnUntraced(function* (options: Options) {
                 ? process.platform !== "win32"
                 : !truthy(process.env.OPENCODE_DISABLE_FFF),
           },
+          // Bus treats a missing persist flag as false and then omits event rows.
+          // Session log replay and restart recovery only see log.synced in that mode.
+          events: { persist: true },
         },
         serviceOptions === undefined
           ? undefined
