@@ -19,6 +19,8 @@ type Input = {
   readonly tool?: Tool
   readonly toolCallPrefix?: string
   readonly titlePrefix?: string
+  /** Completes once the server reports the ask answered or cancelled elsewhere. */
+  readonly settled: Effect.Effect<void>
 }
 
 const options: PermissionOption[] = [
@@ -29,16 +31,23 @@ const options: PermissionOption[] = [
 
 /**
  * Asks the client, then replies to the server. Once `cancelled` completes, the client's request is cancelled or never
- * sent, and the server gets `reject`. The server reply is uninterruptible, so a server that is alive but stuck can
+ * sent, and the server gets `reject`. Once `settled` completes, the dialog is withdrawn without a server reply.
+ * The server reply is uninterruptible, so a server that is alive but stuck can
  * hold a cancel past `CancelDrainTimeout`; a dead server fails fast.
  */
 export const reply = Effect.fn("cli.acp.permission.reply")(function* (input: Input, cancelled: Effect.Effect<void>) {
   yield* Effect.uninterruptibleMask((restore) =>
     // The race starts racers in order and stops once one is done, so an earlier cancel never starts the ask.
-    restore(cancelled.pipe(Effect.as("reject" as const), Effect.raceFirst(ask(input)))).pipe(
+    restore(
+      cancelled.pipe(
+        Effect.as("reject" as const),
+        Effect.raceFirst(input.settled.pipe(Effect.as("settled" as const))),
+        Effect.raceFirst(ask(input)),
+      ),
+    ).pipe(
       Effect.tapCauseIf(Cause.hasDies, (cause) => Effect.logWarning("ACP permission ask failed", cause)),
       Effect.catchCause(() => Effect.succeed("reject" as const)),
-      Effect.flatMap((decision) => respond(input, decision)),
+      Effect.flatMap((decision) => (decision === "settled" ? Effect.void : respond(input, decision))),
     ),
   )
 })

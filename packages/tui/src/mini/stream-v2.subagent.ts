@@ -177,7 +177,8 @@ function permissionTool(request: PermissionRequest, tools: Map<string, SessionMe
 }
 
 function blockerCategory(event: V2Event): "permission" | "form" | undefined {
-  if (event.type === "permission.asked" || event.type === "permission.replied") return "permission"
+  if (event.type === "permission.asked" || event.type === "permission.replied" || event.type === "permission.cancelled")
+    return "permission"
   if (event.type === "form.created" || event.type === "form.replied" || event.type === "form.cancelled") return "form"
 }
 
@@ -886,7 +887,7 @@ export function createSubagentTracker(input: SubagentTrackerInput): SubagentTrac
       input.emit()
       return
     }
-    if (event.type === "permission.replied") {
+    if (event.type === "permission.replied" || event.type === "permission.cancelled") {
       child.permissions = child.permissions.filter((item) => item.id !== event.data.requestID)
       input.emit()
       return

@@ -1,9 +1,19 @@
-import { describe, expect, test } from "bun:test"
+import { afterEach, describe, expect, test } from "bun:test"
 import { $ } from "bun"
 import fs from "fs/promises"
 import os from "os"
 import path from "path"
 import { detachedBranches, nextForkVersion, parseForkVersion, resolveChannel } from "../src/version.js"
+
+const directories: string[] = []
+const temporaryDirectory = async () => {
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), "script-channel-"))
+  directories.push(dir)
+  return dir
+}
+afterEach(async () => {
+  await Promise.all(directories.splice(0).map((dir) => fs.rm(dir, { recursive: true, force: true })))
+})
 
 describe("resolveChannel", () => {
   test("prefers an explicit channel without reading git", async () => {
@@ -66,11 +76,35 @@ describe("resolveChannel", () => {
       }),
     ).rejects.toThrow("OPENCODE_CHANNEL")
   })
+
+  test("requires an explicit channel when detached branch lookup fails", async () => {
+    await expect(
+      resolveChannel({
+        branch: async () => "",
+        detachedBranches: async () => {
+          throw new Error("lookup failed")
+        },
+      }),
+    ).rejects.toThrow("OPENCODE_CHANNEL")
+  })
+})
+
+describe("plain git detachedBranches", () => {
+  test("uses the single branch tip and excludes the detached HEAD pseudo-branch", async () => {
+    const dir = await temporaryDirectory()
+    await $`git init --initial-branch=integration-v2 ${dir}`.quiet()
+    await $`git -c user.name=test -c user.email=test@example.com commit --allow-empty -m base`.cwd(dir).quiet()
+    await $`git checkout --detach`.cwd(dir).quiet()
+    expect(await detachedBranches(dir)).toEqual(["integration-v2"])
+    expect(await resolveChannel({ branch: async () => "", detachedBranches: () => detachedBranches(dir) })).toBe(
+      "integration-v2",
+    )
+  })
 })
 
 describe.skipIf(!Bun.which("jj"))("detachedBranches", () => {
   const repo = async () => {
-    const dir = await fs.mkdtemp(path.join(os.tmpdir(), "script-channel-"))
+    const dir = await temporaryDirectory()
     const jj = (args: string[]) =>
       $`jj --config user.name=test --config user.email=test@example.com ${args}`.cwd(dir).quiet()
     await jj(["git", "init", "--colocate"])
@@ -93,6 +127,87 @@ describe.skipIf(!Bun.which("jj"))("detachedBranches", () => {
     expect(await resolveChannel({ branch: async () => "", detachedBranches: () => detachedBranches(dir) })).toBe(
       "fix-x",
     )
+  })
+
+  test.each(["failed", "missing"])("rejects a %s jj lookup instead of using git HEAD", async (mode) => {
+    const { dir, jj } = await repo()
+    await jj(["bookmark", "create", "fix-x", "-r", "@"])
+    const bin = path.join(dir, "bin")
+    await fs.mkdir(bin)
+    await fs.symlink(Bun.which("git")!, path.join(bin, "git"))
+    if (mode === "failed") {
+      await Bun.write(path.join(bin, "jj"), "#!/bin/sh\nexit 1\n")
+      await fs.chmod(path.join(bin, "jj"), 0o755)
+    }
+    const script = `
+      import { detachedBranches, resolveChannel } from ${JSON.stringify(path.resolve(import.meta.dir, "../src/version.ts"))};
+      await resolveChannel({ branch: async () => "", detachedBranches: () => detachedBranches(${JSON.stringify(dir)}) });
+    `
+    const result = await $`${process.execPath} -e ${script}`
+      .env({ ...process.env, PATH: bin })
+      .quiet()
+      .nothrow()
+    expect(result.exitCode).not.toBe(0)
+    expect(result.stderr.toString()).toContain("OPENCODE_CHANNEL")
+  })
+
+  test("rejects an unimported git branch at the working-copy parent", async () => {
+    const { dir, jj } = await repo()
+    await $`git branch extra-git-only`.cwd(dir).quiet()
+    await expect(
+      resolveChannel({ branch: async () => "", detachedBranches: () => detachedBranches(dir) }),
+    ).rejects.toThrow("(integration-v2, extra-git-only). Set OPENCODE_CHANNEL")
+    // The lookup must see git-side refs without importing them into jj.
+    expect(
+      (await jj(["log", "--ignore-working-copy", "--no-graph", "-r", "@-", "-T", "local_bookmarks"])).text().trim(),
+    ).toBe("integration-v2")
+  })
+
+  test("prefers an unimported git branch at the working copy over its parent", async () => {
+    const { dir, jj } = await repo()
+    const commit = (await jj(["log", "--ignore-working-copy", "--no-graph", "-r", "@", "-T", "commit_id"]))
+      .text()
+      .trim()
+    await $`git branch fix-x ${commit}`.cwd(dir).quiet()
+    expect(await resolveChannel({ branch: async () => "", detachedBranches: () => detachedBranches(dir) })).toBe(
+      "fix-x",
+    )
+  })
+
+  test("reads unimported git branches from a secondary jj workspace", async () => {
+    const { dir, jj } = await repo()
+    const workspace = await temporaryDirectory()
+    await fs.rm(workspace, { recursive: true })
+    await jj(["workspace", "add", workspace])
+    const commit = (
+      await $`jj log --ignore-working-copy --no-graph -r @ -T commit_id`.cwd(workspace).quiet().text()
+    ).trim()
+    await $`git branch fix-x ${commit}`.cwd(dir).quiet()
+    expect(await resolveChannel({ branch: async () => "", detachedBranches: () => detachedBranches(workspace) })).toBe(
+      "fix-x",
+    )
+  })
+
+  test("does not snapshot working-copy edits while looking up a channel", async () => {
+    const { dir, jj } = await repo()
+    await jj(["bookmark", "create", "fix-x", "-r", "@"])
+    const before = (await jj(["log", "--ignore-working-copy", "--no-graph", "-r", "@", "-T", "commit_id"])).text()
+    await Bun.write(path.join(dir, "uncommitted.txt"), "must not be snapshotted")
+    expect(await detachedBranches(dir)).toEqual(["fix-x"])
+    expect((await jj(["log", "--ignore-working-copy", "--no-graph", "-r", "@", "-T", "commit_id"])).text()).toBe(before)
+  })
+
+  test("finds jj metadata from a subdirectory", async () => {
+    const { dir } = await repo()
+    await fs.mkdir(path.join(dir, "nested"))
+    expect(await detachedBranches(path.join(dir, "nested"))).toEqual(["integration-v2"])
+  })
+
+  test("reads bookmarks in a non-colocated jj repository", async () => {
+    const dir = await temporaryDirectory()
+    await $`jj --config user.name=test --config user.email=test@example.com git init ${dir}`.quiet()
+    await $`jj bookmark create fix-x -r @`.cwd(dir).quiet()
+    expect(await detachedBranches(dir)).toEqual(["fix-x"])
   })
 
   test("rejects several bookmarks at the chosen revision", async () => {
