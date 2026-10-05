@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test"
 import fs from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
+import { cleanProcessEnv } from "./fixture/clean-env"
 
 describe("debug paths command", () => {
   test("is included in troubleshooting help", async () => {
@@ -16,6 +17,10 @@ describe("debug paths command", () => {
 
   test("prints resolved global paths without starting a server", async () => {
     const root = await fs.mkdtemp(path.join(os.tmpdir(), "opencode-debug-paths-"))
+    const previousConfig = process.env.OPENCODE_CONFIG_DIR
+    const previousHome = process.env.OPENCODE_TEST_HOME
+    process.env.OPENCODE_CONFIG_DIR = path.join(root, "session-config")
+    process.env.OPENCODE_TEST_HOME = root
 
     try {
       const result = await cli(["debug", "paths"], {
@@ -45,6 +50,10 @@ describe("debug paths command", () => {
       expect(paths.tmp).toBeTruthy()
       expect(await Bun.file(path.join(root, "state", "shuvcode", "service-local.json")).exists()).toBe(false)
     } finally {
+      if (previousConfig === undefined) delete process.env.OPENCODE_CONFIG_DIR
+      else process.env.OPENCODE_CONFIG_DIR = previousConfig
+      if (previousHome === undefined) delete process.env.OPENCODE_TEST_HOME
+      else process.env.OPENCODE_TEST_HOME = previousHome
       await fs.rm(root, { recursive: true, force: true })
     }
   })
@@ -53,7 +62,7 @@ describe("debug paths command", () => {
 async function cli(args: string[], env?: Record<string, string>) {
   const child = Bun.spawn([process.execPath, "run", path.join(import.meta.dir, "../src/index.ts"), ...args], {
     cwd: path.join(import.meta.dir, ".."),
-    env: { ...process.env, ...env },
+    env: { ...cleanProcessEnv(), ...env },
     stdout: "pipe",
     stderr: "pipe",
   })

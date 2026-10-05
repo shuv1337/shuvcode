@@ -50,7 +50,14 @@ const Replied = ephemeral({
     reply: Reply,
   },
 })
-export const Event = { Asked, Replied, Definitions: inventory(Asked, Replied) }
+const Cancelled = ephemeral({
+  type: "permission.cancelled",
+  schema: {
+    sessionID: SessionID,
+    requestID: ID,
+  },
+})
+export const Event = { Asked, Replied, Cancelled, Definitions: inventory(Asked, Replied, Cancelled) }
 
 export const Effect = Schema.Literals(["allow", "deny", "ask"]).annotate({ identifier: "Permission.Effect" })
 export type Effect = typeof Effect.Type
