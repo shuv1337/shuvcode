@@ -130,18 +130,19 @@ const layer = Layer.effect(
     const pending = new Map<ID, Pending>()
     let closed = false
 
+    const cancel = Effect.fnUntraced(function* (item: Pending) {
+      if (!pending.delete(item.request.id)) return
+      yield* bus
+        .publish(Permission.Event.Cancelled, {
+          sessionID: item.request.sessionID,
+          requestID: item.request.id,
+        })
+        .pipe(Effect.ensuring(Deferred.fail(item.deferred, new DeclinedError())))
+    })
+
     const close = Effect.gen(function* () {
       closed = true
-      yield* Effect.forEach(Array.from(pending.values()), (item) =>
-        bus
-          .publish(Permission.Event.Replied, {
-            sessionID: item.request.sessionID,
-            requestID: item.request.id,
-            reply: "reject",
-          })
-          .pipe(Effect.ensuring(Deferred.fail(item.deferred, new DeclinedError()))),
-      )
-      pending.clear()
+      yield* Effect.forEach(Array.from(pending.values()), cancel, { discard: true })
     }).pipe(Effect.uninterruptible)
     yield* Effect.addFinalizer(() => close)
 
@@ -251,11 +252,7 @@ const layer = Layer.effect(
               // WITH feedback (CorrectedError) intentionally stays typed so the leaf can turn
               // it into ToolFailure and the model continues.
               Effect.catchTag("Permission.DeclinedError", (error) => Effect.die(error)),
-              Effect.ensuring(
-                Effect.sync(() => {
-                  pending.delete(item.request.id)
-                }),
-              ),
+              Effect.ensuring(cancel(item)),
             )
           }),
         )
@@ -267,6 +264,9 @@ const layer = Layer.effect(
         Effect.gen(function* () {
           const existing = pending.get(input.requestID)
           if (!existing) return yield* new NotFoundError({ requestID: input.requestID })
+          // Claim the reply before any yield, including publishing and saving an "always" rule.
+          // The assertion may be interrupted meanwhile, but its cleanup must not cancel a replied ask.
+          pending.delete(input.requestID)
           yield* bus.publish(Permission.Event.Replied, {
             sessionID: existing.request.sessionID,
             requestID: existing.request.id,
@@ -278,9 +278,9 @@ const layer = Layer.effect(
               existing.deferred,
               input.message ? new CorrectedError({ feedback: input.message }) : new DeclinedError(),
             )
-            pending.delete(input.requestID)
             for (const [id, item] of pending) {
               if (item.request.sessionID !== existing.request.sessionID) continue
+              pending.delete(id)
               yield* bus.publish(Permission.Event.Replied, {
                 sessionID: item.request.sessionID,
                 requestID: item.request.id,
@@ -291,7 +291,6 @@ const layer = Layer.effect(
                 item.deferred,
                 input.message ? new CorrectedError({ feedback: input.message }) : new DeclinedError(),
               )
-              pending.delete(id)
             }
             return
           }
@@ -304,21 +303,20 @@ const layer = Layer.effect(
             })
           }
           yield* Deferred.succeed(existing.deferred, undefined)
-          pending.delete(input.requestID)
           if (input.reply !== "always" || !existing.request.save?.length) return
 
           for (const [id, item] of pending) {
             const result = yield* evaluateInput({ ...item.request, agent: item.agent }).pipe(
               Effect.catchTag("Session.NotFoundError", () => Effect.undefined),
             )
-            if (result?.effect !== "allow") continue
+            // Evaluation can yield while the assertion is cancelled or another reply claims it.
+            if (result?.effect !== "allow" || !pending.delete(id)) continue
             yield* bus.publish(Permission.Event.Replied, {
               sessionID: item.request.sessionID,
               requestID: item.request.id,
               reply: "always",
             })
             yield* Deferred.succeed(item.deferred, undefined)
-            pending.delete(id)
           }
         }),
       ),
