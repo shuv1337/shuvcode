@@ -993,6 +993,15 @@ export type ReferenceUpdated = {
   data: {}
 }
 
+export type PermissionCancelled = {
+  id: string
+  created: number
+  metadata?: { [x: string]: any }
+  type: "permission.cancelled"
+  location?: LocationRef
+  data: { sessionID: string; requestID: string }
+}
+
 export type PluginUpdated = {
   id: string
   created: number
@@ -2477,6 +2486,7 @@ export type V2Event =
   | ReferenceUpdated
   | PermissionAsked
   | PermissionReplied
+  | PermissionCancelled
   | PluginUpdated
   | ProjectUpdated
   | WorktreeUpdated

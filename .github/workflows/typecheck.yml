@@ -3,7 +3,7 @@ name: typecheck
 on:
   push:
     branches:
-      - v2
+      - integration-v2
   pull_request:
   workflow_dispatch:
 

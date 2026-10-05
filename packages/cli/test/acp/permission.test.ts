@@ -8,6 +8,7 @@ import {
   childCreated,
   delivered,
   durableEvent,
+  ephemeralEvent,
   interrupted,
   permissionAsked,
   startSession,
@@ -296,6 +297,67 @@ describe("acp permissions over the wire", () => {
     releaseBlocked.resolve({ outcome: { outcome: "selected", optionId: "once" } })
     expect(await blocked).toMatchObject({ stopReason: "end_turn" })
     expect(decisions(acp)).toEqual([["perm_blocked", "once"]])
+  })
+
+  for (const owner of ["parent", "child"] as const) {
+    test(`server cancellation withdraws an open ${owner} permission without replying to the dead ask`, async () => {
+      const cancelled = Promise.withResolvers<void>()
+      await using acp = await startSession({
+        onPrompt: ({ sessionID, id }) => [
+          delivered(sessionID, id),
+          ...(owner === "child" ? [childCreated("ses_child", sessionID, "Review")] : []),
+          permissionAsked(owner === "child" ? "ses_child" : sessionID, "perm_cancelled_on_server"),
+        ],
+        permission: (_request, signal) =>
+          new Promise((resolve) => {
+            signal.addEventListener(
+              "abort",
+              () => {
+                cancelled.resolve()
+                resolve({ outcome: { outcome: "cancelled" } })
+              },
+              { once: true },
+            )
+          }),
+      })
+      const prompt = acp.prompt(acp.sessionId, "hello")
+      await acp.until(() => acp.permissions.length === 1, "permission request")
+      const sessionID = owner === "child" ? "ses_child" : acp.sessionId
+      acp.server.send(
+        ephemeralEvent("permission.cancelled", { sessionID, requestID: "perm_cancelled_on_server" }),
+        interrupted(sessionID),
+      )
+      await acp.until(
+        () => acp.received.some((message) => "method" in message && message.method === "$/cancel_request"),
+        "permission request withdrawn",
+      )
+      await cancelled.promise
+      if (owner === "child")
+        acp.server.send(textDelta(acp.sessionId, "msg_after_cancel", "parent continues"), succeeded(acp.sessionId))
+      expect(await prompt).toMatchObject({ stopReason: owner === "child" ? "end_turn" : "cancelled" })
+      expect(acp.server.replies).toEqual([])
+      expect(acp.server.interrupts).toEqual([])
+    })
+  }
+
+  test("does not show or reply to a queued permission already cancelled by the server", async () => {
+    const answer = Promise.withResolvers<RequestPermissionResponse>()
+    await using acp = await startSession({
+      onPrompt: ({ sessionID, id }) => [
+        delivered(sessionID, id),
+        permissionAsked(sessionID, "perm_first"),
+        permissionAsked(sessionID, "perm_queued"),
+      ],
+      permission: () => answer.promise,
+      onPermissionReply: ({ sessionID }) => [succeeded(sessionID)],
+    })
+    const prompt = acp.prompt(acp.sessionId, "hello")
+    await acp.until(() => acp.permissions.length === 1, "first permission request")
+    acp.server.send(ephemeralEvent("permission.cancelled", { sessionID: acp.sessionId, requestID: "perm_queued" }))
+    answer.resolve(allowOnce())
+    expect(await prompt).toMatchObject({ stopReason: "end_turn" })
+    expect(acp.permissions.map((request) => request.toolCall.toolCallId)).toEqual(["perm_first"])
+    expect(decisions(acp)).toEqual([["perm_first", "once"]])
   })
 
   test("cancelling the turn cancels its pending permission request and rejects the permission", async () => {
