@@ -10,9 +10,11 @@ import {
   DateTimeUtcFromMillis,
   NonNegativeInt,
   PositiveInt,
+  optional,
   RelativePath,
   statics,
 } from "@opencode/schema/schema"
+import { AgentAttachment } from "@opencode/schema/prompt"
 import { Event } from "@opencode/schema/event"
 import { Context, Effect, Encoding, Result, Schema, SchemaGetter, Struct } from "effect"
 import { HttpApiEndpoint, HttpApiGroup, HttpApiMiddleware, HttpApiSchema, OpenApi } from "effect/unstable/httpapi"
@@ -78,6 +80,23 @@ const SessionsProjectQuery = Schema.Struct({
 })
 
 const SessionsAllQuery = Schema.Struct(SessionsQueryFields)
+
+// Nested attachments keep the default lenient decode so persisted composer
+// state with extra keys stays accepted; only top-level keys are strict.
+const lenient = { parseOptions: { onExcessProperty: "ignore" } } as const
+
+// Unknown top-level keys are preserved so the server can reject them instead
+// of silently dropping them (a codegen-portable schema cannot carry the check).
+export const SessionPromptPayload = Schema.Struct({
+  id: SessionMessage.ID.pipe(Schema.optional),
+  ...PromptInput.Prompt.fields,
+  files: Schema.Array(PromptInput.FileAttachment).annotate(lenient).pipe(optional),
+  agents: Schema.Array(AgentAttachment).annotate(lenient).pipe(optional),
+  skills: Schema.Array(PromptInput.SkillAttachment).annotate(lenient).pipe(optional),
+  metadata: SessionInbox.UserPayload.fields.metadata,
+  delivery: SessionInbox.Delivery.pipe(Schema.optional),
+  resume: Schema.Boolean.pipe(Schema.optional),
+}).annotate({ parseOptions: { onExcessProperty: "preserve" } })
 
 const withCursor = <Fields extends Schema.Struct.Fields>(schema: Schema.Struct<Fields>) =>
   schema.mapFields((fields) => ({
@@ -170,12 +189,10 @@ export const SessionsQuery = Schema.Struct({
   cursor: SessionsQueryCursor.pipe(Schema.optional),
 }).annotate({ identifier: "SessionsQuery" })
 
-export const makeSessionGroup = <
-  I extends HttpApiMiddleware.AnyId,
-  S,
-  FormI extends HttpApiMiddleware.AnyId,
-  FormS,
->(sessionLocationMiddleware: Context.Key<I, S>, formLocationMiddleware: Context.Key<FormI, FormS>) =>
+export const makeSessionGroup = <I extends HttpApiMiddleware.AnyId, S, FormI extends HttpApiMiddleware.AnyId, FormS>(
+  sessionLocationMiddleware: Context.Key<I, S>,
+  formLocationMiddleware: Context.Key<FormI, FormS>,
+) =>
   HttpApiGroup.make("server.session")
     .add(
       HttpApiEndpoint.get("session.list", "/api/session", {
@@ -394,13 +411,7 @@ export const makeSessionGroup = <
     .add(
       HttpApiEndpoint.post("session.prompt", "/api/session/:sessionID/prompt", {
         params: { sessionID: Session.ID },
-        payload: Schema.Struct({
-          id: SessionMessage.ID.pipe(Schema.optional),
-          ...PromptInput.Prompt.fields,
-          metadata: SessionInbox.UserPayload.fields.metadata,
-          delivery: SessionInbox.Delivery.pipe(Schema.optional),
-          resume: Schema.Boolean.pipe(Schema.optional),
-        }),
+        payload: SessionPromptPayload,
         success: Schema.Struct({ data: SessionInbox.User }),
         error: [ConflictError, InvalidRequestError, SessionNotFoundError],
       })
@@ -562,9 +573,7 @@ export const makeSessionGroup = <
         error: [SessionNotFoundError, SessionBusyError],
       })
         .middleware(sessionLocationMiddleware)
-        .annotateMerge(
-          OpenApi.annotations({ identifier: "session.revert.commit", summary: "Commit staged revert" }),
-        ),
+        .annotateMerge(OpenApi.annotations({ identifier: "session.revert.commit", summary: "Commit staged revert" })),
     )
     .add(
       HttpApiEndpoint.get("session.context", "/api/session/:sessionID/context", {

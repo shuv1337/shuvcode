@@ -2,6 +2,7 @@ export * as SessionRunnerModel from "./model.js"
 
 import { makeLocationNode } from "@opencode/util/effect/app-node"
 import { LanguageModel } from "@opencode/ai"
+import { Agent } from "@opencode/schema/agent"
 import { Model } from "@opencode/schema/model"
 import { Provider } from "@opencode/schema/provider"
 import { Context, Effect, Layer, Schema } from "effect"
@@ -33,10 +34,14 @@ export type Error = ModelNotSelectedError | ModelUnavailableError | ModelResolve
 export type Resolved = ModelResolver.Resolved
 
 export interface Interface {
-  /** Availability is sampled lazily for each explicitly selected model resolution. */
+  /**
+   * Resolves the Session model, then the selected agent's configured model, then the catalog default.
+   * Availability is sampled lazily for each explicitly selected model resolution.
+   */
   readonly resolve: (
     session: SessionSchema.Info,
     available: () => Effect.Effect<ReadonlyArray<Model.Info>>,
+    agent?: Agent.Info,
   ) => Effect.Effect<Resolved, Error>
 }
 
@@ -72,22 +77,23 @@ const layer = Layer.effect(
   Effect.gen(function* () {
     const resolver = yield* ModelResolver.Service
     return Service.of({
-      resolve: Effect.fn("SessionRunnerModel.resolve")(function* (session, available) {
+      resolve: Effect.fn("SessionRunnerModel.resolve")(function* (session, available, agent) {
+        const requested = session.model ?? agent?.model
         // Location plugins populate and filter the catalog asynchronously during layer startup.
-        if (!session.model) {
+        if (!requested) {
           const resolved = yield* resolver.resolve()
           if (resolved) return resolved
           return yield* new ModelNotSelectedError({ sessionID: session.id })
         }
         const selected = (yield* available()).find(
-          (model) => model.providerID === session.model?.providerID && model.id === session.model.id,
+          (model) => model.providerID === requested.providerID && model.id === requested.id,
         )
         if (!selected)
           return yield* new ModelUnavailableError({
-            providerID: session.model.providerID,
-            modelID: session.model.id,
+            providerID: requested.providerID,
+            modelID: requested.id,
           })
-        return yield* resolver.resolveModel(selected, session.model.variant)
+        return yield* resolver.resolveModel(selected, requested.variant)
       }),
     })
   }),
