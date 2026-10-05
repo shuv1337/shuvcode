@@ -1,11 +1,6 @@
 import { Effect, FileSystem, Option, Schedule, Schema } from "effect"
 import type { DiscoverOptions, EnsureOptions, StopOptions } from "../service.js"
-import {
-  contenderFailure,
-  contenderFinished,
-  type ServiceContender,
-  spawnServiceContender,
-} from "../service-contender.js"
+import { contenderPool, spawnServiceContender } from "../service-contender.js"
 import { defaultEnsureTiming, ensureTiming, type EnsureTiming } from "../service-timing.js"
 import { matchesVersion } from "../service-version.js"
 import { PtyHandoff } from "../pty-handoff.js"
@@ -53,12 +48,9 @@ export const incumbent = Effect.fn("service.incumbent")(function* (
 /** Ensure a healthy, compatible local service is running. */
 export const ensure = Effect.fn("service.ensure")(function* (options: EnsureOptions = {}) {
   const timing = ensureTiming(options)
-  const contenders = new Set<ServiceContender>()
+  const pool = contenderPool(timing)
   let timeouts: { readonly info: Info; readonly count: number } | undefined
   let announced = false
-  let lastSpawn = 0
-  let spawnDelay = timing.spawnDelay
-  let failure: Error | undefined
   const announce = (reason: "missing" | "version-mismatch", previousVersion?: string) =>
     Effect.sync(() => {
       if (announced) return
@@ -90,19 +82,13 @@ export const ensure = Effect.fn("service.ensure")(function* (options: EnsureOpti
         yield* Effect.logWarning("Background service is unresponsive; recovery cannot preserve persistent terminals")
         yield* Effect.tryPromise(() => PtyHandoff.clear(options.file ?? fallback()))
         yield* terminate(info, options, timing)
-        for (const item of contenders) {
-          if (item.child.pid === info.pid || contenderFinished(item)) {
-            item.release()
-            contenders.delete(item)
-          }
-        }
-        failure = undefined
+        pool.evict(info.pid)
+        pool.recruitNow()
         timeouts = undefined
-        lastSpawn = Date.now() - spawnDelay
       }
     } else timeouts = undefined
     if (service !== undefined) {
-      spawnDelay = timing.spawnDelay
+      pool.serviceAnswered()
       const versionMatches = matchesVersion(service.version, options)
       const compatible = service.compatible && versionMatches
       if (!service.compatible && versionMatches)
@@ -125,30 +111,15 @@ export const ensure = Effect.fn("service.ensure")(function* (options: EnsureOpti
         file: options.file,
         pty: service.state === "ready" ? "handoff" : "clear",
       }).pipe(Effect.ignore)
-      for (const item of contenders) {
-        if (item.child.pid === service.info.pid || contenderFinished(item)) {
-          item.release()
-          contenders.delete(item)
-        }
-      }
-      failure = undefined
-      lastSpawn = 0
+      pool.evict(service.info.pid)
       return Option.none<LocalService>()
-    } else if (lastSpawn === 0 && info !== undefined) lastSpawn = Date.now()
-
-    const finished = [...contenders].filter(contenderFinished)
-    failure ??= finished.map(contenderFailure).find((error): error is Error => error !== undefined)
-    if (finished.some((item) => item.child.exitCode === 0)) {
-      spawnDelay = Math.min(spawnDelay * 2, timing.maxSpawnDelay)
     }
-    finished.forEach((item) => contenders.delete(item))
-    if (failure !== undefined && contenders.size === 0) return yield* Effect.fail(failure)
-    // Keep one candidate plus one lock probe for pre-lock stalls. After a failure, let the
-    // survivors finish without recruiting replacements that could hide the error indefinitely.
-    if (failure === undefined && contenders.size < 2 && Date.now() - lastSpawn >= spawnDelay) {
+
+    const failed = pool.reap()
+    if (failed !== undefined) return yield* Effect.fail(failed)
+    if (pool.shouldRecruit(info !== undefined)) {
       yield* announce("missing")
-      contenders.add(yield* spawnContender)
-      lastSpawn = Date.now()
+      pool.add(yield* spawnContender)
     }
     return Option.none<LocalService>()
   }).pipe(
@@ -158,10 +129,10 @@ export const ensure = Effect.fn("service.ensure")(function* (options: EnsureOpti
       // like the Promise variant rather than by attempt count.
       schedule: Schedule.spaced(timing.pollInterval).pipe(Schedule.upTo({ duration: timing.promiseTimeout })),
     }),
-    Effect.ensuring(Effect.sync(() => contenders.forEach((contender) => contender.release()))),
+    Effect.ensuring(Effect.sync(() => pool.releaseAll())),
   )
   if (Option.isNone(found))
-    return yield* Effect.fail(failure ?? new Error("Timed out waiting for the background service to start"))
+    return yield* Effect.fail(pool.failure() ?? new Error("Timed out waiting for the background service to start"))
   return found.value.endpoint
 })
 
