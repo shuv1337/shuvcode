@@ -389,8 +389,9 @@ function quotaWindowID(bucket: Record<string, unknown>) {
 
 function fiveHourWindow(windows: readonly QuotaWindow[], modelID: string | undefined) {
   const name = (modelID ?? "").toLowerCase()
-  const preferred = name.includes("claude") || name.includes("gpt") ? "3p:5h" : "gemini:5h"
-  return windows.find((window) => window.id === preferred) ?? windows.find((window) => window.id.endsWith(":5h"))
+  const preferred =
+    name.includes("claude") || name.includes("gpt") ? "3p:5h" : name.includes("gemini") ? "gemini:5h" : undefined
+  return windows.find((window) => window.id === preferred)
 }
 
 function messageIsLongQuota(message: string | undefined) {
