@@ -201,7 +201,16 @@ const table = sqliteTable("session", {
 
 - This workspace uses Bun's isolated linker (`configVersion` 1 in `bun.lock`; `bunfig.toml` does not set `install.linker`). `node_modules` links a package only for the workspace that declares it.
 - Trace an installed package, including a transitive one, with `bun pm why <pkg>` from the repository. `bun pm ls` lists the workspace; `bun pm ls --all` lists the lockfile.
-- Resolve a module from the workspace that declares it: `cd packages/<pkg> && bun -e "console.log(require.resolve('<name>'))"`. `xdg-basedir` is transitive (`lighthouse` → `configstore` in `packages/desktop` and `packages/gui-extensions`). `require.resolve("xdg-basedir")` fails at the repository root and in those directories; resolve `configstore` there, then resolve `xdg-basedir` from that `configstore` module.
+- Resolve direct dependencies from the workspace that declares them. For transitive dependencies, use `createRequire` to follow each declaring dependency. `packages/desktop` and `packages/gui-extensions` declare `lighthouse`, whose chain is `lighthouse` → `configstore` → `xdg-basedir`; neither workspace declares `configstore` or `xdg-basedir`, so resolving either directly there fails. Run this example from `packages/desktop`:
+
+  ```bash
+  bun -e '
+  import { createRequire } from "node:module"
+  const lighthouse = require.resolve("lighthouse")
+  const configstore = createRequire(lighthouse).resolve("configstore")
+  console.log(createRequire(configstore).resolve("xdg-basedir"))
+  '
+  ```
 
 ## V2 Session Core
 
