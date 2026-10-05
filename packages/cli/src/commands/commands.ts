@@ -12,17 +12,6 @@ export const PrintLogs = GlobalFlag.setting("print-logs")({
 
 declare const OPENCODE_CLI_NAME: string | undefined
 
-const ServerParams = {
-  standalone: Flag.boolean("standalone").pipe(
-    Flag.withDescription("Run with a private server instead of the background service"),
-    Flag.withDefault(false),
-  ),
-  server: Flag.string("server").pipe(
-    Flag.withDescription("Connect to a server URL instead of the background service"),
-    Flag.optional,
-  ),
-}
-
 const PermissionParams = {
   auto: Flag.boolean("auto").pipe(
     Flag.withDescription("Auto-approve permissions that are not explicitly denied"),
@@ -38,7 +27,6 @@ const PermissionParams = {
 const Root = Spec.make(typeof OPENCODE_CLI_NAME === "string" ? OPENCODE_CLI_NAME : "shuvcode", {
   description: "Shuvcode command line interface",
   params: {
-    ...ServerParams,
     ...PermissionParams,
     directory: Argument.string("directory").pipe(
       Argument.withDescription("Directory to start Shuvcode in"),
@@ -96,11 +84,10 @@ const Root = Spec.make(typeof OPENCODE_CLI_NAME === "string" ? OPENCODE_CLI_NAME
         ),
       },
     }),
-    Spec.make("acp", { description: "Start an Agent Client Protocol server" }),
+    Spec.make("acp", { description: "Start an Agent Client Protocol server", connectionFlags: "unsupported" }),
     Spec.make("api", {
       description: "Make a request to the running server",
       params: {
-        ...ServerParams,
         request: Argument.string("operation | method path").pipe(
           Argument.withDescription("OpenAPI operation ID, or an HTTP method followed by a path"),
           Argument.variadic({ min: 1, max: 2 }),
@@ -134,7 +121,9 @@ const Root = Spec.make(typeof OPENCODE_CLI_NAME === "string" ? OPENCODE_CLI_NAME
               "log",
               "repos",
             ]).pipe(
-              Argument.withDescription("Print only one path: db, home, data, config, cache, state, tmp, bin, log, repos"),
+              Argument.withDescription(
+                "Print only one path: db, home, data, config, cache, state, tmp, bin, log, repos",
+              ),
               Argument.optional,
             ),
           },
@@ -147,7 +136,6 @@ const Root = Spec.make(typeof OPENCODE_CLI_NAME === "string" ? OPENCODE_CLI_NAME
         Spec.make("list", {
           description: "list integrations and credentials",
           params: {
-            ...ServerParams,
             format: Flag.choice("format", ["default", "json"]).pipe(
               Flag.withDescription("Output format"),
               Flag.withDefault("default"),
@@ -157,7 +145,6 @@ const Root = Spec.make(typeof OPENCODE_CLI_NAME === "string" ? OPENCODE_CLI_NAME
         Spec.make("login", {
           description: "connect an integration",
           params: {
-            ...ServerParams,
             target: Argument.string("target").pipe(
               Argument.withDescription("Integration ID, name, or well-known provider URL"),
               Argument.optional,
@@ -172,7 +159,6 @@ const Root = Spec.make(typeof OPENCODE_CLI_NAME === "string" ? OPENCODE_CLI_NAME
         Spec.make("logout", {
           description: "log out of a saved account",
           params: {
-            ...ServerParams,
             target: Argument.string("target").pipe(
               Argument.withDescription("Integration ID or name"),
               Argument.optional,
@@ -186,7 +172,6 @@ const Root = Spec.make(typeof OPENCODE_CLI_NAME === "string" ? OPENCODE_CLI_NAME
         Spec.make("export", {
           description: "print stored credentials, including secrets, as JSON",
           params: {
-            ...ServerParams,
             target: Argument.string("target").pipe(
               Argument.withDescription("Integration ID or name (exports every integration when omitted)"),
               Argument.optional,
@@ -196,7 +181,6 @@ const Root = Spec.make(typeof OPENCODE_CLI_NAME === "string" ? OPENCODE_CLI_NAME
         Spec.make("import", {
           description: "import credentials exported by auth export",
           params: {
-            ...ServerParams,
             file: Argument.string("file").pipe(
               Argument.withDescription("JSON file to import (reads stdin when omitted)"),
               Argument.optional,
@@ -206,7 +190,6 @@ const Root = Spec.make(typeof OPENCODE_CLI_NAME === "string" ? OPENCODE_CLI_NAME
         Spec.make("switch", {
           description: "switch the active account for an integration",
           params: {
-            ...ServerParams,
             target: Argument.string("target").pipe(
               Argument.withDescription("Integration ID or name"),
               Argument.optional,
@@ -225,6 +208,7 @@ const Root = Spec.make(typeof OPENCODE_CLI_NAME === "string" ? OPENCODE_CLI_NAME
         Spec.make("list", { description: "List configured MCP servers and their status" }),
         Spec.make("add", {
           description: "Add an MCP server to your configuration",
+          connectionFlags: "unsupported",
           params: {
             name: Argument.string("name").pipe(Argument.withDescription("Name of the MCP server")),
             command: Argument.string("command").pipe(
@@ -272,6 +256,7 @@ const Root = Spec.make(typeof OPENCODE_CLI_NAME === "string" ? OPENCODE_CLI_NAME
         }),
         Spec.make("add", {
           description: "Install a plugin and add it to the global configuration",
+          connectionFlags: "unsupported",
           params: {
             package: Argument.string("package").pipe(Argument.withDescription("npm registry or Git package specifier")),
           },
@@ -287,6 +272,7 @@ const Root = Spec.make(typeof OPENCODE_CLI_NAME === "string" ? OPENCODE_CLI_NAME
         }),
         Spec.make("update", {
           description: "Update package plugins",
+          connectionFlags: "unsupported",
           params: {
             target: Argument.string("target").pipe(
               Argument.withDescription("Configured package target; omit to update all outdated plugins"),
@@ -296,6 +282,7 @@ const Root = Spec.make(typeof OPENCODE_CLI_NAME === "string" ? OPENCODE_CLI_NAME
         }),
         Spec.make("remove", {
           description: "Remove a plugin from global configuration",
+          connectionFlags: "unsupported",
           params: {
             package: Argument.string("package").pipe(Argument.withDescription("configured package specifier")),
           },
@@ -304,12 +291,10 @@ const Root = Spec.make(typeof OPENCODE_CLI_NAME === "string" ? OPENCODE_CLI_NAME
     }),
     Spec.make("models", {
       description: "List all available models",
-      params: ServerParams,
     }),
     Spec.make("stats", {
       description: "Show shareable usage statistics",
       params: {
-        ...ServerParams,
         days: Flag.integer("days").pipe(
           Flag.withSchema(Schema.Int.check(Schema.isGreaterThanOrEqualTo(0))),
           Flag.withDescription("Show the last N days; 0 means today"),
@@ -340,7 +325,6 @@ const Root = Spec.make(typeof OPENCODE_CLI_NAME === "string" ? OPENCODE_CLI_NAME
     Spec.make("mini", {
       description: "Start the minimal interactive interface",
       params: {
-        ...ServerParams,
         continue: Flag.boolean("continue").pipe(
           Flag.withAlias("c"),
           Flag.withDescription("Continue the last session"),
@@ -376,7 +360,6 @@ const Root = Spec.make(typeof OPENCODE_CLI_NAME === "string" ? OPENCODE_CLI_NAME
     Spec.make("run", {
       description: "Run Shuvcode with a message",
       params: {
-        ...ServerParams,
         message: Argument.string("message").pipe(
           Argument.withDescription("Message to send"),
           Argument.variadic({ min: 0 }),
@@ -421,7 +404,6 @@ const Root = Spec.make(typeof OPENCODE_CLI_NAME === "string" ? OPENCODE_CLI_NAME
         Spec.make("list", {
           description: "List top-level sessions in the current project, newest first",
           params: {
-            ...ServerParams,
             maxCount: Flag.integer("max-count").pipe(
               Flag.withAlias("n"),
               Flag.withSchema(Schema.Int.check(Schema.isGreaterThanOrEqualTo(1))),
@@ -437,14 +419,12 @@ const Root = Spec.make(typeof OPENCODE_CLI_NAME === "string" ? OPENCODE_CLI_NAME
         Spec.make("delete", {
           description: "Delete a session and its child sessions",
           params: {
-            ...ServerParams,
             sessionID: Argument.string("sessionID").pipe(Argument.withDescription("Session ID to delete")),
           },
         }),
         Spec.make("export", {
           description: "Export session data as JSON",
           params: {
-            ...ServerParams,
             session: Argument.string("session").pipe(
               Argument.withDescription("Session ID to export"),
               Argument.optional,
@@ -458,7 +438,6 @@ const Root = Spec.make(typeof OPENCODE_CLI_NAME === "string" ? OPENCODE_CLI_NAME
         Spec.make("import", {
           description: "Import session data from a JSON file or URL",
           params: {
-            ...ServerParams,
             file: Argument.string("file").pipe(Argument.withDescription("JSON file or URL to import")),
             directory: Flag.string("directory").pipe(
               Flag.withDescription("Directory in which to import the session"),
@@ -470,6 +449,7 @@ const Root = Spec.make(typeof OPENCODE_CLI_NAME === "string" ? OPENCODE_CLI_NAME
     }),
     Spec.make("service", {
       description: "Manage the background server",
+      connectionFlags: "unsupported",
       commands: [
         Spec.make("start", { description: "Start the background server" }),
         Spec.make("restart", { description: "Restart the background server" }),
@@ -512,12 +492,10 @@ const Root = Spec.make(typeof OPENCODE_CLI_NAME === "string" ? OPENCODE_CLI_NAME
     }),
     Spec.make("reload", {
       description: "Reload configuration",
-      params: {
-        ...ServerParams,
-      },
     }),
     Spec.make("pair", {
       description: "Print one-time links to connect a browser or app",
+      connectionFlags: "unsupported",
       params: {
         url: Flag.string("url").pipe(
           Flag.withDescription("Use an external HTTP(S) server URL in pairing links"),
@@ -536,6 +514,7 @@ const Root = Spec.make(typeof OPENCODE_CLI_NAME === "string" ? OPENCODE_CLI_NAME
     }),
     Spec.make("serve", {
       description: "Start the v2 API and web server",
+      connectionFlags: "unsupported",
       params: {
         hostname: Flag.string("hostname").pipe(Flag.optional),
         port: Flag.integer("port").pipe(Flag.optional),
