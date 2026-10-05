@@ -524,11 +524,11 @@ export function messageUpdated(info: SessionMessageAssistant) {
   })
 }
 
-export function status(type: SessionStatus["type"], attempt = 1) {
-  if (type === "busy") return makeEvent("session.execution.started", { sessionID })
-  if (type === "idle") return makeEvent("session.execution.succeeded", { sessionID })
+export function status(type: SessionStatus["type"], attempt = 1, id = sessionID) {
+  if (type === "busy") return makeEvent("session.execution.started", { sessionID: id })
+  if (type === "idle") return makeEvent("session.execution.succeeded", { sessionID: id })
   return makeEvent("session.retry.scheduled", {
-    sessionID,
+    sessionID: id,
     assistantMessageID: assistantID,
     attempt,
     at: 1700000010000,

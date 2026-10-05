@@ -1,6 +1,6 @@
 import type { OpenCodeEvent, SessionMessageInfo } from "@opencode/client/promise"
 import { timelinePresets } from "@opencode/session-ui/timeline/detail"
-import { expect, test, type Page } from "@playwright/test"
+import { expect, test, type Locator, type Page } from "@playwright/test"
 import { expectPath, SERVER, sessionHref } from "../utils/app"
 import { currentSession } from "../utils/mock-server"
 import { assistantMessage, session, sessionID, setupTimeline, textPart, userMessage } from "../utils/timeline"
@@ -36,6 +36,32 @@ test("navigates to a subagent child session missing from the session list", asyn
   // Escape returns to the parent session.
   await page.keyboard.press("Escape")
   await Promise.all([expect(page).toHaveURL(sessionHref(parentID)), expectSessionTitle(page, parentTitle)])
+})
+
+test("keeps the parent title anchored when opening a subagent", async ({ page }) => {
+  await setup(page)
+
+  for (const direction of ["ltr", "rtl"] as const) {
+    await page.goto(sessionHref(parentID))
+    await page.evaluate((direction) => (document.documentElement.dir = direction), direction)
+    await expectSessionTitle(page, parentTitle)
+
+    const start = await titleInlineStart(page.locator("[data-session-title]").getByRole("heading", { name: parentTitle }))
+
+    await page.getByRole("button", { name: "Used 1 Agent", exact: true }).click()
+    await page.locator(`a[href="${sessionHref(childID)}"]`).click()
+    await expectSessionTitle(page, taskDescription)
+
+    const breadcrumb = page.locator('[data-slot="session-title-parent"]')
+
+    await expect(breadcrumb).toHaveText(parentTitle)
+    await expect.poll(() => titleInlineStart(breadcrumb)).toBeCloseTo(start, 0)
+    await breadcrumb.click()
+    await expectSessionTitle(page, parentTitle)
+    await expect
+      .poll(() => titleInlineStart(page.locator("[data-session-title]").getByRole("heading", { name: parentTitle })))
+      .toBeCloseTo(start, 0)
+  }
 })
 
 test("navigates from a running subagent card and hides background controls in the child", async ({ page }) => {
@@ -316,6 +342,19 @@ async function setup(page: Page, events?: () => OpenCodeEvent[], nestedDepth: 0 
       }),
   )
 }
+
+function titleInlineStart(title: Locator) {
+  return title.evaluate((element) => {
+    const range = document.createRange()
+
+    range.selectNodeContents(element)
+
+    const bounds = range.getBoundingClientRect()
+
+    return document.documentElement.dir === "rtl" ? bounds.right : bounds.left
+  })
+}
+
 async function openChildFromParent(page: Page) {
   await page.goto(sessionHref(parentID))
   await expectSessionTitle(page, parentTitle)
