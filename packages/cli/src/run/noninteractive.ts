@@ -12,6 +12,7 @@ import { EOL } from "node:os"
 import { readFile } from "node:fs/promises"
 import { nonEmptyToolContent, toolOutputText, type MiniToolPart } from "@opencode/tui/mini/tool"
 import { UI } from "./ui"
+import { runSetupRequest, RunSetupTimeoutError } from "./setup"
 
 type Model = {
   providerID: string
@@ -76,7 +77,13 @@ const PERMISSION_REJECTED_FEEDBACK =
 export async function runNonInteractivePrompt(input: Input) {
   const controller = new AbortController()
   const stream = input.client.event.subscribe({ signal: controller.signal })[Symbol.asyncIterator]()
-  const connected = await stream.next()
+  const connected = await runSetupRequest("Connecting event stream", async (signal) => {
+    signal.addEventListener("abort", () => controller.abort(), { once: true })
+    return stream.next()
+  }).catch((error) => {
+    controller.abort()
+    throw error
+  })
   if (connected.done) throw new Error("Event stream disconnected before prompt admission")
 
   const messageID = SessionMessage.ID.create()
@@ -713,26 +720,41 @@ export async function runNonInteractivePrompt(input: Input) {
     submitted = true
     completed = consume()
     admission = new AbortController()
-    const response = await input.client.session
-      .prompt(
-        {
-          sessionID: input.sessionID,
-          id: messageID,
-          text: [input.message, ...prepared.flatMap((file) => (file.text ? [file.text] : []))].join("\n\n"),
-          files: prepared.flatMap((file) => (file.attachment ? [file.attachment] : [])),
-          delivery: "steer",
-        },
-        { signal: admission.signal },
-      )
-      .catch(async (error) => {
-        if (interrupted) {
-          await input.client.session.interrupt({ sessionID: input.sessionID }).catch(() => {})
-        }
-        controller.abort()
+    const response = await runSetupRequest(
+      `Admitting prompt (session ${input.sessionID}, request ${messageID})`,
+      (signal) =>
+        input.client.session.prompt(
+          {
+            sessionID: input.sessionID,
+            id: messageID,
+            text: [input.message, ...prepared.flatMap((file) => (file.text ? [file.text] : []))].join("\n\n"),
+            files: prepared.flatMap((file) => (file.attachment ? [file.attachment] : [])),
+            delivery: "steer",
+          },
+          { signal },
+        ),
+      { signal: admission.signal },
+    ).catch(async (error) => {
+      if (interrupted) {
+        await input.client.session.interrupt({ sessionID: input.sessionID }).catch(() => {})
+      }
+      controller.abort()
+      if (interrupted) {
         await completed?.catch(() => {})
-        if (interrupted || emittedError) return undefined
-        throw error
-      })
+        return undefined
+      }
+      if (error instanceof RunSetupTimeoutError) {
+        // Event handling may itself be waiting on an RPC; do not let cleanup extend the admission deadline.
+        void completed?.catch(() => {})
+        throw new Error(
+          `${error.message}. Delivery is unknown; the prompt may already be admitted. Keep session ${input.sessionID} and request ${messageID}; inspect this session before resubmitting.`,
+          { cause: error },
+        )
+      }
+      await completed?.catch(() => {})
+      if (emittedError) return undefined
+      throw error
+    })
     admission = undefined
     if (!response) return
     if (interrupted) await input.client.session.interrupt({ sessionID: input.sessionID }).catch(() => {})
