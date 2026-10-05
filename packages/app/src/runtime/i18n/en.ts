@@ -2,6 +2,13 @@ import { DESKTOP_NATIVE_ENGLISH } from "./desktop-native"
 
 export const dict = {
   ...DESKTOP_NATIVE_ENGLISH,
+  "session.location.unavailable": "Session location unavailable",
+  "session.location.description": "Choose another directory to continue this session.",
+  "session.location.choose": "Choose directory",
+  "session.location.worktree": "Choose worktree",
+  "session.location.worktreesFailed": "Failed to load worktrees",
+  "session.location.moving": "Moving session…",
+  "session.location.moveFailed": "Failed to move session",
   "server.action.authenticate": "Authenticate",
   "server.status.connecting": "Connecting over SSH…",
   "server.status.authentication": "Authentication required",
