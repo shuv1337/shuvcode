@@ -63,6 +63,11 @@ Valid types are `feat`, `fix`, `docs`, `chore`, `refactor`, and `test`. Scopes a
 
 Examples: `fix(tui): simplify thinking toggle styling`, `docs: update contributing guide`, `chore(sdk): regenerate types`.
 
+## A/B checks against HEAD
+
+- Copy the committed blob to a temporary file with `git show HEAD:<path>` when comparing a worktree file to HEAD.
+- Leave intent-to-add index entries (`git add -N`) out of `git stash push <pathspec>`. That stash can record a tree with a duplicate path entry; pop then aborts and leaves phantom add/delete index entries until `git reset` and `git rm --cached`.
+
 ## Style Guide
 
 ### General Principles
