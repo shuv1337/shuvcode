@@ -145,7 +145,7 @@ function session(input: {
 }
 
 describe("Composer submission", () => {
-  test("runs a client argument command without admitting it to the session", async () => {
+  test("applies the selection and runs a client argument command without admitting it to the session", async () => {
     const state = createMemoryComposerState().capture()
 
     const image = {
@@ -169,7 +169,8 @@ describe("Composer submission", () => {
       }
     }).submit(new Event("submit"))
 
-    expect(calls).toEqual(["btw"])
+    // Client commands such as /btw generate with the session's model, so the composer's selection commits first.
+    expect(calls).toEqual(["switch-agent", "switch-model", "btw"])
     expect(history).toEqual([])
     expect(state.current()).toEqual([{ type: "text", content: "", start: 0, end: 0 }, image])
     expect(state.context.items()).toHaveLength(1)
