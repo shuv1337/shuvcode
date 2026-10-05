@@ -58,6 +58,23 @@ remote-only host needs one `shuvcode service start` after a reboot.
   child pids were unchanged across the replacement.
 - `shuvcode service stop` stops the server and the sidecar.
 
+## Durable session logs
+
+All CLI `serve` modes retain durable session events in the selected SQLite
+database. `GET /api/experimental/session/:sessionID/log` replays those events
+after a server restart; `?after=<sequence>` resumes after a previously consumed
+event. Ephemeral notifications are not retained.
+
+Event retention follows the session lifetime: deleting a session removes its
+event payloads and sequence row. Replay reads at most 512 durable rows per
+database page, but retained sessions have no automatic age, row-count, or
+byte-size limit. Paging bounds each database read, not disk growth.
+
+From `packages/cli`, `bun test test/event-persist.test.ts` verifies replay after
+an abrupt server exit, cursor resumption, and deletion cleanup in isolated
+HOME/XDG/database state. To exercise a local compiled build, set
+`SHUVCODE_EVENT_TEST_BINARY` to its absolute executable path for the same test.
+
 ## Pairing remote clients
 
 ```sh

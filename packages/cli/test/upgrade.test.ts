@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test"
 import { mkdtemp, rm } from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
+import { cleanProcessEnv } from "./fixture/clean-env"
 
 describe("upgrade command", () => {
   test("is registered in root help and documents its options", async () => {
@@ -82,7 +83,7 @@ async function cli(args: string[], env: Record<string, string> = {}, entry = "fi
       {
         cwd: path.join(import.meta.dir, ".."),
         env: {
-          ...process.env,
+          ...cleanProcessEnv(),
           OPENCODE_TEST_HOME: root,
           XDG_DATA_HOME: path.join(root, "data"),
           XDG_CONFIG_HOME: path.join(root, "config"),
