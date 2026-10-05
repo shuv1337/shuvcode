@@ -334,6 +334,13 @@ const Group = HttpApiGroup.make("mock")
     }),
   )
   .add(
+    HttpApiEndpoint.post("sessionCompact", "/api/session/:sessionID/compact", {
+      params: SessionParams,
+      payload: JsonPayload,
+      success: Json,
+    }),
+  )
+  .add(
     HttpApiEndpoint.post("sessionCommand", "/api/session/:sessionID/command", {
       params: SessionParams,
       payload: JsonPayload,

@@ -183,7 +183,12 @@ function MessageTimelineView(
     onUserScroll: props.onUserScroll,
     onHistoryScroll: props.onHistoryScroll,
     canRenderImmediately: (row, disclosure) => {
-      if (Predicate.isTagged(row, "TurnGap") || Predicate.isTagged(row, "TurnDivider")) return true
+      if (
+        Predicate.isTagged(row, "TurnGap") ||
+        Predicate.isTagged(row, "TurnDivider") ||
+        Predicate.isTagged(row, "CompactionQueued")
+      )
+        return true
 
       if (Predicate.isTagged(row, "Notice")) {
         const message = messageByID().get(row.messageID)
