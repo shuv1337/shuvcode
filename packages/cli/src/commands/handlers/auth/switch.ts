@@ -16,10 +16,7 @@ export default Runtime.handler(
   ),
 )
 
-const switchAccount = Effect.fn("cli.auth.switch.run")(function* (input: {
-  target?: string
-  credential?: string
-}) {
+const switchAccount = Effect.fn("cli.auth.switch.run")(function* (input: { target?: string; credential?: string }) {
   if (!input.target)
     yield* requireInteractive("Pass an integration ID or name when running without an interactive terminal")
   if (!input.credential)
