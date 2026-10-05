@@ -7,6 +7,7 @@
 - Local `main` ref may not exist; use `integration-v2` or `origin/integration-v2` for diffs. Use `upstream/v2` to compare with or sync from upstream.
 - Before syncing `upstream/v2` into `integration-v2`, refresh fork refs with `git fetch --prune origin`. Choose `base=integration-v2` when `git show-ref --verify --quiet refs/heads/integration-v2` succeeds, otherwise `base=origin/integration-v2`; verify the chosen base matches the refreshed default before continuing. Inventory local branches with `git branch --no-merged "$base"` and fork remote-tracking branches with `git for-each-ref --no-merged="$base" --format='%(refname:short)' refs/remotes/origin/`. Exclude `upstream/*` from this fork inventory.
 - Review each unmerged fork branch's unique changes and PR status, distinguishing intentionally open work from fixes missing from the default. Record an explicit disposition for each: already landed by an equivalent change (with its reference), intentionally open and preserved across the sync (with its PR or work reference), a missing fix to reconcile before syncing, or obsolete work with a recorded decision. Do not automatically merge or delete every unmerged branch; landing or discarding work still requires authorization.
+- When a pull request changes more than 300 files, fetch it (`git fetch origin pull/<number>/head`) and review the complete change with `git diff <base>...FETCH_HEAD`. GitHub's diff endpoint returns HTTP 406 past that cap, so `gh pr diff` and Plannotator `--no-local` omit file hunks. Inspect how a merge commit resolved conflicts with `git show --remerge-diff <merge-commit>` (`git log` accepts the same option).
 
 ## Shuvcode Fork
 
@@ -64,6 +65,11 @@ Use conventional commit-style messages and PR titles: `type(scope): summary`.
 Valid types are `feat`, `fix`, `docs`, `chore`, `refactor`, and `test`. Scopes are optional; use the affected package or area when helpful, e.g. `core`, `opencode`, `tui`, `app`, `desktop`, `sdk`, or `plugin`.
 
 Examples: `fix(tui): simplify thinking toggle styling`, `docs: update contributing guide`, `chore(sdk): regenerate types`.
+
+## A/B checks against HEAD
+
+- Copy the committed blob to a temporary file with `git show HEAD:<path>` when comparing a worktree file to HEAD.
+- Leave intent-to-add index entries (`git add -N`) out of `git stash push <pathspec>`. That stash can record a tree with a duplicate path entry; pop then aborts and leaves phantom add/delete index entries until `git reset` and `git rm --cached`.
 
 ## Style Guide
 
@@ -198,6 +204,12 @@ const table = sqliteTable("session", {
 
 - Run `bun run check` from the repository root as the canonical full lint and type-check verification.
 - During focused iteration, run `bun typecheck` from the affected package directory (for example, `packages/core`). Never run `tsc` directly.
+- Validate whitespace with plain `git diff --check`, or check formatting with Prettier (`bun run prettier --ignore-unknown --check .`). `jj diff` has no `--check` flag.
+
+## Remote port probes
+
+- Check whether a remote port accepts connections with a timeout-bounded connect. In bash, use `/dev/tcp` under `timeout`. Otherwise use `nc -z` with a connect timeout.
+- Do not use `lsof` for that probe. On macOS a read-only listener precheck can enter uninterruptible sleep and ignore `SIGTERM` and `SIGKILL`.
 
 ## V2 Session Core
 
