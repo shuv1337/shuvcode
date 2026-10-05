@@ -1,18 +1,26 @@
 import { describe, expect, test } from "bun:test"
-import { mkdir, mkdtemp, rm } from "node:fs/promises"
+import { mkdtemp, rm } from "node:fs/promises"
+import { tmpdir } from "node:os"
 import path from "node:path"
 import { cleanProcessEnv } from "../fixture/clean-env"
-import { RUN_SETUP_TIMEOUT_MS } from "../../src/run/setup"
+import { RUN_ADMISSION_TIMEOUT_MS, RUN_SETUP_TIMEOUT_MS } from "../../src/run/setup"
 import type { EventSubscribeOutput, SessionMessageInfo, SessionInboxUser } from "@opencode/client/promise"
 
 const repository = path.resolve(import.meta.dir, "../../../..")
-const directory = path.join(repository, ".artifacts/i412")
+const scale = 30
+const setupTimeout = RUN_SETUP_TIMEOUT_MS / scale
+const admissionTimeout = RUN_ADMISSION_TIMEOUT_MS / scale
 const sessionID = "ses_fixture"
 const candidate = process.env.SHUV_RUN_TEST_CLI
   ? [process.env.SHUV_RUN_TEST_CLI]
   : [process.execPath, "run", path.join(repository, "packages/cli/src/index.ts")]
 
 describe("isolated run setup", () => {
+  test("prompt admission has a longer deadline than setup RPCs", () => {
+    expect(RUN_SETUP_TIMEOUT_MS).toBe(30_000)
+    expect(RUN_ADMISSION_TIMEOUT_MS).toBe(120_000)
+  })
+
   const stalls = [
     { route: "GET /api/location", phase: "Looking up location", args: [] },
     { route: "POST /api/session", phase: "Creating session", args: [] },
@@ -40,15 +48,16 @@ describe("isolated run setup", () => {
           const result = await capture(child)
           expect(result.code).toBe(1)
           expect(result.stderr).toContain(stall.phase)
-          expect(result.stderr).toContain("timed out after 30s")
+          const admitting = stall.phase === "Admitting prompt"
+          expect(result.stderr).toContain(`timed out after ${(admitting ? admissionTimeout : setupTimeout) / 1000}s`)
           expect(result.stderr).toContain("Reading stdin until EOF")
           expect(fixture.requests.filter((request) => request.route === stall.route)).toHaveLength(1)
           expect(
             fixture.requests.filter((request) => request.route === "POST /api/session").length,
           ).toBeLessThanOrEqual(1)
-          expect(fixture.prompts).toHaveLength(stall.phase === "Admitting prompt" ? 1 : 0)
+          expect(fixture.prompts).toHaveLength(admitting ? 1 : 0)
           expect(fixture.requests.some((request) => request.route.endsWith("/interrupt"))).toBe(false)
-          if (stall.phase === "Admitting prompt") {
+          if (admitting) {
             expect(result.stderr).toContain("Delivery is unknown")
             expect(result.stderr).toContain(`session ${sessionID}`)
             expect(result.stderr).toContain(`request ${fixture.prompts[0]!.id}`)
@@ -60,7 +69,7 @@ describe("isolated run setup", () => {
           await fixture.close()
         }
       },
-      RUN_SETUP_TIMEOUT_MS + 15_000,
+      admissionTimeout + 15_000,
     )
   }
 
@@ -73,12 +82,12 @@ describe("isolated run setup", () => {
         child.stdin.end()
         const result = await capture(child)
         expect(result.code).toBe(1)
-        expect(result.stderr).toContain("Looking up location timed out after 30s")
+        expect(result.stderr).toContain(`Looking up location timed out after ${setupTimeout / 1000}s`)
       } finally {
         await fixture.close()
       }
     },
-    RUN_SETUP_TIMEOUT_MS + 15_000,
+    admissionTimeout + 15_000,
   )
 
   test("an open pipe waits for EOF and retains late input", async () => {
@@ -103,9 +112,9 @@ describe("isolated run setup", () => {
   }, 15_000)
 
   test(
-    "execution and its event stream survive beyond the setup deadline",
+    "execution and its event stream survive beyond the admission deadline",
     async () => {
-      const fixture = await start({ duration: RUN_SETUP_TIMEOUT_MS + 1000 })
+      const fixture = await start({ duration: admissionTimeout + 1000 })
       try {
         const child = fixture.cli([])
         child.stdin.end()
@@ -119,7 +128,7 @@ describe("isolated run setup", () => {
         await fixture.close()
       }
     },
-    RUN_SETUP_TIMEOUT_MS + 15_000,
+    admissionTimeout + 15_000,
   )
 
   test(
@@ -132,6 +141,7 @@ describe("isolated run setup", () => {
         const result = await capture(child)
         expect(result.code).toBe(1)
         expect(result.stderr).toContain("Admitting prompt")
+        expect(result.stderr).toContain(`timed out after ${admissionTimeout / 1000}s`)
         expect(result.stderr).toContain("Delivery is unknown")
         expect(fixture.requests.filter((request) => request.route.endsWith("/reply"))).toHaveLength(1)
         expect(fixture.prompts).toHaveLength(1)
@@ -139,13 +149,12 @@ describe("isolated run setup", () => {
         await fixture.close()
       }
     },
-    RUN_SETUP_TIMEOUT_MS + 15_000,
+    admissionTimeout + 15_000,
   )
 })
 
 async function start(options: { stall?: string; body?: boolean; duration?: number; pendingPermission?: boolean } = {}) {
-  await mkdir(directory, { recursive: true })
-  const root = await mkdtemp(path.join(directory, "fixture-"))
+  const root = await mkdtemp(path.join(tmpdir(), "shuvcode-run-setup-"))
   const requests: { route: string }[] = []
   const prompts: { id: string; text: string }[] = []
   const children: ReturnType<typeof Bun.spawn<"pipe", "pipe", "pipe">>[] = []
@@ -308,6 +317,7 @@ async function start(options: { stall?: string; body?: boolean; duration?: numbe
           OPENCODE_CONFIG_DIR: path.join(root, "config"),
           OPENCODE_CONFIG_CONTENT: "{}",
           OPENCODE_DISABLE_PROJECT_CONFIG: "true",
+          OPENCODE_TEST_RUN_DEADLINE_SCALE: String(scale),
           XDG_CONFIG_HOME: path.join(root, "config"),
           XDG_DATA_HOME: path.join(root, "data"),
           XDG_STATE_HOME: path.join(root, "state"),
@@ -333,7 +343,7 @@ async function start(options: { stall?: string; body?: boolean; duration?: numbe
 }
 
 async function capture(child: ReturnType<typeof Bun.spawn<"pipe", "pipe", "pipe">>) {
-  const timeout = setTimeout(() => child.kill("SIGKILL"), RUN_SETUP_TIMEOUT_MS + 10_000)
+  const timeout = setTimeout(() => child.kill("SIGKILL"), admissionTimeout + 10_000)
   try {
     const [stdout, stderr, code] = await Promise.all([
       new Response(child.stdout).text(),

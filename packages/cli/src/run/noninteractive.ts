@@ -12,7 +12,7 @@ import { EOL } from "node:os"
 import { readFile } from "node:fs/promises"
 import { nonEmptyToolContent, toolOutputText, type MiniToolPart } from "@opencode/tui/mini/tool"
 import { UI } from "./ui"
-import { runSetupRequest, RunSetupTimeoutError } from "./setup"
+import { RUN_ADMISSION_TIMEOUT_MS, runSetupRequest, RunSetupTimeoutError } from "./setup"
 
 type Model = {
   providerID: string
@@ -695,24 +695,32 @@ export async function runNonInteractivePrompt(input: Input) {
   let completed: Promise<void> | undefined
   try {
     if (input.agent) {
-      await input.client.session.switchAgent({ sessionID: input.sessionID, agent: input.agent })
+      const agent = input.agent
+      await runSetupRequest("Selecting agent", (signal) =>
+        input.client.session.switchAgent({ sessionID: input.sessionID, agent }, { signal }),
+      )
     }
     const selected = input.model
       ? { providerID: input.model.providerID, id: input.model.modelID, variant: input.variant }
       : input.variant
-        ? await input.client.session
-            .get({ sessionID: input.sessionID })
+        ? await runSetupRequest("Resolving session", (signal) =>
+            input.client.session.get({ sessionID: input.sessionID }, { signal }),
+          )
             .then((result) => result.model)
             .then(async (model) => {
               if (model) return { ...model, variant: input.variant }
-              const result = await input.client.model.default()
+              const result = await runSetupRequest("Resolving model", (signal) =>
+                input.client.model.default(undefined, { signal }),
+              )
               const fallback = result.data
               return fallback ? { providerID: fallback.providerID, id: fallback.id, variant: input.variant } : undefined
             })
         : undefined
     if (input.variant && !selected) throw new Error("Cannot select a variant before selecting a model")
     if (selected) {
-      await input.client.session.switchModel({ sessionID: input.sessionID, model: selected })
+      await runSetupRequest("Selecting model", (signal) =>
+        input.client.session.switchModel({ sessionID: input.sessionID, model: selected }, { signal }),
+      )
     }
 
     const prepared = await Promise.all(input.files.map(prepareFile))
@@ -734,6 +742,7 @@ export async function runNonInteractivePrompt(input: Input) {
           { signal },
         ),
       { signal: admission.signal },
+      RUN_ADMISSION_TIMEOUT_MS,
     ).catch(async (error) => {
       if (interrupted) {
         await input.client.session.interrupt({ sessionID: input.sessionID }).catch(() => {})

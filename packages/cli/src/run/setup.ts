@@ -2,7 +2,13 @@ import type { OpenCodeClient } from "@opencode/client/promise"
 
 type RequestOptions = NonNullable<Parameters<OpenCodeClient["session"]["get"]>[1]>
 
-export const RUN_SETUP_TIMEOUT_MS = 30_000
+// Subprocess tests shrink both deadlines proportionally instead of waiting them out.
+const scale = Number(process.env.OPENCODE_TEST_RUN_DEADLINE_SCALE) || 1
+
+export const RUN_SETUP_TIMEOUT_MS = 30_000 / scale
+
+/** Admission may wait on plugin activation, so it matches the service bootstrap deadline. */
+export const RUN_ADMISSION_TIMEOUT_MS = 120_000 / scale
 
 export class RunSetupTimeoutError extends Error {}
 
@@ -30,6 +36,7 @@ export async function runSetupRequest<T>(
   }
 }
 
+/** Bounds the session-target resolution RPCs; pass the unbounded client to execution. */
 export function withRunSetupDeadlines(client: OpenCodeClient) {
   const bounded =
     <A, B>(phase: string, request: (input: A, options?: RequestOptions) => Promise<B>) =>
@@ -56,21 +63,6 @@ export function withRunSetupDeadlines(client: OpenCodeClient) {
       fork: bounded("Forking session", client.session.fork),
       environment: bounded("Setting session environment", client.session.environment),
       update: bounded("Updating session", client.session.update),
-      switchAgent: bounded("Selecting agent", client.session.switchAgent),
-      switchModel: bounded("Selecting model", client.session.switchModel),
-      form: {
-        ...client.session.form,
-        list: bounded("Looking up session forms", client.session.form.list),
-      },
-    },
-    permission: {
-      ...client.permission,
-      list: bounded("Looking up permissions", client.permission.list),
-    },
-    form: {
-      ...client.form,
-      list: (input, options) =>
-        runSetupRequest("Looking up forms", (signal) => client.form.list(input, { ...options, signal }), options),
     },
   }
   return result
