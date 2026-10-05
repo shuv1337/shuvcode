@@ -219,6 +219,201 @@ export function unwrapSSE() {
   })
 }
 
+export type CloudCodeError = {
+  code?: number
+  status?: string
+  message?: string
+  reason?: string
+  resetTime?: string
+}
+
+type QuotaWindow = {
+  id: string
+  remainingFraction: number
+  resetTime?: string
+}
+
+/**
+ * Read a Cloud Code error from the complete body. A 500-character prefix is not valid JSON
+ * once the payload is longer than that, and slicing it drops the Google status and message.
+ */
+export function parseCloudCodeError(text: string): CloudCodeError | undefined {
+  const trimmed = text.trim()
+  if (!trimmed) return
+  return cloudCodeError(trimmed) ?? cloudCodeError(payloadAfterPrefix(trimmed) ?? "")
+}
+
+function quotaWindows(summary: unknown): QuotaWindow[] {
+  const root = isRecord(summary) ? summary : undefined
+  if (!root || !Array.isArray(root.groups)) return []
+  const windows: QuotaWindow[] = []
+  const seen = new Set<string>()
+  root.groups.forEach((rawGroup, index) => {
+    const group = isRecord(rawGroup) ? rawGroup : undefined
+    if (!group || !Array.isArray(group.buckets)) return
+    const prefix = quotaGroupID(group, index)
+    for (const rawBucket of group.buckets) {
+      const bucket = isRecord(rawBucket) ? rawBucket : undefined
+      if (!bucket) continue
+      const fraction = finiteNumber(bucket.remainingFraction ?? bucket.remaining_fraction)
+      if (fraction === undefined) continue
+      const id = `${prefix}:${quotaWindowID(bucket)}`
+      if (seen.has(id)) continue
+      seen.add(id)
+      const resetTime = textField(bucket.resetTime ?? bucket.reset_time)
+      windows.push({ id, remainingFraction: fraction, ...(resetTime ? { resetTime } : {}) })
+    }
+  })
+  return windows
+}
+
+export function explainCloudCodeError(input: {
+  error: CloudCodeError
+  summary?: unknown
+  httpStatus: number
+  modelID?: string
+}) {
+  if (!input.error.status && !input.error.message && !input.error.reason) return
+  const windows = quotaWindows(input.summary)
+  const fiveHour = fiveHourWindow(windows, input.modelID)
+  const quota =
+    input.error.reason?.toLowerCase() === "quota_exhausted" ||
+    (input.error.status === "RESOURCE_EXHAUSTED" && fiveHour !== undefined && fiveHour.remainingFraction <= 0) ||
+    (input.error.status === "RESOURCE_EXHAUSTED" && messageIsLongQuota(input.error.message))
+  const headline =
+    input.error.status && input.error.message
+      ? `${input.error.status}: ${input.error.message}`
+      : (input.error.status ?? input.error.message ?? "")
+  const readout = windows.map(
+    (window) =>
+      `${window.id} remainingFraction=${JSON.stringify(window.remainingFraction)}${window.resetTime ? ` resetTime=${window.resetTime}` : ""}`,
+  )
+  const fallbackReset = windows.length === 0 && input.error.resetTime ? [`resetTime=${input.error.resetTime}`] : []
+  const message = [headline, ...readout, ...fallbackReset].filter((part) => part.length > 0).join(" ")
+  const reason = quota ? "QUOTA_EXHAUSTED" : input.error.reason
+  return {
+    message,
+    quota,
+    body: JSON.stringify({
+      error: {
+        code: input.httpStatus,
+        message,
+        ...(input.error.status ? { status: input.error.status } : {}),
+        ...(reason ? { details: [{ "@type": "type.googleapis.com/google.rpc.ErrorInfo", reason }] } : {}),
+      },
+    }),
+  }
+}
+
+function cloudCodeError(text: string): CloudCodeError | undefined {
+  if (!text) return
+  const parsed = Option.getOrUndefined(decodeJson(text))
+  if (!isRecord(parsed)) return
+  const error = isRecord(parsed.error) ? parsed.error : parsed
+  const outerMessage = textField(error.message)
+  const nested = outerMessage ? nestedGoogleError(outerMessage) : undefined
+  const outerStatus = textField(error.status)
+  const innerStatus = nested ? textField(nested.status) : undefined
+  const status = innerStatus && (!outerStatus || outerStatus === "UNKNOWN") ? innerStatus : (outerStatus ?? innerStatus)
+  const innerMessage = nested ? textField(nested.message) : undefined
+  const message =
+    outerMessage && innerMessage && outerMessage.includes("{") ? innerMessage : (outerMessage ?? innerMessage)
+  const outerDetails = errorDetails(error)
+  const details = outerDetails.reason ? outerDetails : nested ? errorDetails(nested) : outerDetails
+  const code = finiteNumber(error.code ?? nested?.code)
+  if (!status && !message && !details.reason) return
+  return {
+    ...(code === undefined ? {} : { code }),
+    ...(status ? { status } : {}),
+    ...(message ? { message } : {}),
+    ...(details.reason ? { reason: details.reason } : {}),
+    ...(details.resetTime ? { resetTime: details.resetTime } : {}),
+  }
+}
+
+function nestedGoogleError(message: string) {
+  const start = message.indexOf("{")
+  if (start < 0) return
+  const parsed = Option.getOrUndefined(decodeJson(message.slice(start)))
+  if (!isRecord(parsed)) return
+  const error = isRecord(parsed.error) ? parsed.error : parsed
+  if (!textField(error.status) && !textField(error.message) && !Array.isArray(error.details)) return
+  return error
+}
+
+function errorDetails(error: Record<string, unknown> | undefined) {
+  const details = error && Array.isArray(error.details) ? error.details : []
+  return details.reduce<{ reason?: string; resetTime?: string }>((acc, detail) => {
+    if (!isRecord(detail)) return acc
+    const metadata = isRecord(detail.metadata) ? detail.metadata : undefined
+    return {
+      reason: acc.reason ?? textField(detail.reason),
+      resetTime:
+        acc.resetTime ??
+        textField(metadata?.quotaResetTimeStamp) ??
+        textField(metadata?.quotaResetTimestamp) ??
+        textField(metadata?.resetTime),
+    }
+  }, {})
+}
+
+function payloadAfterPrefix(text: string) {
+  const data = text.split(/\r?\n/).flatMap((line) => {
+    const match = /^data:\s*(.*)$/.exec(line)
+    return match?.[1] && match[1] !== "[DONE]" ? [match[1]] : []
+  })
+  const payload = [...data].reverse().find((line) => line.includes("{"))
+  if (payload) return payload
+  const start = text.indexOf("{")
+  if (start < 0) return
+  return text.slice(start)
+}
+
+function quotaGroupID(group: Record<string, unknown>, index: number) {
+  const text = (
+    textField(group.displayName) ??
+    textField(group.display_name) ??
+    textField(group.id) ??
+    ""
+  ).toLowerCase()
+  if (text.includes("gemini")) return "gemini"
+  if (text.includes("claude") || text.includes("gpt")) return "3p"
+  return textField(group.id) ?? `group-${index}`
+}
+
+function quotaWindowID(bucket: Record<string, unknown>) {
+  const raw = (textField(bucket.window) ?? "").toLowerCase()
+  if (raw === "5h" || raw === "weekly") return raw
+  return raw || textField(bucket.bucketId) || textField(bucket.bucket_id) || "limit"
+}
+
+function fiveHourWindow(windows: readonly QuotaWindow[], modelID: string | undefined) {
+  const name = (modelID ?? "").toLowerCase()
+  const preferred =
+    name.includes("claude") || name.includes("gpt") ? "3p:5h" : name.includes("gemini") ? "gemini:5h" : undefined
+  return windows.find((window) => window.id === preferred)
+}
+
+function messageIsLongQuota(message: string | undefined) {
+  if (!message) return false
+  if (/\b5h\b|5-hour|five[- ]hour/i.test(message)) return true
+  const hours = /reset after\s+(\d+)h/i.exec(message)
+  return hours !== null && Number(hours[1]) >= 1
+}
+
+function finiteNumber(value: unknown) {
+  if (typeof value === "number") return Number.isFinite(value) ? value : undefined
+  if (typeof value === "string" && value.trim() !== "") {
+    const parsed = Number(value)
+    return Number.isFinite(parsed) ? parsed : undefined
+  }
+  return undefined
+}
+
+function textField(value: unknown) {
+  return typeof value === "string" && value.length > 0 ? value : undefined
+}
+
 export function applyProvider(evt: ProviderEditor, active: boolean) {
   if (!active) return
   evt.update(googleProviderID, (provider) => {
