@@ -132,6 +132,7 @@ export function SessionFrame(props: { sessionID: string; verticalTabsWidth: numb
   )
   const wide = createMemo(() => dimensions().width - props.verticalTabsWidth > 120)
   const sidebarVisible = createMemo(() => {
+    if (data.session.get(props.sessionID)?.parentID) return false
     if (sidebarOpen()) return true
     return (config.data.session?.sidebar ?? "auto") === "auto" && wide()
   })
