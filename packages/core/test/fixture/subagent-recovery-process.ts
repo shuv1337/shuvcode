@@ -36,9 +36,9 @@ import { SubagentTool } from "@opencode/core/tool/plugin/subagent"
 import { offlineModels } from "./models"
 import { registerToolPlugin } from "../lib/tool"
 
-const [stage, root, seededPhase] = process.argv.slice(2)
+// The test SIGKILLs the seed once `ready` exists, so its contents may be truncated; both stages take the phase from argv.
+const [stage, root, phase] = process.argv.slice(2)
 if (!root || (stage !== "seed" && stage !== "recover")) throw new Error("Expected seed|recover and fixture root")
-const phase = stage === "recover" ? await Bun.file(path.join(root, "ready")).text() : seededPhase
 
 const parentID = Session.ID.make("ses_i407_recovery_parent")
 const childID = Session.ID.make("ses_i407_recovery_child")

@@ -57,7 +57,7 @@ describe("confirmed subagent recovery after process death", () => {
         )
 
       const recovery = Bun.spawnSync({
-        cmd: [process.execPath, fixture, "recover", dir.path],
+        cmd: [process.execPath, fixture, "recover", dir.path, phase],
         cwd: import.meta.dir,
         env,
         stdout: "pipe",
