@@ -41,9 +41,9 @@ The active-work crash test exposed that private stdio servers had never enabled 
 
 ## Evaluation box
 
-The default VM entry is now `ssh -t shuvcode-test.exe.xyz shuvcode supervisor`, using `/home/exedev/fleet-home` and optional background Herdr views. `ssh -t shuvcode-test.exe.xyz herdr` shows the fleet in Herdr. The earlier explicit `native-fleet` trial and its ShuvBro publication gate are retained in the [three-repository evaluation](native-supervisor-herdr.md#exedev-testing-october-6-2026-pdt). The parity environment below remains available through its named wrapper.
+The default VM entry is `ssh -t shuvcode-test.exe.xyz shuvcode supervisor`, using `/home/exedev/fleet-home` and optional background Herdr views. `ssh -t shuvcode-test.exe.xyz herdr` shows the fleet in Herdr. The October 6, 2026 PDT reset removed the earlier trial homes, Sessions, worktrees, wrappers, watcher, and test SSH route. It retained the operator's `2password` project and left a fresh firstmate with no messages or tasks, with all runtimes stopped. The [three-repository evaluation](native-supervisor-herdr.md#exedev-testing-october-6-2026-pdt) retains the historical observations and the separate ShuvBro publication status.
 
-`ssh -t shuvcode-test.exe.xyz shuvcode-parity supervisor lead` opens the earlier compiled parity lead. `shuvcode-parity supervisor status`, `projects`, `backlog`, `read`, and `show NAME` use `/home/exedev/eval/parity`. The separate delegate home is `/home/exedev/eval/secondmate`. The original approved pilot remains accessible through `shuvcode-pilot` at `/home/exedev/eval/pilot`.
+The retired parity evaluation used `/home/exedev/eval/parity`, with its delegate at `/home/exedev/eval/secondmate` and the original pilot at `/home/exedev/eval/pilot`.
 
 The real model was `eval/gpt-6-sol` through exe.dev's configured ChatGPT integration. The two-project evaluation produced:
 
@@ -55,7 +55,7 @@ The first live workflow needed operator intervention while the native question t
 
 Both homes were restarted onto the compiled distribution with the same leads, six total work items, decisions, and receipts preserved. Real model replies then confirmed each home could read its private marker and the primary's shared marker, without sharing the primary's private marker. Shared update history survived another delegate restart. The temporary active markers were retired through stow afterward.
 
-Raw evaluation evidence is retained on the VM under `/home/exedev/eval/parity/`: `parity-evidence.json`, `knowledge-compiled-evidence.json`, `before-compiled.json`, `after-compiled.json`, `final-status.json`, and corresponding secondmate snapshots. Local test/build evidence is under `/home/shuv/.cache/agent-ws/native-supervisor-parity/` and the compiled artifact under `/home/shuv/.cache/agent-ws/native-supervisor-final-package/`.
+The reset removed the runtime homes and their session data. Local test/build evidence is under `/home/shuv/.cache/agent-ws/native-supervisor-parity/` and the historical compiled artifact under `/home/shuv/.cache/agent-ws/native-supervisor-final-package/`.
 
 ## Remaining production qualification
 

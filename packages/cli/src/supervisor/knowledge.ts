@@ -116,7 +116,7 @@ export namespace SupervisorKnowledge {
         }
       })
       const text = [
-        "Supervisor startup knowledge (read once for this lead process; task and project notes are available on demand):",
+        "Supervisor startup knowledge (task and project notes are available on demand):",
         ...scopes.flatMap(({ heading, state, active }) => [
           `${heading}: ${state.toUpperCase()}`,
           ...active.map((item) => `- [${item.id}] ${item.title}: ${item.content}`),

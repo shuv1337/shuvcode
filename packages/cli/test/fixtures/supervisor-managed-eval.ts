@@ -4,6 +4,7 @@ import path from "node:path"
 import { isolatedEnv } from "../fixture/environment"
 
 type RequestBody = {
+  instructions?: string
   input?: unknown[]
   tools?: Array<{ name?: string }>
   model?: string
