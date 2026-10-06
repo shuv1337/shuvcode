@@ -66,6 +66,16 @@ export function createComposerSubmit(input: ComposerSubmitInput) {
       submitting.add(input.adapter.state)
 
       try {
+        // Client commands such as /btw answer with the session's model, so apply the composer's selection first,
+        // following the same steer rule as server commands.
+        const selection = currentSelection(input)
+
+        if (input.adapter.kind === "active-session" && selection && (input.delivery?.(false) ?? "steer") === "steer")
+          await applySelection(
+            input.adapter.session(),
+            selection,
+            input.adapter.controls().model.selection.trackSessionCommit,
+          )
         clearClientCommand(input, prompt)
         await clientCommand()
       } catch (error) {
@@ -272,25 +282,22 @@ function readSubmission(
 
   if (!text.trim() && !prompt.some(isAttachment) && comments === 0) return
 
-  const controls = input.adapter.controls()
-  const model = controls.model.selection.current()
-  const agent = controls.agents.current
+  const selection = currentSelection(input)
 
-  if (!model || !agent) {
+  if (!selection) {
     input.notify.missingSelection()
 
     return
   }
 
-  const variant = controls.model.selection.variant.current()
   const retry = input.adapter.state.retry.current()
 
   const retryID =
     retry &&
-    retry.agent === agent &&
-    retry.providerID === model.provider.id &&
-    retry.modelID === model.id &&
-    (retry.variant ?? "default") === (variant ?? "default")
+    retry.agent === selection.agent &&
+    retry.providerID === selection.model.providerID &&
+    retry.modelID === selection.model.modelID &&
+    (retry.variant ?? "default") === (selection.variant ?? "default")
       ? retry.id
       : undefined
 
@@ -301,12 +308,22 @@ function readSubmission(
     context,
     text,
     images,
-    selection: {
-      agent,
-      model: { modelID: model.id, providerID: model.provider.id },
-      variant,
-    },
+    selection,
     delivery: input.delivery?.(alternate) ?? "steer",
+  }
+}
+
+function currentSelection(input: ComposerSubmitInput): ComposerSelection | undefined {
+  const controls = input.adapter.controls()
+  const model = controls.model.selection.current()
+  const agent = controls.agents.current
+
+  if (!model || !agent) return
+
+  return {
+    agent,
+    model: { modelID: model.id, providerID: model.provider.id },
+    variant: controls.model.selection.variant.current(),
   }
 }
 
@@ -438,6 +455,7 @@ async function applySelection(
   session: ComposerSession,
   selection: ComposerSelection,
   track?: ModelSelection["trackSessionCommit"],
+  beforeModel?: () => Promise<void>,
 ) {
   const cancel = track?.(session.id, selection)
 
@@ -447,6 +465,8 @@ async function applySelection(
     if (current?.agent !== selection.agent) {
       await session.api.switchAgent({ sessionID: session.id, agent: selection.agent })
     }
+
+    await beforeModel?.()
 
     // The server deduplicates unchanged selections; cached SSE state may still be behind an earlier switch.
     await session.api.switchModel({
@@ -472,9 +492,14 @@ async function sendPrompt(
   // selection applies now; a queued follow-up must not reconfigure the turn it
   // waits behind, so it runs with the session selection at delivery time (the
   // intended selection stays recorded in its metadata).
-  if (value.delivery === "steer") {
-    await applySelection(session, value.selection, track)
+  // Like the TUI, a staged revert settles after the agent switch and before the model switch and admission. The
+  // server would otherwise commit it on admission and delete every row from its boundary on, the model switch too.
+  const settle = async () => {
+    if (session.current()?.revert) await session.api.revert.commit({ sessionID: session.id })
   }
+
+  if (value.delivery === "steer") await applySelection(session, value.selection, track, settle)
+  else await settle()
 
   const admission = {
     id: value.id,
