@@ -24,6 +24,7 @@ import type { Command } from "@opencode/schema/command"
 import { Form } from "@opencode/schema/form"
 import type { Location } from "@opencode/schema/location"
 import type { Model } from "@opencode/schema/model"
+import type { Plugin } from "@opencode/schema/plugin"
 import type { Session } from "@opencode/schema/session"
 import type { SessionMessage } from "@opencode/schema/session-message"
 import type { TokenUsage } from "@opencode/schema/token-usage"
@@ -40,6 +41,7 @@ type CommandInfo = typeof Command.Info.Encoded
 type LocationRef = typeof Location.PublicRef.Encoded
 type ModelInfo = typeof Model.Info.Encoded
 type ModelRef = typeof Model.Ref.Encoded
+type PluginInfo = typeof Plugin.Info.Encoded
 type SessionInfo = typeof Session.Info.Encoded
 type SessionMessageInfo = typeof SessionMessage.Info.Encoded
 type TokenUsageInfo = typeof TokenUsage.Info.Encoded
@@ -155,6 +157,7 @@ type Catalog = {
   models: ModelInfo[]
   agents: AgentInfo[]
   commands: CommandInfo[]
+  plugins: PluginInfo[]
 }
 
 export type InitializeOptions = {
@@ -559,6 +562,14 @@ function startServer(options: WireOptions, changed: () => void) {
     models: [testModel, secondModel],
     agents: [buildAgent, planAgent],
     commands: [reviewCommand],
+    plugins: [
+      {
+        id: "opencode.models.dev",
+        source: { type: "builtin" },
+        features: { server: true },
+        state: { status: "active" },
+      },
+    ],
   }
   const requests: ServerRequest[] = []
   const submissions: Submission[] = []
@@ -697,6 +708,7 @@ function startServer(options: WireOptions, changed: () => void) {
       "/api/model/default": { GET: catalogRoute(() => catalog.models[0] ?? null) },
       "/api/agent": { GET: catalogRoute(() => catalog.agents) },
       "/api/command": { GET: catalogRoute(() => catalog.commands) },
+      "/api/plugin": { GET: catalogRoute(() => catalog.plugins) },
       "/api/session": {
         GET: route((_req, query) => {
           const sessions = [...fake.sessions.values()]
