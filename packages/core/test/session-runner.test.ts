@@ -48,6 +48,7 @@ import { SessionProjector } from "@opencode/core/session/projector"
 import { SessionExecution } from "@opencode/core/session/execution"
 import { SessionRestart } from "@opencode/core/session/execution/restart"
 import { SubagentRecovery } from "@opencode/core/session/subagent-recovery"
+import { SubagentTool } from "@opencode/core/tool/plugin/subagent"
 import { Job } from "@opencode/core/job"
 import { KV } from "@opencode/core/kv"
 import { SessionRunCoordinator } from "@opencode/core/session/run-coordinator"
@@ -592,7 +593,11 @@ const setup = Effect.gen(function* () {
   })
 })
 
-const seedPreparedRecovery = Effect.fnUntraced(function* (s: Effect.Success<typeof setup>, nested = false) {
+const seedPreparedRecovery = Effect.fnUntraced(function* (
+  s: Effect.Success<typeof setup>,
+  nested = false,
+  background = false,
+) {
   const store = yield* SessionStore.Service
   const parent = sessionID
   const child = Session.ID.make("ses_runner_recovered_child")
@@ -687,7 +692,31 @@ const seedPreparedRecovery = Effect.fnUntraced(function* (s: Effect.Success<type
       },
     })
   }
-  yield* store.claim(parent)
+  if (background) {
+    yield* s.bus.publish(SessionEvent.Tool.Success, {
+      sessionID: parent,
+      assistantMessageID,
+      id: "call-recover-child",
+      content: [{ type: "text", text: SubagentTool.backgroundResult(child).output }],
+      metadata: { sessionID: child, status: "running" },
+      executed: true,
+    })
+    const jobs = yield* Job.make
+    yield* jobs.start({
+      id: child,
+      type: "subagent",
+      recovery: {
+        kind: "subagent",
+        parentSessionID: parent,
+        childSessionID: child,
+        agent: "build",
+        description: input.description,
+      },
+      run: Effect.never,
+    })
+    yield* jobs.background(child)
+  }
+  if (!background) yield* store.claim(parent)
   yield* store.claim(child)
   if (nested) yield* store.claim(grandchild)
   return { parent, child, grandchild, leaf, assistantMessageID, model }
@@ -4673,6 +4702,52 @@ describe("SessionRunnerLLM", () => {
       },
     )
   }
+
+  scenario("stops nested ambiguous effects before a recovered background child drains", function* (s) {
+    const seeded = yield* seedPreparedRecovery(s, true, true)
+    const assistantMessageID = SessionMessage.ID.create()
+    yield* s.bus.publish(SessionEvent.Step.Started, {
+      sessionID: seeded.grandchild,
+      assistantMessageID,
+      agent: Agent.ID.make("build"),
+      model: seeded.model,
+      started: 0,
+    })
+    yield* s.bus.publish(SessionEvent.Tool.Input.Started, {
+      sessionID: seeded.grandchild,
+      assistantMessageID,
+      id: "call-ambiguous-effect",
+      name: "echo",
+    })
+    yield* s.bus.publish(SessionEvent.Tool.Called, {
+      sessionID: seeded.grandchild,
+      assistantMessageID,
+      id: "call-ambiguous-effect",
+      input: { text: "effect already happened" },
+      executed: false,
+    })
+    s.executions.push("effect already happened")
+    yield* s.llm.push(TestLLM.text("Parent saw the failure", "text-parent"))
+    const execution = yield* SessionExecution.Service
+    yield* (yield* SessionRestart.Service).resumeSuspendedSessions
+    yield* execution.awaitIdle(seeded.child)
+    yield* execution.awaitIdle(seeded.parent).pipe(Effect.timeout("5 seconds"))
+
+    expect(s.requests).toHaveLength(1)
+    expect(s.executions).toEqual(["effect already happened"])
+    expect((yield* s.session.get(seeded.child)).outcome).toBe("failed")
+    expect((yield* s.session.get(seeded.grandchild)).outcome).toBe("failed")
+    const childCall = (yield* s.session.messages({ sessionID: seeded.child })).flatMap((message) =>
+      message.type === "assistant" ? message.content.filter((item) => item.type === "tool") : [],
+    )
+    expect(childCall.map((item) => item.state.status)).toEqual(["error"])
+    const effect = yield* s.session.message({ sessionID: seeded.grandchild, messageID: assistantMessageID })
+    expect(
+      effect?.type === "assistant" ? effect.content.find((item) => item.type === "tool")?.state.status : undefined,
+    ).toBe("error")
+    expect((yield* s.session.list({ parentID: seeded.parent })).data).toHaveLength(1)
+    expect((yield* s.session.list({ parentID: seeded.child })).data).toHaveLength(1)
+  })
 
   scenario("keeps restart preparation owned when a wake arrives during its synthetic notice", function* (s) {
     const seeded = yield* seedPreparedRecovery(s)
