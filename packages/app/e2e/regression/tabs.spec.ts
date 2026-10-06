@@ -484,10 +484,6 @@ test("five loaded workspace tabs stay rendered and reactive through repeated swi
 })
 
 test("each session tab shows its own file tab after a switch to a session in another folder", async ({ page }) => {
-  test.fixme(
-    true,
-    "FolderSwitch project label covers the Open file button: https://github.com/shuv1337/shuvcode/issues/438",
-  )
   await page.setViewportSize({ width: 1440, height: 900 })
   const directory = "C:/OpenCode/FolderSwitch"
   const alpha = { id: "ses_folderswitch_alpha", title: "Folder switch alpha" }
@@ -520,6 +516,8 @@ test("each session tab shows its own file tab after a switch to a session in ano
 
   await open("greet.ts")
   await visit(other)
+  // The pointer rests on the switched tab, so its hover preview opens over Open file and must not take the click.
+  await expect(page.locator('[data-component="session-tab-popover"]')).toBeVisible()
   await open("notes.txt")
   await visit(beta)
   await open("guide.md")
