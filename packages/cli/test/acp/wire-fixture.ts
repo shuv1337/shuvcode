@@ -751,6 +751,9 @@ function startServer(options: WireOptions, changed: () => void) {
           })
           return noContent()
         }),
+        DELETE: route((req) =>
+          fake.sessions.delete(req.params.sessionID) ? noContent() : notFound(req.params.sessionID),
+        ),
       },
       "/api/session/:sessionID/fork": {
         POST: route((req) => {
