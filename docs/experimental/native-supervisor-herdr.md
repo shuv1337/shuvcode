@@ -1,6 +1,6 @@
 # Herdr, Shuvcode, and ShuvBro integration
 
-Status: implemented and locally validated for new managed native homes. Delivery spans [Shuvcode #440](https://github.com/shuv1337/shuvcode/pull/440), [Herdr #16](https://github.com/shuv1337/herdr/pull/16), and [ShuvBro #62](https://github.com/shuv1337/shuvbro/pull/62). Two-host qualification remains open; the evidence below covers the three-repository local path.
+Status: implemented and validated for new managed native homes in private local labs and on the exe.dev evaluation VM. Delivery spans [Shuvcode #440](https://github.com/shuv1337/shuvcode/pull/440), [Herdr #16](https://github.com/shuv1337/herdr/pull/16), and [ShuvBro #62](https://github.com/shuv1337/shuvbro/pull/62). Two-host qualification remains open; each evaluated home keeps its runtime and display on one host.
 
 ## Product contract
 
@@ -102,6 +102,24 @@ Late Herdr review repaired Done state in actual client snapshots, ownership afte
 
 Joint snapshots, screenshots, and validation logs are retained locally under `/home/shuv/.cache/agent-ws/herdr-parity/`. ShuvBro's required no-mistakes pipeline additionally validates its public entrypoint with a hermetic native CLI and Herdr socket. Its review repaired per-entry failure isolation, absent-entry closure, title validation before pending creation, watch lock handoff and stale-owner reclaim, and test teardown. The continuous-watch proof used ShuvBro `089d2b789a4e41aaa607a066ee06b8f72e3c5c8f` with adapter SHA-256 `e63cfe03b39a15f6382e146df952b50ee6c3a42306a0d72682161a2b3d3e0c05`. Herdr's initial Windows CI exposed Unix-only fixture paths; the tests now use platform-native absolute paths while production path validation remains strict.
 
-The follow-up adapter at `76d68406aabf9d7b7d5774bd6129fbafc89582ab`, SHA-256 `cbf89f86a44088aa70e246b8907e327933ea43725368c327f054a875f3e604fa`, passed the peer-identity and continuous-watch checks against the final Herdr binary. Exact foreground argv and both closed pane absences were observed; both generations' neighboring panes, parent focus, native settlement, and the 4-model-request count were preserved. Its 20 executable CLI tests passed. This follow-up remains under pipeline review, including the first-pass handling of an acknowledged attach whose foreground process is not visible yet; it is not the published ShuvBro PR head.
+The follow-up adapter at `76d68406aabf9d7b7d5774bd6129fbafc89582ab`, SHA-256 `cbf89f86a44088aa70e246b8907e327933ea43725368c327f054a875f3e604fa`, passed the peer-identity and continuous-watch checks against the final Herdr binary. Exact foreground argv and both closed pane absences were observed; both generations' neighboring panes, parent focus, native settlement, and the 4-model-request count were preserved.
+
+The subsequent candidate at `ca4dc6174aae25820f2fcc8bd1f2425b2e971757`, adapter SHA-256 `961fb5bb59c638fdd09b16a56dfd2568df5e1316a3ae47e2f05f0ecd45ab8e0a`, fixes first-pass handling of an acknowledged attach whose foreground process is not visible yet. A fresh private lab observed `up` exit successfully in `launch_pending` with sequence zero, followed by `ready` only after exactly one matching foreground attach process appeared. Its real worker completed, and concurrent watch/cleanup/reopen retained the Session, neighboring panes, parent focus, and native settlement with model requests unchanged at 4. All 20 executable CLI tests passed, including the delayed-launch regression. These tests use simulated fault peers; the private PTY workflow supplies separate real-runtime evidence. The candidate remains in the required pipeline Test evidence-review gate and is not yet the published ShuvBro PR head.
+
+## exe.dev testing, October 6, 2026, PDT
+
+Open the prepared fleet with:
+
+```sh
+ssh -t shuvcode-test.exe.xyz native-fleet
+```
+
+This opens Herdr's named `native-herdr` session with the firstmate view selected. Give the lead a small task in the disposable `/home/exedev/eval/native-herdr-project` repository; worker views appear in the sidebar. The native home is `/home/exedev/eval/native-herdr`. It uses `eval/gpt-6-sol`, automatic tool permissions, and local-only delivery with manual operator approval for landing.
+
+The Ubuntu 24.04 VM runs the compiled Shuvcode CLI, Herdr `63835aa2d261560be02b9b50968f79d6119925be`, and the ShuvBro candidate above. Binary hashes, source revisions, and instructions are saved in the home's `versions.json` and `TESTING.md`. A real model-driven worker committed a greeting implementation, tests, and `RESULT.md`; an independent rerun passed all three tests, its native receipt verified, and the operator landed commit `99218396c723202aff6607958c64cefcda34b91e` locally. Restarting Herdr preserved the home, Session, pane, and binding identities, with the lead idle and worker Done. This evidence is recorded in `vm-smoke-proof.json`.
+
+From a separate SSH shell, use `shuvcode-native supervisor status`, `shuvcode-native supervisor read`, or `shuvcode-native supervisor send "your task"`. `shuvbro-native status` reports display bindings. The presentation watcher runs as `shuvbro-native-eval-watch.service`; check it with `systemctl status shuvbro-native-eval-watch`. It is not enabled at boot: after a VM reboot, open `native-fleet`, then run `shuvbro-native up` and `sudo systemctl start shuvbro-native-eval-watch` from another shell.
+
+Inside this Herdr session, `shuvcode supervisor ...` targets the new native home. Outside it, the existing `shuvcode` entry still targets the earlier parity environment, so use `shuvcode-native` for this trial. The earlier pilot, parity, and secondmate homes remain available. The pending ShuvBro publication gate does not prevent testing the pinned candidate here.
 
 Initial rollout targets new managed native homes. Existing-home migration, two-host networking and SSH display disconnects, and production load remain unqualified. Destination homes own their own runtime and presentation; this change does not provision a remote host. These limits remain outside the qualified local path.
