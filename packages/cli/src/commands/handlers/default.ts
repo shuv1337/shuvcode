@@ -21,6 +21,12 @@ export default Runtime.handler(Commands, (input) =>
   Effect.gen(function* () {
     const requestedDirectory = Option.getOrUndefined(input.directory)
     const requestedServer = (yield* ServerFlags.read()).server
+    const session = Option.getOrUndefined(input.session)
+    if (
+      input.attachOnly &&
+      (!requestedServer || !session || !requestedDirectory || input.continue || Option.isSome(input.prompt))
+    )
+      return yield* Effect.fail(new Error("Attach requires an explicit server, Session, and location without a prompt"))
     if (requestedDirectory !== undefined) process.chdir(requestedDirectory)
     const preflight = UpdatePreflight.make()
     yield* Effect.addFinalizer(() => Effect.promise(() => preflight.close()))
@@ -49,18 +55,20 @@ export default Runtime.handler(Commands, (input) =>
         Effect.promise(() => preflight.fail("Shuvcode update could not start the new background service")),
       ),
     )
-    const session = Option.getOrUndefined(input.session)
     // A missing --session ID becomes the ID of the session the first prompt creates.
-    const sessionExists =
-      session !== undefined &&
-      (yield* Effect.tryPromise({
-        try: () =>
-          findSession(
-            OpenCode.make({ baseUrl: server.endpoint.url, headers: Service.headers(server.endpoint) }),
-            session,
-          ),
-        catch: (cause) => new Error(errorMessage(cause)),
-      })) !== undefined
+    const selected = session
+      ? yield* Effect.tryPromise({
+          try: () =>
+            findSession(
+              OpenCode.make({ baseUrl: server.endpoint.url, headers: Service.headers(server.endpoint) }),
+              session,
+            ),
+          catch: (cause) => new Error(errorMessage(cause)),
+        })
+      : undefined
+    if (input.attachOnly && (!selected || selected.parentID || selected.location.directory !== process.cwd()))
+      return yield* Effect.fail(new Error("Attachment Session is missing or its location changed"))
+    const sessionExists = selected !== undefined
     const updater = yield* Updater.Service
     let installing: string | undefined
     let latest: Updater.RunResult | undefined
