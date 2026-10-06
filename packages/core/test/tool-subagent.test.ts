@@ -231,7 +231,7 @@ describe("SubagentTool", () => {
             type: "tool-call" as const,
             id: "call-confirmed-child",
             name: SubagentTool.name,
-            input: { agent: "reviewer", description: "review files", prompt: "review this" },
+            input: { prompt: "review this", description: "review files", agent: "reviewer" },
           }
           yield* bus.publish(SessionEvent.Step.Started, {
             sessionID: parent.id,

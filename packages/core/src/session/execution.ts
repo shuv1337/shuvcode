@@ -20,8 +20,14 @@ export interface Interface {
   readonly active: Effect.Effect<ReadonlySet<SessionSchema.ID>>
   /** Checks process-local ownership, including interruption cleanup and terminal settlement. */
   readonly isActive: (sessionID: SessionSchema.ID) => Effect.Effect<boolean>
-  /** Starts execution while idle or joins the active execution. */
-  readonly resume: (sessionID: SessionSchema.ID) => Effect.Effect<void, SessionRunner.RunError>
+  /**
+   * Starts execution while idle or joins the active execution. `prepare` runs under a started
+   * execution's ownership before its first drain, so wakes during it wait; joining ignores it.
+   */
+  readonly resume: (
+    sessionID: SessionSchema.ID,
+    prepare?: Effect.Effect<void, SessionRunner.RunError>,
+  ) => Effect.Effect<void, SessionRunner.RunError>
   /** Registers newly recorded work. Repeated wakeups may coalesce. */
   readonly wake: (sessionID: SessionSchema.ID) => Effect.Effect<void>
   /**

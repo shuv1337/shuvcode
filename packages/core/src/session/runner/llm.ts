@@ -16,7 +16,6 @@ import { SessionProviderContext } from "../provider-context.js"
 import { SessionModelRequest } from "../model-request.js"
 import { SessionModelTransport } from "../model-transport.js"
 import { SessionMessage } from "../message.js"
-import { SubagentRecovery } from "../subagent-recovery.js"
 import { SessionSchema } from "../schema.js"
 import { SessionStore } from "../store.js"
 import { SessionMessageTable } from "../sql.js"
@@ -334,7 +333,6 @@ const layer = Layer.effect(
         if (message.type !== "assistant") continue
         for (const tool of message.content) {
           if (tool.type !== "tool" || (tool.state.status !== "streaming" && tool.state.status !== "running")) continue
-          if (SubagentRecovery.prepared(tool)) continue
           const metadata = tool.state.status === "running" ? tool.state.metadata : undefined
           const childID =
             tool.name === "subagent" && typeof metadata?.sessionID === "string" ? metadata.sessionID : undefined
@@ -346,7 +344,11 @@ const layer = Layer.effect(
               type: "aborted",
               message: `Tool execution interrupted: ${tool.name}${childID ? ` (sessionID: ${childID})` : ""}`,
             },
-            ...(metadata && Object.keys(metadata).length > 0 ? { metadata } : {}),
+            ...(tool.state.status === "streaming"
+              ? { metadata: { recovery: "unconfirmed" } }
+              : metadata && Object.keys(metadata).length > 0
+                ? { metadata }
+                : {}),
             executed: tool.executed === true,
           })
         }
