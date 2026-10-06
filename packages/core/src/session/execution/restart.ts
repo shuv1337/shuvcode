@@ -432,7 +432,22 @@ export const layer = (options?: Options) =>
                   )
                 : [],
             )
-            if (!calls.some((call) => !SubagentRecovery.prepared(call.tool))) {
+            const nested = children.includes(sessionID)
+              ? yield* Effect.forEach(calls, (call) => {
+                  const operation = SubagentRecovery.prepared(call.tool)
+                  return operation
+                    ? store
+                        .get(operation.childSessionID)
+                        .pipe(
+                          Effect.flatMap((child) =>
+                            child?.parentID === sessionID ? stopStaleChild(child.id) : Effect.succeed(false),
+                          ),
+                        )
+                    : Effect.succeed(false)
+                })
+              : []
+            const stopped = nested.some(Boolean)
+            if (!stopped && !calls.some((call) => !SubagentRecovery.prepared(call.tool))) {
               for (const call of calls) {
                 const operation = SubagentRecovery.prepared(call.tool)
                 if (operation) preparedChildren.add(operation.childSessionID)
@@ -449,7 +464,9 @@ export const layer = (options?: Options) =>
                 error: {
                   type: "aborted",
                   message: operation
-                    ? `Subagent recovery stopped with an ambiguous sibling (sessionID: ${operation.childSessionID})`
+                    ? stopped
+                      ? `Nested subagent recovery stopped (sessionID: ${operation.childSessionID})`
+                      : `Subagent recovery stopped with an ambiguous sibling (sessionID: ${operation.childSessionID})`
                     : `Tool outcome is ambiguous after restart: ${call.tool.name}`,
                 },
                 metadata: operation
