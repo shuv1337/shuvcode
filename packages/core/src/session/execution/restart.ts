@@ -81,19 +81,20 @@ export const layer = (options?: Options) =>
       const maxAttempts = options?.maxAttempts ?? DEFAULT_MAX_ATTEMPTS
       const preparedInFlight = new Set<SessionSchema.ID>()
 
-      const prepareResume = Effect.fnUntraced(function* (sessionID: SessionSchema.ID) {
+      const prepareResume = Effect.fnUntraced(function* (sessionID: SessionSchema.ID, withinExecution = false) {
         // Durable before the resume runs, so a crash inside the resumed turn is
         // counted by the next sweep and the budget cannot be dodged.
         const attempts = yield* store.countResume(sessionID)
         if (attempts === undefined) return false
         if (attempts > maxAttempts) {
-          // Terminalize instead: the release hook clears the claim and resets the
-          // counter atomically with the terminal event.
-          yield* bus.publish(
-            SessionEvent.Execution.Failed,
-            { sessionID, error: RESUME_EXHAUSTED },
-            { commit: () => store.release(sessionID) },
-          )
+          // A prepared execution settles its own failure; other recovery paths
+          // still terminalize here because they have not registered ownership.
+          if (!withinExecution)
+            yield* bus.publish(
+              SessionEvent.Execution.Failed,
+              { sessionID, error: RESUME_EXHAUSTED },
+              { commit: () => store.release(sessionID) },
+            )
           return false
         }
         yield* bus.publish(SessionEvent.Synthetic, {
@@ -201,6 +202,54 @@ export const layer = (options?: Options) =>
         )
       })
 
+      // Foreground children are not returned by listSuspended. Until nested
+      // prepared calls can be coordinated before their own drain, stop the
+      // entire in-flight subtree rather than let settleStaleToolCalls turn a
+      // possibly executed effect into a retryable model-visible tool error.
+      const stopStaleChild = Effect.fnUntraced(function* (sessionID: SessionSchema.ID): Effect.fn.Return<boolean> {
+        const calls = (yield* store.context(sessionID).pipe(Effect.orDie)).flatMap((message) =>
+          message.type === "assistant"
+            ? message.content.flatMap((tool) =>
+                tool.type === "tool" && tool.state.status === "running" && tool.executed !== true
+                  ? [{ messageID: message.id, tool }]
+                  : [],
+              )
+            : [],
+        )
+        if (calls.length === 0) return false
+        for (const call of calls) {
+          const operation = SubagentRecovery.prepared(call.tool)
+          const child = operation && (yield* store.get(operation.childSessionID))
+          if (child?.parentID === sessionID) yield* stopStaleChild(child.id)
+          yield* bus.publish(SessionEvent.Tool.Failed, {
+            sessionID,
+            assistantMessageID: call.messageID,
+            id: call.tool.id,
+            error: {
+              type: "aborted",
+              message: operation
+                ? `Nested subagent recovery stopped (sessionID: ${operation.childSessionID})`
+                : `Tool outcome is ambiguous after restart: ${call.tool.name}`,
+            },
+            metadata: operation
+              ? { sessionID: operation.childSessionID }
+              : call.tool.state.status === "running"
+                ? call.tool.state.metadata
+                : {},
+            executed: false,
+          })
+        }
+        yield* bus.publish(
+          SessionEvent.Execution.Failed,
+          {
+            sessionID,
+            error: { type: "aborted", message: "Execution stopped: a child tool outcome is ambiguous after restart." },
+          },
+          { commit: () => store.release(sessionID) },
+        )
+        return true
+      })
+
       const recoverPreparedCall = Effect.fn("SessionRestart.recoverPreparedCall")(function* (
         sessionID: SessionSchema.ID,
         assistantMessageID: SessionMessage.ID,
@@ -252,6 +301,17 @@ export const layer = (options?: Options) =>
           resume: false,
         })
         const settled = yield* SubagentRecovery.settled(sessions, child.id, operation.inboxID)
+        if (!settled && (yield* stopStaleChild(child.id))) {
+          yield* bus.publish(SessionEvent.Tool.Failed, {
+            sessionID,
+            assistantMessageID,
+            id: tool.id,
+            error: { type: "aborted", message: `Subagent recovery stopped (sessionID: ${child.id})` },
+            metadata: { sessionID: child.id },
+            executed: false,
+          })
+          return false
+        }
         const recovery = {
           kind: "subagent" as const,
           parentSessionID: sessionID,
@@ -439,20 +499,17 @@ export const layer = (options?: Options) =>
             recovering.add(sessionID)
             for (const call of calls) recovering.add(call.operation.childSessionID)
             yield* Effect.gen(function* () {
-              if (!(yield* prepareResume(sessionID))) {
-                yield* Effect.forEach(
-                  calls,
-                  (call) => failPrepared(sessionID, call, "Subagent recovery limit reached"),
-                  {
-                    discard: true,
-                  },
-                )
-                return
-              }
-              // Recovery owns the parent's execution, so a prompt arriving meanwhile waits for the settled call.
               yield* execution.resume(
                 sessionID,
                 Effect.gen(function* () {
+                  // Register execution before the first durable recovery step, so
+                  // any prompt wake joins this owner instead of dropping prepare.
+                  if (!(yield* prepareResume(sessionID, true))) {
+                    yield* Effect.forEach(calls, (call) => failPrepared(sessionID, call, RESUME_EXHAUSTED.message), {
+                      discard: true,
+                    })
+                    return yield* new StepFailedError({ error: RESUME_EXHAUSTED })
+                  }
                   for (const [index, call] of calls.entries()) {
                     const recovered = yield* recoverPreparedCall(sessionID, call.messageID, call.tool).pipe(
                       Effect.catchCause((cause) =>
@@ -482,7 +539,7 @@ export const layer = (options?: Options) =>
             }).pipe(
               Effect.catchCause((cause) => Effect.logError("Prepared subagent recovery stopped", { sessionID, cause })),
               Effect.ensuring(Effect.sync(() => preparedInFlight.delete(sessionID))),
-              Effect.forkIn(scope),
+              Effect.forkIn(scope, { startImmediately: true }),
             )
           }
 
