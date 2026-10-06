@@ -211,13 +211,16 @@ export const Plugin = {
                 return yield* new ToolFailure({ message: `Subagent operation input changed: ${context.id}` })
               if (confirmed && call.state.metadata.recovery !== undefined && !recorded)
                 return yield* new ToolFailure({ message: `Subagent operation identity mismatch: ${context.id}` })
+              const reservedModel =
+                confirmed && !recorded ? (model ?? (yield* agents.select(parent.agent)).info?.model) : undefined
               const operation = confirmed
                 ? (recorded ?? {
                     childSessionID: existing?.id ?? SessionSchema.ID.create(),
                     inboxID: SessionMessage.ID.create(),
                     inputDigest: SubagentRecovery.digest(call.state.input),
                     agent: agent.id,
-                    model: model ?? (yield* agents.select(parent.agent)).info?.model,
+                    // Projected tool metadata must be JSON, so a catalog-default child omits the key.
+                    ...(reservedModel === undefined ? {} : { model: reservedModel }),
                   })
                 : undefined
               if (
