@@ -6,22 +6,36 @@ The supported installed path is the Linux Shuvcode CLI package built with Bun. T
 
 ## Start a home
 
+From any directory:
+
 ```bash
-shuvcode supervisor up \
-  --home /absolute/path/to/supervisor \
-  --project /absolute/path/to/git-repository \
-  --model eval/gpt-6-sol \
-  --provider-url https://llm.int.exe.xyz/openai/v1
-shuvcode supervisor lead --home /absolute/path/to/supervisor
+shuvcode supervisor
 ```
 
-`up` initializes and starts a managed loopback server, creates the lead, and registers the initial project. Repeating it with the same home preserves that home's model, provider connection, permission policy, and lead. `init` prepares a home without starting it; `start` and `stop` control the managed processes. `lead` opens the terminal; `lead --no-open` prints the attach command. Set `SHUVCODE_SUPERVISOR_HOME` to use one home without repeating `--home`.
+This creates or reopens `~/fleet-home` and connects to the same firstmate lead Session. The current directory is not registered as a project. Ask firstmate to add an existing repository, clone one, or create a project before assigning work. `--home` and `SHUVCODE_SUPERVISOR_HOME` select a different home. `--no-open` starts the fleet without opening a terminal view.
+
+Inside Herdr, the launcher focuses firstmate's managed pane. Outside Herdr, it opens firstmate in the current terminal. Workers always execute in durable native Sessions. When a compatible Herdr server is running, the supervisor creates firstmate and worker views even without a connected Herdr client. It also discovers Herdr started later. Closing the launching terminal or disconnecting Herdr leaves the supervisor and workers running. Reconnecting uses the same Sessions; a new explicit `shuvcode supervisor` launch restores views that were closed.
+
+The supervisor maintains its own model connection. Use `/connect` in firstmate for provider sign-in, or select a model/provider when creating a home:
+
+```bash
+shuvcode supervisor \
+  --home /absolute/path/to/supervisor \
+  --model eval/gpt-6-sol \
+  --provider-url https://llm.int.exe.xyz/openai/v1
+```
+
+`up --project /absolute/repository` remains available for scripted setup with an initial project. Repeating setup with the same home preserves its model, provider connection, permission policy, and lead. `init` prepares a home without starting it; `start` and `stop` control the managed processes. `lead` opens a direct terminal view; `lead --no-open` prints the attach command. Existing homes are not migrated automatically.
+
+`status` includes Herdr view availability separately from native execution health. A missing or incompatible Herdr server does not block work. With several named Herdr sessions and no default server, launch inside the intended session to select it. Existing homes owned by ShuvBro's `native-display.json` adapter keep that adapter's presentation ownership.
 
 The lead and workers ask for tool permissions by default. `--auto` at initial setup allows automatic permissions; it cannot be added later to a prompt-based home. A project defaults to manual merge authority (`--yolo` is off). Projects with an origin remote default to `no-mistakes-prod-only`: internal work resolves to `direct-PR`, while product, mixed, or uncertain work resolves to `no-mistakes`. Projects without an origin default to `local-only`. The resolved delivery mode and merge authority are captured when work is queued. A lead can inherit existing permissions and policy, but changing worker permissions, increasing merge authority, or changing delivery mode requires the operator.
 
 For a headless connection, use `supervisor send "..."`, `supervisor read`, and `supervisor status --watch`. `status --task NAME` shows the exact worker, worktree, decisions, permissions, and recovery state; `doctor` checks setup and actionable errors. A provider error appears in `read` and `status`.
 
 ## Projects and backlog
+
+Ask firstmate, for example: “Add the repository at `/home/me/repos/api` as `api`,” “Clone `https://example.com/team/repo.git` as `backend`,” or “Create a project called `scratch`.” Firstmate uses its project tools and reports the registered ID and path. The equivalent CLI operations are:
 
 ```bash
 shuvcode supervisor projects
@@ -96,10 +110,10 @@ The operator-set startup budget defaults to 7,500 estimated tokens per home. `kn
 
 ## Evaluation and evidence
 
-For the integrated Herdr, Shuvcode, and ShuvBro trial, run `ssh -t shuvcode-test.exe.xyz native-fleet`. The new home at `/home/exedev/eval/native-herdr` uses a disposable project, real `eval/gpt-6-sol` work, and the pinned ShuvBro candidate under publication review. A real worker, three passing tests, local landing, and restored display identities after Herdr restart have been verified. See the [entry instructions and three-repository evidence](native-supervisor-herdr.md#exedev-testing-october-6-2026-pdt). Use `shuvcode-native supervisor status` from an ordinary SSH shell to inspect this home.
+The current VM entry is `ssh -t shuvcode-test.exe.xyz shuvcode supervisor`. It opens firstmate in `/home/exedev/fleet-home`; `ssh -t shuvcode-test.exe.xyz herdr` opens the same fleet with its worker views. Firstmate registered the disposable `launcher` project conversationally and completed a real scout with three passing tests while Herdr was absent. Starting the default Herdr server later added both views without a client. See the [entry instructions and evidence](native-supervisor-herdr.md#exedev-testing-october-6-2026-pdt). The earlier `native-fleet` / `shuvcode-native` trial remains at `/home/exedev/eval/native-herdr`.
 
 The original approved pilot remains at `/home/exedev/eval/pilot` on `shuvcode-test.exe.xyz`, reached through its `shuvcode-pilot` wrapper. Its historical October 5, 2026 PDT run used source base `28350a1f141e1fe7fef440d72ca791d31f595349` and a real `eval/gpt-6-sol` lead. At 11:54 PDT, ship worker `implement-slug` committed `95f4fc3fa905f1dda013d414bc5e3356c419651d`; an independent rerun passed six tests and seven assertions. Scout worker `review-input` received an answer to its question and returned a verified report. Both tasks completed with their reports preserved. A forced manager-death restart retained lead generation 1, three receipts, obligations, and the decision answer; five seconds of resumed reconciliation added no Session step starts or inbox enqueues. Raw run evidence remains under `/home/exedev/eval/evidence/`. These observations qualify that pilot run only; no merge or worktree removal was requested.
 
-The test box's default `shuvcode` and explicit `shuvcode-parity` commands now use the compiled parity distribution at `/home/exedev/eval/parity-dist`. Run `ssh -t shuvcode-test.exe.xyz shuvcode supervisor lead` to attach. Its home is `/home/exedev/eval/parity`, with registered projects `parity-a` and `parity-b` and a separate delegate home at `/home/exedev/eval/secondmate`. The source snapshot remains at `/home/exedev/repos/shuvcode-parity`. These are isolated from the approved pilot and the production ShuvBro deployment. The [parity matrix](native-supervisor-parity.md) records the passing 169-test supervisor suite, real multi-project workflow, SSH handoff/recovery, compiled two-home knowledge evaluation, and remaining live integration and performance qualification.
+The earlier `shuvcode-parity` command retains the compiled parity distribution at `/home/exedev/eval/parity-dist`. Run `ssh -t shuvcode-test.exe.xyz shuvcode-parity supervisor lead` to attach. Its home is `/home/exedev/eval/parity`, with registered projects `parity-a` and `parity-b` and a separate delegate home at `/home/exedev/eval/secondmate`. The source snapshot remains at `/home/exedev/repos/shuvcode-parity`. These are isolated from the approved pilot and the production ShuvBro deployment. The [parity matrix](native-supervisor-parity.md) records the passing 169-test supervisor suite, real multi-project workflow, SSH handoff/recovery, compiled two-home knowledge evaluation, and remaining live integration and performance qualification.
 
 Run focused tests from `packages/cli` (`bun test test/supervisor-*.test.ts` and `bun typecheck`); run `bun run check` and `git diff --check` from the repository root. The 1,000-obligation test measures storage and idempotence, not 1,000 model executions.

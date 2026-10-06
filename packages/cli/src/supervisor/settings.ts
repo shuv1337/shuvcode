@@ -15,6 +15,7 @@ export namespace SupervisorSettings {
     version: Schema.Literal(1),
     pilotID: Schema.String,
     project: Schema.String,
+    registerProject: Schema.optional(Schema.Boolean),
     baseRef: Schema.String,
     model: Model,
     agent: Schema.String,
@@ -34,18 +35,17 @@ export namespace SupervisorSettings {
     endpoint?: string
     providerURL?: string
     profile?: string
+    registerProject?: boolean
   }
 
   export function home(value?: string) {
-    return path.resolve(
-      value ?? process.env.SHUVCODE_SUPERVISOR_HOME ?? path.join(os.homedir(), ".local/share/shuvcode/supervisor"),
-    )
+    return path.resolve(value ?? process.env.SHUVCODE_SUPERVISOR_HOME ?? path.join(os.homedir(), "fleet-home"))
   }
 
   export async function read(value?: string) {
     const root = home(value)
     if (!(await Bun.file(path.join(root, "settings.json")).exists()))
-      throw new Error(`Supervisor is not initialized. Run: shuvcode supervisor up --project ${process.cwd()}`)
+      throw new Error("Supervisor is not initialized. Run: shuvcode supervisor")
     return {
       home: await realpath(root),
       ...Schema.decodeUnknownSync(Value)(await Bun.file(path.join(root, "settings.json")).json()),
@@ -84,14 +84,17 @@ export namespace SupervisorSettings {
         )
       return current
     }
+    if (input.registerProject === false) await mkdir(root, { recursive: true, mode: 0o700 })
     const project = await realpath(input.project ?? process.cwd())
     const git = Bun.spawnSync(["git", "-C", project, "rev-parse", "--show-toplevel"], {
       stdout: "pipe",
       stderr: "pipe",
     })
-    if (git.exitCode !== 0) throw new Error("Supervisor project must be a Git repository")
-    const canonical = await realpath(new TextDecoder().decode(git.stdout).trim())
-    if (canonical !== project) throw new Error(`Use the repository root: ${canonical}`)
+    if (input.registerProject !== false) {
+      if (git.exitCode !== 0) throw new Error("Supervisor project must be a Git repository")
+      const canonical = await realpath(new TextDecoder().decode(git.stdout).trim())
+      if (canonical !== project) throw new Error(`Use the repository root: ${canonical}`)
+    }
     const branch = Bun.spawnSync(["git", "-C", project, "symbolic-ref", "--quiet", "--short", "HEAD"], {
       stdout: "pipe",
       stderr: "pipe",
@@ -129,6 +132,7 @@ export namespace SupervisorSettings {
       version: 1,
       pilotID: crypto.randomUUID(),
       project,
+      registerProject: input.registerProject,
       baseRef,
       model: model(input.model ?? "openai/gpt-6-sol"),
       agent: "build",
@@ -256,8 +260,9 @@ export namespace SupervisorSettings {
 }
 
 function leadInstructions(settings: SupervisorSettings.Value) {
-  return `You are the lead for this Shuvcode supervisor.
-Use supervisor_projects to inspect registered projects and their default. Use supervisor_project to add or maintain projects. The initial model ${settings.model.providerID}/${settings.model.modelID} and base ${settings.baseRef} seeded the first project; current project settings may differ, so inspect them before assigning work.
+  return `You are firstmate, the lead for this Shuvcode supervisor.
+Users can ask you to register an existing Git repository, clone a repository, or create a new project. Use supervisor_project directly for these requests; do not send the user to shell commands. Use an absolute repository-root path for an existing project, a URL and project ID to clone, or initialize with a project ID to create a new repository. Expand user-supplied ~ paths against the operator's home directory, ${os.homedir()}. Inspect supervisor_projects first to avoid duplicate registrations, and report the registered ID and path. If the request does not identify the repository or destination clearly enough, ask for that missing information. A fleet may start with no registered projects; add a project before assigning project work. The lead's directory does not select the project for new work.
+Use supervisor_projects to inspect registered projects and their default. Use supervisor_project to add or maintain projects. The fleet's default model is ${settings.model.providerID}/${settings.model.modelID}. Each project's base, model, and policy may differ; inspect its current settings before assigning work.
 Use supervisor_task to queue implementation as ship work and research as scout work. Give a concrete brief and acceptance criteria. Confirm the delivery mode and merge policy from the user's request; do not broaden either from a later project edit. Work is queued without an artificial worker cap. Dependencies, named resources, future starts, and holds control when it can start.
 Use supervisor_status and supervisor_work to inspect or manage the backlog. A hold pauses future admission but does not interrupt an active native worker. Use supervisor_control when an active task needs steering, interruption, resumption, cancellation, or completion. Workers run native sessions in separate Git worktrees and submit their report through supervisor_result.
 Answer routine worker decisions with supervisor_answer. Ask the user for decisions or approvals that require their authority; do not answer those on their behalf. Leave user-owned worker decisions on the board and finish your response so their durable answer can resume work. Do not wait or poll in a tool for the user. When a result notice arrives, inspect verified evidence and report the outcome. Complete a native task only after its obligations and decisions settle.

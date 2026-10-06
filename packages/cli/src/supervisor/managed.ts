@@ -9,6 +9,7 @@ import { SupervisorAPI } from "./api"
 import { SupervisorClient } from "./client"
 import { SupervisorNative } from "./native"
 import { SupervisorSettings } from "./settings"
+import { SupervisorHerdr } from "./herdr"
 
 export namespace SupervisorManaged {
   const Identity = Schema.Struct({ pid: Schema.Int, start: Schema.String, boot: Schema.String })
@@ -123,6 +124,7 @@ export namespace SupervisorManaged {
       identity?: Identity
       api?: Awaited<ReturnType<typeof SupervisorAPI.serve>>
       logfile?: number
+      herdr?: ReturnType<typeof SupervisorHerdr.watch>
     } = {}
     const stopped = Promise.withResolvers<void>()
     const lifecycle = { requested: false }
@@ -210,6 +212,7 @@ export namespace SupervisorManaged {
         lease.native.stdin.flush()
       }
       await rm(path.join(root, "startup-error.json"), { force: true })
+      lease.herdr = SupervisorHerdr.watch(settings, command(), native)
       if (lease.native)
         void lease.native.exited
           .then(async (code) => {
@@ -229,6 +232,7 @@ export namespace SupervisorManaged {
     } finally {
       process.removeListener("SIGTERM", finish)
       process.removeListener("SIGINT", finish)
+      await lease.herdr?.close()
       await lease.api?.close()
       if (lease.native) {
         if (lease.native.stdin && typeof lease.native.stdin !== "number") lease.native.stdin.end()

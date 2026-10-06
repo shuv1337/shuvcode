@@ -6,24 +6,32 @@ Status: implemented and validated for new managed native homes in private local 
 
 Herdr is the multiplexer and agent display. Shuvcode is the durable coding runtime. ShuvBro supplies orchestration policy and the lead/worker/secondmate workflow. A complete native path must make these three work together.
 
-| Owner    | Responsibilities                                                                                                                              |
-| -------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
-| ShuvBro  | Work and delivery policy, roles, home routing, presentation placement, and cleanup policy.                                                    |
-| Shuvcode | Durable home/work/Session identities, prompt admission, execution, permissions, cancellation, recovery, and authenticated Session attachment. |
-| Herdr    | Workspace/tab/pane topology, focus, terminal display, persisted attachment identity, and typed status presentation.                           |
+| Owner    | Responsibilities                                                                                                                            |
+| -------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| ShuvBro  | Work and delivery policy, roles, home routing, and optional adapter placement and cleanup policy.                                           |
+| Shuvcode | Durable home/work/Session identities, execution, permissions, recovery, authenticated attachment, and the bare launcher's background views. |
+| Herdr    | Workspace/tab/pane topology, focus, terminal display, persisted attachment identity, and typed status presentation.                         |
 
 ```mermaid
 flowchart LR
   User --> Herdr[Herdr agent display]
   Herdr --> TUI[Shuvcode Session view]
   TUI --> Runtime[Shuvcode durable runtime]
-  ShuvBro[ShuvBro policy and placement] --> Supervisor[Native supervisor engine]
+  ShuvBro[ShuvBro policy] --> Supervisor[Native supervisor engine]
   Supervisor --> Runtime
-  ShuvBro -->|exact display bindings| Herdr
-  Runtime -->|typed execution observations| ShuvBro
+  Supervisor -->|exact display bindings| Herdr
+  Runtime -->|typed execution observations| Supervisor
 ```
 
-The native supervisor is the sole durable workflow engine for a native home. ShuvBro's native adapter supplies policy and reconciles presentation; it must not run the legacy watcher/controller against the same home or create another authoritative workflow database.
+The native supervisor is the sole durable workflow engine for a native home. The bare `shuvcode supervisor` launcher now owns ordinary firstmate/worker presentation through its background process. ShuvBro's explicit native adapter remains available for homes with its placement policy; a home containing its `native-display.json` keeps that publisher. These publishers never run together for one home, and neither uses pane liveness as execution authority.
+
+## Bare launcher
+
+`shuvcode supervisor` works from any directory and uses `~/fleet-home` by default. It creates a projectless fleet, reuses the durable firstmate Session, and accepts conversational project registration through `supervisor_project`. Inside Herdr it focuses a managed firstmate pane; outside it opens an ordinary attached TUI. The supervisor publishes worker views independently of that TUI's lifetime.
+
+Discovery uses the current Herdr pane's explicit socket/session first. Outside Herdr it chooses a running default session or the sole running named session, then persists that peer identity. Multiple ambiguous named sessions require launching inside the intended session. A headless Herdr server works; Herdr may also start after native work has begun. Each view gets its own workspace at the exact native Session location, without requiring a retained parent shell. Worker creation does not steal focus.
+
+The daemon alone writes `herdr-views.json`. It journals creation, binding, launch, and report sequence before mutation. A lost create result remains unresolved; a lost PTY acknowledgement is not resent. Readback requires the exact pane, binding, attachment, and foreground argv. Closed views stay closed during ordinary reconciliation; explicitly launching the fleet again creates a new view generation for the same Session, retaining prior identities. `herdr-status.json` reports display availability separately from workflow health. Missing, stopped, incompatible, and mismatched Herdr peers never prevent native work.
 
 ## Baseline and repaired gaps
 
@@ -53,13 +61,13 @@ Display state and execution state remain separate. A closed pane may accompany a
 
 | Repository                 | Change                                                                                                                                                                                                                      |
 | -------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Shuvcode, existing PR #440 | Exact attach-only CLI, versioned read-only presentation data, native home/location validation, deliberate Herdr client environment composition, and selectable ShuvBro policy profile.                                      |
+| Shuvcode, existing PR #440 | Bare firstmate launcher, projectless fleet homes, background Herdr views, exact attach-only CLI, versioned presentation data, home/location validation, and selectable ShuvBro policy profile.                              |
 | Herdr fork                 | Preserve Shuvcode launch identity; add advertised binding, query, status-report, and unbind operations; persist reconnectable attachment data; acknowledge whether a report applied; preserve endpoint generation 1 codecs. |
 | ShuvBro                    | Explicit native entrypoint/profile for new homes and an idempotent presentation adapter using native observations and Herdr bindings. Keep the journal as display provenance only.                                          |
 
-ShuvBro retains exact-parent placement, creation without focus changes, disposable worker/scout spaces, and persistent lead/secondmate grouping. Labels and metadata tokens help presentation but never authorize mutation. Cleanup closes only the exact owned pane after runtime settlement and preserves neighboring panes and workspaces. Ambiguous outcomes retain the binding for reconciliation.
+The explicit ShuvBro adapter retains exact-parent placement, creation without focus changes, disposable worker/scout spaces, and persistent lead/secondmate grouping. Labels and metadata tokens help presentation but never authorize mutation. Its cleanup closes only the exact owned pane after runtime settlement and preserves neighboring panes and workspaces. Ambiguous outcomes retain the binding for reconciliation.
 
-The adapter verifies the actual Herdr peer's named session through JSON ping before native execution or display mutation. An attach becomes ready only after exact foreground argv is observed; a close completes only after pane absence is confirmed. Persisted closed binding owners reserve their public workspace identities across Herdr restart, so recorded topology remains meaningful after views disappear.
+The ShuvBro adapter verifies the actual Herdr peer's named session through JSON ping before native execution or display mutation. The bare launcher starts native work independently and negotiates Herdr before display mutation. An attach becomes ready only after exact foreground argv is observed; a close completes only after pane absence is confirmed. Persisted closed binding owners reserve their public workspace identities across Herdr restart, so recorded topology remains meaningful after views disappear.
 
 Remote secondmate homes own their own runtime and Herdr presentation. An unreachable destination remains unknown; the primary must not start a local replacement. SSH display disconnects must leave destination execution intact.
 
@@ -108,7 +116,29 @@ The subsequent candidate at `ca4dc6174aae25820f2fcc8bd1f2425b2e971757`, adapter 
 
 ## exe.dev testing, October 6, 2026, PDT
 
-Open the prepared fleet with:
+Open the current firstmate lead directly, from any directory:
+
+```sh
+ssh -t shuvcode-test.exe.xyz shuvcode supervisor
+```
+
+The home is `/home/exedev/fleet-home`. It uses `eval/gpt-6-sol` through exe.dev's configured provider, with automatic tool permissions and manual merge authority. Firstmate conversationally registered `/home/exedev/eval/fleet-launcher-project` as `launcher`, then completed the `bare-smoke` scout with a verified report. An independent rerun passed all three Bun tests. This completed while Herdr was absent.
+
+For all worker views:
+
+```sh
+ssh -t shuvcode-test.exe.xyz herdr
+```
+
+The default Herdr server added firstmate and the scout without any client attached. Running `shuvcode supervisor` in a Herdr shell focuses firstmate; workers get separate workspaces without a parent-shell dependency. Detach with Ctrl+B, then Q. Native execution and the background publisher continue. The default Herdr server runs in `herdr-fleet-launcher.service`; no ShuvBro watch process is needed for this home. The service is not enabled at boot; `herdr` starts its ordinary interactive session, or `sudo systemctl start herdr-fleet-launcher` starts a headless server.
+
+The source suite passed 181 supervisor tests with 1,284 assertions, the compiled Linux CLI passed five project/attachment/presentation tests with 57 assertions, and all 41 canonical check tasks passed. Fault tests cover incompatible peer identity/capabilities, uncertain creation across supervisor restart, lost launch acknowledgement, explicit closed-view reopening, and refusal to focus a replaced lead's old pane. A compiled private PTY run closed the outside TUI and attached/detached Herdr twice while the worker remained running; releasing its model response produced a verified result. All private local fixtures were stopped afterward.
+
+On the VM, the supervisor and Herdr were restarted independently. Launches from `/tmp` and `/usr` retained the home, lead and worker Session IDs, pane IDs, and bindings. Native step started/streamed/ended counts remained 16 before and after. A second real scout, `reconnect-smoke`, remained running after closing the outside SSH TUI and after two Herdr client attach/detach cycles over SSH; its Session ID and the lead's Session ID stayed unchanged. The home contains `TESTING.md`, `versions.json`, `launcher-vm-proof.json`, `launcher-final-restart-proof.json`, and `launcher-ssh-reconnect-proof.json`.
+
+### Earlier ShuvBro adapter trial
+
+The earlier explicit adapter trial remains available:
 
 ```sh
 ssh -t shuvcode-test.exe.xyz native-fleet
@@ -120,6 +150,6 @@ The Ubuntu 24.04 VM runs the compiled Shuvcode CLI, Herdr `63835aa2d261560be02b9
 
 From a separate SSH shell, use `shuvcode-native supervisor status`, `shuvcode-native supervisor read`, or `shuvcode-native supervisor send "your task"`. `shuvbro-native status` reports display bindings. The presentation watcher runs as `shuvbro-native-eval-watch.service`; check it with `systemctl status shuvbro-native-eval-watch`. It is not enabled at boot: after a VM reboot, open `native-fleet`, then run `shuvbro-native up` and `sudo systemctl start shuvbro-native-eval-watch` from another shell.
 
-Inside this Herdr session, `shuvcode supervisor ...` targets the new native home. Outside it, the existing `shuvcode` entry still targets the earlier parity environment, so use `shuvcode-native` for this trial. The earlier pilot, parity, and secondmate homes remain available. The pending ShuvBro publication gate does not prevent testing the pinned candidate here.
+Inside that named Herdr session, its environment still selects the earlier native home. Use `shuvcode-native` outside it to address the same trial. The plain `shuvcode` command now selects `~/fleet-home`. The earlier pilot, parity, and secondmate homes remain available through their named wrappers. The pending ShuvBro publication gate does not prevent testing the pinned candidate here.
 
-Initial rollout targets new managed native homes. Existing-home migration, two-host networking and SSH display disconnects, and production load remain unqualified. Destination homes own their own runtime and presentation; this change does not provision a remote host. These limits remain outside the qualified local path.
+Initial rollout targets new managed native homes. Existing-home migration, two-host fleet networking, and production load remain unqualified. The VM test qualifies SSH display disconnect/reconnect while destination-native work continues. Destination homes own their own runtime and presentation; this change does not provision a remote host.

@@ -10,7 +10,7 @@ type RequestBody = {
 }
 
 export async function managedEval(
-  scenario: "result" | "decision" | "permission" | "lead-permission" = "result",
+  scenario: "result" | "decision" | "permission" | "lead-permission" | "projects" = "result",
   executable?: string,
 ) {
   const root = await mkdtemp(path.join(os.tmpdir(), "shuvcode-supervisor-eval-"))
@@ -67,6 +67,13 @@ export async function managedEval(
         return message("Verified worker result received")
       if (wire.includes("Supervisor decision pending for managed-fixture"))
         return message("Decision pending for operator")
+      if (scenario === "projects" && wire.includes("Register fixture projects")) {
+        if (outputs === 0) return call("supervisor_projects", {})
+        if (outputs === 1) return call("supervisor_project", { action: "add", name: "existing", path: project })
+        if (outputs === 2) return call("supervisor_project", { action: "add", name: "cloned", url: project })
+        if (outputs === 3) return call("supervisor_project", { action: "add", name: "created", initialize: true })
+        return message("Registered existing, cloned, and created projects")
+      }
       if (wire.includes("Build managed-fixture")) {
         if (outputs === 0)
           return call("supervisor_task", {

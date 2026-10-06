@@ -3,6 +3,80 @@ import { SupervisorNative } from "../src/supervisor/native"
 import { SupervisorManaged } from "../src/supervisor/managed"
 import { SupervisorSettings } from "../src/supervisor/settings"
 import { managedEval } from "./fixtures/supervisor-managed-eval"
+import { SupervisorClient } from "../src/supervisor/client"
+import path from "node:path"
+
+test("a projectless firstmate registers existing, cloned, and new projects through native tools", async () => {
+  await using fixture = await managedEval("projects", process.env.SHUVCODE_SUPERVISOR_BINARY)
+  try {
+    const opened = await fixture.cli([
+      "--no-open",
+      "--home",
+      fixture.home,
+      "--model",
+      "test/test-model",
+      "--provider-url",
+      fixture.providerURL,
+      "--auto",
+    ])
+    if (opened.code !== 0) throw new Error(opened.stderr)
+    const initial = await SupervisorClient.request(fixture.home, { type: "project.list" })
+    expect(initial).toMatchObject({ projects: [] })
+    const sent = await fixture.cli([
+      "send",
+      "Register fixture projects: add the existing repository, clone it, and create a new project.",
+      "--home",
+      fixture.home,
+    ])
+    if (sent.code !== 0) throw new Error(sent.stderr)
+    const settings = await SupervisorSettings.read(fixture.home)
+    const native = SupervisorNative.connect({
+      url: settings.endpoint,
+      password: await SupervisorSettings.password(settings),
+    })
+    const lead = (await status(fixture)).lead!.sessionID
+    await until(
+      async () =>
+        (await native.messages(lead)).data.some(
+          (message) =>
+            message.type === "assistant" &&
+            message.content.some(
+              (part) => part.type === "text" && part.text.includes("Registered existing, cloned, and created projects"),
+            ),
+        ) || undefined,
+      25_000,
+    )
+    expect(await SupervisorClient.request(fixture.home, { type: "project.list" })).toMatchObject({
+      defaultProject: "existing",
+      projects: expect.arrayContaining([
+        expect.objectContaining({ id: "existing", path: fixture.project }),
+        expect.objectContaining({ id: "cloned", path: path.join(fixture.home, "projects", "cloned") }),
+        expect.objectContaining({ id: "created", path: path.join(fixture.home, "projects", "created") }),
+      ]),
+    })
+    expect(JSON.stringify(fixture.requests[0])).toContain("Users can ask you to register an existing Git repository")
+    expect((await status(fixture)).lead!.sessionID).toBe(lead)
+    const delegated = await fixture.cli([
+      "task",
+      "Build and commit RESULT.md with the managed worker finding",
+      "--name",
+      "managed-fixture",
+      "--home",
+      fixture.home,
+    ])
+    if (delegated.code !== 0) throw new Error(delegated.stderr)
+    const result = await until(
+      async () =>
+        (await status(fixture)).tasks.find((task) => task.id === "managed-fixture" && task.receipts.length > 0),
+      25_000,
+    )
+    expect(result.sessionID).not.toBe(lead)
+    expect(result.receipts[0]?.evidence.artifact.relativePath).toBe("RESULT.md")
+    expect(await native.get(lead)).toMatchObject({ location: { directory: fixture.home } })
+  } finally {
+    await fixture.cli(["stop", "--home", fixture.home])
+  }
+}, 90_000)
 
 test("managed CLI delegates through a local Responses model and wakes the lead with a verified result", async () => {
   await using fixture = await managedEval()

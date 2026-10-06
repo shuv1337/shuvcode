@@ -10,6 +10,7 @@ import { SupervisorProtocol } from "./protocol"
 import { SupervisorProjects } from "./projects"
 import { SupervisorSettings } from "./settings"
 import { SupervisorPresentation } from "./presentation"
+import { SupervisorHerdr } from "./herdr"
 
 export namespace SupervisorOperator {
   const Permission = Schema.Struct({
@@ -153,10 +154,29 @@ export namespace SupervisorOperator {
   type Home = { home?: string }
   type TaskInput = Home & { task: string }
   type StatusResult = Awaited<ReturnType<typeof status>>
-  export type Status = Omit<StatusResult, "projects" | "defaultProject" | "backlog" | "deliveries" | "warnings"> &
-    Partial<Pick<StatusResult, "projects" | "defaultProject" | "backlog" | "deliveries" | "warnings">>
+  export type Status = Omit<
+    StatusResult,
+    "projects" | "defaultProject" | "backlog" | "deliveries" | "warnings" | "herdr"
+  > &
+    Partial<Pick<StatusResult, "projects" | "defaultProject" | "backlog" | "deliveries" | "warnings" | "herdr">>
 
   export const init = SupervisorSettings.init
+
+  export async function open(input: SupervisorSettings.Init & { noOpen?: boolean }) {
+    const home = SupervisorSettings.home(input.home)
+    const existing = await Bun.file(path.join(home, "settings.json")).exists()
+    const settings = await init({
+      ...input,
+      home,
+      ...(!existing && !input.project ? { project: home, registerProject: false } : {}),
+    })
+    await SupervisorHerdr.enable(settings)
+    await start({ home })
+    const current = await lead({ home })
+    if (!input.noOpen && !(await SupervisorHerdr.focus(settings, current.sessionID).catch(() => false)))
+      await attach({ home, sessionID: current.sessionID })
+    return current
+  }
 
   export async function up(input: SupervisorSettings.Init) {
     const settings = await init(input)
@@ -223,12 +243,17 @@ export namespace SupervisorOperator {
             permissions: [],
           }))
         : undefined
+    const herdr = await Bun.file(path.join(settings.home, "herdr-status.json"))
+      .json()
+      .then(Schema.decodeUnknownSync(SupervisorHerdr.Status))
+      .catch(() => undefined)
     return {
       home: settings.home,
       project: settings.project,
       endpoint: settings.endpoint,
       model: settings.model,
       health: alive ? ("running" as const) : ("stopped" as const),
+      herdr: herdr && { ...herdr, available: alive && herdr.available && Date.now() - herdr.observedAt < 5000 },
       error: health?.error ?? startup?.error,
       warnings: snapshot.warnings ?? [],
       lead: snapshot.lead,

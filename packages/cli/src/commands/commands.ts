@@ -507,8 +507,16 @@ const Root = Spec.make(typeof OPENCODE_CLI_NAME === "string" ? OPENCODE_CLI_NAME
       ],
     }),
     Spec.make("supervisor", {
-      description: "Operate the native task supervisor",
+      description: "Open firstmate and manage the native fleet",
       connectionFlags: "unsupported",
+      params: {
+        ...SupervisorInitParams,
+        project: Flag.string("project").pipe(Flag.withDescription("Register an initial Git project"), Flag.optional),
+        noOpen: Flag.boolean("no-open").pipe(
+          Flag.withDescription("Start firstmate without opening the TUI"),
+          Flag.withDefault(false),
+        ),
+      },
       commands: [
         Spec.make("up", {
           description: "Set up and start a supervisor with a lead",
