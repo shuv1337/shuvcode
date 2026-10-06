@@ -374,8 +374,9 @@ function MessageTimelineView(
         return message?.type === "compaction" && message.status === "running"
       }
 
-      // Used groups keep the fallback regardless of disclosure state.
-      if (!Predicate.isTagged(row, "AssistantPart") || row.group.type === "context") return false
+      // Used and read groups keep the fallback, so each new read does not swap Working out for its short call.
+      if (!Predicate.isTagged(row, "AssistantPart") || row.group.type === "context" || row.group.type === "read")
+        return false
 
       return (row.group.type === "part" ? [row.group.ref] : row.group.refs).some((ref) => {
         const content = Timeline.resolveContent(messageByID().get(ref.messageID), ref.partID)
@@ -389,6 +390,17 @@ function MessageTimelineView(
       })
     })
   })
+
+  const runningMenu = (title?: string) => (
+    <SessionRunningMenu
+      sessionID={sessionID()}
+      owner={props.background.running.sessionID()}
+      blocking={props.background.running.blocking()}
+      tasks={props.background.running.tasks()}
+      onReveal={virtualized.revealPart}
+      title={title}
+    />
+  )
 
   return (
     <VirtualizedTimeline
@@ -455,7 +467,8 @@ function MessageTimelineView(
                       />
                     )}
                   </Show>
-                  <Show when={childTitle() || title.editing}>
+                  <Show when={parentID()}>{runningMenu(childTitle())}</Show>
+                  <Show when={!parentID() && (childTitle() || title.editing)}>
                     <Show
                       when={title.editing}
                       fallback={
@@ -505,6 +518,7 @@ function MessageTimelineView(
                       />
                     </Show>
                   </Show>
+                  <Show when={!parentID()}>{runningMenu()}</Show>
                   <Show when={!parentID() && sessionID()} keyed>
                     {(id) => (
                       <Menu
@@ -558,13 +572,6 @@ function MessageTimelineView(
                       </Menu>
                     )}
                   </Show>
-                  <SessionRunningMenu
-                    sessionID={sessionID()}
-                    owner={props.background.running.sessionID()}
-                    blocking={props.background.running.blocking()}
-                    tasks={props.background.running.tasks()}
-                    onReveal={virtualized.revealPart}
-                  />
                 </div>
               </div>
               <Show when={sessionID()} keyed>
