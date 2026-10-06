@@ -688,6 +688,10 @@
   }
 }
 
+[data-notices-only] > [data-component="collapsed-tool-group"] > [data-component="collapsible"].tool-collapsible {
+  --tool-content-gap: 0px;
+}
+
 [data-component="context-tool-group-list"] {
   padding: 0;
   display: flex;
@@ -1585,7 +1589,8 @@
   background: var(--v2-background-bg-layer-02);
 }
 
-:root body
+:root
+  body
   [data-workspace-session]
   [data-component="user-message"]:not([data-pending])
   [data-slot="user-message-text"] {
