@@ -344,7 +344,11 @@ const layer = Layer.effect(
               type: "aborted",
               message: `Tool execution interrupted: ${tool.name}${childID ? ` (sessionID: ${childID})` : ""}`,
             },
-            ...(metadata && Object.keys(metadata).length > 0 ? { metadata } : {}),
+            ...(tool.state.status === "streaming"
+              ? { metadata: { recovery: "unconfirmed" } }
+              : metadata && Object.keys(metadata).length > 0
+                ? { metadata }
+                : {}),
             executed: tool.executed === true,
           })
         }
