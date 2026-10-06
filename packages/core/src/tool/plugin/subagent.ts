@@ -296,7 +296,12 @@ export const Plugin = {
                 : undefined
               if (settled && background && operation) {
                 yield* SubagentCompletion.deliver(sessions, jobs, {
-                  status: settled.status === "succeeded" ? "completed" : settled.status === "interrupted" ? "cancelled" : "error",
+                  status:
+                    settled.status === "succeeded"
+                      ? "completed"
+                      : settled.status === "interrupted"
+                        ? "cancelled"
+                        : "error",
                   output: settled.output,
                   error: settled.status,
                   notificationID: SubagentRecovery.notificationID(operation),
