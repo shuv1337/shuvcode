@@ -42,7 +42,7 @@ export namespace SupervisorRuntime {
     const permissionDefaults: SupervisorStore.Task["permissions"] = defaults
       ? SupervisorSettings.permissions(defaults)
       : [{ action: "*", resource: "*", effect: "ask" }]
-    if (defaults && !store.projects.default()) {
+    if (defaults && defaults.registerProject !== false && !store.projects.default()) {
       store.projects.add(
         await SupervisorProjects.prepare({
           path: defaults.project,

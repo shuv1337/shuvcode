@@ -7,6 +7,33 @@ import { isolatedEnv } from "./fixture/environment"
 
 const entrypoint = path.join(import.meta.dir, "../src/index.ts")
 
+test("bare supervisor opens the same projectless fleet from unrelated directories", async () => {
+  const original = await setup()
+  const fixture = { ...original, home: path.join(original.root, "fleet-home"), project: original.root }
+  const owned: SupervisorManaged.Identity[] = []
+  try {
+    const first = await cli(fixture, ["--no-open"])
+    expect(first.stderr).toBe("")
+    expect(first.code).toBe(0)
+    const owner = await requireOwner(fixture.home)
+    owned.push(owner.owner, owner.native!)
+    const initial = await status(fixture)
+    expect(initial.lead?.active).toBe(true)
+    const settings = await Bun.file(path.join(fixture.home, "settings.json")).json()
+    expect(settings.project).toBe(fixture.home)
+    expect(settings.registerProject).toBe(false)
+    expect(initial).toHaveProperty("projects", [])
+
+    expect((await cli({ ...fixture, project: original.project }, ["--no-open"])).code).toBe(0)
+    expect((await status(fixture)).lead).toEqual(initial.lead)
+    expect(await requireOwner(fixture.home)).toEqual(owner)
+    expect((await Bun.file(path.join(fixture.home, "settings.json")).json()).pilotID).toBe(settings.pilotID)
+    expect((await cli(fixture, ["stop"])).code).toBe(0)
+  } finally {
+    await cleanup(fixture, owned)
+  }
+}, 90_000)
+
 test("managed CLI keeps one lead, fences a killed native owner, and stops only its own processes", async () => {
   const fixture = await setup()
   const unrelated = Bun.spawn(["sleep", "30"], { stdout: "ignore", stderr: "ignore" })
@@ -128,7 +155,15 @@ async function setup() {
 async function cli(fixture: Awaited<ReturnType<typeof setup>>, args: string[], timeoutMs = 35_000) {
   const child = Bun.spawn([process.execPath, entrypoint, "supervisor", ...args], {
     cwd: fixture.project,
-    env: isolatedEnv(fixture.root, { USERPROFILE: fixture.root }),
+    env: isolatedEnv(fixture.root, {
+      USERPROFILE: fixture.root,
+      SHUVCODE_SUPERVISOR_HOME: undefined,
+      ...Object.fromEntries(
+        Object.keys(process.env)
+          .filter((key) => key.startsWith("HERDR_"))
+          .map((key) => [key, undefined]),
+      ),
+    }),
     stdout: "pipe",
     stderr: "pipe",
   })

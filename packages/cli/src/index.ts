@@ -76,6 +76,7 @@ const Handlers = Runtime.handlers(Commands, {
     unset: () => import("./commands/handlers/service/unset"),
   },
   supervisor: {
+    $: () => import("./commands/handlers/supervisor/open"),
     up: () => import("./commands/handlers/supervisor/up"),
     init: () => import("./commands/handlers/supervisor/init"),
     start: () => import("./commands/handlers/supervisor/start"),

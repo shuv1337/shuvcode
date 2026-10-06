@@ -10,7 +10,9 @@ export namespace SupervisorFormat {
   }
 
   export function status(value: Status, selected?: string, home?: string) {
-    const lines = [`Supervisor: ${value.health}`, `Project: ${value.project}`]
+    const lines = [`Supervisor: ${value.health}`, `Fleet: ${value.home}`]
+    if (value.herdr)
+      lines.push(`Herdr views: ${value.herdr.available ? "connected" : (value.herdr.error ?? "waiting for Herdr")}`)
     if (value.projects?.length)
       lines.push(
         `Registered projects: ${value.projects.length}${value.defaultProject ? ` · default ${value.defaultProject}` : ""}`,
