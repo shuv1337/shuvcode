@@ -37,6 +37,7 @@ async function fixture() {
   const outcomesOnGet = new Map<string, ("succeeded" | "failed" | "interrupted")[]>()
   let unknownPrompt = false
   const promptGates = new Map<string, Promise<void>>()
+  const logGates = new Map<string, { started: () => void; release: Promise<void> }>()
   const native = {
     async get(id: string) {
       const session = sessions.get(id)
@@ -90,6 +91,10 @@ async function fixture() {
     async pluginReady() {},
     async log(input: { sessionID: string; after?: number }) {
       const found = (events.get(input.sessionID) ?? []).filter((event) => event.seq > (input.after ?? 0))
+      const gate = logGates.get(input.sessionID)
+      logGates.delete(input.sessionID)
+      gate?.started()
+      await gate?.release
       return { events: found, cursor: found.at(-1)?.seq ?? input.after ?? 0 }
     },
   } as unknown as ReturnType<typeof SupervisorNative.connect>
@@ -126,6 +131,9 @@ async function fixture() {
     },
     gatePrompt(sessionID: string, gate: Promise<void>) {
       promptGates.set(sessionID, gate)
+    },
+    gateLog(sessionID: string, started: () => void, release: Promise<void>) {
+      logGates.set(sessionID, { started, release })
     },
     async closeRuntime(runtime: Awaited<ReturnType<typeof SupervisorRuntime.open>>) {
       const index = runtimes.indexOf(runtime)
@@ -952,6 +960,43 @@ test("artifact mutation after a provisional receipt prevents settlement", async 
     expect((await status(runtime, "task")).tasks[0]?.receipts).toHaveLength(1)
     expect((await status(runtime, "task")).tasks[0]?.obligations[0]?.state).toBe("settled")
   } finally {
+    await setup.close()
+  }
+})
+
+test("status delivery refresh cannot overtake an in-flight reconciliation cursor", async () => {
+  const setup = await fixture()
+  const started = Promise.withResolvers<void>()
+  const release = Promise.withResolvers<void>()
+  try {
+    const runtime = await setup.open()
+    const lead = await activate(runtime)
+    const current = await create(runtime, setup.project, lead.generation)
+    await runtime.reconcile()
+    await runtime.request(operator, {
+      type: "task.send",
+      generation: lead.generation,
+      taskID: current.id,
+      operationID: "msg_next",
+      text: "Continue the work",
+      delivery: "queue",
+    })
+    setup.gateLog(current.sessionID, started.resolve, release.promise)
+    const draining = runtime.reconcile()
+    await started.promise
+    setup.appendDelivery(current.sessionID, "synthetic-foreign")
+    const snapshot = (await runtime.request(operator, { type: "status" })) as Awaited<ReturnType<typeof status>>
+    expect(snapshot.tasks[0]?.obligations.find((item) => item.operationID === "msg_next")?.delivered).toBe(true)
+    release.resolve()
+    await draining
+    const observed = (await status(runtime, current.id)).tasks[0]
+    expect(observed?.error).toBeUndefined()
+    expect(observed?.cursor).toBe(2)
+    await runtime.reconcile()
+    expect((await status(runtime, current.id)).tasks[0]?.cursor).toBe(3)
+    expect(setup.prompts).toHaveLength(2)
+  } finally {
+    release.resolve()
     await setup.close()
   }
 })

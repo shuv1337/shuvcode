@@ -421,7 +421,9 @@ export namespace SupervisorRuntime {
       store.observe({
         taskID: current.id,
         sessionID: current.sessionID,
-        cursor: log.cursor ?? current.cursor,
+        // Status can refresh deliveries while reconciliation owns an older log snapshot.
+        // Only that serialized observer advances the cursor; delivery facts are idempotent.
+        cursor: task(current.id).cursor,
         delivered,
       })
     }
