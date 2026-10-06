@@ -516,6 +516,8 @@ test("each session tab shows its own file tab after a switch to a session in ano
 
   await open("greet.ts")
   await visit(other)
+  // The pointer rests on the switched tab, so its hover preview opens over Open file and must not take the click.
+  await expect(page.locator('[data-component="session-tab-popover"]')).toBeVisible()
   await open("notes.txt")
   await visit(beta)
   await open("guide.md")
