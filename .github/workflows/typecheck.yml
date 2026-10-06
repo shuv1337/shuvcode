@@ -1,14 +1,15 @@
 name: typecheck
 
+# Pull requests get typecheck only; the full test suite runs for releases (see test.yml).
+# Merges to integration-v2 were already typechecked on their pull request.
 on:
-  push:
-    branches:
-      - integration-v2
   pull_request:
+  workflow_call:
   workflow_dispatch:
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  # Only pull requests share a group, so a release's typecheck is never cancelled by another run.
+  group: typecheck-${{ github.event.pull_request.number || github.run_id }}
   cancel-in-progress: true
 
 permissions:

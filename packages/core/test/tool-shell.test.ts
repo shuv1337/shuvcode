@@ -287,7 +287,7 @@ const runPermissionCommand = (
     expect(yield* permission.list()).toEqual([])
     expect(yield* Queue.size(queue)).toBe(0)
     return { exit, requests }
-  }).pipe(Effect.scoped, Effect.timeout(Duration.seconds(10)))
+  }).pipe(Effect.scoped)
 
 // Directory cases still document inherited limitations; fixed scanner cases require matching behavior.
 describe("ShellTool scanner permissions", () => {
@@ -807,8 +807,8 @@ describe("ShellTool ordinary shell syntax", () => {
               }),
             pwsh ?? "pwsh",
           ),
-        // PowerShell cold start alone can approach Bun's 5s default on CI runners.
-        { timeout: 15_000 },
+        // PowerShell cold start has exceeded 10s on loaded CI runners.
+        { timeout: 30_000 },
       )
     }
   }

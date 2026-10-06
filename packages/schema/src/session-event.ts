@@ -516,6 +516,23 @@ export namespace Tool {
   })
   export type Called = typeof Called.Type
 
+  /** Authorization and stable child admission identity for one confirmed subagent call. */
+  export const SubagentPrepared = Event.durable({
+    type: "session.tool.subagent.prepared",
+    ...options,
+    schema: {
+      ...ToolBase,
+      recovery: Schema.Struct({
+        childSessionID: SessionID,
+        inboxID: SessionMessage.ID,
+        inputDigest: Schema.String,
+        agent: Agent.ID,
+        model: Model.Ref.pipe(optional),
+      }),
+    },
+  })
+  export type SubagentPrepared = typeof SubagentPrepared.Type
+
   /** Live replacement metadata for a running tool. */
   export const Progress = Event.ephemeral({
     type: "session.tool.progress",
@@ -688,6 +705,7 @@ export const Definitions = Event.inventory(
   Tool.Input.Delta,
   Tool.Input.Ended,
   Tool.Called,
+  Tool.SubagentPrepared,
   Tool.Progress,
   Tool.Success,
   Tool.Failed,
