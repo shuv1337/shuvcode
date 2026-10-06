@@ -21,7 +21,9 @@
   color: var(--v2-text-text-base);
   font-variant-numeric: tabular-nums;
   user-select: none;
-  pointer-events: none;
+  /* Kobalte's layer stack writes inline pointer-events: auto on every mounted
+     layer; the preview must never intercept clicks on what it covers. */
+  pointer-events: none !important;
 
   transform-origin: var(--kb-hovercard-content-transform-origin);
   /* Entrance: instant (trying no animation — may revert to 120ms ease-out). */

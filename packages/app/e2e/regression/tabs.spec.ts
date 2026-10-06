@@ -484,10 +484,6 @@ test("five loaded workspace tabs stay rendered and reactive through repeated swi
 })
 
 test("each session tab shows its own file tab after a switch to a session in another folder", async ({ page }) => {
-  test.fixme(
-    true,
-    "FolderSwitch project label covers the Open file button: https://github.com/shuv1337/shuvcode/issues/438",
-  )
   await page.setViewportSize({ width: 1440, height: 900 })
   const directory = "C:/OpenCode/FolderSwitch"
   const alpha = { id: "ses_folderswitch_alpha", title: "Folder switch alpha" }
