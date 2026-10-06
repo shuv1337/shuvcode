@@ -130,6 +130,11 @@ function session(input: {
           input.calls.push("shell")
         }),
       command: input.command ?? (async () => undefined),
+      revert: {
+        commit: async () => {
+          input.calls.push("revert-commit")
+        },
+      },
     },
     data: {
       location: { command: { list: () => [] } },
@@ -138,6 +143,16 @@ function session(input: {
         prompt: async (value) => {
           input.calls.push("prompt")
           await input.prompt?.(value)
+
+          // The admitted inbox item, as the server returns it.
+          return {
+            id: value.id ?? "msg_admitted",
+            sessionID: value.sessionID,
+            time: { created: 0 },
+            type: "user" as const,
+            payload: { text: value.text },
+            delivery: value.delivery ?? "steer",
+          }
         },
       },
     },
@@ -145,7 +160,7 @@ function session(input: {
 }
 
 describe("Composer submission", () => {
-  test("runs a client argument command without admitting it to the session", async () => {
+  test("applies the selection and runs a client argument command without admitting it to the session", async () => {
     const state = createMemoryComposerState().capture()
 
     const image = {
@@ -169,7 +184,8 @@ describe("Composer submission", () => {
       }
     }).submit(new Event("submit"))
 
-    expect(calls).toEqual(["btw"])
+    // Client commands such as /btw generate with the session's model, so the composer's selection commits first.
+    expect(calls).toEqual(["switch-agent", "switch-model", "btw"])
     expect(history).toEqual([])
     expect(state.current()).toEqual([{ type: "text", content: "", start: 0, end: 0 }, image])
     expect(state.context.items()).toHaveLength(1)
@@ -181,6 +197,11 @@ describe("Composer submission", () => {
     {
       current: { agent: "build", model: { providerID: "provider-1", id: "model-1", variant: "balanced" } },
       calls: ["switch-model"],
+    },
+    // A prompt commits a staged revert, which would delete the model switch made after its boundary.
+    {
+      current: { agent: "plan", model: { id: "old", providerID: "old" }, revert: { messageID: "msg_reverted" } },
+      calls: ["switch-agent", "revert-commit", "switch-model"],
     },
   ])("applies the selection before sending one captured value: $calls", async (row) => {
     const state = createMemoryComposerState({ prompt: "ship it" }).capture()

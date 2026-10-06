@@ -54,13 +54,16 @@ test("restores a view observed before its first attachment", async () => {
   const targetWindow = new Window()
   const mutations = controlledMutations(targetWindow)
   const viewport = targetWindow.document.createElement("div")
+
   const instance = {
     scrollElement: viewport,
     targetWindow,
     scrollOffset: 240,
     options: { horizontal: false, isRtl: false, isScrollingResetDelay: 0, useScrollendEvent: false },
   } as unknown as Virtualizer<HTMLDivElement, HTMLDivElement>
+
   const connections: boolean[] = []
+
   const cleanup = observeElementOffsetReconnectAware(
     instance,
     (offset) => {
@@ -68,6 +71,7 @@ test("restores a view observed before its first attachment", async () => {
     },
     () => connections.push(viewport.isConnected),
   )
+
   try {
     mutations.append(targetWindow.document.body, viewport)
     await frames(2, targetWindow)
@@ -87,6 +91,7 @@ test("reports a divergent native offset once and ignores equal offsets and unrel
   const unrelated = targetWindow.document.createElement("div")
   route.append(viewport)
   targetWindow.document.body.append(route)
+
   const instance = {
     scrollElement: viewport,
     targetWindow,
@@ -98,7 +103,9 @@ test("reports a divergent native offset once and ignores equal offsets and unrel
       useScrollendEvent: false,
     },
   } as unknown as Virtualizer<HTMLDivElement, HTMLDivElement>
+
   const calls: [number, boolean][] = []
+
   const cleanup = observeElementOffsetReconnectAware(instance, (offset, isScrolling) => {
     calls.push([offset, isScrolling])
     instance.scrollOffset = offset
@@ -132,6 +139,7 @@ test("keeps checking until stale reset-delay callbacks can no longer win", async
   const viewport = targetWindow.document.createElement("div")
   route.append(viewport)
   targetWindow.document.body.append(route)
+
   const instance = {
     scrollElement: viewport,
     targetWindow,
@@ -143,7 +151,9 @@ test("keeps checking until stale reset-delay callbacks can no longer win", async
       useScrollendEvent: false,
     },
   } as unknown as Virtualizer<HTMLDivElement, HTMLDivElement>
+
   const calls: number[] = []
+
   const cleanup = observeElementOffsetReconnectAware(instance, (offset) => {
     calls.push(offset)
     instance.scrollOffset = offset
@@ -173,6 +183,7 @@ test("cleanup suppresses queued delegated callbacks, reconnect checks, and later
   const viewport = document.createElement("div")
   route.append(viewport)
   document.body.append(route)
+
   const instance = {
     scrollElement: viewport,
     targetWindow: window,
@@ -184,7 +195,9 @@ test("cleanup suppresses queued delegated callbacks, reconnect checks, and later
       useScrollendEvent: false,
     },
   } as unknown as Virtualizer<HTMLDivElement, HTMLDivElement>
+
   const calls: [number, boolean][] = []
+
   const cleanup = observeElementOffsetReconnectAware(instance, (offset, isScrolling) => {
     calls.push([offset, isScrolling])
     instance.scrollOffset = offset
@@ -219,6 +232,7 @@ function controlledMutations(targetWindow: Window) {
   let emit: (record: MutationRecord) => void = () => {
     throw new Error("Mutation observer is not active")
   }
+
   class ControlledMutationObserver {
     constructor(callback: MutationCallback) {
       emit = (record) => callback([record], this as unknown as MutationObserver)
@@ -229,9 +243,12 @@ function controlledMutations(targetWindow: Window) {
       return []
     }
   }
+
   Object.defineProperty(targetWindow, "MutationObserver", { value: ControlledMutationObserver })
+
   const record = (target: Node, addedNodes: Node[], removedNodes: Node[]) =>
     ({ type: "childList", target, addedNodes, removedNodes }) as unknown as MutationRecord
+
   return {
     append(parent: Node, node: Node) {
       parent.appendChild(node)
@@ -239,6 +256,7 @@ function controlledMutations(targetWindow: Window) {
     },
     remove(node: Node) {
       const parent = node.parentNode
+
       if (!parent) throw new Error("Mutation target has no parent")
       parent.removeChild(node)
       emit(record(parent, [], [node]))
@@ -255,12 +273,14 @@ function controlledAnimationFrames(targetWindow: Window) {
     value: (callback: FrameRequestCallback) => {
       id += 1
       callbacks.set(id, callback)
+
       return id
     },
   })
   Object.defineProperty(targetWindow, "cancelAnimationFrame", {
     value: (frame: number) => callbacks.delete(frame),
   })
+
   return {
     run(at: number) {
       time = at

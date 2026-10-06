@@ -1,10 +1,10 @@
 import type { SessionUserActions } from "@opencode/session-ui/message"
-import { getFilename } from "@opencode/util/path"
+import { getFilename, sameDirectory } from "@opencode/util/path"
 import { useDialog } from "@opencode/ui/context/dialog"
 import { isScrollKeyTarget, scrollKey, scrollKeyOwner } from "@opencode/ui/scroll-view"
 import { makeEventListener } from "@solid-primitives/event-listener"
 import { useNavigate } from "@solidjs/router"
-import { createEffect, createMemo, on, onMount, type Accessor } from "solid-js"
+import { createEffect, createMemo, on, onMount, Show, type Accessor } from "solid-js"
 import { Composer } from "@/composer/composer"
 import { useComposerState } from "@/composer/persistence"
 import { createComposerControls } from "@/composer/selection"
@@ -32,6 +32,7 @@ import { SessionQueuePanel } from "./queue-panel"
 import { resolveSessionComposerSelection } from "./selection"
 import { createSessionRequestModel } from "../requests/model"
 import type { Region } from "@/runtime/extension/panels"
+import { SessionLocationMissing } from "./location-missing"
 
 export function createActiveSessionRegion(input: {
   session: SessionModel
@@ -285,24 +286,51 @@ export function createActiveSessionRegion(input: {
 export type ActiveSessionRegionModel = ReturnType<typeof createActiveSessionRegion>
 
 export function ActiveSessionComposerRegion(props: {
+  session: SessionModel
   model: SessionComposerController
   suggestionBoundary: () => HTMLElement | undefined
 }) {
+  const location = useWorkspaceLocation()
+
+  // Only the server's LocationNotFoundError for the session's own Location replaces the composer.
+  const missing = createMemo(() => {
+    const ref = location().missing
+    const info = props.session.data.info()
+
+    if (!ref || !info || !sameDirectory(info.location.directory, ref.directory)) return
+
+    return { directory: info.location.directory, sessionID: info.id, projectID: info.projectID }
+  })
+
   return (
     <SessionComposerRegion
       controller={props.model.region}
       composer={
-        <div class="relative">
-          <SessionQueuePanel queue={props.model.queue} />
-          <div class="relative z-10">
-            <Composer
-              model={props.model.composer}
-              borderUnderlay
-              readOnly={props.model.queue.undoing()}
-              suggestionBoundary={props.suggestionBoundary}
+        <Show
+          when={missing()}
+          keyed
+          fallback={
+            <div class="relative">
+              <SessionQueuePanel queue={props.model.queue} />
+              <div class="relative z-10">
+                <Composer
+                  model={props.model.composer}
+                  borderUnderlay
+                  readOnly={props.model.queue.undoing()}
+                  suggestionBoundary={props.suggestionBoundary}
+                />
+              </div>
+            </div>
+          }
+        >
+          {(current) => (
+            <SessionLocationMissing
+              sessionID={current.sessionID}
+              projectID={current.projectID}
+              directory={current.directory}
             />
-          </div>
-        </div>
+          )}
+        </Show>
       }
     />
   )
