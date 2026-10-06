@@ -15,7 +15,7 @@ import { Bus } from "./bus.js"
 import { Instance } from "./instance/service.js"
 import { Database } from "./database/database.js"
 import { SessionProjector } from "./session/projector.js"
-import { SessionMessageTable } from "./session/sql.js"
+import { SessionMessageTable, SubagentOperationTable } from "./session/sql.js"
 import { SessionSchema } from "./session/schema.js"
 import { RelativePath } from "./schema.js"
 import { Agent } from "@opencode/schema/agent"
@@ -137,6 +137,11 @@ export interface Interface {
     sessionID: SessionSchema.ID
     messageID: SessionMessage.ID
   }) => Effect.Effect<SessionMessage.Info | undefined>
+  readonly subagentOperation: (input: {
+    sessionID: SessionSchema.ID
+    assistantMessageID: SessionMessage.ID
+    callID: string
+  }) => Effect.Effect<typeof SubagentOperationTable.$inferSelect | undefined>
   readonly context: (
     sessionID: SessionSchema.ID,
   ) => Effect.Effect<SessionMessage.Info[], NotFoundError | MessageDecodeError>
@@ -399,6 +404,19 @@ const layer = Layer.effect(
         })
       }),
       inbox: (sessionID) => sessions.forSession(sessionID).inbox(),
+      subagentOperation: (input) =>
+        db
+          .select()
+          .from(SubagentOperationTable)
+          .where(
+            and(
+              eq(SubagentOperationTable.session_id, input.sessionID),
+              eq(SubagentOperationTable.assistant_message_id, input.assistantMessageID),
+              eq(SubagentOperationTable.call_id, input.callID),
+            ),
+          )
+          .get()
+          .pipe(Effect.orDie),
       cancelInbox: (input) => sessions.forSession(input.sessionID).cancelInbox(input.inboxID),
       steerInbox: (input) => sessions.forSession(input.sessionID).steerInbox(input.inboxID),
       queueInbox: (input) => sessions.forSession(input.sessionID).queueInbox(input.inboxID),

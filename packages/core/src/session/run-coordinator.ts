@@ -9,8 +9,11 @@ export interface Coordinator<Key, E, Reason = never> {
   readonly active: Effect.Effect<ReadonlySet<Key>>
   /** Checks ownership for one key, including cleanup and terminal settlement. */
   readonly isActive: (key: Key) => Effect.Effect<boolean>
-  /** Starts an execution while idle, or joins the active execution and returns its exit. */
-  readonly run: (key: Key) => Effect.Effect<void, E>
+  /**
+   * Starts an execution while idle, or joins the active execution and returns its exit.
+   * `prepare` runs under a started execution's ownership before its first drain; joining ignores it.
+   */
+  readonly run: (key: Key, prepare?: Effect.Effect<void, E>) => Effect.Effect<void, E>
   /** Rings the doorbell: an idle key starts an execution; an active one drains again before settling. */
   readonly wake: (key: Key, scope?: Promotable) => Effect.Effect<void>
   /**
@@ -84,7 +87,7 @@ export const make = <Key, E, Reason = never>(options: {
         ),
       )
 
-    const start = (key: Key, force: boolean, scope: Promotable) => {
+    const start = (key: Key, force: boolean, scope: Promotable, prepare: Effect.Effect<void, E> = Effect.void) => {
       const execution: Execution<E, Reason> = {
         done: Deferred.makeUnsafe<void, E>(),
         scope,
@@ -97,6 +100,7 @@ export const make = <Key, E, Reason = never>(options: {
       execution.owner = fork(
         Effect.yieldNow.pipe(
           Effect.andThen(Effect.uninterruptible(options.started?.(key) ?? Effect.void)),
+          Effect.andThen(prepare),
           Effect.andThen(loop(key, execution, force)),
           Effect.onExit((exit) =>
             Effect.sync(() => {
@@ -121,16 +125,16 @@ export const make = <Key, E, Reason = never>(options: {
 
     const isActive = (key: Key) => Effect.sync(() => executions.has(key))
 
-    const run = (key: Key): Effect.Effect<void, E> =>
+    const run = (key: Key, prepare?: Effect.Effect<void, E>): Effect.Effect<void, E> =>
       Effect.suspend(() => {
         const execution = executions.get(key)
         if (execution !== undefined) {
           // A stopping execution refuses joiners: wait out its cleanup, then run fresh.
           if (execution.stopping)
-            return Deferred.await(execution.done).pipe(Effect.ignoreCause, Effect.andThen(run(key)))
+            return Deferred.await(execution.done).pipe(Effect.ignoreCause, Effect.andThen(run(key, prepare)))
           return Deferred.await(execution.done)
         }
-        return Deferred.await(start(key, true, "input").done)
+        return Deferred.await(start(key, true, "input", prepare).done)
       })
 
     const wake = (key: Key, scope: Promotable = "input") =>

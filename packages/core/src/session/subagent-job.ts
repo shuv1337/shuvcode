@@ -3,12 +3,13 @@ export * as SubagentJob from "./subagent-job.js"
 import { Effect, Scope } from "effect"
 import { Job } from "../job.js"
 import { Session } from "../session.js"
+import { SessionMessage } from "./message.js"
 import { SubagentCompletion } from "./subagent-completion.js"
 
 type Recovery = Extract<Job.Recovery, { kind: "subagent" }>
 
 interface Runner {
-  start: (recovery: Recovery) => Effect.Effect<Job.Info>
+  start: (recovery: Recovery, notificationID?: SessionMessage.ID) => Effect.Effect<Job.Info>
   background: (recovery: Recovery) => Effect.Effect<void>
   notify: (recovery: Recovery, startedAt: number) => Effect.Effect<void>
 }
@@ -34,13 +35,14 @@ export const make: Effect.Effect<Runner, never, Session.Service | Job.Service | 
   })
 
   return {
-    start: (recovery: Recovery) =>
+    start: (recovery: Recovery, notificationID?: SessionMessage.ID) =>
       jobs.start({
         id: recovery.childSessionID,
         type: "subagent",
         title: recovery.description,
         metadata: {},
         recovery,
+        notificationID,
         run: Effect.gen(function* () {
           yield* sessions.resume(recovery.childSessionID)
           const messages = yield* sessions.messages({ sessionID: recovery.childSessionID, order: "desc", limit: 20 })

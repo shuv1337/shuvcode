@@ -431,6 +431,13 @@ export const createLLMEventPublisher = (bus: Pick<Bus.Interface, "publish">, inp
     (error: SessionError.Error, scope: "hosted" | "all" = "all") => failTools(error, scope),
   )
 
+  const failUnconfirmedTools = Effect.fnUntraced(function* (error: SessionError.Error) {
+    for (const [id, tool] of tools) {
+      if (tool.called || tool.settled) continue
+      yield* failTool(id, error, { recovery: "unconfirmed" })
+    }
+  })
+
   const publish = Effect.fnUntraced(function* (event: LLMEvent) {
     switch (event.type) {
       case "step-start":
@@ -642,6 +649,7 @@ export const createLLMEventPublisher = (bus: Pick<Bus.Interface, "publish">, inp
     failTool,
     publishStepFailure,
     failUnsettledTools,
+    failUnconfirmedTools,
     hasProviderError: () => providerFailed,
     hasStarted: () => stepStarted,
     /** Immutable snapshot of everything recorded for this step so far. */

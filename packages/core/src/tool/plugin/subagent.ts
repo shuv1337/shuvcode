@@ -5,18 +5,22 @@ import type { Context } from "@opencode/plugin/effect/plugin"
 import type { SessionHooks } from "@opencode/plugin/effect/session"
 import { Effect, Predicate, Schema } from "effect"
 import { Agent } from "../../agent.js"
+import { Bus } from "../../bus.js"
 import { Config } from "../../config.js"
 import { Job } from "../../job.js"
 import { Model } from "../../model.js"
 import { Permission } from "../../permission.js"
 import { Session } from "../../session.js"
 import { SessionSchema } from "../../session/schema.js"
+import { SessionEvent } from "../../session/event.js"
+import { SessionMessage } from "../../session/message.js"
+import { SubagentRecovery } from "../../session/subagent-recovery.js"
 import { SubagentCompletion } from "../../session/subagent-completion.js"
 import { SubagentJob } from "../../session/subagent-job.js"
 
 export const name = "subagent"
 
-const backgroundResult = (sessionID: SessionSchema.ID) => ({
+export const backgroundResult = (sessionID: SessionSchema.ID) => ({
   sessionID,
   status: "running" as const,
   output: [
@@ -65,6 +69,7 @@ export const Plugin = {
   id: "opencode.tool.subagent",
   effect: Effect.fn("SubagentTool.Plugin")(function* (ctx: Context) {
     const sessions = yield* Session.Service
+    const bus = yield* Bus.Service
     const jobs = yield* Job.Service
     const agents = yield* Agent.Service
     const config = yield* Config.Service
@@ -114,6 +119,39 @@ export const Plugin = {
                     (error) => new ToolFailure({ message: `Parent session not found: ${context.sessionID}`, error }),
                   ),
                 )
+              const message = yield* sessions.message({ sessionID: context.sessionID, messageID: context.messageID })
+              const call =
+                message?.type === "assistant"
+                  ? message.content.find((item) => item.type === "tool" && item.id === context.id)
+                  : undefined
+              const prior = yield* sessions.subagentOperation({
+                sessionID: context.sessionID,
+                assistantMessageID: context.messageID,
+                callID: context.id,
+              })
+              if (
+                prior &&
+                (call?.type !== "tool" || call.name !== name || prior.input_digest !== SubagentRecovery.digest(input))
+              )
+                return yield* new ToolFailure({ message: `Subagent operation identity mismatch: ${context.id}` })
+              if (prior?.status === "failed" && call?.type === "tool" && call.state.status === "error")
+                return yield* new ToolFailure({ message: call.state.error.message })
+              if (prior?.status === "completed" && call?.type === "tool" && call.state.status === "completed") {
+                if (call.state.metadata?.sessionID !== prior.child_session_id)
+                  return yield* new ToolFailure({ message: `Subagent result identity mismatch: ${context.id}` })
+                if (call.state.metadata.status === "running") return backgroundResult(prior.child_session_id)
+                const text = call.state.content.find((item) => item.type === "text")?.text
+                const prefix = `<subagent sessionID="${prior.child_session_id}" state="completed">\n`
+                if (!text?.startsWith(prefix) || !text.endsWith("\n</subagent>"))
+                  return yield* new ToolFailure({ message: `Subagent result is unavailable: ${context.id}` })
+                return {
+                  sessionID: prior.child_session_id,
+                  status: "completed" as const,
+                  output: text.slice(prefix.length, -"\n</subagent>".length),
+                }
+              }
+              if (prior?.status !== undefined && (call?.type !== "tool" || call.state.status !== "running"))
+                return yield* new ToolFailure({ message: `Subagent operation state mismatch: ${context.id}` })
               let current = parent
               let depth = 0
               while (current.parentID) {
@@ -166,9 +204,34 @@ export const Plugin = {
                   message: `Session ${existing.id} is not a child of the current session`,
                 })
               const override = input.model === undefined ? undefined : yield* resolveModel(input.model)
+              const model = override ?? agent.model ?? parent.model
+              const confirmed = call?.type === "tool" && call.name === name && call.state.status === "running"
+              const recorded = confirmed ? SubagentRecovery.prepared(call) : undefined
+              if (confirmed && SubagentRecovery.digest(input) !== SubagentRecovery.digest(call.state.input))
+                return yield* new ToolFailure({ message: `Subagent operation input changed: ${context.id}` })
+              if (confirmed && call.state.metadata.recovery !== undefined && !recorded)
+                return yield* new ToolFailure({ message: `Subagent operation identity mismatch: ${context.id}` })
+              const reservedModel =
+                confirmed && !recorded ? (model ?? (yield* agents.select(parent.agent)).info?.model) : undefined
+              const operation = confirmed
+                ? (recorded ?? {
+                    childSessionID: existing?.id ?? SessionSchema.ID.create(),
+                    inboxID: SessionMessage.ID.create(),
+                    inputDigest: SubagentRecovery.digest(call.state.input),
+                    agent: agent.id,
+                    // Projected tool metadata must be JSON, so a catalog-default child omits the key.
+                    ...(reservedModel === undefined ? {} : { model: reservedModel }),
+                  })
+                : undefined
+              if (
+                recorded &&
+                (recorded.agent !== agent.id || recorded.childSessionID !== (existing?.id ?? recorded.childSessionID))
+              )
+                return yield* new ToolFailure({ message: `Subagent operation changed on replay: ${context.id}` })
+
               // Continuing with a different agent switches the child, mirroring create semantics
               // where an explicit model wins over the agent's configured model, which wins over the inherited one.
-              if (existing !== undefined) {
+              if (existing !== undefined && !recorded) {
                 const switched = existing.agent !== agent.id
                 const model = override ?? (switched ? agent.model : undefined)
                 yield* Effect.all([
@@ -180,22 +243,31 @@ export const Plugin = {
                   ),
                 )
               }
+              if (operation && recorded === undefined)
+                yield* bus.publish(SessionEvent.Tool.SubagentPrepared, {
+                  sessionID: context.sessionID,
+                  assistantMessageID: context.messageID,
+                  id: context.id,
+                  recovery: operation,
+                })
 
-              const model = override ?? agent.model ?? parent.model
               const child =
                 existing ??
                 (yield* sessions
                   .create({
+                    ...(operation ? { id: operation.childSessionID } : {}),
                     parentID: context.sessionID,
                     title: input.description,
-                    agent: Agent.ID.make(input.agent),
-                    model: model ?? (yield* agents.select(parent.agent)).info?.model,
+                    agent: operation?.agent ?? Agent.ID.make(input.agent),
+                    model: operation?.model ?? model ?? (yield* agents.select(parent.agent)).info?.model,
                   })
                   .pipe(
                     Effect.mapError(
                       (error) => new ToolFailure({ message: `Parent session not found: ${context.sessionID}`, error }),
                     ),
                   ))
+              if (child.parentID !== context.sessionID)
+                return yield* new ToolFailure({ message: `Session ${child.id} is not a child of the current session` })
 
               const background = input.background === true
               yield* context.progress({ sessionID: child.id, status: "running" })
@@ -204,18 +276,59 @@ export const Plugin = {
               // its run effect, and the default wake starts an idle child or steers a running one.
               yield* sessions
                 .prompt({
+                  ...(operation ? { id: operation.inboxID } : {}),
                   sessionID: child.id,
                   text:
                     existing === undefined
                       ? ["You are a subagent spawned by another session.", input.prompt].join("\n")
                       : input.prompt,
-                  ...(background && existing === undefined ? { resume: false } : {}),
+                  ...(operation || (background && existing === undefined) ? { resume: false } : {}),
                 })
                 .pipe(
                   Effect.mapError(
                     (error) => new ToolFailure({ message: `Failed to prompt subagent: ${child.id}`, error }),
                   ),
                 )
+
+              const settled = operation
+                ? yield* SubagentRecovery.settled(sessions, child.id, operation.inboxID).pipe(
+                    Effect.mapError(
+                      (error) => new ToolFailure({ message: `Failed to inspect subagent: ${child.id}`, error }),
+                    ),
+                  )
+                : undefined
+              if (settled && background && operation) {
+                yield* SubagentCompletion.deliver(sessions, jobs, {
+                  status:
+                    settled.status === "succeeded"
+                      ? "completed"
+                      : settled.status === "interrupted"
+                        ? "cancelled"
+                        : "error",
+                  output: settled.output,
+                  error: settled.status,
+                  notificationID: SubagentRecovery.notificationID(operation),
+                  recovery: {
+                    kind: "subagent",
+                    parentSessionID: context.sessionID,
+                    childSessionID: child.id,
+                    agent: agent.name,
+                    description: input.description,
+                  },
+                  resume: false,
+                }).pipe(
+                  Effect.mapError(
+                    (error) => new ToolFailure({ message: `Failed to notify subagent completion: ${child.id}`, error }),
+                  ),
+                )
+                return backgroundResult(child.id)
+              }
+              if (settled?.status === "succeeded")
+                return { sessionID: child.id, status: "completed" as const, output: settled.output }
+              if (settled?.status === "failed" || settled?.status === "interrupted")
+                return yield* new ToolFailure({
+                  message: `Subagent ${settled.status} (sessionID: ${child.id})`,
+                })
 
               const recovery = {
                 kind: "subagent" as const,
@@ -224,7 +337,11 @@ export const Plugin = {
                 agent: agent.name,
                 description: input.description,
               }
-              yield* subagents.start(recovery)
+              if (!recorded || (yield* jobs.get(child.id))?.status !== "completed")
+                yield* subagents.start(
+                  recovery,
+                  operation && background ? SubagentRecovery.notificationID(operation) : undefined,
+                )
 
               if (background) {
                 yield* subagents.background(recovery)
