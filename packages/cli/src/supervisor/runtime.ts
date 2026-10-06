@@ -13,6 +13,7 @@ import { SupervisorDelegatesRuntime } from "./delegates-runtime"
 import { SupervisorKnowledge } from "./knowledge"
 import { SupervisorNative } from "./native"
 import { SupervisorProjects } from "./projects"
+import { SupervisorPresentation } from "./presentation"
 import { SupervisorProtocol } from "./protocol"
 import { SupervisorSettings } from "./settings"
 import { SupervisorStore } from "./store"
@@ -209,7 +210,8 @@ export namespace SupervisorRuntime {
         const current = store.backlog.get(operation.id)
         return current?.taskID ? `task:${current.taskID}` : `work:${operation.id}`
       }
-      if (operation.type === "status" || operation.type === "project.list") return "view"
+      if (operation.type === "status" || operation.type === "project.list" || operation.type === "presentation")
+        return "view"
       if (operation.type.startsWith("delegate.") || operation.type.startsWith("handoff.")) return "delegates"
       if (Schema.is(SupervisorChannels.Operation)(operation)) return "channels"
       return "home"
@@ -749,6 +751,46 @@ export namespace SupervisorRuntime {
             if (session.parentID || store.tasks().some((item) => item.sessionID === session.id))
               throw new Error("Lead must be an independent session outside this worker fleet")
             return store.activateLead(operation)
+          }
+          if (operation.type === "presentation") {
+            if (!("operator" in actor)) throw new Error("Presentation requires the local operator")
+            if (!defaults) throw new Error("Supervisor home has no settings")
+            const lead = store.lead()
+            const entries: (typeof SupervisorPresentation.Facts.Type.entries)[number][] = [
+              ...(lead?.active
+                ? [
+                    {
+                      id: "lead",
+                      role: "lead" as const,
+                      title: defaults.profile?.id === "shuvbro" ? "ShuvBro lead" : "Supervisor lead",
+                      sessionID: lead.sessionID,
+                      location: defaults.project,
+                      lifecycle: "active" as const,
+                      decisions: 0,
+                      uncertain: false,
+                      retired: false,
+                    },
+                  ]
+                : []),
+              ...store.tasks().map((item) => {
+                const work = workForTask(item.id)
+                return {
+                  id: item.id,
+                  role: item.kind,
+                  taskID: item.id,
+                  workID: work?.id,
+                  projectID: work?.projectID,
+                  title: work?.id ?? item.id,
+                  sessionID: item.sessionID,
+                  location: item.worktree,
+                  lifecycle: item.status,
+                  decisions: store.decisions(item.id).filter((decision) => !decision.resolution).length,
+                  uncertain: item.admissionUncertain,
+                  retired: Boolean(store.cleanup(item.id)),
+                }
+              }),
+            ]
+            return { entries }
           }
           if (operation.type === "project.list") {
             const lead = store.lead()

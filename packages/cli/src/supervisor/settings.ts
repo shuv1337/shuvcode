@@ -1,10 +1,16 @@
 import { chmod, mkdir, realpath, rename } from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
+import { createHash } from "node:crypto"
 import { Schema } from "effect"
 
 export namespace SupervisorSettings {
   export const Model = Schema.Struct({ providerID: Schema.String, modelID: Schema.String })
+  const Profile = Schema.Struct({
+    version: Schema.Literal(1),
+    id: Schema.String.check(Schema.isPattern(/^[a-z0-9][a-z0-9-]{0,63}$/)),
+    leadInstructions: Schema.String.check(Schema.isMinLength(1), Schema.isMaxLength(64_000)),
+  })
   export const Value = Schema.Struct({
     version: Schema.Literal(1),
     pilotID: Schema.String,
@@ -17,6 +23,7 @@ export namespace SupervisorSettings {
     endpoint: Schema.String,
     port: Schema.Int,
     providerURL: Schema.optional(Schema.String),
+    profile: Schema.optional(Schema.Struct({ ...Profile.fields, sha256: Schema.String })),
   })
   export type Value = typeof Value.Type
   export type Init = {
@@ -26,6 +33,7 @@ export namespace SupervisorSettings {
     auto: boolean
     endpoint?: string
     providerURL?: string
+    profile?: string
   }
 
   export function home(value?: string) {
@@ -53,8 +61,13 @@ export namespace SupervisorSettings {
 
   export async function init(input: Init) {
     const root = home(input.home)
+    const profile = input.profile ? Schema.decodeUnknownSync(Profile)(await Bun.file(input.profile).json()) : undefined
+    if (profile && input.endpoint) throw new Error("Orchestration profiles require a managed supervisor home")
+    const profileHash = profile && createHash("sha256").update(JSON.stringify(profile)).digest("hex")
     if (await Bun.file(path.join(root, "settings.json")).exists()) {
       const current = await read(root)
+      if (profileHash && (current.mode !== "managed" || current.profile?.sha256 !== profileHash))
+        throw new Error("This supervisor home uses a different orchestration profile. Choose a new --home.")
       const project = input.project ? await realpath(input.project) : current.project
       if (
         current.project !== project ||
@@ -124,6 +137,7 @@ export namespace SupervisorSettings {
       endpoint: endpoint.toString().replace(/\/$/, ""),
       port: Number(endpoint.port || 80),
       providerURL: input.providerURL,
+      profile: profile && profileHash ? { ...profile, sha256: profileHash } : undefined,
     }
     if (settings.mode === "managed") {
       await write(root, "native-password", crypto.randomUUID() + crypto.randomUUID())
@@ -179,7 +193,12 @@ export namespace SupervisorSettings {
         "supervisor-lead": {
           mode: "primary",
           description: "Coordinate native supervisor work",
-          system: leadInstructions(settings),
+          system: [
+            leadInstructions(settings),
+            settings.profile && `Orchestration profile: ${settings.profile.id}\n${settings.profile.leadInstructions}`,
+          ]
+            .filter(Boolean)
+            .join("\n\n"),
         },
       },
       ...(settings.providerURL
@@ -221,6 +240,17 @@ export namespace SupervisorSettings {
       OPENCODE_DISABLE_AUTOUPDATE: "true",
       OPENCODE_DISABLE_PROJECT_CONFIG: "true",
       OPENCODE_CHANNEL: "supervisor-pilot",
+    }
+  }
+
+  export function clientEnvironment(settings: Value & { home: string }, secret?: string) {
+    return {
+      ...environment(settings, secret),
+      ...Object.fromEntries(
+        ["HERDR_ENV", "HERDR_SESSION", "HERDR_PANE_ID", "HERDR_SOCKET_PATH", "HERDR_CLIENT_SOCKET_PATH"]
+          .filter((key) => process.env[key] !== undefined)
+          .map((key) => [key, process.env[key]]),
+      ),
     }
   }
 }

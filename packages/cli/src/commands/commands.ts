@@ -34,6 +34,7 @@ const SupervisorInitParams = {
   auto: Flag.boolean("auto").pipe(Flag.withDescription("Allow automatic tool permissions"), Flag.withDefault(false)),
   endpoint: Flag.string("endpoint").pipe(Flag.withDescription("Existing local server endpoint"), Flag.optional),
   providerURL: Flag.string("provider-url").pipe(Flag.withDescription("OpenAI-compatible model API URL"), Flag.optional),
+  profile: Flag.string("profile").pipe(Flag.withDescription("Orchestration profile JSON file"), Flag.optional),
 }
 
 const SupervisorTaskParams = { task: Argument.string("task"), home: Flag.string("home").pipe(Flag.optional) }
@@ -56,6 +57,7 @@ const Root = Spec.make(typeof OPENCODE_CLI_NAME === "string" ? OPENCODE_CLI_NAME
       Flag.withDescription("Session ID to continue, or to create if it does not exist"),
       Flag.optional,
     ),
+    attachOnly: Flag.boolean("attach-only").pipe(Flag.withDefault(false), Flag.withHidden),
     prompt: Flag.string("prompt").pipe(Flag.withDescription("Prompt to use"), Flag.optional),
   },
   commands: [
@@ -532,7 +534,6 @@ const Root = Spec.make(typeof OPENCODE_CLI_NAME === "string" ? OPENCODE_CLI_NAME
         }),
         Spec.make("lead", {
           description: "Open the lead session",
-          aliases: ["attach"],
           params: {
             home: Flag.string("home").pipe(Flag.withDescription("Supervisor state directory"), Flag.optional),
             session: Flag.string("session").pipe(Flag.withDescription("Adopt an existing lead session"), Flag.optional),
@@ -541,6 +542,26 @@ const Root = Spec.make(typeof OPENCODE_CLI_NAME === "string" ? OPENCODE_CLI_NAME
               Flag.withDescription("Print the attach command without opening the TUI"),
               Flag.withDefault(false),
             ),
+          },
+        }),
+        Spec.make("attach", {
+          description: "View an existing Session without starting work",
+          params: {
+            home: Flag.string("home").pipe(Flag.withDescription("Supervisor state directory")),
+            homeID: Flag.string("home-id").pipe(Flag.withDescription("Expected supervisor home ID")),
+            session: Flag.string("session").pipe(Flag.withDescription("Existing Session ID")),
+            location: Flag.string("location").pipe(Flag.withDescription("Expected Session directory")),
+            json: Flag.boolean("json").pipe(
+              Flag.withDescription("Resolve attachment without opening"),
+              Flag.withDefault(false),
+            ),
+          },
+        }),
+        Spec.make("presentation", {
+          description: "Read native Session display state",
+          params: {
+            home: Flag.string("home").pipe(Flag.withDescription("Supervisor state directory"), Flag.optional),
+            json: Flag.boolean("json").pipe(Flag.withDescription("Print JSON"), Flag.withDefault(false)),
           },
         }),
         Spec.make("send", {

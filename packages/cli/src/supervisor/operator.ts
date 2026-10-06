@@ -1,6 +1,7 @@
 import { OpenCode } from "@opencode/client"
 import path from "node:path"
 import { rm } from "node:fs/promises"
+import { realpath } from "node:fs/promises"
 import { Schema } from "effect"
 import { SupervisorClient } from "./client"
 import { SupervisorManaged } from "./managed"
@@ -8,6 +9,7 @@ import { SupervisorNative } from "./native"
 import { SupervisorProtocol } from "./protocol"
 import { SupervisorProjects } from "./projects"
 import { SupervisorSettings } from "./settings"
+import { SupervisorPresentation } from "./presentation"
 
 export namespace SupervisorOperator {
   const Permission = Schema.Struct({
@@ -288,19 +290,75 @@ export namespace SupervisorOperator {
     return { home: settings.home, endpoint: settings.endpoint, sessionID }
   }
 
-  export async function attach(input: { home: string; sessionID: string }) {
+  export async function resolveAttachment(input: {
+    home: string
+    sessionID: string
+    homeID?: string
+    location?: string
+  }) {
     const settings = await SupervisorSettings.read(input.home)
+    if (input.homeID && settings.pilotID !== input.homeID) throw new Error("Supervisor home identity changed")
+    const session = await SupervisorNative.connect({
+      url: settings.endpoint,
+      password: await SupervisorSettings.password(settings),
+    }).get(input.sessionID)
+    if (session.id !== input.sessionID || session.parentID)
+      throw new Error("Attachment requires the exact root Session")
+    const location = await realpath(session.location.directory)
+    if (input.location && location !== (await realpath(input.location))) throw new Error("Session location changed")
+    return {
+      settings,
+      session,
+      location,
+      attachment: SupervisorPresentation.attachment({
+        settings,
+        sessionID: session.id,
+        location,
+        command: SupervisorManaged.command(),
+      }),
+    }
+  }
+
+  export async function attach(input: { home: string; sessionID: string; homeID?: string; location?: string }) {
+    const resolved = await resolveAttachment(input)
     const child = Bun.spawn(
-      [...SupervisorManaged.command(), "--server", settings.endpoint, "--session", input.sessionID, settings.project],
+      [
+        ...SupervisorManaged.command(),
+        "--server",
+        resolved.settings.endpoint,
+        "--session",
+        resolved.session.id,
+        "--attach-only",
+        resolved.location,
+      ],
       {
-        cwd: settings.project,
-        env: SupervisorSettings.environment(settings, await SupervisorSettings.password(settings)),
+        cwd: resolved.location,
+        env: SupervisorSettings.clientEnvironment(
+          resolved.settings,
+          await SupervisorSettings.password(resolved.settings),
+        ),
         stdin: "inherit",
         stdout: "inherit",
         stderr: "inherit",
       },
     )
-    if ((await child.exited) !== 0) throw new Error("Lead terminal exited with an error")
+    if ((await child.exited) !== 0) throw new Error("Session view exited with an error")
+  }
+
+  export async function presentation(input: Home) {
+    const settings = await SupervisorSettings.read(input.home)
+    const facts = Schema.decodeUnknownSync(SupervisorPresentation.Facts)(
+      await SupervisorClient.request(settings.home, { type: "presentation" }),
+    )
+    return SupervisorPresentation.read({
+      settings,
+      facts,
+      native: SupervisorNative.connect({
+        url: settings.endpoint,
+        password: await SupervisorSettings.password(settings),
+      }),
+      command: SupervisorManaged.command(),
+    })
   }
 
   export async function send(input: Home & { text: string }) {

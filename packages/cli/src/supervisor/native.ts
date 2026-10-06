@@ -160,9 +160,12 @@ export namespace SupervisorNative {
       async active() {
         return Object.keys(await client.session.active(request()))
       },
-      async permissions(directory: string, sessionID: string) {
+      async permissions(directory: string, sessionID?: string) {
         const pending = await client.permission.request.list({ location: { directory } }, request())
-        return pending.data.filter((item) => item.sessionID === sessionID)
+        return pending.data.filter((item) => !sessionID || item.sessionID === sessionID)
+      },
+      async forms(directory: string) {
+        return (await client.form.list({ location: { directory } }, request())).data
       },
       async log(input: {
         sessionID: string

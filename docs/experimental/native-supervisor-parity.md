@@ -1,6 +1,8 @@
 # Native supervisor: ShuvBro parity
 
-The native implementation covers the intended ShuvBro workflow through Shuvcode Sessions, a durable supervisor, and native tools. Claude/Codex/Pi and terminal-backend compatibility are excluded, as requested. This is an experimental implementation with qualified local and isolated-box behavior; production migration and live external integrations require the additional checks below.
+The native implementation covers the orchestration and runtime portion of the intended ShuvBro workflow through Shuvcode Sessions, a durable supervisor, and native tools. Full parity also requires first-class Herdr support for the lead, workers, and secondmates. The [three-repository contract and local evidence](native-supervisor-herdr.md) cover the new managed-home integration; companion review and two-host qualification remain open. Compatibility with other agent harnesses and multiplexers is outside this native path.
+
+This is an experimental implementation with qualified local and isolated-box behavior. Herdr qualification, production migration, and live external integrations require the additional checks below.
 
 The comparison is pinned to ShuvBro `b952627653ee2e0a9df5224b4678e7d2d7a5a70d` and Shuvcode base `28350a1f141e1fe7fef440d72ca791d31f595349`. Development is on `native-supervisor`. Verification below was completed October 5, 2026, PDT. No package has been published.
 

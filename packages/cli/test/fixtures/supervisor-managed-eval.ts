@@ -88,34 +88,45 @@ export async function managedEval(
     providerURL: `http://127.0.0.1:${provider.port}/v1`,
     resultRequested: resultRequested.promise,
     releaseResult: () => resultReleased.resolve(),
-    async cli(args: string[], timeoutMs = 35_000) {
-      const child = Bun.spawn(
-        executable
-          ? [executable, "supervisor", ...args]
-          : [process.execPath, path.join(import.meta.dir, "../../src/index.ts"), "supervisor", ...args],
-        {
-          cwd: project,
-          env: isolatedEnv(root, { USERPROFILE: root }),
-          stdout: "pipe",
-          stderr: "pipe",
-        },
-      )
-      const timer = setTimeout(() => child.kill(), timeoutMs)
-      try {
-        const [code, stdout, stderr] = await Promise.all([
-          child.exited,
-          new Response(child.stdout).text(),
-          new Response(child.stderr).text(),
-        ])
-        return { code, stdout, stderr }
-      } finally {
-        clearTimeout(timer)
-      }
-    },
+    cli: (args: string[], timeoutMs = 35_000) => cli(["supervisor", ...args], timeoutMs),
+    rootCli: (args: string[], environment: Record<string, string | undefined>) => cli(args, 35_000, environment),
     async [Symbol.asyncDispose]() {
       await provider.stop(true)
       await rm(root, { recursive: true, force: true, maxRetries: 20, retryDelay: 100 })
     },
+  }
+
+  async function cli(args: string[], timeoutMs: number, environment: Record<string, string | undefined> = {}) {
+    const child = Bun.spawn(
+      executable
+        ? [executable, ...args]
+        : [process.execPath, path.join(import.meta.dir, "../../src/index.ts"), ...args],
+      {
+        cwd: project,
+        env: isolatedEnv(root, {
+          USERPROFILE: root,
+          ...Object.fromEntries(
+            Object.keys(process.env)
+              .filter((key) => key.startsWith("HERDR_"))
+              .map((key) => [key, undefined]),
+          ),
+          ...environment,
+        }),
+        stdout: "pipe",
+        stderr: "pipe",
+      },
+    )
+    const timer = setTimeout(() => child.kill(), timeoutMs)
+    try {
+      const [code, stdout, stderr] = await Promise.all([
+        child.exited,
+        new Response(child.stdout).text(),
+        new Response(child.stderr).text(),
+      ])
+      return { code, stdout, stderr }
+    } finally {
+      clearTimeout(timer)
+    }
   }
 }
 
