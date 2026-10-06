@@ -1,17 +1,13 @@
 name: test
 
+# The full suite runs only for releases: publish.yml calls it before publishing, and a pushed
+# v* tag runs it too. Pull requests and merges to integration-v2 get typecheck.yml only.
 on:
   push:
-    branches:
-      - integration-v2
-  pull_request:
+    tags:
+      - "v*"
+  workflow_call:
   workflow_dispatch:
-
-concurrency:
-  # Keep every run on integration-v2 so cancelled checks do not pollute the default branch
-  # commit history. PRs and other branches still share a group and cancel stale runs.
-  group: ${{ case(github.ref == 'refs/heads/integration-v2', format('{0}-{1}', github.workflow, github.run_id), format('{0}-{1}', github.workflow, github.event.pull_request.number || github.ref)) }}
-  cancel-in-progress: true
 
 permissions:
   contents: read
@@ -21,36 +17,6 @@ env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
-  affected:
-    name: affected packages
-    runs-on: ubuntu-latest
-    outputs:
-      app: ${{ steps.packages.outputs.app }}
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          fetch-depth: 0
-
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
-        with:
-          bun-version: "1.4.2"
-
-      - name: Find affected packages
-        id: packages
-        env:
-          TURBO_SCM_BASE: ${{ github.event_name == 'pull_request' && format('{0}^1', github.sha) || github.event.before }}
-          TURBO_SCM_HEAD: ${{ github.sha }}
-        run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            echo "app=true" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-          bun x turbo@2.10.2 ls --affected --filter=@opencode/app --output=json > affected.json
-          bun -e 'const result = await Bun.file("affected.json").json(); console.log(`app=${result.packages.count > 0}`)' >> "$GITHUB_OUTPUT"
-
   unit:
     name: unit
     runs-on: ubuntu-latest
@@ -107,14 +73,7 @@ jobs:
         run: |
           # OpenCode infra trees stay in the repo but are outside fork CI.
           # The runners have four vCPUs, and each Bun test process performs its own concurrent work.
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            GITHUB_ACTIONS=false bun turbo test --concurrency=3 --filter='!@opencode/desktop' --filter='!@opencode/update'
-            exit 0
-          fi
-          GITHUB_ACTIONS=false bun turbo test --affected --concurrency=3 --filter='!@opencode/desktop' --filter='!@opencode/update'
-        env:
-          TURBO_SCM_BASE: ${{ github.event_name == 'pull_request' && format('{0}^1', github.sha) || github.event.before }}
-          TURBO_SCM_HEAD: ${{ github.sha }}
+          GITHUB_ACTIONS=false bun turbo test --concurrency=3 --filter='!@opencode/desktop' --filter='!@opencode/update'
 
       - name: Verify published codemode package
         working-directory: packages/codemode
@@ -152,44 +111,37 @@ jobs:
 
   e2e:
     name: e2e
-    needs: affected
     runs-on: ubuntu-latest
     env:
-      E2E_ENABLED: ${{ needs.affected.outputs.app == 'true' && github.ref_name != 'integration-v2' && github.head_ref != 'integration-v2' }}
       PLAYWRIGHT_BROWSERS_PATH: ${{ github.workspace }}/.playwright-browsers
     defaults:
       run:
         shell: bash
     steps:
       - name: Checkout repository
-        if: env.E2E_ENABLED == 'true'
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Setup Node
-        if: env.E2E_ENABLED == 'true'
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           # Playwright 1.59 hangs while extracting Chromium with Node 24.16.
           node-version: "24.15"
 
       - name: Setup Bun
-        if: env.E2E_ENABLED == 'true'
         uses: ./.github/actions/setup-bun
         with:
           bun-version: "1.4.2"
           install-flags: --frozen-lockfile
 
       - name: Read Playwright version
-        if: env.E2E_ENABLED == 'true'
         id: playwright-version
         run: |
           version=$(node -e 'console.log(require("./package.json").workspaces.catalog["@playwright/test"])')
           echo "version=$version" >> "$GITHUB_OUTPUT"
 
       - name: Cache Playwright browsers
-        if: env.E2E_ENABLED == 'true'
         id: playwright-cache
         uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
@@ -197,44 +149,41 @@ jobs:
           key: ${{ runner.os }}-${{ runner.arch }}-playwright-${{ steps.playwright-version.outputs.version }}-chromium
 
       - name: Install Playwright system dependencies
-        if: env.E2E_ENABLED == 'true'
         working-directory: packages/app
         run: bunx playwright install-deps chromium
 
       - name: Install Playwright browsers
-        if: env.E2E_ENABLED == 'true' && steps.playwright-cache.outputs.cache-hit != 'true'
+        if: steps.playwright-cache.outputs.cache-hit != 'true'
         working-directory: packages/app
         run: bunx playwright install chromium
 
       - name: Run app e2e tests against production build
-        if: env.E2E_ENABLED == 'true'
         run: bun --cwd packages/app test:e2e:built
         env:
           CI: true
         timeout-minutes: 30
 
       - name: Verify service worker precaching and upgrades
-        if: env.E2E_ENABLED == 'true'
         working-directory: packages/app
         run: bunx playwright test --config e2e/service-worker/playwright.config.ts
         timeout-minutes: 5
 
       - name: Run session UI component tests
-        if: ${{ !cancelled() && env.E2E_ENABLED == 'true' }}
+        if: ${{ !cancelled() }}
         run: bun --cwd packages/session-ui test:components
         env:
           CI: true
         timeout-minutes: 15
 
       - name: Run app component tests
-        if: ${{ !cancelled() && env.E2E_ENABLED == 'true' }}
+        if: ${{ !cancelled() }}
         run: bun --cwd packages/app test:components
         env:
           CI: true
         timeout-minutes: 15
 
       - name: Upload Playwright artifacts
-        if: always() && env.E2E_ENABLED == 'true'
+        if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: playwright-linux-${{ github.run_attempt }}
