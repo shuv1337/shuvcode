@@ -81,6 +81,9 @@ const Handlers = Runtime.handlers(Commands, {
     start: () => import("./commands/handlers/supervisor/start"),
     stop: () => import("./commands/handlers/supervisor/stop"),
     lead: () => import("./commands/handlers/supervisor/lead"),
+    attach: () => import("./commands/handlers/supervisor/attachment").then((module) => ({ default: module.attach })),
+    presentation: () =>
+      import("./commands/handlers/supervisor/attachment").then((module) => ({ default: module.presentation })),
     send: () => import("./commands/handlers/supervisor/send"),
     read: () => import("./commands/handlers/supervisor/read"),
     status: () => import("./commands/handlers/supervisor/status"),

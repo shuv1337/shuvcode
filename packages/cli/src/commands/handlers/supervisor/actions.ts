@@ -20,6 +20,7 @@ export const up = Runtime.handler(
         auto: input.auto,
         endpoint: Option.getOrUndefined(input.endpoint),
         providerURL: Option.getOrUndefined(input.providerURL),
+        profile: Option.getOrUndefined(input.profile),
       }),
     )
     print(`Supervisor running: ${result.project}`)
@@ -42,6 +43,7 @@ export const init = Runtime.handler(
         auto: input.auto,
         endpoint: Option.getOrUndefined(input.endpoint),
         providerURL: Option.getOrUndefined(input.providerURL),
+        profile: Option.getOrUndefined(input.profile),
       }),
     )
     print(`Supervisor initialized: ${result.home}`)

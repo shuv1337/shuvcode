@@ -56,6 +56,7 @@ export namespace SupervisorProtocol {
     SupervisorDelegatesRuntime.Operation,
     SupervisorKnowledge.Operation,
     Schema.Struct({ type: Schema.Literal("status"), taskID: Schema.optional(ID) }),
+    Schema.Struct({ type: Schema.Literal("presentation") }),
     Schema.Struct({ type: Schema.Literal("project.list"), includeArchived: Schema.optional(Schema.Boolean) }),
     Schema.Struct({
       type: Schema.Literal("project.add"),
