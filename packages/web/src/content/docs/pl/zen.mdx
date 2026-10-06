@@ -131,6 +131,7 @@ Możesz też uzyskać dostęp do naszych modeli przez poniższe endpointy API.
 | Kimi K2.6                       | kimi-k2.6                       | `https://opencode.ai/zen/v1/chat/completions`             | `@ai-sdk/openai-compatible` |
 | Kimi K2.7 Code                  | kimi-k2.7-code                  | `https://opencode.ai/zen/v1/chat/completions`             | `@ai-sdk/openai-compatible` |
 | Kimi K3                         | kimi-k3                         | `https://opencode.ai/zen/v1/chat/completions`             | `@ai-sdk/openai-compatible` |
+| Mistral Large 4                 | mistral-large-4                 | `https://opencode.ai/zen/v1/chat/completions`             | `@ai-sdk/openai-compatible` |
 | Jev 1.13                        | jev-1.13                        | `https://opencode.ai/zen/v1/systemone`                    | -                           |
 | Jev 1.13 Free                   | jev-1.13-free                   | `https://opencode.ai/zen/v1/systemone`                    | -                           |
 | Big Pickle                      | big-pickle                      | `https://opencode.ai/zen/v1/chat/completions`             | `@ai-sdk/openai-compatible` |
@@ -246,6 +247,7 @@ Obsługujemy model pay-as-you-go. Poniżej znajdują się ceny **za 1M tokenów*
 | Kimi K3                           | $3.00   | $15.00  | $0.30          | -              |
 | Kimi K2.6                         | $0.95   | $4.00   | $0.16          | -              |
 | Kimi K2.5                         | $0.60   | $3.00   | $0.10          | -              |
+| Mistral Large 4                   | $0.68   | $2.09   | $0.07          | -              |
 | Qwen3.8 Max                       | $2.00   | $6.00   | $0.25          | $2.50          |
 | Qwen3.8 Flash                     | $0.15   | $0.47   | $0.016         | $0.20          |
 | Qwen3.7 Max                       | $2.50   | $7.50   | $0.50          | $3.125         |
@@ -393,7 +395,7 @@ ostatecznie obciążyć Cię kwotą wyższą niż $20, jeśli Twoje saldo spadni
 
 ## Prywatność
 
-Wszystkie nasze modele są hostowane w US. Nasi dostawcy stosują politykę zero-retention i nie wykorzystują Twoich danych do trenowania modeli, z następującymi wyjątkami:
+Wszystkie nasze modele są hostowane w US i EU. Nasi dostawcy stosują politykę zero-retention i nie wykorzystują Twoich danych do trenowania modeli, z następującymi wyjątkami:
 
 - Big Pickle: W czasie darmowego okresu zebrane dane mogą być wykorzystywane do ulepszania modelu.
 - Fledge Alpha Free: W czasie darmowego okresu zebrane dane mogą być wykorzystywane do ulepszania modelu.
@@ -405,6 +407,7 @@ Wszystkie nasze modele są hostowane w US. Nasi dostawcy stosują politykę zero
 - Nemotron 3.5 Lightning Free (darmowe endpointy NVIDIA): Tylko do użytku próbnego — nie przesyłaj danych osobowych ani poufnych. Twoje korzystanie jest rejestrowane w celach bezpieczeństwa oraz w celu ulepszania produktów i usług NVIDIA. Rejestrowane dane sesji wykorzystywane do celów ulepszania nie są powiązane z Twoją tożsamością ani żadnym trwałym identyfikatorem. Aby uzyskać więcej informacji o naszych praktykach przetwarzania danych, zapoznaj się z naszą [Polityką prywatności](https://assets.ngc.nvidia.com/products/api-catalog/legal/NVIDIA%20API%20Trial%20Terms%20of%20Service.pdf). Korzystając z tego endpointu, wyrażasz zgodę na gromadzenie, rejestrowanie i wykorzystywanie przez nas takich informacji oraz na [NVIDIA API Trial Terms of Service](https://assets.ngc.nvidia.com/products/api-catalog/legal/NVIDIA%20API%20Trial%20Terms%20of%20Service.pdf).
 - OpenAI APIs: Żądania są przechowywane przez 30 dni zgodnie z [OpenAI's Data Policies](https://platform.openai.com/docs/guides/your-data).
 - Anthropic APIs: Żądania są przechowywane przez 30 dni zgodnie z [Anthropic's Data Policies](https://docs.anthropic.com/en/docs/claude-code/data-usage).
+- Mistral APIs: Prompty i inne dane wejściowe nie są wykorzystywane do trenowania modeli. Dane są przechowywane zgodnie z [Polityką przechowywania danych Mistral](https://docs.mistral.ai/admin/monitor-comply/zero-data-retention).
 - Jev APIs: Prompty i inne dane wejściowe nie są wykorzystywane do trenowania modeli. Dane są przechowywane zgodnie z [Polityką prywatności TypeSafe AI](https://typesafe.ai/legal/privacy-policy).
 - Muse Spark 1.3 Contributor Free: Znacznie obniżone ceny tokenów w zamian za zgodę na wykorzystanie Twoich promptów i odpowiedzi do trenowania przyszłych modeli Meta. [Dowiedz się więcej](https://dev.meta.ai/docs/pricing-rate-limits#contributor-tier).
 

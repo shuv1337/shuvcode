@@ -122,6 +122,7 @@ OpenCode Zen 的工作方式与 OpenCode 中的任何其他提供商相同。
 | Kimi K2.6                       | kimi-k2.6                       | `https://opencode.ai/zen/v1/chat/completions`             | `@ai-sdk/openai-compatible` |
 | Kimi K2.7 Code                  | kimi-k2.7-code                  | `https://opencode.ai/zen/v1/chat/completions`             | `@ai-sdk/openai-compatible` |
 | Kimi K3                         | kimi-k3                         | `https://opencode.ai/zen/v1/chat/completions`             | `@ai-sdk/openai-compatible` |
+| Mistral Large 4                 | mistral-large-4                 | `https://opencode.ai/zen/v1/chat/completions`             | `@ai-sdk/openai-compatible` |
 | Jev 1.13                        | jev-1.13                        | `https://opencode.ai/zen/v1/systemone`                    | -                           |
 | Jev 1.13 Free                   | jev-1.13-free                   | `https://opencode.ai/zen/v1/systemone`                    | -                           |
 | Big Pickle                      | big-pickle                      | `https://opencode.ai/zen/v1/chat/completions`             | `@ai-sdk/openai-compatible` |
@@ -235,6 +236,7 @@ curl https://opencode.ai/zen/v1/systemone \
 | Kimi K3                           | $3.00  | $15.00  | $0.30    | -        |
 | Kimi K2.6                         | $0.95  | $4.00   | $0.16    | -        |
 | Kimi K2.5                         | $0.60  | $3.00   | $0.10    | -        |
+| Mistral Large 4                   | $0.68  | $2.09   | $0.07    | -        |
 | Qwen3.8 Max                       | $2.00  | $6.00   | $0.25    | $2.50    |
 | Qwen3.8 Flash                     | $0.15  | $0.47   | $0.016   | $0.20    |
 | Qwen3.7 Max                       | $2.50  | $7.50   | $0.50    | $3.125   |
@@ -379,7 +381,7 @@ curl https://opencode.ai/zen/v1/systemone \
 
 ## 隐私
 
-我们所有模型都托管在 US。我们的提供商遵循零保留政策，不会将你的数据用于模型训练，但以下情况除外：
+我们所有模型都托管在 US 和 EU。我们的提供商遵循零保留政策，不会将你的数据用于模型训练，但以下情况除外：
 
 - Big Pickle：在免费期间，收集的数据可能会被用于改进模型。
 - Fledge Alpha Free：在免费期间，收集的数据可能会被用于改进模型。
@@ -391,6 +393,7 @@ curl https://opencode.ai/zen/v1/systemone \
 - Nemotron 3.5 Lightning Free（NVIDIA 免费端点）：仅供试用 — 请勿提交个人或机密数据。出于安全目的以及为改进 NVIDIA 产品和服务，系统会记录你的使用情况。出于改进目的而记录的会话数据不会与你的身份或任何持久标识符相关联。有关我们数据处理实践的更多信息，请参阅我们的[隐私政策](https://assets.ngc.nvidia.com/products/api-catalog/legal/NVIDIA%20API%20Trial%20Terms%20of%20Service.pdf)。与此端点进行交互，即表示你同意我们收集、记录和使用此类信息，并同意 [NVIDIA API Trial Terms of Service](https://assets.ngc.nvidia.com/products/api-catalog/legal/NVIDIA%20API%20Trial%20Terms%20of%20Service.pdf)。
 - OpenAI APIs：请求会根据 [OpenAI's Data Policies](https://platform.openai.com/docs/guides/your-data) 保留 30 天。
 - Anthropic APIs：请求会根据 [Anthropic's Data Policies](https://docs.anthropic.com/en/docs/claude-code/data-usage) 保留 30 天。
+- Mistral APIs：提示词和其他输入不会用于训练。数据会根据 [Mistral 的数据保留政策](https://docs.mistral.ai/admin/monitor-comply/zero-data-retention) 保留。
 - Jev APIs：提示词和其他输入不会用于训练。数据会根据 [TypeSafe AI 的隐私政策](https://typesafe.ai/legal/privacy-policy) 保留。
 - Muse Spark 1.3 Contributor Free：以允许使用你的提示词和补全内容训练未来的 Meta 模型为条件，享受大幅折扣的 token 价格。[了解更多](https://dev.meta.ai/docs/pricing-rate-limits#contributor-tier)。
 

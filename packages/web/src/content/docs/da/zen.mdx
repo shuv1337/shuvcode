@@ -131,6 +131,7 @@ Du kan også få adgang til vores modeller gennem følgende API-endpoints.
 | Kimi K2.6                       | kimi-k2.6                       | `https://opencode.ai/zen/v1/chat/completions`             | `@ai-sdk/openai-compatible` |
 | Kimi K2.7 Code                  | kimi-k2.7-code                  | `https://opencode.ai/zen/v1/chat/completions`             | `@ai-sdk/openai-compatible` |
 | Kimi K3                         | kimi-k3                         | `https://opencode.ai/zen/v1/chat/completions`             | `@ai-sdk/openai-compatible` |
+| Mistral Large 4                 | mistral-large-4                 | `https://opencode.ai/zen/v1/chat/completions`             | `@ai-sdk/openai-compatible` |
 | Jev 1.13                        | jev-1.13                        | `https://opencode.ai/zen/v1/systemone`                    | -                           |
 | Jev 1.13 Free                   | jev-1.13-free                   | `https://opencode.ai/zen/v1/systemone`                    | -                           |
 | Big Pickle                      | big-pickle                      | `https://opencode.ai/zen/v1/chat/completions`             | `@ai-sdk/openai-compatible` |
@@ -246,6 +247,7 @@ Vi understøtter en pay-as-you-go-model. Nedenfor er priserne **pr. 1M tokens**.
 | Kimi K3                           | $3.00  | $15.00  | $0.30       | -            |
 | Kimi K2.6                         | $0.95  | $4.00   | $0.16       | -            |
 | Kimi K2.5                         | $0.60  | $3.00   | $0.10       | -            |
+| Mistral Large 4                   | $0.68  | $2.09   | $0.07       | -            |
 | Qwen3.8 Max                       | $2.00  | $6.00   | $0.25       | $2.50        |
 | Qwen3.8 Flash                     | $0.15  | $0.47   | $0.016      | $0.20        |
 | Qwen3.7 Max                       | $2.50  | $7.50   | $0.50       | $3.125       |
@@ -393,7 +395,7 @@ at opkræve dig mere end $20, hvis din saldo kommer under $5.
 
 ## Privatliv
 
-Alle vores modeller hostes i US. Vores udbydere følger en nul-opbevaringspolitik og bruger ikke dine data til modeltræning, med følgende undtagelser:
+Alle vores modeller hostes i US og EU. Vores udbydere følger en nul-opbevaringspolitik og bruger ikke dine data til modeltræning, med følgende undtagelser:
 
 - Big Pickle: I den gratis periode kan indsamlede data blive brugt til at forbedre modellen.
 - Fledge Alpha Free: I den gratis periode kan indsamlede data blive brugt til at forbedre modellen.
@@ -405,6 +407,7 @@ Alle vores modeller hostes i US. Vores udbydere følger en nul-opbevaringspoliti
 - Nemotron 3.5 Lightning Free (gratis NVIDIA-endpoints): Kun til prøvebrug — indsend ikke personlige eller fortrolige data. Din brug logges af sikkerhedshensyn og for at forbedre NVIDIAs produkter og tjenester. De loggede sessionsdata, der bruges til forbedringsformål, er ikke knyttet til din identitet eller nogen vedvarende identifikator. For mere information om vores databehandlingspraksis, se vores [privatlivspolitik](https://assets.ngc.nvidia.com/products/api-catalog/legal/NVIDIA%20API%20Trial%20Terms%20of%20Service.pdf). Ved at interagere med dette endpoint giver du samtykke til vores indsamling, registrering og brug af sådanne oplysninger samt [NVIDIA API Trial Terms of Service](https://assets.ngc.nvidia.com/products/api-catalog/legal/NVIDIA%20API%20Trial%20Terms%20of%20Service.pdf).
 - OpenAI APIs: Anmodninger opbevares i 30 dage i overensstemmelse med [OpenAI's Data Policies](https://platform.openai.com/docs/guides/your-data).
 - Anthropic APIs: Anmodninger opbevares i 30 dage i overensstemmelse med [Anthropic's Data Policies](https://docs.anthropic.com/en/docs/claude-code/data-usage).
+- Mistral APIs: Prompts og andre input bruges ikke til træning. Data opbevares i overensstemmelse med [Mistrals politik for dataopbevaring](https://docs.mistral.ai/admin/monitor-comply/zero-data-retention).
 - Jev APIs: Prompts og andre input bruges ikke til træning. Data opbevares i overensstemmelse med [TypeSafe AI's privatlivspolitik](https://typesafe.ai/legal/privacy-policy).
 - Muse Spark 1.3 Contributor Free: Kraftigt nedsatte tokenpriser til gengæld for tilladelse til at bruge dine prompts og svar til at træne fremtidige Meta-modeller. [Læs mere](https://dev.meta.ai/docs/pricing-rate-limits#contributor-tier).
 

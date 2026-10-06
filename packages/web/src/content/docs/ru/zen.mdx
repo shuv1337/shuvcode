@@ -131,6 +131,7 @@ OpenCode Zen работает как любой другой провайдер 
 | Kimi K2.6                       | kimi-k2.6                       | `https://opencode.ai/zen/v1/chat/completions`             | `@ai-sdk/openai-compatible` |
 | Kimi K2.7 Code                  | kimi-k2.7-code                  | `https://opencode.ai/zen/v1/chat/completions`             | `@ai-sdk/openai-compatible` |
 | Kimi K3                         | kimi-k3                         | `https://opencode.ai/zen/v1/chat/completions`             | `@ai-sdk/openai-compatible` |
+| Mistral Large 4                 | mistral-large-4                 | `https://opencode.ai/zen/v1/chat/completions`             | `@ai-sdk/openai-compatible` |
 | Jev 1.13                        | jev-1.13                        | `https://opencode.ai/zen/v1/systemone`                    | -                           |
 | Jev 1.13 Free                   | jev-1.13-free                   | `https://opencode.ai/zen/v1/systemone`                    | -                           |
 | Big Pickle                      | big-pickle                      | `https://opencode.ai/zen/v1/chat/completions`             | `@ai-sdk/openai-compatible` |
@@ -246,6 +247,7 @@ curl https://opencode.ai/zen/v1/systemone \
 | Kimi K3                           | $3.00     | $15.00    | $0.30       | -            |
 | Kimi K2.6                         | $0.95     | $4.00     | $0.16       | -            |
 | Kimi K2.5                         | $0.60     | $3.00     | $0.10       | -            |
+| Mistral Large 4                   | $0.68     | $2.09     | $0.07       | -            |
 | Qwen3.8 Max                       | $2.00     | $6.00     | $0.25       | $2.50        |
 | Qwen3.8 Flash                     | $0.15     | $0.47     | $0.016      | $0.20        |
 | Qwen3.7 Max                       | $2.50     | $7.50     | $0.50       | $3.125       |
@@ -393,7 +395,7 @@ curl https://opencode.ai/zen/v1/systemone \
 
 ## Конфиденциальность
 
-Все наши модели размещены в US. Наши провайдеры придерживаются политики нулевого хранения и не используют ваши данные для обучения моделей, за следующими исключениями:
+Все наши модели размещены в US и EU. Наши провайдеры придерживаются политики нулевого хранения и не используют ваши данные для обучения моделей, за следующими исключениями:
 
 - Big Pickle: во время бесплатного периода собранные данные могут использоваться для улучшения модели.
 - Fledge Alpha Free: во время бесплатного периода собранные данные могут использоваться для улучшения модели.
@@ -405,6 +407,7 @@ curl https://opencode.ai/zen/v1/systemone \
 - Nemotron 3.5 Lightning Free (бесплатные эндпоинты NVIDIA): только для пробного использования — не отправляйте персональные или конфиденциальные данные. Использование логируется в целях безопасности и для улучшения продуктов и сервисов NVIDIA. Логируемые данные сессии, используемые в целях улучшения, не связаны с вашей личностью или каким-либо постоянным идентификатором. Подробнее о наших практиках обработки данных см. в нашей [Политике конфиденциальности](https://assets.ngc.nvidia.com/products/api-catalog/legal/NVIDIA%20API%20Trial%20Terms%20of%20Service.pdf). Взаимодействуя с этим эндпоинтом, вы соглашаетесь на сбор, запись и использование нами такой информации, а также с [NVIDIA API Trial Terms of Service](https://assets.ngc.nvidia.com/products/api-catalog/legal/NVIDIA%20API%20Trial%20Terms%20of%20Service.pdf).
 - OpenAI APIs: запросы хранятся 30 дней в соответствии с [OpenAI's Data Policies](https://platform.openai.com/docs/guides/your-data).
 - Anthropic APIs: запросы хранятся 30 дней в соответствии с [Anthropic's Data Policies](https://docs.anthropic.com/en/docs/claude-code/data-usage).
+- Mistral APIs: запросы и другие входные данные не используются для обучения. Данные хранятся в соответствии с [Политикой хранения данных Mistral](https://docs.mistral.ai/admin/monitor-comply/zero-data-retention).
 - Jev APIs: запросы и другие входные данные не используются для обучения. Данные хранятся в соответствии с [Политикой конфиденциальности TypeSafe AI](https://typesafe.ai/legal/privacy-policy).
 - Muse Spark 1.3 Contributor Free: значительно сниженная стоимость токенов в обмен на разрешение использовать ваши запросы и ответы для обучения будущих моделей Meta. [Подробнее](https://dev.meta.ai/docs/pricing-rate-limits#contributor-tier).
 

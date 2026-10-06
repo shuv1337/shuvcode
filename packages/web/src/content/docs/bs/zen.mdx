@@ -131,6 +131,7 @@ Našim modelima možete pristupiti i preko sljedećih API endpointa.
 | Kimi K2.6                       | kimi-k2.6                       | `https://opencode.ai/zen/v1/chat/completions`             | `@ai-sdk/openai-compatible` |
 | Kimi K2.7 Code                  | kimi-k2.7-code                  | `https://opencode.ai/zen/v1/chat/completions`             | `@ai-sdk/openai-compatible` |
 | Kimi K3                         | kimi-k3                         | `https://opencode.ai/zen/v1/chat/completions`             | `@ai-sdk/openai-compatible` |
+| Mistral Large 4                 | mistral-large-4                 | `https://opencode.ai/zen/v1/chat/completions`             | `@ai-sdk/openai-compatible` |
 | Jev 1.13                        | jev-1.13                        | `https://opencode.ai/zen/v1/systemone`                    | -                           |
 | Jev 1.13 Free                   | jev-1.13-free                   | `https://opencode.ai/zen/v1/systemone`                    | -                           |
 | Big Pickle                      | big-pickle                      | `https://opencode.ai/zen/v1/chat/completions`             | `@ai-sdk/openai-compatible` |
@@ -246,6 +247,7 @@ Podržavamo pay-as-you-go model. Ispod su cijene **po 1M tokena**.
 | Kimi K3                           | $3.00     | $15.00    | $0.30       | -            |
 | Kimi K2.6                         | $0.95     | $4.00     | $0.16       | -            |
 | Kimi K2.5                         | $0.60     | $3.00     | $0.10       | -            |
+| Mistral Large 4                   | $0.68     | $2.09     | $0.07       | -            |
 | Qwen3.8 Max                       | $2.00     | $6.00     | $0.25       | $2.50        |
 | Qwen3.8 Flash                     | $0.15     | $0.47     | $0.016      | $0.20        |
 | Qwen3.7 Max                       | $2.50     | $7.50     | $0.50       | $3.125       |
@@ -394,7 +396,7 @@ vam ipak može naplatiti više od $20 ako vam stanje padne ispod $5.
 
 ## Privatnost
 
-Svi naši modeli su hostovani u US. Naši provajderi prate zero-retention politiku
+Svi naši modeli su hostovani u US i EU. Naši provajderi prate zero-retention politiku
 i ne koriste vaše podatke za treniranje modela, uz sljedeće izuzetke:
 
 - Big Pickle: Tokom besplatnog perioda, prikupljeni podaci mogu se koristiti za poboljšanje modela.
@@ -407,6 +409,7 @@ i ne koriste vaše podatke za treniranje modela, uz sljedeće izuzetke:
 - Nemotron 3.5 Lightning Free (besplatni NVIDIA endpointi): Samo za probnu upotrebu — nemojte slati lične ili povjerljive podatke. Vaše korištenje se bilježi radi sigurnosti i poboljšanja NVIDIA proizvoda i usluga. Zabilježeni podaci sesije koji se koriste u svrhu poboljšanja nisu povezani s vašim identitetom niti bilo kojim trajnim identifikatorom. Za više informacija o našim praksama obrade podataka pogledajte našu [Politiku privatnosti](https://assets.ngc.nvidia.com/products/api-catalog/legal/NVIDIA%20API%20Trial%20Terms%20of%20Service.pdf). Interakcijom s ovim endpointom pristajete na naše prikupljanje, bilježenje i korištenje takvih informacija te na [NVIDIA API Trial Terms of Service](https://assets.ngc.nvidia.com/products/api-catalog/legal/NVIDIA%20API%20Trial%20Terms%20of%20Service.pdf).
 - OpenAI APIs: Requests are retained for 30 days in accordance with [OpenAI's Data Policies](https://platform.openai.com/docs/guides/your-data).
 - Anthropic APIs: Requests are retained for 30 days in accordance with [Anthropic's Data Policies](https://docs.anthropic.com/en/docs/claude-code/data-usage).
+- Mistral APIs: Promptovi i drugi ulazni podaci ne koriste se za treniranje modela. Podaci se čuvaju u skladu s [Politikom zadržavanja podataka kompanije Mistral](https://docs.mistral.ai/admin/monitor-comply/zero-data-retention).
 - Jev APIs: Promptovi i drugi ulazni podaci ne koriste se za treniranje modela. Podaci se čuvaju u skladu s [Politikom privatnosti TypeSafe AI](https://typesafe.ai/legal/privacy-policy).
 - Muse Spark 1.3 Contributor Free: Znatno snižene cijene tokena u zamjenu za dozvolu da se vaši promptovi i odgovori koriste za treniranje budućih Meta modela. [Saznajte više](https://dev.meta.ai/docs/pricing-rate-limits#contributor-tier).
 
