@@ -788,6 +788,21 @@ export type SessionToolInputEnded = {
   data: { sessionID: string; assistantMessageID: string; id: string; text: string }
 }
 
+export type SessionToolSubagentPrepared = {
+  id: string
+  created: number
+  metadata?: { [x: string]: any }
+  type: "session.tool.subagent.prepared"
+  durable: { aggregateID: string; seq: number; version: 1 }
+  location?: LocationRef
+  data: {
+    sessionID: string
+    assistantMessageID: string
+    id: string
+    recovery: { childSessionID: string; inboxID: string; inputDigest: string; agent: string; model?: ModelRef }
+  }
+}
+
 export type SessionRetryScheduled = {
   id: string
   created: number
@@ -2410,6 +2425,7 @@ export type SessionEventDurable =
   | SessionToolInputStarted
   | SessionToolInputEnded
   | SessionToolCalled
+  | SessionToolSubagentPrepared
   | SessionToolSuccess
   | SessionToolFailed
   | SessionRetryScheduled
@@ -2477,6 +2493,7 @@ export type V2Event =
   | SessionToolInputDelta
   | SessionToolInputEnded
   | SessionToolCalled
+  | SessionToolSubagentPrepared
   | SessionToolProgress
   | SessionToolSuccess
   | SessionToolFailed

@@ -46,6 +46,11 @@ import { SessionProviderContext } from "@opencode/core/session/provider-context"
 import { Money } from "@opencode/schema/money"
 import { SessionProjector } from "@opencode/core/session/projector"
 import { SessionExecution } from "@opencode/core/session/execution"
+import { SessionRestart } from "@opencode/core/session/execution/restart"
+import { SubagentRecovery } from "@opencode/core/session/subagent-recovery"
+import { SubagentTool } from "@opencode/core/tool/plugin/subagent"
+import { Job } from "@opencode/core/job"
+import { KV } from "@opencode/core/kv"
 import { SessionRunCoordinator } from "@opencode/core/session/run-coordinator"
 import { SessionRunner } from "@opencode/core/session/runner/index"
 import { SessionRunnerLLM } from "@opencode/core/session/runner/llm"
@@ -484,6 +489,9 @@ const layer = Layer.unwrap(
         LayerNodePlatform.llmClient,
         SessionRunnerLLM.node,
         SessionExecution.node,
+        SessionRestart.node,
+        Job.node,
+        KV.node,
         Session.node,
       ]),
       [
@@ -583,6 +591,135 @@ const setup = Effect.gen(function* () {
       return { finish: gate.release.pipe(Effect.andThen(Fiber.join(run))) }
     }),
   })
+})
+
+const seedPreparedRecovery = Effect.fnUntraced(function* (
+  s: Effect.Success<typeof setup>,
+  nested = false,
+  background = false,
+) {
+  const store = yield* SessionStore.Service
+  const parent = sessionID
+  const child = Session.ID.make("ses_runner_recovered_child")
+  const grandchild = Session.ID.make("ses_runner_recovered_grandchild")
+  const model = { id: ID.make("fake-model"), providerID: Provider.ID.make("fake") }
+  yield* s.admit("Resume the confirmed subagent")
+  yield* SessionInbox.promote(s.db, s.bus, parent, "input")
+  const assistantMessageID = SessionMessage.ID.create()
+  const input = { agent: "build", description: "Recover child", prompt: "Inspect state" }
+  yield* s.bus.publish(SessionEvent.Step.Started, {
+    sessionID: parent,
+    assistantMessageID,
+    agent: Agent.ID.make("build"),
+    model,
+    started: 0,
+  })
+  yield* s.bus.publish(SessionEvent.Tool.Input.Started, {
+    sessionID: parent,
+    assistantMessageID,
+    id: "call-recover-child",
+    name: "subagent",
+  })
+  yield* s.bus.publish(SessionEvent.Tool.Called, {
+    sessionID: parent,
+    assistantMessageID,
+    id: "call-recover-child",
+    input,
+    executed: false,
+  })
+  yield* s.bus.publish(SessionEvent.Tool.SubagentPrepared, {
+    sessionID: parent,
+    assistantMessageID,
+    id: "call-recover-child",
+    recovery: {
+      childSessionID: child,
+      inboxID: SessionMessage.ID.make("msg_runner_recovered_child_inbox"),
+      inputDigest: SubagentRecovery.digest(input),
+      agent: Agent.ID.make("build"),
+      model,
+    },
+  })
+  yield* s.session.create({ id: child, parentID: parent, agent: Agent.ID.make("build"), model })
+  yield* s.session.prompt({
+    id: SessionMessage.ID.make("msg_runner_recovered_child_inbox"),
+    sessionID: child,
+    text: input.prompt,
+    resume: false,
+  })
+  yield* SessionInbox.promote(s.db, s.bus, child, "input")
+  if (nested) yield* s.session.create({ id: grandchild, parentID: child, agent: Agent.ID.make("build"), model })
+  const leaf = nested ? grandchild : child
+  if (nested) {
+    yield* s.session.prompt({
+      id: SessionMessage.ID.make("msg_runner_recovered_grandchild_inbox"),
+      sessionID: grandchild,
+      text: "Perform a generic effect",
+      resume: false,
+    })
+    yield* SessionInbox.promote(s.db, s.bus, grandchild, "input")
+    const nestedAssistant = SessionMessage.ID.create()
+    const nestedInput = { agent: "build", description: "Recover grandchild", prompt: "Perform a generic effect" }
+    yield* s.bus.publish(SessionEvent.Step.Started, {
+      sessionID: child,
+      assistantMessageID: nestedAssistant,
+      agent: Agent.ID.make("build"),
+      model,
+      started: 0,
+    })
+    yield* s.bus.publish(SessionEvent.Tool.Input.Started, {
+      sessionID: child,
+      assistantMessageID: nestedAssistant,
+      id: "call-recover-grandchild",
+      name: "subagent",
+    })
+    yield* s.bus.publish(SessionEvent.Tool.Called, {
+      sessionID: child,
+      assistantMessageID: nestedAssistant,
+      id: "call-recover-grandchild",
+      input: nestedInput,
+      executed: false,
+    })
+    yield* s.bus.publish(SessionEvent.Tool.SubagentPrepared, {
+      sessionID: child,
+      assistantMessageID: nestedAssistant,
+      id: "call-recover-grandchild",
+      recovery: {
+        childSessionID: grandchild,
+        inboxID: SessionMessage.ID.make("msg_runner_recovered_grandchild_inbox"),
+        inputDigest: SubagentRecovery.digest(nestedInput),
+        agent: Agent.ID.make("build"),
+        model,
+      },
+    })
+  }
+  if (background) {
+    yield* s.bus.publish(SessionEvent.Tool.Success, {
+      sessionID: parent,
+      assistantMessageID,
+      id: "call-recover-child",
+      content: [{ type: "text", text: SubagentTool.backgroundResult(child).output }],
+      metadata: { sessionID: child, status: "running" },
+      executed: true,
+    })
+    const jobs = yield* Job.make
+    yield* jobs.start({
+      id: child,
+      type: "subagent",
+      recovery: {
+        kind: "subagent",
+        parentSessionID: parent,
+        childSessionID: child,
+        agent: "build",
+        description: input.description,
+      },
+      run: Effect.never,
+    })
+    yield* jobs.background(child)
+  }
+  if (!background) yield* store.claim(parent)
+  yield* store.claim(child)
+  if (nested) yield* store.claim(grandchild)
+  return { parent, child, grandchild, leaf, assistantMessageID, model }
 })
 
 type Scenario = Effect.Success<typeof setup>
@@ -4513,6 +4650,139 @@ describe("SessionRunnerLLM", () => {
     ])
   })
 
+  for (const nested of [false, true]) {
+    scenario(
+      `stops ${nested ? "nested" : "foreground"} ambiguous effects before a recovered real-runner drain`,
+      function* (s) {
+        const seeded = yield* seedPreparedRecovery(s, nested)
+        const assistantMessageID = SessionMessage.ID.create()
+        yield* s.bus.publish(SessionEvent.Step.Started, {
+          sessionID: seeded.leaf,
+          assistantMessageID,
+          agent: Agent.ID.make("build"),
+          model: seeded.model,
+          started: 0,
+        })
+        yield* s.bus.publish(SessionEvent.Tool.Input.Started, {
+          sessionID: seeded.leaf,
+          assistantMessageID,
+          id: "call-ambiguous-effect",
+          name: "echo",
+        })
+        yield* s.bus.publish(SessionEvent.Tool.Called, {
+          sessionID: seeded.leaf,
+          assistantMessageID,
+          id: "call-ambiguous-effect",
+          input: { text: "effect already happened" },
+          executed: false,
+        })
+        s.executions.push("effect already happened")
+        yield* s.llm.push(TestLLM.tool("call-retry", "echo", { text: "effect already happened" }))
+        yield* (yield* SessionRestart.Service).resumeSuspendedSessions
+        yield* (yield* SessionExecution.Service).awaitIdle(seeded.parent)
+
+        expect(s.requests).toHaveLength(0)
+        expect(s.executions).toEqual(["effect already happened"])
+        const child = yield* s.session.get(seeded.child)
+        expect(child.outcome).toBe("failed")
+        const leaf = yield* s.session.get(seeded.leaf)
+        expect(leaf.outcome).toBe("failed")
+        const parentCall = yield* s.session.message({ sessionID: seeded.parent, messageID: seeded.assistantMessageID })
+        expect(
+          parentCall?.type === "assistant"
+            ? parentCall.content.find((item) => item.type === "tool")?.state.status
+            : undefined,
+        ).toBe("error")
+        const effect = yield* s.session.message({ sessionID: seeded.leaf, messageID: assistantMessageID })
+        expect(
+          effect?.type === "assistant" ? effect.content.find((item) => item.type === "tool")?.state.status : undefined,
+        ).toBe("error")
+        expect((yield* s.session.list({ parentID: seeded.parent })).data).toHaveLength(1)
+        if (nested) expect((yield* s.session.list({ parentID: seeded.child })).data).toHaveLength(1)
+      },
+    )
+  }
+
+  scenario("stops nested ambiguous effects before a recovered background child drains", function* (s) {
+    const seeded = yield* seedPreparedRecovery(s, true, true)
+    const assistantMessageID = SessionMessage.ID.create()
+    yield* s.bus.publish(SessionEvent.Step.Started, {
+      sessionID: seeded.grandchild,
+      assistantMessageID,
+      agent: Agent.ID.make("build"),
+      model: seeded.model,
+      started: 0,
+    })
+    yield* s.bus.publish(SessionEvent.Tool.Input.Started, {
+      sessionID: seeded.grandchild,
+      assistantMessageID,
+      id: "call-ambiguous-effect",
+      name: "echo",
+    })
+    yield* s.bus.publish(SessionEvent.Tool.Called, {
+      sessionID: seeded.grandchild,
+      assistantMessageID,
+      id: "call-ambiguous-effect",
+      input: { text: "effect already happened" },
+      executed: false,
+    })
+    s.executions.push("effect already happened")
+    yield* s.llm.push(TestLLM.text("Parent saw the failure", "text-parent"))
+    const execution = yield* SessionExecution.Service
+    yield* (yield* SessionRestart.Service).resumeSuspendedSessions
+    yield* execution.awaitIdle(seeded.child)
+    yield* execution.awaitIdle(seeded.parent).pipe(Effect.timeout("5 seconds"))
+
+    expect(s.requests).toHaveLength(1)
+    expect(s.executions).toEqual(["effect already happened"])
+    expect((yield* s.session.get(seeded.child)).outcome).toBe("failed")
+    expect((yield* s.session.get(seeded.grandchild)).outcome).toBe("failed")
+    const childCall = (yield* s.session.messages({ sessionID: seeded.child })).flatMap((message) =>
+      message.type === "assistant" ? message.content.filter((item) => item.type === "tool") : [],
+    )
+    expect(childCall.map((item) => item.state.status)).toEqual(["error"])
+    const effect = yield* s.session.message({ sessionID: seeded.grandchild, messageID: assistantMessageID })
+    expect(
+      effect?.type === "assistant" ? effect.content.find((item) => item.type === "tool")?.state.status : undefined,
+    ).toBe("error")
+    expect((yield* s.session.list({ parentID: seeded.parent })).data).toHaveLength(1)
+    expect((yield* s.session.list({ parentID: seeded.child })).data).toHaveLength(1)
+  })
+
+  scenario("keeps restart preparation owned when a wake arrives during its synthetic notice", function* (s) {
+    const seeded = yield* seedPreparedRecovery(s)
+    const execution = yield* SessionExecution.Service
+    const ownedAtNotice = yield* Deferred.make<boolean>()
+    yield* s.bus.project(SessionEvent.Synthetic, (event) =>
+      event.data.sessionID === seeded.parent
+        ? Effect.gen(function* () {
+            yield* Deferred.succeed(ownedAtNotice, yield* execution.isActive(seeded.parent))
+            yield* execution.wake(seeded.parent)
+          })
+        : Effect.void,
+    )
+    yield* s.llm.push(
+      TestLLM.text("Recovered child result", "text-child"),
+      TestLLM.text("Parent result", "text-parent"),
+    )
+    yield* (yield* SessionRestart.Service).resumeSuspendedSessions
+    expect(yield* Deferred.await(ownedAtNotice).pipe(Effect.timeout("5 seconds"))).toBe(true)
+    yield* execution.awaitIdle(seeded.parent).pipe(Effect.timeout("5 seconds"))
+    const call = yield* s.session.message({ sessionID: seeded.parent, messageID: seeded.assistantMessageID })
+    expect(
+      call?.type === "assistant" ? call.content.find((item) => item.type === "tool")?.state.status : undefined,
+    ).toBe("completed")
+    expect((yield* s.session.list({ parentID: seeded.parent })).data).toHaveLength(1)
+    expect(
+      (yield* s.session.messages({ sessionID: seeded.child })).filter(
+        (message) => message.id === "msg_runner_recovered_child_inbox",
+      ),
+    ).toHaveLength(1)
+    expect(
+      (yield* s.session.inbox(seeded.child)).filter((item) => item.id === "msg_runner_recovered_child_inbox"),
+    ).toHaveLength(0)
+  })
+
   scenario("preserves a stale subagent child session in its model-visible failure", function* (s) {
     yield* s.admit("Recover interrupted subagent")
     yield* SessionInbox.promote(s.db, s.bus, sessionID, "steer")
@@ -4649,10 +4919,12 @@ describe("SessionRunnerLLM", () => {
     yield* s.resume
 
     expect(s.requests).toHaveLength(1)
-    expect(messageRoles(s.requests[0])).toEqual(["user", "assistant", "tool"])
+    expect(messageRoles(s.requests[0])).toEqual(["user"])
     expect(yield* s.context).toMatchObject([
       Expected.user("Recover interrupted tool input"),
-      Expected.assistant({}, [Expected.failedTool({ id: "call-pending-interrupted" }, {})]),
+      Expected.assistant({}, [
+        Expected.failedTool({ id: "call-pending-interrupted" }, { metadata: { recovery: "unconfirmed" } }),
+      ]),
     ])
   })
 
@@ -5984,6 +6256,70 @@ describe("SessionRunnerLLM", () => {
         ],
       },
     ])
+  })
+
+  for (const [code, fragment] of [
+    ["1012", '{"text":'],
+    ["1006", '{"text":"not confirmed"}'],
+  ] as const) {
+    scenario(`regenerates after ${code} without replaying an unconfirmed tool call`, function* (s) {
+      yield* s.admit("Recover a draft tool call")
+      yield* s.llm.push(
+        TestLLM.failAfter(
+          new AIError({
+            reason: new TransportError({
+              message: `WebSocket closed with code ${code}`,
+              transport: "websocket",
+              operation: "read",
+              phase: "close",
+              code,
+              delivery: "accepted",
+            }),
+          }),
+          LLMEvent.stepStart({ index: 0 }),
+          LLMEvent.toolInputStart({ id: "draft", name: "echo" }),
+          LLMEvent.toolInputDelta({ id: "draft", name: "echo", text: fragment }),
+        ),
+        TestLLM.text("Recovered", "after-draft"),
+      )
+      const scheduled = yield* subscribeRetries(s)
+      const run = yield* s.resume.pipe(Effect.forkChild)
+      yield* Queue.take(scheduled)
+      yield* TestClock.adjust("2400 millis")
+      yield* Fiber.join(run)
+      expect(s.executions).toEqual([])
+      expect(s.requests).toHaveLength(2)
+      expect(
+        s.requests[1]?.messages.flatMap((message) => message.content).some((part) => part.type === "tool-call"),
+      ).toBe(false)
+      const context = yield* s.context
+      expect(context[1]).toMatchObject({
+        content: [{ id: "draft", state: { status: "error", metadata: { recovery: "unconfirmed" } } }],
+      })
+    })
+  }
+
+  scenario("retains a settled sibling while regenerating an interrupted draft", function* (s) {
+    yield* s.admit("Keep the completed call")
+    yield* s.llm.push(
+      TestLLM.failAfter(
+        websocketDisconnected(),
+        LLMEvent.stepStart({ index: 0 }),
+        LLMEvent.toolCall({ id: "settled", name: "echo", input: { text: "once" } }),
+        LLMEvent.toolInputStart({ id: "draft", name: "echo" }),
+        LLMEvent.toolInputDelta({ id: "draft", name: "echo", text: '{"text":"not confirmed"}' }),
+      ),
+      TestLLM.text("Recovered", "after-sibling"),
+    )
+    const scheduled = yield* subscribeRetries(s)
+    const run = yield* s.resume.pipe(Effect.forkChild)
+    yield* Queue.take(scheduled)
+    yield* TestClock.adjust("2400 millis")
+    yield* Fiber.join(run)
+    expect(s.executions).toEqual(["once"])
+    const parts = s.requests[1]?.messages.flatMap((message) => message.content) ?? []
+    expect(parts.filter((part) => part.type === "tool-call").map((part) => part.id)).toEqual(["settled"])
+    expect(parts.filter((part) => part.type === "tool-result").map((part) => part.id)).toEqual(["settled"])
   })
 
   scenario("continues an incomplete stream after settling a local tool defect", function* (s) {
