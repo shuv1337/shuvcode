@@ -135,17 +135,22 @@ export const make = Effect.fnUntraced(function* (input: {
     switch (output._tag) {
       case "SessionUpdate":
         if (turn.background) return Effect.void
-        return input.connection.sessionUpdate({ sessionId: turn.ctx.sessionID, update: output.update })
+        return ACPPermission.withCompletedDiffs(output.update, output.diff, turn.ctx.cwd).pipe(
+          Effect.flatMap((update) => input.connection.sessionUpdate({ sessionId: turn.ctx.sessionID, update })),
+        )
       case "ChildUpdate":
-        return input.connection
-          .extNotification(ACPChild.UpdateMethod, output.update)
-          .pipe(
-            Effect.catchCause((cause) =>
-              Cause.hasInterruptsOnly(cause)
-                ? Effect.void
-                : Effect.logWarning("ACP child session update failed", cause),
-            ),
-          )
+        return Effect.gen(function* () {
+          if (output.update.type !== "update")
+            return yield* input.connection.extNotification(ACPChild.UpdateMethod, output.update)
+          const update = yield* ACPPermission.withCompletedDiffs(output.update.update, output.diff, turn.ctx.cwd)
+          return yield* input.connection.extNotification(ACPChild.UpdateMethod, { ...output.update, update })
+        }).pipe(
+          Effect.catchCause((cause) =>
+            Cause.hasInterruptsOnly(cause)
+              ? Effect.void
+              : Effect.logWarning("ACP child session update failed", cause),
+          ),
+        )
       case "PermissionAsk": {
         const permission = {
           client: input.client,

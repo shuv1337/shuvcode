@@ -29,6 +29,7 @@ import type { Session } from "@opencode/schema/session"
 import type { SessionMessage } from "@opencode/schema/session-message"
 import type { TokenUsage } from "@opencode/schema/token-usage"
 import type { BunRequest } from "bun"
+import { createTwoFilesPatch } from "diff"
 import { Duration, Effect, Exit, Logger, Option, Schema, Scope } from "effect"
 import { FetchHttpClient } from "effect/unstable/http"
 import { ACP } from "../../src/acp/agent"
@@ -338,6 +339,15 @@ export function toolCalled(sessionID: string, id: string, input: EventData<"sess
 
 export function toolProgress(sessionID: string, id: string, metadata: EventData<"session.tool.progress">["metadata"]) {
   return ephemeralEvent("session.tool.progress", { sessionID, assistantMessageID: "msg_tools", id, metadata })
+}
+
+export function fileDiff(
+  file: string,
+  before: string,
+  after: string,
+  status: "added" | "deleted" | "modified" = "modified",
+) {
+  return { file, patch: createTwoFilesPatch(file, file, before, after), additions: 1, deletions: 1, status }
 }
 
 export function toolSucceeded(
