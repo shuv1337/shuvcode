@@ -3,14 +3,18 @@ import { Service, type Info } from "@opencode/client/effect/service"
 import { Global } from "@opencode/util/global"
 import { OPENCODE_VERSION } from "../src/version"
 import { expect, test } from "bun:test"
-import { Effect, FileSystem, Schedule, Schema } from "effect"
+import { Deferred, Effect, FileSystem, Schedule, Schema } from "effect"
+import { TestClock } from "effect/testing"
 import fs from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
 import { ServiceConfig } from "../src/services/service-config"
 import { ServiceRegistration } from "../src/services/service-registration"
 import { cleanProcessEnv } from "./fixture/clean-env"
-import { isolatedEnv } from "./fixture/environment"
+import { isolatedEnv, transpilerCache } from "./fixture/environment"
+import { testEffect } from "../../core/test/lib/effect"
+
+const it = testEffect(NodeFileSystem.layer)
 
 test("managed service ports are stable per installation channel", () => {
   expect(ServiceConfig.defaultPort("latest")).toBe(0x1337)
@@ -171,49 +175,44 @@ test("preview registration migration never moves stable discovery", async () => 
   }
 })
 
-test("deleting a managed service registration stops its owner", async () => {
-  const service = await startManagedService("opencode-service-delete-")
-  try {
-    await fs.rm(service.registration)
-    expect(await waitForExit(service.owner)).toBe(true)
-    expect(await Bun.file(service.registration).exists()).toBe(false)
-    await expectPortAvailable(service.port)
-  } finally {
-    await stopManagedService(service)
-  }
-}, 30_000)
+it.effect("deleting a managed service registration stops its owner", () =>
+  Effect.gen(function* () {
+    const service = yield* registered()
+    yield* service.fileSystem.remove(service.file)
+    yield* service.stops
+    yield* service.cleanup
+    expect(yield* service.fileSystem.exists(service.file)).toBe(false)
+  }),
+)
 
+it.effect("corrupting a managed service registration stops its owner", () =>
+  Effect.gen(function* () {
+    const service = yield* registered()
+    yield* service.fileSystem.writeFileString(service.file, "not-json")
+    yield* service.stops
+    yield* service.cleanup
+    expect(yield* service.fileSystem.readFileString(service.file)).toBe("not-json")
+  }),
+)
+
+it.effect("replacing a managed service registration stops its owner and preserves the foreign owner", () =>
+  Effect.gen(function* () {
+    const service = yield* registered()
+    const foreign = JSON.stringify({ id: "foreign-owner", url: "http://127.0.0.1:4322", pid: process.pid })
+    yield* service.fileSystem.writeFileString(service.file, foreign)
+    yield* service.stops
+    yield* service.cleanup
+    expect(yield* service.fileSystem.readFileString(service.file)).toBe(foreign)
+  }),
+)
+
+// Real process: a server whose boot failed must still be watching its registration.
 test("deleting a failed service registration stops its owner", async () => {
   const service = await startManagedService("opencode-service-failed-delete-", true)
   try {
     await waitForFailed(service.info)
     await fs.rm(service.registration)
     expect(await waitForExit(service.owner)).toBe(true)
-    await expectPortAvailable(service.port)
-  } finally {
-    await stopManagedService(service)
-  }
-}, 30_000)
-
-test("corrupting a managed service registration stops its owner", async () => {
-  const service = await startManagedService("opencode-service-corrupt-")
-  try {
-    await fs.writeFile(service.registration, "not-json")
-    expect(await waitForExit(service.owner)).toBe(true)
-    expect(await Bun.file(service.registration).text()).toBe("not-json")
-    await expectPortAvailable(service.port)
-  } finally {
-    await stopManagedService(service)
-  }
-}, 30_000)
-
-test("replacing a managed service registration stops its owner and preserves the foreign owner", async () => {
-  const service = await startManagedService("opencode-service-foreign-")
-  const foreign = { ...service.info, id: "foreign-owner", pid: process.pid }
-  try {
-    await fs.writeFile(service.registration, JSON.stringify(foreign))
-    expect(await waitForExit(service.owner)).toBe(true)
-    expect(await Bun.file(service.registration).json()).toEqual(foreign)
     await expectPortAvailable(service.port)
   } finally {
     await stopManagedService(service)
@@ -671,9 +670,36 @@ async function availablePort() {
   return port
 }
 
+/** A registration watched in-process. `stops` advances the test clock until the watch shuts the server down. */
+const registered = Effect.fnUntraced(function* () {
+  const fileSystem = yield* FileSystem.FileSystem
+  const file = path.join(yield* fileSystem.makeTempDirectoryScoped(), "service-local.json")
+  const stopped = yield* Deferred.make<void>()
+  const cleanup = yield* ServiceRegistration.register({
+    address: { _tag: "TcpAddress", hostname: "127.0.0.1", port: 4321 },
+    password: "secret",
+    id: "owner",
+    file,
+    shutdown: Deferred.succeed(stopped, undefined).pipe(Effect.asVoid),
+  })
+  // Let the watch's immediate first check read the intact file, so the damage is found by a scheduled check.
+  yield* TestClock.withLive(Effect.sleep("50 millis"))
+  // Each check reads the file for real, so give that I/O live time between 5 s steps. Fail rather than hang.
+  const stops = Effect.gen(function* () {
+    for (const _ of Array.from({ length: 100 })) {
+      if (yield* Deferred.isDone(stopped)) return
+      yield* TestClock.adjust("5 seconds")
+      yield* TestClock.withLive(Effect.sleep("10 millis"))
+    }
+    return yield* Effect.fail(new Error("The registration watch never shut the server down"))
+  })
+  return { fileSystem, file, stops, cleanup }
+})
+
 function serviceEnv(root: string) {
   return {
     ...cleanProcessEnv(),
+    BUN_RUNTIME_TRANSPILER_CACHE_PATH: transpilerCache,
     HOME: root,
     OPENCODE_DB: path.join(root, "opencode.db"),
     OPENCODE_TEST_HOME: root,
