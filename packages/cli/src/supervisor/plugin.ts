@@ -43,6 +43,9 @@ export default Plugin.define({
         ),
       )
       if (result.deferred) event.prompt.text = result.text
+    })
+    // Request context is rebuilt for each model call; it never changes the durable user message.
+    await context.session.hook("context", async (event) => {
       const startup = Schema.decodeUnknownSync(
         Schema.Struct({
           state: Schema.Literals(["ready", "blocked"]),
@@ -52,10 +55,13 @@ export default Plugin.define({
         }),
       )(await SupervisorClient.request(options.home, { type: "knowledge.startup" }, { sessionID: event.sessionID }))
       if (startup.state === "blocked") {
-        event.prompt.text = `Supervisor startup knowledge is over its operator-set budget (${startup.estimatedTokens}/${startup.budgetTokens} estimated tokens). Curate or archive startup knowledge with supervisor_knowledge, or ask the operator to set a new budget. Ordinary work intake and dispatch are held until the budget is ready.\n\n${event.prompt.text}`
+        event.system.push({
+          type: "text",
+          text: `Supervisor startup knowledge is over its operator-set budget (${startup.estimatedTokens}/${startup.budgetTokens} estimated tokens). Curate or archive startup knowledge with supervisor_knowledge, or ask the operator to set a new budget. Ordinary work intake and dispatch are held until the budget is ready.`,
+        })
         return
       }
-      if (startup.text) event.prompt.text = `${startup.text}\n\n${event.prompt.text}`
+      if (startup.text) event.system.push({ type: "text", text: startup.text })
     })
     await context.tool.transform((editor) => {
       // The built-in question tool blocks a native step, preventing durable decision answers from delivering.

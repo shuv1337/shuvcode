@@ -122,7 +122,9 @@ Open the current firstmate lead directly, from any directory:
 ssh -t shuvcode-test.exe.xyz shuvcode supervisor
 ```
 
-The home is `/home/exedev/fleet-home`. It uses `eval/gpt-6-sol` through exe.dev's configured provider, with automatic tool permissions and manual merge authority. Firstmate conversationally registered `/home/exedev/eval/fleet-launcher-project` as `launcher`, then completed the `bare-smoke` scout with a verified report. An independent rerun passed all three Bun tests. This completed while Herdr was absent.
+The home is `/home/exedev/fleet-home`. It uses `eval/gpt-6-sol` through exe.dev's configured provider, with automatic tool permissions and manual merge authority. After the operator-requested reset, it retains the `2password` checkout and registration, with a fresh firstmate and no tasks or conversation. The supervisor and Herdr are stopped at handoff. The earlier trial described below is historical evidence; its Sessions and test worktrees have been removed.
+
+Before the reset, firstmate conversationally registered `/home/exedev/eval/fleet-launcher-project` as `launcher`, then completed the `bare-smoke` scout with a verified report. An independent rerun passed all three Bun tests. This completed while Herdr was absent.
 
 For all worker views:
 
@@ -134,22 +136,16 @@ The default Herdr server added firstmate and the scout without any client attach
 
 The source suite passed 181 supervisor tests with 1,284 assertions, the compiled Linux CLI passed five project/attachment/presentation tests with 57 assertions, and all 41 canonical check tasks passed. Fault tests cover incompatible peer identity/capabilities, uncertain creation across supervisor restart, lost launch acknowledgement, explicit closed-view reopening, and refusal to focus a replaced lead's old pane. A compiled private PTY run closed the outside TUI and attached/detached Herdr twice while the worker remained running; releasing its model response produced a verified result. All private local fixtures were stopped afterward.
 
-On the VM, the supervisor and Herdr were restarted independently. Launches from `/tmp` and `/usr` retained the home, lead and worker Session IDs, pane IDs, and bindings. Native step started/streamed/ended counts remained 16 before and after. A second real scout, `reconnect-smoke`, remained running after closing the outside SSH TUI and after two Herdr client attach/detach cycles over SSH; its Session ID and the lead's Session ID stayed unchanged. The home contains `TESTING.md`, `versions.json`, `launcher-vm-proof.json`, `launcher-final-restart-proof.json`, and `launcher-ssh-reconnect-proof.json`.
+On the VM, the supervisor and Herdr were restarted independently. Launches from `/tmp` and `/usr` retained the home, lead and worker Session IDs, pane IDs, and bindings. Native step started/streamed/ended counts remained 16 before and after. A second real scout, `reconnect-smoke`, remained running after closing the outside SSH TUI and after two Herdr client attach/detach cycles over SSH; its Session ID and the lead's Session ID stayed unchanged. Copies of the launcher proof files remain locally under `/home/shuv/.cache/agent-ws/herdr-parity/vm-launcher/`.
+
+The startup-knowledge follow-up reproduced duplicate context on the second user message, moved knowledge and budget warnings into model system context, and verified unchanged user history across subsequent messages, restart, and curation. All 181 supervisor tests passed with 1,298 assertions; the compiled regression passed 28 assertions and all 41 canonical checks passed. The reset removed 21 old Sessions across five homes, retired the four earlier homes and wrappers, and cleared Herdr's saved test views. The real project checkout was preserved.
 
 ### Earlier ShuvBro adapter trial
 
-The earlier explicit adapter trial remains available:
+The earlier explicit adapter trial used Herdr's named `native-herdr` session and the native home `/home/exedev/eval/native-herdr`. It used `eval/gpt-6-sol`, automatic tool permissions, and local-only delivery with manual operator approval for landing. Its Sessions, worktrees, wrapper commands, and watcher were retired during the requested reset.
 
-```sh
-ssh -t shuvcode-test.exe.xyz native-fleet
-```
+The Ubuntu 24.04 trial ran the compiled Shuvcode CLI, Herdr `63835aa2d261560be02b9b50968f79d6119925be`, and the ShuvBro candidate above. A real model-driven worker committed a greeting implementation, tests, and `RESULT.md`; an independent rerun passed all three tests, its native receipt verified, and the operator landed commit `99218396c723202aff6607958c64cefcda34b91e` locally. Restarting Herdr preserved the home, Session, pane, and binding identities, with the lead idle and worker Done.
 
-This opens Herdr's named `native-herdr` session with the firstmate view selected. Give the lead a small task in the disposable `/home/exedev/eval/native-herdr-project` repository; worker views appear in the sidebar. The native home is `/home/exedev/eval/native-herdr`. It uses `eval/gpt-6-sol`, automatic tool permissions, and local-only delivery with manual operator approval for landing.
-
-The Ubuntu 24.04 VM runs the compiled Shuvcode CLI, Herdr `63835aa2d261560be02b9b50968f79d6119925be`, and the ShuvBro candidate above. Binary hashes, source revisions, and instructions are saved in the home's `versions.json` and `TESTING.md`. A real model-driven worker committed a greeting implementation, tests, and `RESULT.md`; an independent rerun passed all three tests, its native receipt verified, and the operator landed commit `99218396c723202aff6607958c64cefcda34b91e` locally. Restarting Herdr preserved the home, Session, pane, and binding identities, with the lead idle and worker Done. This evidence is recorded in `vm-smoke-proof.json`.
-
-From a separate SSH shell, use `shuvcode-native supervisor status`, `shuvcode-native supervisor read`, or `shuvcode-native supervisor send "your task"`. `shuvbro-native status` reports display bindings. The presentation watcher runs as `shuvbro-native-eval-watch.service`; check it with `systemctl status shuvbro-native-eval-watch`. It is not enabled at boot: after a VM reboot, open `native-fleet`, then run `shuvbro-native up` and `sudo systemctl start shuvbro-native-eval-watch` from another shell.
-
-Inside that named Herdr session, its environment still selects the earlier native home. Use `shuvcode-native` outside it to address the same trial. The plain `shuvcode` command now selects `~/fleet-home`. The earlier pilot, parity, and secondmate homes remain available through their named wrappers. The pending ShuvBro publication gate does not prevent testing the pinned candidate here.
+The plain `shuvcode` command selects `~/fleet-home`. It supplies its own background presentation publisher and does not need the retired ShuvBro watch service. The separate ShuvBro publication gate remains pending.
 
 Initial rollout targets new managed native homes. Existing-home migration, two-host fleet networking, and production load remain unqualified. The VM test qualifies SSH display disconnect/reconnect while destination-native work continues. Destination homes own their own runtime and presentation; this change does not provision a remote host.
