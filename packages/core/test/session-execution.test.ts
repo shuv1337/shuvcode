@@ -66,36 +66,38 @@ describe("SessionExecution lifecycle", () => {
       const release = yield* Deferred.make<void>()
       const scope = yield* Scope.make()
       yield* Effect.addFinalizer(() => Scope.close(scope, Exit.void))
-      const context = yield* buildExecution(scope, ({ sessionID }) =>
-        Effect.gen(function* () {
-          const activity = yield* ToolActivity.Service
-          yield* activity.lease(sessionID).pipe(
-            Effect.andThen(
-              Effect.gen(function* () {
-                yield* execute(
-                  {
-                    name: "hold",
-                    description: "Hold",
-                    input: {},
-                    execute: () => Effect.succeed({ content: "ok" }),
-                  },
-                  {},
-                  {
-                    sessionID,
-                    agent: Agent.ID.make("build"),
-                    messageID: SessionMessage.ID.make("msg_lease"),
-                    id: CallID.make("call_lease"),
-                    progress: () => Effect.void,
-                  },
-                )
-                yield* Deferred.succeed(held, yield* activity.count(sessionID))
-                yield* Deferred.await(release)
-              }),
-            ),
-            Effect.scoped,
-          )
-          yield* Deferred.succeed(finished, yield* activity.count(sessionID))
-        }).pipe(Effect.orDie) as unknown as Effect.Effect<void, SessionRunner.RunError>,
+      const context = yield* buildExecution(
+        scope,
+        ({ sessionID }) =>
+          Effect.gen(function* () {
+            const activity = yield* ToolActivity.Service
+            yield* activity.lease(sessionID).pipe(
+              Effect.andThen(
+                Effect.gen(function* () {
+                  yield* execute(
+                    {
+                      name: "hold",
+                      description: "Hold",
+                      input: {},
+                      execute: () => Effect.succeed({ content: "ok" }),
+                    },
+                    {},
+                    {
+                      sessionID,
+                      agent: Agent.ID.make("build"),
+                      messageID: SessionMessage.ID.make("msg_lease"),
+                      id: CallID.make("call_lease"),
+                      progress: () => Effect.void,
+                    },
+                  )
+                  yield* Deferred.succeed(held, yield* activity.count(sessionID))
+                  yield* Deferred.await(release)
+                }),
+              ),
+              Effect.scoped,
+            )
+            yield* Deferred.succeed(finished, yield* activity.count(sessionID))
+          }).pipe(Effect.orDie) as unknown as Effect.Effect<void, SessionRunner.RunError>,
       )
       const execution = Context.get(context, SessionExecution.Service)
       const running = yield* execution.resume(sessionID).pipe(Effect.forkIn(scope))
@@ -430,6 +432,91 @@ describe("SessionExecution lifecycle", () => {
 })
 
 describe("SessionRestart background recovery", () => {
+  it.effect("terminalizes an owner's cancelled recovery tree before resuming unrelated claims", () =>
+    Effect.gen(function* () {
+      const database = yield* Database.Service
+      const jobs = yield* Job.Service
+      const bus = yield* Bus.Service
+      const parent = Session.ID.make("ses_cancel_recovery_parent")
+      const child = Session.ID.make("ses_cancel_recovery_child")
+      const grandchild = Session.ID.make("ses_cancel_recovery_grandchild")
+      const unrelated = Session.ID.make("ses_cancel_recovery_unrelated")
+      yield* seedSessions(database, [parent, unrelated], { time_suspended: Date.now(), resume_attempts: 2 })
+      yield* seedSessions(database, [child], { parent_id: parent, time_suspended: Date.now(), resume_attempts: 2 })
+      yield* seedSessions(database, [grandchild], { parent_id: child, time_suspended: Date.now(), resume_attempts: 2 })
+      yield* Effect.forEach(
+        [
+          { parentSessionID: parent, childSessionID: child },
+          { parentSessionID: child, childSessionID: grandchild },
+        ],
+        (recovery) =>
+          Effect.gen(function* () {
+            yield* jobs.start({
+              id: recovery.childSessionID,
+              type: "subagent",
+              recovery: {
+                kind: "subagent",
+                ...recovery,
+                agent: "explore",
+                description: "Cancelled background work",
+              },
+              run: Effect.never,
+            })
+            yield* jobs.background(recovery.childSessionID)
+          }),
+      )
+      yield* seedBackground(jobs, grandchild, [{ id: "cancelled-shell", shellID: "sh_cancelled", command: "sleep 60" }])
+      const scope = yield* Scope.make()
+      yield* Effect.addFinalizer(() => Scope.close(scope, Exit.void))
+      const restarted = yield* Job.make.pipe(Scope.provide(scope))
+      const drained: Session.ID[] = []
+      const terminals: SessionEvent.Execution.Interrupted[] = []
+      const continued: SessionEvent.Synthetic[] = []
+      const resumed = yield* Deferred.make<void>()
+      const context = yield* buildExecution(
+        scope,
+        ({ sessionID }) =>
+          Effect.sync(() => void drained.push(sessionID)).pipe(
+            Effect.andThen(Deferred.succeed(resumed, undefined)),
+            Effect.asVoid,
+          ),
+        undefined,
+        restarted,
+      )
+      const restart = Context.get(context, SessionRestart.Service)
+      const execution = Context.get(context, SessionExecution.Service)
+      yield* bus.project(SessionEvent.Execution.Interrupted, (event) => Effect.sync(() => void terminals.push(event)))
+      yield* bus.project(SessionEvent.Synthetic, (event) => Effect.sync(() => void continued.push(event)))
+
+      yield* restart.resumeSuspendedSessionsWith({ interrupted: [parent, Session.ID.make("ses_missing_cancel")] })
+      yield* Deferred.await(resumed)
+      yield* execution.awaitIdle(unrelated)
+      expect(drained).toEqual([unrelated])
+      expect(terminals.map((event) => event.data)).toEqual(
+        [parent, child, grandchild].map((sessionID) => ({ sessionID, reason: "user" })),
+      )
+      expect(continued.map((event) => event.data.sessionID)).toEqual([unrelated])
+      expect(yield* claims(database)).toEqual({
+        [parent]: false,
+        [child]: false,
+        [grandchild]: false,
+        [unrelated]: false,
+      })
+      expect(yield* restarted.pendingBackground).toEqual([])
+      yield* Effect.forEach([parent, child, grandchild], (sessionID) =>
+        Effect.gen(function* () {
+          expect(yield* attempts(database, sessionID)).toBe(0)
+          expect(yield* SessionInbox.list(database.db, sessionID)).toEqual([])
+        }),
+      )
+
+      yield* restart.resumeSuspendedSessionsWith({ interrupted: [parent] })
+      yield* restart.resumeSuspendedSessions
+      expect(drained).toEqual([unrelated])
+      expect(terminals).toHaveLength(3)
+    }),
+  )
+
   it.effect("keeps shell owners idle until a user prompt delivers recovered notices exactly once", () =>
     Effect.gen(function* () {
       const database = yield* Database.Service

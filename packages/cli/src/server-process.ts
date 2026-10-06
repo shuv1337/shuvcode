@@ -9,6 +9,7 @@ import { AppProcess } from "@opencode/util/process"
 import { randomBytes, randomUUID } from "node:crypto"
 import { Effect, Option, Redacted, Schema } from "effect"
 import { PersistentPty } from "@opencode/schema/persistent-pty"
+import { Session } from "@opencode/schema/session"
 import { HttpServer } from "effect/unstable/http"
 import { Env } from "./env"
 import { ServiceConfig } from "./services/service-config"
@@ -24,6 +25,7 @@ export type Options = {
   readonly hostname?: string
   readonly port?: number
   readonly cors?: readonly string[]
+  readonly recoveryReady?: Effect.Effect<ReadonlyArray<Session.ID>>
 }
 
 // The process effect lives until server shutdown; tracing it would parent every request to one process-lifetime trace.
@@ -132,7 +134,9 @@ const processEffect = Effect.fnUntraced(function* (options: Options) {
           events: { persist: true },
         },
         serviceOptions === undefined
-          ? undefined
+          ? options.recoveryReady === undefined
+            ? undefined
+            : { onListen: () => Effect.succeed(Effect.void), beforeRecovery: options.recoveryReady }
           : {
               onListen: (address, shutdown) =>
                 Effect.gen(function* () {

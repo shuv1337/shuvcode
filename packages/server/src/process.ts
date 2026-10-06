@@ -4,6 +4,7 @@ import { NodeHttpServer } from "@effect/platform-node"
 import { Bus } from "@opencode/core/bus"
 import { SessionRestart } from "@opencode/core/session/execution/restart"
 import { InstallationEvent } from "@opencode/schema/installation-event"
+import { Session } from "@opencode/schema/session"
 import { hasPtyConnectTicketURL } from "@opencode/protocol/groups/pty"
 import { hasPersistentPtyConnectTicketURL } from "@opencode/protocol/groups/persistent-pty"
 import { isPairingConnectURL } from "@opencode/protocol/groups/server"
@@ -21,6 +22,8 @@ import { Status } from "./service-status"
 import type { ServerOptions } from "./options"
 
 export interface Lifecycle<E = never, R = never> {
+  /** Wait for the private owner's bridge and carry its durable cancellation decisions into recovery. */
+  readonly beforeRecovery?: Effect.Effect<ReadonlyArray<Session.ID>>
   readonly onListen: (
     address: HttpServer.Address,
     shutdown: Effect.Effect<void>,
@@ -102,7 +105,7 @@ export const start = Effect.fn("ServerProcess.start")(function* <E, R>(
       applicationScope,
     )
     if (lifecycle) {
-      yield* installRestartContinuity(Context.get(context, SessionRestart.Service)).pipe(
+      yield* installRestartContinuity(Context.get(context, SessionRestart.Service), lifecycle.beforeRecovery).pipe(
         Effect.provideService(Scope.Scope, applicationScope),
       )
     }
@@ -234,6 +237,13 @@ function unavailable(status: Status.State) {
  * never released. Claims are written when execution starts (see SessionExecution), so recovery covers
  * graceful restarts and unclean deaths alike — no shutdown hook participates.
  */
-const installRestartContinuity = Effect.fnUntraced(function* (restart: SessionRestart.Interface) {
-  yield* Effect.forkScoped(restart.resumeSuspendedSessions)
+const installRestartContinuity = Effect.fnUntraced(function* (
+  restart: SessionRestart.Interface,
+  ready?: Effect.Effect<ReadonlyArray<Session.ID>>,
+) {
+  yield* Effect.forkScoped(
+    ready
+      ? ready.pipe(Effect.flatMap((interrupted) => restart.resumeSuspendedSessionsWith({ interrupted })))
+      : restart.resumeSuspendedSessions,
+  )
 })

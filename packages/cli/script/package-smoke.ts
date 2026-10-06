@@ -62,6 +62,32 @@ export async function smokeDistribution(distribution: ForkDistribution) {
 
     const help = run(path.join(root, "node_modules", ".bin", "shuvcode"), ["serve", "--help"], root)
     if (!help.includes("--stdio")) throw new Error("Installed CLI does not advertise serve --stdio")
+
+    const project = path.join(root, "project")
+    const home = path.join(root, "supervisor")
+    run("git", ["init", "-q", project], root)
+    run(
+      path.join(root, "node_modules", ".bin", "shuvcode"),
+      ["supervisor", "init", "--project", project, "--home", home],
+      root,
+    )
+    const config: unknown = JSON.parse(await readFile(path.join(home, "config", "opencode.json"), "utf8"))
+    if (!isRecord(config) || !Array.isArray(config.plugins) || !isRecord(config.plugins[0]))
+      throw new Error("Installed supervisor config is missing its plugin")
+    const plugin = config.plugins[0].package
+    const platformBins = compatible.map((name) => path.join(root, "node_modules", name, "bin"))
+    if (typeof plugin !== "string" || !platformBins.some((bin) => plugin === path.join(bin, "supervisor-plugin")))
+      throw new Error("Installed supervisor plugin path does not point to a platform package")
+    await Promise.all([
+      exists(path.join(plugin, "index.js")),
+      exists(path.join(plugin, "package.json")),
+      ...["fm-voice-client.py", "fm-voice-relay.py", "fm_voice_frame.py", "fm_voice_records.py", "LICENSE.shuvbro"].map(
+        (file) => exists(path.join(path.dirname(plugin), "supervisor-voice", file)),
+      ),
+    ])
+    const definition = await import(path.join(plugin, "index.js"))
+    if (definition.default?.id !== "native-supervisor-pilot")
+      throw new Error("Installed supervisor plugin does not export its definition")
   } finally {
     await rm(root, { recursive: true, force: true })
   }
