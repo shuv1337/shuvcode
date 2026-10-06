@@ -318,6 +318,61 @@ describe("SubagentTool", () => {
       ),
     ),
   )
+
+  it.live("reserves a confirmed call when no session or agent model is selected", () =>
+    Effect.acquireRelease(
+      Effect.promise(() => tmpdir()),
+      (dir) => Effect.promise(() => dir[Symbol.asyncDispose]()),
+    ).pipe(
+      Effect.flatMap((dir) =>
+        Effect.gen(function* () {
+          const sessions = yield* Session.Service
+          const bus = yield* Bus.Service
+          const parent = yield* sessions.create({
+            location: Location.Ref.make({ directory: AbsolutePath.make(dir.path) }),
+          })
+          yield* withSubagent(parent.location)
+          const locations = yield* LocationServiceMap.Service
+          const registry = yield* Tool.Service.pipe(Effect.provide(locations.get(parent.location)))
+          const messageID = SessionMessage.ID.create()
+          const call = {
+            type: "tool-call" as const,
+            id: "call-default-model",
+            name: SubagentTool.name,
+            input: { prompt: "review this", description: "default model", agent: "fallback" },
+          }
+          yield* bus.publish(SessionEvent.Step.Started, {
+            sessionID: parent.id,
+            assistantMessageID: messageID,
+            agent: toolIdentity.agent,
+            model: parentModel,
+            started: 0,
+          })
+          yield* bus.publish(SessionEvent.Tool.Input.Started, {
+            sessionID: parent.id,
+            assistantMessageID: messageID,
+            id: call.id,
+            name: call.name,
+          })
+          yield* bus.publish(SessionEvent.Tool.Called, {
+            sessionID: parent.id,
+            assistantMessageID: messageID,
+            id: call.id,
+            input: call.input,
+            executed: false,
+          })
+          const result = yield* executeTool(registry, { sessionID: parent.id, ...toolIdentity, messageID, call })
+          expect(result).toMatchObject({ status: "completed" })
+          const childID = outputSessionID(result.metadata)
+          expect((yield* sessions.get(childID)).model).toBeUndefined()
+          const assistant = yield* sessions.message({ sessionID: parent.id, messageID })
+          expect(assistant).toMatchObject({
+            content: [{ state: { status: "running", metadata: { recovery: { childSessionID: childID } } } }],
+          })
+        }),
+      ),
+    ),
+  )
   productionIt.live(
     "inherits the parent's agent model and variant unless the child agent specifies its own model",
     () =>
