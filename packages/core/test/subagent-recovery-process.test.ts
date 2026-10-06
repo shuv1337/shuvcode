@@ -10,6 +10,7 @@ describe("confirmed subagent recovery after process death", () => {
     "created",
     "admitted",
     "running",
+    "prompted",
     "settled",
     "result",
     "background-prepared",
@@ -81,14 +82,15 @@ describe("confirmed subagent recovery after process death", () => {
         return
       }
       expect(JSON.parse(line)).toEqual({
-          childCount: 1,
-          admissionCount: 1,
-          childRuns: phase === "background-cancelled" ? 0 : 1,
+        childCount: 1,
+        admissionCount: 1,
+        childRuns: phase === "background-cancelled" ? 0 : 1,
         first: ["completed"],
         second: ["completed"],
         results: 1,
-          ...(phase.startsWith("background-") ? { notices: 1 } : {}),
-          ...(phase === "background-cancelled" ? { noticeState: "cancelled" } : {}),
+        ...(phase === "prompted" ? { parentDrains: ["completed"] } : {}),
+        ...(phase.startsWith("background-") ? { notices: 1 } : {}),
+        ...(phase === "background-cancelled" ? { noticeState: "cancelled" } : {}),
       })
     }, 30_000)
   }

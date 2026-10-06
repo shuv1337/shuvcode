@@ -4649,10 +4649,12 @@ describe("SessionRunnerLLM", () => {
     yield* s.resume
 
     expect(s.requests).toHaveLength(1)
-    expect(messageRoles(s.requests[0])).toEqual(["user", "assistant", "tool"])
+    expect(messageRoles(s.requests[0])).toEqual(["user"])
     expect(yield* s.context).toMatchObject([
       Expected.user("Recover interrupted tool input"),
-      Expected.assistant({}, [Expected.failedTool({ id: "call-pending-interrupted" }, {})]),
+      Expected.assistant({}, [
+        Expected.failedTool({ id: "call-pending-interrupted" }, { metadata: { recovery: "unconfirmed" } }),
+      ]),
     ])
   })
 

@@ -16,7 +16,9 @@ export const digest = (input: Record<string, unknown>) =>
     .update(
       JSON.stringify(
         Object.fromEntries(
-          Object.entries(input).filter(([key, value]) => !(["model", "sessionID"].includes(key) && value === "")),
+          Object.entries(input)
+            .filter(([key, value]) => !(["model", "sessionID"].includes(key) && value === ""))
+            .toSorted(([a], [b]) => (a < b ? -1 : 1)),
         ),
       ),
     )
