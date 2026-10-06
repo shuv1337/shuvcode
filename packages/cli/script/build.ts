@@ -1,7 +1,7 @@
 #!/usr/bin/env bun
 
 import { $ } from "bun"
-import { mkdir, rm } from "fs/promises"
+import { copyFile, mkdir, rm } from "fs/promises"
 import path from "path"
 import { Script } from "@opencode/script"
 import { createSolidTransformPlugin } from "@opentui/solid/bun-plugin"
@@ -46,6 +46,23 @@ if (!targets.length) throw new Error(`Unknown build target: ${requestedTarget}`)
 if (!skipInstall)
   await $`bun install --os="*" --cpu="*" @opentui/core@${pkg.dependencies["@opentui/core"]} @opencode-ai/pty@${pkg.dependencies["@opencode-ai/pty"]}`
 const appArchive = await buildAppArchive(Script.channel, { skipBuild: skipWebUi })
+const supervisorPlugin = await Bun.build({
+  entrypoints: ["./src/supervisor/plugin/index.ts"],
+  target: "bun",
+  format: "esm",
+  minify: true,
+})
+if (!supervisorPlugin.success) {
+  for (const log of supervisorPlugin.logs) console.error(log)
+  throw new Error("Failed to bundle the native supervisor plugin")
+}
+const voiceAssets = [
+  "fm-voice-client.py",
+  "fm-voice-relay.py",
+  "fm_voice_frame.py",
+  "fm_voice_records.py",
+  "LICENSE.shuvbro",
+]
 const appAssetsPlugin: BunPlugin = {
   name: "opencode-app-assets",
   setup(build) {
@@ -160,6 +177,26 @@ export default { path: file, version: ${JSON.stringify(opencodePty.version)}, sh
       },
       null,
       2,
+    ),
+  )
+  await Bun.write(path.join(outdir, name, "bin", "supervisor-plugin", "index.js"), supervisorPlugin.outputs[0]!)
+  await Bun.write(
+    path.join(outdir, name, "bin", "supervisor-plugin", "package.json"),
+    JSON.stringify({
+      name: "native-supervisor-pilot",
+      version: "0.0.0",
+      private: true,
+      type: "module",
+      exports: "./index.js",
+    }),
+  )
+  await mkdir(path.join(outdir, name, "bin", "supervisor-voice"), { recursive: true })
+  await Promise.all(
+    voiceAssets.map((file) =>
+      copyFile(
+        path.join(dir, "src", "supervisor", "voice", file),
+        path.join(outdir, name, "bin", "supervisor-voice", file),
+      ),
     ),
   )
   await verifyArtifact(path.join(outdir, name))

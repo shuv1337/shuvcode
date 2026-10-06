@@ -41,6 +41,10 @@ export interface Interface {
    * the resume path leaves the same orphaned claim for the next boot.
    */
   readonly resumeSuspendedSessions: Effect.Effect<void>
+  /** Applies durable owner cancellations before any orphaned execution can resume. */
+  readonly resumeSuspendedSessionsWith: (options: {
+    readonly interrupted: ReadonlyArray<SessionSchema.ID>
+  }) => Effect.Effect<void>
 }
 
 /**
@@ -189,10 +193,49 @@ export const layer = (options?: Options) =>
         )
       })
 
-      return Service.of({
-        resumeSuspendedSessions: Effect.gen(function* () {
+      const resumeSuspendedSessionsWith: Interface["resumeSuspendedSessionsWith"] = Effect.fnUntraced(
+        function* (input) {
+          const interrupted = new Set(input.interrupted)
+          const descendants = [...interrupted]
+          for (const sessionID of descendants) {
+            const children = yield* store.list({ parentID: sessionID })
+            children.forEach((child) => {
+              if (interrupted.has(child.id)) return
+              interrupted.add(child.id)
+              descendants.push(child.id)
+            })
+          }
+          const backgrounds = yield* jobs.pendingBackground
+          const cancelledBackgrounds = backgrounds.filter((background) =>
+            background.recovery.kind === "shell"
+              ? interrupted.has(background.recovery.sessionID)
+              : interrupted.has(background.recovery.parentSessionID) ||
+                interrupted.has(background.recovery.childSessionID),
+          )
+          // Cancelled recovery trees must not enqueue completion notices that revive their owners.
+          yield* Effect.forEach(
+            cancelledBackgrounds,
+            Effect.fnUntraced(function* (background) {
+              yield* jobs.cancel(background.id)
+              yield* jobs.completeBackground(background.notificationID)
+            }),
+            { discard: true },
+          )
+          yield* Effect.forEach(
+            descendants,
+            Effect.fnUntraced(function* (sessionID) {
+              if (yield* execution.interrupt(sessionID, { reason: "user", awaitSettlement: true })) return
+              if (!(yield* store.hasClaim(sessionID))) return
+              yield* bus.publish(
+                SessionEvent.Execution.Interrupted,
+                { sessionID, reason: "user" },
+                { commit: () => store.release(sessionID) },
+              )
+            }),
+            { discard: true },
+          )
           const active = yield* execution.active
-          const pending = yield* jobs.pendingBackground
+          const pending = backgrounds.filter((background) => !cancelledBackgrounds.includes(background))
           const children = pending.flatMap((background) =>
             background.status === "running" && background.recovery.kind === "subagent"
               ? [background.recovery.childSessionID]
@@ -228,7 +271,12 @@ export const layer = (options?: Options) =>
           )
           // Async observers consult this set at delivery; later completions wake parents normally.
           suspended.clear()
-        }),
+        },
+      )
+
+      return Service.of({
+        resumeSuspendedSessions: resumeSuspendedSessionsWith({ interrupted: [] }),
+        resumeSuspendedSessionsWith,
       })
     }),
   )
