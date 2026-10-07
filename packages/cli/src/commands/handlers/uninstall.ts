@@ -20,11 +20,10 @@ export default Runtime.handler(
     const updater = yield* Updater.Service
     const method = yield* updater.method()
     const removal = method ? updater.removal(method) : undefined
+    // Data and config hold sessions, credentials, and user-authored settings; uninstall never removes them.
     const directories = [
-      { path: global.data, label: "Data", keep: input.keepData },
-      { path: global.cache, label: "Cache", keep: false },
-      { path: global.config, label: "Config", keep: input.keepConfig },
-      { path: global.state, label: "State", keep: false },
+      { path: global.cache, label: "Cache" },
+      { path: global.state, label: "State" },
     ]
     // All channels share these directories. Stop their owners before deleting state or data.
     // Read registrations directly: ServiceConfig.options() can migrate files even during a dry run.
@@ -38,7 +37,7 @@ export default Runtime.handler(
     yield* Effect.forEach(directories, (directory) =>
       Effect.gen(function* () {
         if (!(yield* fs.exists(directory.path))) return
-        log.info(`  ${directory.label}: ${directory.path}${directory.keep ? " (keeping)" : ""}`)
+        log.info(`  ${directory.label}: ${directory.path}`)
       }),
     )
     services.forEach((name) =>
@@ -85,7 +84,6 @@ export default Runtime.handler(
     const errors: string[] = []
     yield* Effect.forEach(directories, (directory) =>
       Effect.gen(function* () {
-        if (directory.keep) return
         progress.start(`Removing ${directory.label}...`)
         yield* fs.remove(directory.path, { recursive: true, force: true }).pipe(
           // Windows reports a terminated service as gone before it releases its database
