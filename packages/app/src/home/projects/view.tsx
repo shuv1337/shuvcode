@@ -33,6 +33,11 @@ const HOME_PROJECT_NAV_LABEL = "min-w-0 flex-1 overflow-hidden text-ellipsis whi
 
 const serverContextMenuID = (server: ServerConnection.Any) => `server:${ServerConnection.key(server)}`
 
+// Extension servers ask for sign-in themselves; an HTTP server that rejects its saved credentials needs a new
+// pairing link or password.
+const signInRequired = (server: ServerConnection.Any, health: ServerHealth | undefined) =>
+  (server.type === "extension" && server.authenticationRequired) || (server.type === "http" && !!health?.unauthorized)
+
 const projectContextMenuID = (server: ServerConnection.Any, directory: string) =>
   `project:${ServerConnection.key(server)}:${directory}`
 
@@ -158,7 +163,7 @@ export function HomeProjectsView(props: HomeProjectsViewProps) {
 }
 
 function HomeProjectsPanel(props: HomeProjectsViewProps) {
-  const [contextMenu, setContextMenu] = createStore({ open: undefined as string | undefined })
+  const [contextMenu, setContextMenu] = createStore<{ open: string | undefined }>({ open: undefined })
 
   const contextMenuProps = {
     contextMenuOpen: (id: string) => contextMenu.open === id,
@@ -216,7 +221,9 @@ function HomeProjectsPanel(props: HomeProjectsViewProps) {
           when={
             props.servers.length > 1 ||
             props.servers.some(
-              (server) => server.type === "extension" && (server.authenticationRequired || server.connecting),
+              (server) =>
+                signInRequired(server, props.serverHealth(server)) ||
+                (server.type === "extension" && server.connecting),
             )
           }
           fallback={
@@ -253,7 +260,7 @@ function HomeProjectsPanel(props: HomeProjectsViewProps) {
                 const healthy = () => !!props.serverHealth(item)?.healthy
                 const hasProjects = () => projects().length > 0
                 const collapsed = () => props.collapsed(item)
-                const authentication = () => item.type === "extension" && item.authenticationRequired
+                const authentication = () => signInRequired(item, props.serverHealth(item))
                 const connecting = () => item.type === "extension" && item.connecting
 
                 return (
@@ -358,7 +365,7 @@ function HomeServerRow(props: {
   health: ServerHealth | undefined
 }) {
   const healthy = () => !!props.health?.healthy
-  const authentication = () => props.server.type === "extension" && props.server.authenticationRequired
+  const authentication = () => signInRequired(props.server, props.health)
   const incompatible = () => !!props.health?.incompatible
   const canToggle = () => healthy() && props.projectsForServer(props.server).length > 0
   const contextMenuID = () => serverContextMenuID(props.server)

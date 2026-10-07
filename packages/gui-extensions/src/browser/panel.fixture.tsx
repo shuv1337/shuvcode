@@ -767,7 +767,7 @@ export function mountBrowserRegion(input: RegionHost) {
     const appearance: Appearance = { font: () => "monospace" }
     const router: Router = { routing: () => false, path: () => "/" }
     const keybinds: Keybinds = { keybind: () => [], keys: (bind) => bind.split("+"), matches: () => false }
-    const servers: Servers = { list: () => [server.id] }
+    const servers: Servers = { list: () => [server.id], get: () => undefined }
     const workspaces: Workspaces = { on: () => () => undefined }
 
     const listeners = new Set<(value: { binding: string; event: PaneEvent }) => void>()
