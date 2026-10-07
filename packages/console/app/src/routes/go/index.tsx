@@ -308,7 +308,8 @@ export default function Home() {
                       .
                     </p>
                     <p>
-                      <strong>Claude Haiku 5.5:</strong> {i18n.t("go.faq.a5.retention")}: {i18n.t("go.faq.a5.retention30")}.{" "}
+                      <strong>Claude Haiku 5.5:</strong> {i18n.t("go.faq.a5.retention")}:{" "}
+                      {i18n.t("go.faq.a5.retention30")}.{" "}
                       <a href="https://docs.anthropic.com/en/docs/claude-code/data-usage">
                         {i18n.t("go.faq.a5.learnMore")}
                       </a>
