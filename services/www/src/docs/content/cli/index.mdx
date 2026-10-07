@@ -96,8 +96,8 @@ opencode uninstall --dry-run
 ```
 
 Run `opencode uninstall` to confirm removal. OpenCode stops registered background services and persistent terminals before
-removing the global cache and state directories. These directories are shared by OpenCode versions and channels. Session
-data and configuration are never removed.
+removing the global cache directory, which is shared by OpenCode versions and channels. Session data, configuration, and
+state are never removed.
 
 - `--force` (`-f`) skips confirmation; use it for noninteractive removal.
 - Package-manager installations use the detected package manager. Curl installations print the final command to remove

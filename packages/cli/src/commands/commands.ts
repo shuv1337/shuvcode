@@ -73,7 +73,7 @@ const Root = Spec.make(typeof OPENCODE_CLI_NAME === "string" ? OPENCODE_CLI_NAME
       },
     }),
     Spec.make("uninstall", {
-      description: "Uninstall OpenCode, keeping session data and configuration",
+      description: "Uninstall OpenCode, keeping session data, configuration, and state",
       params: {
         dryRun: Flag.boolean("dry-run").pipe(
           Flag.withDescription("Show what would be removed without removing"),
