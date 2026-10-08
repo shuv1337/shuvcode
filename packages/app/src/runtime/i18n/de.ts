@@ -28,9 +28,9 @@ export const dict = {
   "server.connect.failed":
     "Es konnte keine Verbindung hergestellt werden. Überprüfen Sie die Serveradresse und das Passwort und versuchen Sie es dann erneut.",
   "server.connect.scan": "Scannen Sie den QR-Code",
-  "server.connect.scan.description": "Richten Sie Ihre Kamera auf den von opencode pair angezeigten Code QR.",
+  "server.connect.scan.description": "Richten Sie Ihre Kamera auf den von shuvcode pair angezeigten Code QR.",
   "server.connect.scan.invalid":
-    "Dies ist kein OpenCode-Pairing-Code. Scannen Sie den von opencode pair angezeigten Code.",
+    "Dies ist kein OpenCode-Pairing-Code. Scannen Sie den von shuvcode pair angezeigten Code.",
   "server.connect.camera": "Kamera koppeln",
   "server.connect.camera.starting": "Kamera wird geöffnet…",
   "server.connect.mixedContent":

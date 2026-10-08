@@ -813,8 +813,8 @@ export const dict = {
   "server.connect.failed":
     "Povezave ni bilo mogoče vzpostaviti. Preverite naslov strežnika in geslo ter poskusite znova.",
   "server.connect.scan": "Skeniraj QR kodo",
-  "server.connect.scan.description": "Usmerite kamero na QR kodo, ki jo prikaže opencode pair.",
-  "server.connect.scan.invalid": "To ni OpenCode paritna koda. Skenirajte kodo, ki jo prikaže opencode pair.",
+  "server.connect.scan.description": "Usmerite kamero na QR kodo, ki jo prikaže shuvcode pair.",
+  "server.connect.scan.invalid": "To ni OpenCode paritna koda. Skenirajte kodo, ki jo prikaže shuvcode pair.",
   "server.connect.camera": "Paritvena kamera",
   "server.connect.camera.starting": "Odpiranje kamere…",
   "server.connect.mixedContent":

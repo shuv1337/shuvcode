@@ -851,7 +851,7 @@ export const dict = {
   "server.connect.failed": "ไม่สามารถเชื่อมต่อได้ ตรวจสอบที่อยู่เซิร์ฟเวอร์และรหัสผ่าน จากนั้นลองใหม่อีกครั้ง",
   "server.connect.scan": "สแกนรหัส QR",
   "server.connect.scan.description": "ชี้กล้องของคุณไปที่รหัส QR ที่แสดงโดยการจับคู่ opencode",
-  "server.connect.scan.invalid": "นี่ไม่ใช่รหัสจับคู่ OpenCode สแกนรหัสที่แสดงโดย opencode pair",
+  "server.connect.scan.invalid": "นี่ไม่ใช่รหัสจับคู่ OpenCode สแกนรหัสที่แสดงโดย shuvcode pair",
   "server.connect.camera": "กำลังจับคู่กล้อง",
   "server.connect.camera.starting": "กำลังเปิดกล้อง…",
   "server.connect.mixedContent": "ไม่สามารถเชื่อมต่อกับเซิร์ฟเวอร์ HTTP จากหน้า HTTPS ใช้ที่อยู่เซิร์ฟเวอร์ HTTPS แทน",

@@ -24,8 +24,8 @@ export const dict = {
   "server.connect.failed":
     "Kunne ikke oprette forbindelse. Tjek serveradressen og adgangskoden, og prøv derefter igen.",
   "server.connect.scan": "Scan QR kode",
-  "server.connect.scan.description": "Ret dit kamera mod QR-koden vist af opencode pair.",
-  "server.connect.scan.invalid": "Dette er ikke en OpenCode-parringskode. Scan koden vist af opencode pair.",
+  "server.connect.scan.description": "Ret dit kamera mod QR-koden vist af shuvcode pair.",
+  "server.connect.scan.invalid": "Dette er ikke en OpenCode-parringskode. Scan koden vist af shuvcode pair.",
   "server.connect.camera": "Parring af kamera",
   "server.connect.camera.starting": "Åbner kamera...",
   "server.connect.mixedContent":

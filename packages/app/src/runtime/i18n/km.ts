@@ -789,8 +789,8 @@ export const dict = {
   "server.connect.address.invalid": "បញ្ចូលអាសយដ្ឋានម៉ាស៊ីនមេ HTTP ឬ HTTPS ត្រឹមត្រូវ។",
   "server.connect.failed": "មិនអាចភ្ជាប់បានទេ។ សូមពិនិត្យអាសយដ្ឋានម៉ាស៊ីនមេ និងពាក្យសម្ងាត់ រួចព្យាយាមម្តងទៀត។",
   "server.connect.scan": "ស្កេនកូដ QR",
-  "server.connect.scan.description": "បង្ខំកាមេរ៉ារបស់អ្នកទៅកូដ QR ដែលបង្ហាញដោយ opencode pair។",
-  "server.connect.scan.invalid": "នេះមិនមែនជាកូដផ្គុំ OpenCode ទេ។ ស្កេនកូដដែលបង្ហាញដោយ opencode pair។",
+  "server.connect.scan.description": "បង្ខំកាមេរ៉ារបស់អ្នកទៅកូដ QR ដែលបង្ហាញដោយ shuvcode pair។",
+  "server.connect.scan.invalid": "នេះមិនមែនជាកូដផ្គុំ OpenCode ទេ។ ស្កេនកូដដែលបង្ហាញដោយ shuvcode pair។",
   "server.connect.camera": "កំពុងផ្គុំកាមេរ៉ា",
   "server.connect.camera.starting": "កំពុងបើកកាមេរ៉ា…",
   "server.connect.mixedContent":

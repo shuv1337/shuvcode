@@ -795,8 +795,8 @@ export const dict = {
   "server.connect.address.invalid": "Yaroqli HTTP yoki HTTPS server manzilini kiriting.",
   "server.connect.failed": "Ulanib bo‘lmadi. Server manzili va parolni tekshiring, keyin qayta urinib ko'ring.",
   "server.connect.scan": "QR kodini skanerlang",
-  "server.connect.scan.description": "Kamerani opencode pair koʻrsatgan QR kodga qarating.",
-  "server.connect.scan.invalid": "Bu OpenCode ulash kodi emas. opencode pair koʻrsatgan kodni skanerlang.",
+  "server.connect.scan.description": "Kamerani shuvcode pair koʻrsatgan QR kodga qarating.",
+  "server.connect.scan.invalid": "Bu OpenCode ulash kodi emas. shuvcode pair koʻrsatgan kodni skanerlang.",
   "server.connect.camera": "Kamerani ulash",
   "server.connect.camera.starting": "Kamera ochilmoqda…",
   "server.connect.mixedContent":

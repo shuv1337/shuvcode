@@ -805,7 +805,7 @@ test("the add server dialog pairs from a one-time link and explains a spent one"
 
   const spent = await addServer()
   await expect(spent.getByRole("alert")).toHaveText(
-    "This pairing link expired or was already used. Run opencode pair to get a new one.",
+    "This pairing link expired or was already used. Run shuvcode pair to get a new one.",
   )
 })
 

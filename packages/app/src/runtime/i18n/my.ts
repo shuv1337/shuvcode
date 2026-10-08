@@ -806,7 +806,7 @@ export const dict = {
   "server.connect.address.invalid": "မှန်ကန်သော HTTP သို့မဟုတ် HTTPS server လိပ်စာကို ထည့်ပါ။",
   "server.connect.failed": "ချိတ်ဆက်၍ မရပါ။ Server လိပ်စာနှင့် စကားဝှက်ကို စစ်ဆေးပြီး ပြန်ကြိုးစားပါ။",
   "server.connect.scan": "QR ကုဒ် စကင်",
-  "server.connect.scan.description": "opencode pair မှ ပြသထားသော QR ကုဒ်ကို သင်၏ ကင်မရာဖြင့် ညွှန်ပါ။",
+  "server.connect.scan.description": "shuvcode pair မှ ပြသထားသော QR ကုဒ်ကို သင်၏ ကင်မရာဖြင့် ညွှန်ပါ။",
   "server.connect.scan.invalid":
     "ဒါသည် OpenCode အစုံပေါင်းကုဒ်မဟုတ်ပါ။ OpenCode pairing မှ ဖော်ပြထားသောကုဒ်ကို စကင်လုပ်ပါ။",
   "server.connect.camera": "ကင်မရာကို အစုံပေါင်းခြင်း",

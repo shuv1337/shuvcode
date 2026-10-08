@@ -24,8 +24,8 @@ export const dict = {
   "server.connect.failed":
     "Yhteyttä ei voitu muodostaa. Tarkista palvelimen osoite ja salasana ja yritä sitten uudelleen.",
   "server.connect.scan": "Skannaa QR-koodi",
-  "server.connect.scan.description": "Suuntaa kamerasi QR-koodiin, joka näkyy opencode pair:ssä.",
-  "server.connect.scan.invalid": "Tämä ei ole OpenCode-pariliitoskoodi. Skannaa opencode pair:n näyttämä koodi.",
+  "server.connect.scan.description": "Suuntaa kamerasi QR-koodiin, joka näkyy shuvcode pair:ssä.",
+  "server.connect.scan.invalid": "Tämä ei ole OpenCode-pariliitoskoodi. Skannaa shuvcode pair:n näyttämä koodi.",
   "server.connect.camera": "Kameraparin muodostaminen",
   "server.connect.camera.starting": "Avataan kameraa…",
   "server.connect.mixedContent":

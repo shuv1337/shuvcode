@@ -860,8 +860,8 @@ export const dict = {
   "server.connect.address.invalid": "Masukkan alamat server HTTP atau HTTPS yang valid.",
   "server.connect.failed": "Tidak dapat terhubung. Periksa alamat server dan kata sandi, lalu coba lagi.",
   "server.connect.scan": "Pindai kode QR",
-  "server.connect.scan.description": "Arahkan kamera Anda ke kode QR yang ditampilkan oleh opencode pair.",
-  "server.connect.scan.invalid": "Ini bukan kode pemasangan OpenCode. Pindai kode yang ditampilkan oleh opencode pair.",
+  "server.connect.scan.description": "Arahkan kamera Anda ke kode QR yang ditampilkan oleh shuvcode pair.",
+  "server.connect.scan.invalid": "Ini bukan kode pemasangan OpenCode. Pindai kode yang ditampilkan oleh shuvcode pair.",
   "server.connect.camera": "Kamera pemasangan",
   "server.connect.camera.starting": "Membuka kamera…",
   "server.connect.mixedContent":

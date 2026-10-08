@@ -95,7 +95,7 @@ In Vite development mode, `origin` uses `VITE_OPENCODE_SERVER_HOST` / `VITE_OPEN
 from storage. Desktop provides the local server it discovers or starts through native initialization.
 
 With no configured servers, or when the only server rejects the saved credentials, the app shows a full-screen
-connection form. Enter a server address and password, paste a link from `opencode pair`, or choose
+connection form. Enter a server address and password, paste a link from `shuvcode pair`, or choose
 **Scan QR code** to read its QR code. Pairing links are single-use; the app exchanges them for a session token
 and immediately attempts to connect. Failed connections leave the details available
 to edit and retry with **Connect**. Credentials are checked before saving the server. Camera access requires
@@ -104,7 +104,7 @@ HTTPS (or localhost) and browser permission. Saved offline servers continue to u
 When the service is exposed through an HTTPS reverse proxy, advertise its external address at runtime:
 
 ```bash
-opencode pair --url https://opencode.example.com
+shuvcode pair --url https://opencode.example.com
 ```
 
 This replaces the addresses in the printed links and QR code.

@@ -777,8 +777,8 @@ export const dict = {
   "server.connect.address.invalid": "Skriva eina gylduga HTTP ella HTTPS ambætaraadressu.",
   "server.connect.failed": "Fekk ikki samband. Kanna ambætaraadressuna og loyniorðið, og royn síðani aftur.",
   "server.connect.scan": "Skanna QR-kotu",
-  "server.connect.scan.description": "Peika myndatólið á QR-kotuna, sum opencode pair vísir.",
-  "server.connect.scan.invalid": "Hetta er ikki ein OpenCode paringarkoda. Skanna kotuna, sum opencode pair vísir.",
+  "server.connect.scan.description": "Peika myndatólið á QR-kotuna, sum shuvcode pair vísir.",
+  "server.connect.scan.invalid": "Hetta er ikki ein OpenCode paringarkoda. Skanna kotuna, sum shuvcode pair vísir.",
   "server.connect.camera": "Para myndatól",
   "server.connect.camera.starting": "Opna myndatól...",
   "server.connect.mixedContent":

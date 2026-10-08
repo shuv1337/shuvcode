@@ -792,8 +792,8 @@ export const dict = {
   "server.connect.address.invalid": "Adjon meg egy érvényes HTTP vagy HTTPS szervercímet.",
   "server.connect.failed": "Nem sikerült csatlakozni. Ellenőrizze a szerver címét és jelszavát, majd próbálja újra.",
   "server.connect.scan": "QR-kód beolvasása",
-  "server.connect.scan.description": "Irányítsa kameráját a opencode pair által mutatott QR kódra.",
-  "server.connect.scan.invalid": "Ez nem egy OpenCode párosítási kód. Olvassa be a opencode pair által mutatott kódot.",
+  "server.connect.scan.description": "Irányítsa kameráját a shuvcode pair által mutatott QR kódra.",
+  "server.connect.scan.invalid": "Ez nem egy OpenCode párosítási kód. Olvassa be a shuvcode pair által mutatott kódot.",
   "server.connect.camera": "Kamera párosítása",
   "server.connect.camera.starting": "Kamera nyitása…",
   "server.connect.mixedContent":

@@ -794,9 +794,9 @@ export const dict = {
   "server.connect.address.invalid": "Суроғаи сервери дурусти HTTP ё HTTPS-ро ворид кунед.",
   "server.connect.failed": "Пайваст шуда натавонист. Суроғаи сервер ва паролро тафтиш кунед ва аз нав кӯшиш кунед.",
   "server.connect.scan": "Рамзи QR-ро скан кунед",
-  "server.connect.scan.description": "Камераро ба рамзи QR, ки opencode pair нишон медиҳад, равона кунед.",
+  "server.connect.scan.description": "Камераро ба рамзи QR, ки shuvcode pair нишон медиҳад, равона кунед.",
   "server.connect.scan.invalid":
-    "Ин рамзи ҷуфткунии OpenCode нест. Рамзеро, ки opencode pair нишон медиҳад, скан кунед.",
+    "Ин рамзи ҷуфткунии OpenCode нест. Рамзеро, ки shuvcode pair нишон медиҳад, скан кунед.",
   "server.connect.camera": "Камераи ҷуфткунӣ",
   "server.connect.camera.starting": "Кушодани камера…",
   "server.connect.mixedContent":

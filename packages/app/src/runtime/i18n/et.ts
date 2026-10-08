@@ -773,8 +773,8 @@ export const dict = {
   "server.connect.address.invalid": "Sisestage kehtiv serveri aadress HTTP või HTTPS.",
   "server.connect.failed": "Ühendust ei õnnestunud luua. Kontrollige serveri aadressi ja parooli ning proovige uuesti.",
   "server.connect.scan": "Skaneeri QR-kood",
-  "server.connect.scan.description": "Suunake oma kaamera koodile QR, mida näitab opencode pair.",
-  "server.connect.scan.invalid": "See ei ole OpenCode sidumiskood. Skannige koodi, mida näitab opencode pair.",
+  "server.connect.scan.description": "Suunake oma kaamera koodile QR, mida näitab shuvcode pair.",
+  "server.connect.scan.invalid": "See ei ole OpenCode sidumiskood. Skannige koodi, mida näitab shuvcode pair.",
   "server.connect.camera": "Kaamera sidumine",
   "server.connect.camera.starting": "Kaamera avamine…",
   "server.connect.mixedContent":
