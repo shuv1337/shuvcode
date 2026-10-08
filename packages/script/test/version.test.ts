@@ -3,6 +3,7 @@ import { $ } from "bun"
 import fs from "fs/promises"
 import os from "os"
 import path from "path"
+import semver from "semver"
 import { detachedBranches, nextForkVersion, parseForkVersion, resolveChannel } from "../src/version.js"
 
 const directories: string[] = []
@@ -29,6 +30,24 @@ describe("resolveChannel", () => {
 
   test("uses the current branch for preview builds", async () => {
     expect(await resolveChannel({ branch: async () => "v2-rewrite\n" })).toBe("v2-rewrite")
+  })
+
+  test("turns a slashed branch into a preview version identifier", async () => {
+    const channel = await resolveChannel({ branch: async () => "cursor/sync-upstream-v225-9a24" })
+    expect(channel).toBe("cursor-sync-upstream-v225-9a24")
+    expect(semver.valid(`0.0.0-${channel}-202610081115`)).toBe(`0.0.0-${channel}-202610081115`)
+    expect(await resolveChannel({ branch: async () => "/leading" })).toBe("branch--leading")
+    expect(
+      await resolveChannel({
+        branch: async () => "",
+        github: { headRef: "feat/thing", refName: "12/merge", refType: "branch" },
+        detachedBranches: async () => [],
+      }),
+    ).toBe("feat-thing")
+    expect(await resolveChannel({ branch: async () => "", detachedBranches: async () => ["jj/bookmark"] })).toBe(
+      "jj-bookmark",
+    )
+    expect(await resolveChannel({ channel: "feat/kept", branch: async () => "unused" })).toBe("feat/kept")
   })
 
   test("resolves a detached HEAD from the branches or bookmarks at the working copy", async () => {
