@@ -12,6 +12,7 @@ describe("OAuth boundary", () => {
     expect(isSubscription({ ...credential, methodID: IntegrationMethodID.make("other") })).toBe(false)
     expect(isSubscription({ type: "key", key: "sk-ant-oat01-fixture" })).toBe(true)
     expect(isSubscription({ type: "key", key: "sk-ant-api03-fixture" })).toBe(false)
+    expect(isSubscription(Credential.External.make({ type: "external", methodID }))).toBe(false)
     expect(isSubscription(undefined)).toBe(false)
   })
 

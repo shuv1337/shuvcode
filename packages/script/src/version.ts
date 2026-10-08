@@ -8,6 +8,14 @@ import path from "path"
 // bare upstream version can never be published under the fork's package name.
 const suffix = "shuv"
 
+// Preview versions are `0.0.0-${channel}-<build>`. npm prerelease identifiers allow
+// ASCII alphanumerics, dots, and hyphens, and the first character must be alphanumeric.
+function channelName(value: string) {
+  const channel = value.replace(/[^a-zA-Z0-9._-]/g, "-")
+  if (/^[a-zA-Z0-9]/.test(channel)) return channel
+  return `branch-${channel}`
+}
+
 export async function resolveChannel(input: {
   readonly channel?: string
   readonly bump?: string
@@ -20,10 +28,11 @@ export async function resolveChannel(input: {
   if (input.bump) return "latest"
   if (input.version && !input.version.startsWith("0.0.0-")) return "latest"
   const branch = (await input.branch().catch(() => "")).trim()
-  if (branch) return branch
+  if (branch) return channelName(branch)
   // GitHub Actions checks out PRs at a detached merge commit that no local branch points at.
-  if (input.github?.headRef?.trim()) return input.github.headRef.trim()
-  if (input.github?.refType === "branch" && input.github.refName?.trim()) return input.github.refName.trim()
+  if (input.github?.headRef?.trim()) return channelName(input.github.headRef.trim())
+  if (input.github?.refType === "branch" && input.github.refName?.trim())
+    return channelName(input.github.refName.trim())
   // jj-colocated and other detached-HEAD checkouts have no current branch. A single branch or
   // bookmark at the working copy names the channel; several are ambiguous, so require OPENCODE_CHANNEL.
   const candidates = (
@@ -38,7 +47,7 @@ export async function resolveChannel(input: {
   )
     .map((name) => name.trim())
     .filter((name) => name.length > 0)
-  if (candidates.length === 1) return candidates[0]
+  if (candidates.length === 1) return channelName(candidates[0])
   if (candidates.length > 1)
     throw new Error(
       `Could not determine the build channel: several branches or jj bookmarks point at the working copy (${candidates.join(", ")}). Set OPENCODE_CHANNEL to one of them.`,

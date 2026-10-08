@@ -61,18 +61,8 @@ const Root = Spec.make(typeof OPENCODE_CLI_NAME === "string" ? OPENCODE_CLI_NAME
       },
     }),
     Spec.make("uninstall", {
-      description: "Uninstall Shuvcode and remove all related files",
+      description: "Uninstall Shuvcode, keeping session data, configuration, and state",
       params: {
-        keepConfig: Flag.boolean("keep-config").pipe(
-          Flag.withAlias("c"),
-          Flag.withDescription("Keep configuration files"),
-          Flag.withDefault(false),
-        ),
-        keepData: Flag.boolean("keep-data").pipe(
-          Flag.withAlias("d"),
-          Flag.withDescription("Keep session data and snapshots"),
-          Flag.withDefault(false),
-        ),
         dryRun: Flag.boolean("dry-run").pipe(
           Flag.withDescription("Show what would be removed without removing"),
           Flag.withDefault(false),
@@ -84,7 +74,16 @@ const Root = Spec.make(typeof OPENCODE_CLI_NAME === "string" ? OPENCODE_CLI_NAME
         ),
       },
     }),
-    Spec.make("acp", { description: "Start an Agent Client Protocol server", connectionFlags: "unsupported" }),
+    Spec.make("acp", {
+      description: "Start an Agent Client Protocol server",
+      connectionFlags: "unsupported",
+      params: {
+        login: Flag.boolean("login").pipe(
+          Flag.withDescription("Run auth login instead of starting the server"),
+          Flag.withDefault(false),
+        ),
+      },
+    }),
     Spec.make("api", {
       description: "Make a request to the running server",
       params: {
@@ -509,6 +508,10 @@ const Root = Spec.make(typeof OPENCODE_CLI_NAME === "string" ? OPENCODE_CLI_NAME
             () => "Expected an HTTP(S) server URL without credentials, query parameters, or a fragment",
           ),
           Flag.optional,
+        ),
+        remote: Flag.boolean("remote").pipe(
+          Flag.withDescription("Pair through the OpenTunnel remote address, enabling remote access if needed"),
+          Flag.withDefault(false),
         ),
       },
     }),

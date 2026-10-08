@@ -49,6 +49,9 @@ export type CommandMethod = Integration.CommandMethod
 export const KeyMethod = Integration.KeyMethod
 export type KeyMethod = Integration.KeyMethod
 
+export const ExternalMethod = Integration.ExternalMethod
+export type ExternalMethod = Integration.ExternalMethod
+
 export const EnvMethod = Integration.EnvMethod
 export type EnvMethod = Integration.EnvMethod
 
@@ -86,6 +89,11 @@ export interface KeyImplementation {
   readonly method: KeyMethod
 }
 
+export interface ExternalImplementation {
+  readonly integrationID: ID
+  readonly method: ExternalMethod
+}
+
 export interface CommandImplementation {
   readonly integrationID: ID
   readonly method: CommandMethod
@@ -96,7 +104,12 @@ export interface EnvImplementation {
   readonly method: EnvMethod
 }
 
-export type Implementation = OAuthImplementation | CommandImplementation | KeyImplementation | EnvImplementation
+export type Implementation =
+  | OAuthImplementation
+  | CommandImplementation
+  | KeyImplementation
+  | ExternalImplementation
+  | EnvImplementation
 
 export const Attempt = Integration.Attempt
 export type Attempt = Integration.Attempt
@@ -169,7 +182,7 @@ export interface Interface extends State.Transformable<Editor> {
   readonly connection: {
     /** Returns the active connection for one integration. */
     readonly active: (id: ID) => Effect.Effect<IntegrationConnection.Info | undefined>
-    /** Resolves a connection into usable credential material. */
+    /** Resolves a connection into credential material or an external credential-source reference. */
     readonly resolve: (
       connection: IntegrationConnection.Info,
     ) => Effect.Effect<Credential.Value | undefined, AuthorizationError>
@@ -179,6 +192,17 @@ export interface Interface extends State.Transformable<Editor> {
       readonly integrationID: ID
       /** Secret entered by the user. */
       readonly key: string
+      /** Values collected from the method's form fields. */
+      readonly answer?: Form.Answer
+      /** User-facing label for the stored credential. */
+      readonly label?: string
+    }) => Effect.Effect<void, AuthorizationError>
+    /** Runs an external method and stores a reference configured by its form answers. */
+    readonly external: (input: {
+      /** Integration receiving the credential. */
+      readonly integrationID: ID
+      /** External method that defines the form and credential source. */
+      readonly methodID: MethodID
       /** Values collected from the method's form fields. */
       readonly answer?: Form.Answer
       /** User-facing label for the stored credential. */
@@ -331,6 +355,8 @@ const layer = Layer.effect(
                 return method.id === implementation.method.id
               if (method.type === "command" && implementation.method.type === "command")
                 return method.id === implementation.method.id
+              if (method.type === "external" && implementation.method.type === "external")
+                return method.id === implementation.method.id
               return true
             })
             if (index === -1) current.methods.push(implementation.method as Types.DeepMutable<Method>)
@@ -349,6 +375,7 @@ const layer = Layer.effect(
               if (candidate.type !== method.type) return false
               if (candidate.type === "oauth" && method.type === "oauth") return candidate.id === method.id
               if (candidate.type === "command" && method.type === "command") return candidate.id === method.id
+              if (candidate.type === "external" && method.type === "external") return candidate.id === method.id
               return true
             })
             if (index !== -1) current.methods.splice(index, 1)
@@ -706,7 +733,7 @@ const layer = Layer.effect(
             Effect.gen(function* () {
               // Read under the lock so waiters use the replacement persisted by its owner.
               const credential = yield* credentials.get(connection.id)
-              if (!credential || credential.value.type === "key") return credential?.value
+              if (!credential || credential.value.type !== "oauth") return credential?.value
               const now = yield* Clock.currentTimeMillis
               const fresh = credential.value.expires > now + Duration.toMillis(Duration.minutes(5))
               if (credential.value.metadata?.shuvcodeAuthImport === "access-only") {
@@ -749,6 +776,31 @@ const layer = Layer.effect(
               type: "key",
               key: input.key,
               ...(Object.keys(answer).length > 0 ? { configuration: answer } : {}),
+            }),
+          })
+        }),
+        external: Effect.fn("Integration.connection.external")(function* (input) {
+          const method = state
+            .get()
+            .integrations.get(input.integrationID)
+            ?.methods.find((method) => method.type === "external" && method.id === input.methodID)
+          if (method?.type !== "external")
+            return yield* new AuthorizationError({ cause: new Error(`External method not found: ${input.methodID}`) })
+          const answer = input.answer ?? {}
+          if (method.form) {
+            const invalid = Form.validateFields(method.form) ?? Form.validateAnswer(method.form, answer)
+            if (invalid) return yield* new AuthorizationError({ cause: new Error(invalid) })
+          }
+          if (!method.form && Object.keys(answer).length > 0) {
+            return yield* new AuthorizationError({ cause: new Error("External method does not accept a form answer") })
+          }
+          yield* createCredential({
+            integrationID: input.integrationID,
+            label: input.label,
+            value: Credential.External.make({
+              type: "external",
+              methodID: method.id,
+              ...(Object.keys(answer).length > 0 ? { metadata: answer } : {}),
             }),
           })
         }),

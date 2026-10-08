@@ -44,7 +44,8 @@ export function token(source: Source, credential: Credential.Value | undefined):
     if (!source.methodIDs.has(credential.methodID)) return undefined
     return { access: credential.access, metadata: credential.metadata }
   }
-  if (source.key?.(credential.key)) return { access: credential.key, metadata: credential.metadata }
+  if (credential.type === "key" && source.key?.(credential.key))
+    return { access: credential.key, metadata: credential.metadata }
   return undefined
 }
 

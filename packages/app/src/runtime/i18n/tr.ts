@@ -324,9 +324,6 @@ export const dict = {
   "dialog.server.edit.title": "Sunucuyu düzenle",
 
   "dialog.server.menu.edit": "Düzenle",
-  "dialog.server.menu.default": "Varsayılan olarak ayarla",
-  "dialog.server.menu.defaultRemove": "Varsayılanı kaldır",
-  "dialog.server.status.default": "Varsayılan",
 
   "dialog.project.edit.title": "Projeyi düzenle",
   "dialog.project.edit.icon": "Simge",
@@ -860,16 +857,14 @@ export const dict = {
   "server.connect.button": "Bağlan",
   "server.connect.address.invalid": "Geçerli bir HTTP veya HTTPS sunucu adresi girin.",
   "server.connect.failed": "Bağlantı kurulamadı. Sunucu adresini ve şifreyi kontrol edip tekrar deneyin.",
-  "server.connect.pair.description": "Bağlantı ayrıntılarınızı almak için bilgisayarınızda bu komutu çalıştırın.",
   "server.connect.scan": "QR kodunu tarayın",
-  "server.connect.scan.description": "Kameranızı opencode pair tarafından gösterilen QR koduna doğrultun.",
+  "server.connect.scan.description": "Kameranızı shuvcode pair tarafından gösterilen QR koduna doğrultun.",
   "server.connect.scan.invalid":
-    "Bu bir OpenCode eşleştirme kodu değildir. opencode pair tarafından gösterilen kodu tarayın.",
+    "Bu bir OpenCode eşleştirme kodu değildir. shuvcode pair tarafından gösterilen kodu tarayın.",
   "server.connect.camera": "Kamera eşleniyor",
   "server.connect.camera.starting": "Kamera açılıyor…",
   "server.connect.mixedContent":
     "Bu HTTP sunucusuna bir HTTPS sayfasından bağlanılamadı. Bunun yerine HTTPS sunucu adresini kullanın.",
-  "server.connect.camera.insecure": "QR taraması, bu sayfanın HTTPS veya localhost üzerinden açılmasını gerektirir.",
   "server.connect.camera.unavailable":
     "Bu tarayıcıda kamera mevcut değil. Bağlantı ayrıntılarınızı manuel olarak girin.",
   "server.connect.camera.error":

@@ -90,6 +90,14 @@ function packageNames() {
 
 function resolveBinary(name) {
   const packagePath = require.resolve(`${name}/package.json`)
+  // Package managers keep an older platform package when the matching version is not yet on the registry,
+  // which would silently run the previous release under the new launcher.
+  const version = JSON.parse(fs.readFileSync(packagePath, "utf8")).version
+  if (version !== dependencies[name]) {
+    const error = new Error(`${name} is ${version}, expected ${dependencies[name]}`)
+    error.code = "STALE_PLATFORM_BINARY"
+    throw error
+  }
   const binary = path.join(path.dirname(packagePath), "bin", sourceBinary)
   if (!fs.existsSync(binary)) throw new Error(`Binary not found at ${binary}`)
   return binary
@@ -101,14 +109,21 @@ function fail(message) {
 }
 
 const names = packageNames()
-const binary = names.reduce((result, name) => {
-  if (result) return result
+const binary = (() => {
   try {
-    return resolveBinary(name)
-  } catch {
-    return undefined
+    return names.reduce((result, name) => {
+      if (result) return result
+      try {
+        return resolveBinary(name)
+      } catch (error) {
+        if (error && error.code === "STALE_PLATFORM_BINARY") throw error
+        return undefined
+      }
+    }, undefined)
+  } catch (error) {
+    fail(error instanceof Error ? error.message : String(error))
   }
-}, undefined)
+})()
 
 if (!binary) fail(`Failed to find Shuvcode binary package. Reinstall ${packageJson.name}.`)
 

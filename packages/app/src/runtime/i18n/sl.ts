@@ -311,9 +311,6 @@ export const dict = {
   "dialog.server.add.passwordPlaceholder": "geslo",
   "dialog.server.edit.title": "Uredi strežnik",
   "dialog.server.menu.edit": "Uredi",
-  "dialog.server.menu.default": "Nastavi kot privzeto",
-  "dialog.server.menu.defaultRemove": "Odstrani privzeto",
-  "dialog.server.status.default": "Privzeto",
   "dialog.project.edit.title": "Uredi projekt",
   "dialog.project.edit.icon": "Ikona",
   "dialog.project.edit.icon.alt": "Ikona projekta",
@@ -815,15 +812,13 @@ export const dict = {
   "server.connect.address.invalid": "Vnesite veljaven HTTP ali HTTPS naslov strežnika.",
   "server.connect.failed":
     "Povezave ni bilo mogoče vzpostaviti. Preverite naslov strežnika in geslo ter poskusite znova.",
-  "server.connect.pair.description": "Za pridobitev podatkov o povezavi zaženite ta ukaz na svojem računalniku.",
   "server.connect.scan": "Skeniraj QR kodo",
-  "server.connect.scan.description": "Usmerite kamero na QR kodo, ki jo prikaže opencode pair.",
-  "server.connect.scan.invalid": "To ni OpenCode paritna koda. Skenirajte kodo, ki jo prikaže opencode pair.",
+  "server.connect.scan.description": "Usmerite kamero na QR kodo, ki jo prikaže shuvcode pair.",
+  "server.connect.scan.invalid": "To ni OpenCode paritna koda. Skenirajte kodo, ki jo prikaže shuvcode pair.",
   "server.connect.camera": "Paritvena kamera",
   "server.connect.camera.starting": "Odpiranje kamere…",
   "server.connect.mixedContent":
     "Z HTTP strežnikom se ni mogoče povezati iz HTTPS strani. Uporabite HTTPS naslov strežnika.",
-  "server.connect.camera.insecure": "Skeniranje QR zahteva odpiranje te strani preko HTTPS ali na localhost.",
   "server.connect.camera.unavailable": "Brskalnik nima na voljo kamere. Vnesite podatke o povezavi ročno.",
   "server.connect.camera.error":
     "Kamer ne morem odpreti. Dovolite dostop do kamere ali vnesite podatke o povezavi ročno.",

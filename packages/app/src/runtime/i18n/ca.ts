@@ -286,9 +286,6 @@ export const dict = {
   "dialog.server.add.passwordPlaceholder": "contrasenya",
   "dialog.server.edit.title": "Edita el servidor",
   "dialog.server.menu.edit": "Edita",
-  "dialog.server.menu.default": "Estableix com a predeterminat",
-  "dialog.server.menu.defaultRemove": "Elimina el valor predeterminat",
-  "dialog.server.status.default": "Per defecte",
   "dialog.project.edit.title": "Edita el projecte",
   "dialog.project.edit.icon": "Icona",
   "dialog.project.edit.icon.alt": "Icona del projecte",
@@ -796,17 +793,14 @@ export const dict = {
   "server.connect.address.invalid": "Introduïu una adreça de servidor HTTP o HTTPS vàlida.",
   "server.connect.failed":
     "No s'ha pogut connectar. Comproveu l'adreça i la contrasenya del servidor i torneu-ho a provar.",
-  "server.connect.pair.description":
-    "Executeu aquesta ordre al vostre ordinador per obtenir els detalls de la vostra connexió.",
   "server.connect.scan": "Escaneja el codi QR",
-  "server.connect.scan.description": "Apunteu la càmera al codi QR que mostra opencode pair.",
+  "server.connect.scan.description": "Apunteu la càmera al codi QR que mostra shuvcode pair.",
   "server.connect.scan.invalid":
-    "Aquest no és un codi d'aparellament OpenCode. Escaneja el codi mostrat per opencode pair.",
+    "Aquest no és un codi d'aparellament OpenCode. Escaneja el codi mostrat per shuvcode pair.",
   "server.connect.camera": "Càmera d'aparellament",
   "server.connect.camera.starting": "Obertura de la càmera...",
   "server.connect.mixedContent":
     "No s'ha pogut connectar a aquest servidor HTTP des d'una pàgina HTTPS. Utilitzeu una adreça de servidor HTTPS.",
-  "server.connect.camera.insecure": "L'exploració de QR requereix obrir aquesta pàgina a HTTPS o a localhost.",
   "server.connect.camera.unavailable":
     "No hi ha cap càmera disponible per a aquest navegador. Introduïu els detalls de connexió manualment.",
   "server.connect.camera.error":

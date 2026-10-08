@@ -4,17 +4,56 @@ import markedShiki from "marked-shiki"
 import { createMarkdownBase } from "./marked-base"
 
 export function createMarkdownParser(highlight: (code: string, language: string) => string | Promise<string>) {
-  return createMarkdownBase().use(katexExtension, markedShiki({ highlight }))
+  return createMarkdownBase().use(markdownMath, markedShiki({ highlight }))
 }
 
-const inlineMathRegex = /^\\\(((?:\\.|[^\\\n])*?)\\\)/
+// `$$...$$` renders as display math anywhere in a line.
+// `$...$` follows Pandoc's boundaries so prices and shell variables stay text: the opening `$` needs a non-space
+// after it, the closing `$` needs a non-space before it and no letter, digit, or underscore after it.
+// Neither form spans a newline, and `$...$` cannot contain an unescaped `$`, so a failed `$...$` attempt stops at
+// the next `$` and a failed `$$...$$` attempt stops at the end of the line.
+const inlineDollarMathRegex =
+  /\$\$(?!\$)((?:\\.|[^\\\n])*?(?:\\.|[^\\\n$]))\$\$|\$(?=[^\s$])((?:\\.|[^\\\n$])*?(?:\\\S|[^\s\\$]))\$(?!\w)/y
 
-const blockMathRegex = /^\$\$\n([\s\S]+?)\n\$\$(?:\n|$)/
+const inlineParenMathRegex = /^\\\(((?:\\.|[^\\\n])*?)\\\)/
 
-const katexExtension: MarkedExtension = {
+const blockMathRegex = /^(\${1,2})\n((?:\\[^]|[^\\])+?)\n\1(?:\n|$)/
+
+function renderMath(token: Tokens.Generic) {
+  return katex.renderToString(token.text, { throwOnError: false, displayMode: token.displayMode })
+}
+
+export const markdownMath: MarkedExtension = {
   extensions: [
     {
-      name: "inlineKatex",
+      name: "inlineDollarKatex",
+      level: "inline",
+      // marked calls `start` again for every text token with the rest of the paragraph, so it must not try the
+      // regex at each `$`; a `$` that fails the tokenizer just stays in the merged text.
+      start(src) {
+        const index = src.indexOf("$")
+
+        if (index === -1) return
+
+        return index
+      },
+      tokenizer(src) {
+        inlineDollarMathRegex.lastIndex = 0
+        const match = inlineDollarMathRegex.exec(src)
+
+        if (!match) return
+
+        return {
+          type: "inlineDollarKatex",
+          raw: match[0],
+          text: (match[1] ?? match[2]).trim(),
+          displayMode: match[1] !== undefined,
+        }
+      },
+      renderer: renderMath,
+    },
+    {
+      name: "inlineParenKatex",
       level: "inline",
       start(src) {
         const index = src.indexOf("\\(")
@@ -24,18 +63,18 @@ const katexExtension: MarkedExtension = {
         return index
       },
       tokenizer(src) {
-        const match = src.match(inlineMathRegex)
+        const match = src.match(inlineParenMathRegex)
 
         if (!match) return
 
         return {
-          type: "inlineKatex",
+          type: "inlineParenKatex",
           raw: match[0],
           text: match[1].trim(),
           displayMode: false,
         }
       },
-      renderer: renderKatexToken,
+      renderer: renderMath,
     },
     {
       name: "blockKatex",
@@ -48,18 +87,11 @@ const katexExtension: MarkedExtension = {
         return {
           type: "blockKatex",
           raw: match[0],
-          text: match[1].trim(),
-          displayMode: true,
+          text: match[2].trim(),
+          displayMode: match[1].length === 2,
         }
       },
-      renderer: renderKatexToken,
+      renderer: (token) => renderMath(token) + "\n",
     },
   ],
-}
-
-function renderKatexToken(token: Tokens.Generic) {
-  return katex.renderToString(typeof token.text === "string" ? token.text : "", {
-    displayMode: token.displayMode === true,
-    throwOnError: false,
-  })
 }

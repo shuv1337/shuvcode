@@ -1,0 +1,13 @@
+diff --git a/src/bridge-protocol.ts b/src/bridge-protocol.ts
+index e2fa993ac60db4dada794e843c0d446bdd9e5d32..e6ae8c6f9f807aef3d38f3af66492d3b94fabb45 100644
+--- a/src/bridge-protocol.ts
++++ b/src/bridge-protocol.ts
+@@ -135,7 +135,7 @@ export const ControlMessage = Schema.Union([
+ export type ControlMessage = Schema.Schema.Type<typeof ControlMessage>;
+ 
+ // WebSocket subprotocol name
+-export const WEBSOCKET_SUBPROTOCOL = "opentunnel";
++export const WEBSOCKET_SUBPROTOCOL = "shuvtunnel";
+ 
+ // Error codes from specs.md
+ export const BridgeErrorCode = {
