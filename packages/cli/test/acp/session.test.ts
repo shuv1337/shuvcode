@@ -36,7 +36,7 @@ describe("acp session lifecycle over the wire", () => {
       {
         id: "opencode-login",
         name: "Login with opencode",
-        description: "Run `opencode auth login` in the terminal",
+        description: "Run `shuvcode auth login` in the terminal",
         type: "terminal",
         args: ["--login"],
       },
