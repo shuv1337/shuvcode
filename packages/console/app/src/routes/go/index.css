@@ -435,7 +435,6 @@ body {
       height: 28px;
       color: var(--color-text-strong);
     }
-
   }
 
   [data-slot="pricing-copy"] {
