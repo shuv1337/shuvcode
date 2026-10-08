@@ -26,6 +26,7 @@ function profile() {
 // Holds the route for the life of the service. The SDK reconnects through network failures itself, so only
 // setup failures reach the retry here; a rejected token or failed certificate stops it for good.
 export const run = Effect.fnUntraced(function* (input: {
+  readonly route: string
   readonly target: string
   readonly onURL: (url: string | undefined) => void
 }) {
@@ -37,9 +38,9 @@ export const run = Effect.fnUntraced(function* (input: {
     const client = yield* OpenTunnelClient
     const connection = yield* client.tunnel.connect({
       profile: profile(),
-      routes: { [route()]: input.target },
+      routes: { [input.route]: input.target },
     })
-    input.onURL(`https://${route()}.${connection.tunnel.hostname}`)
+    input.onURL(`https://${input.route}.${connection.tunnel.hostname}`)
     yield* connection.closed
   }).pipe(
     Effect.scoped,
@@ -80,8 +81,8 @@ export const ensure = Effect.fnUntraced(function* () {
 })
 
 // The tunnel hostname is persisted once the certificate is ready, so this is undefined until then.
-export const hostname = Effect.fnUntraced(function* () {
+export const hostname = Effect.fnUntraced(function* (route: string) {
   const { OpenTunnelStorage } = yield* Effect.promise(() => import("@opentunnel/client/effect"))
   const identity = yield* OpenTunnelStorage.xdg().load(profile())
-  return identity === undefined ? undefined : `${route()}.${identity.hostname}`
+  return identity === undefined ? undefined : `${route}.${identity.hostname}`
 })
