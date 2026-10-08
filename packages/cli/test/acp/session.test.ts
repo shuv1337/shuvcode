@@ -27,7 +27,7 @@ describe("acp session lifecycle over the wire", () => {
       agentInfo: { name: "Shuvcode" },
     })
     expect(plain.authMethods).toEqual([
-      { id: "opencode-login", name: "Login with opencode", description: "Run `shuvcode auth login` in the terminal" },
+      { id: "opencode-login", name: "Login with Shuvcode", description: "Run `shuvcode auth login` in the terminal" },
     ])
     expect(terminal.authMethods?.[0]?._meta).toEqual({
       "terminal-auth": { command: "shuvcode", args: ["auth", "login"], label: "Shuvcode Login" },
@@ -35,7 +35,7 @@ describe("acp session lifecycle over the wire", () => {
     expect(standard.authMethods).toEqual([
       {
         id: "opencode-login",
-        name: "Login with opencode",
+        name: "Login with Shuvcode",
         description: "Run `shuvcode auth login` in the terminal",
         type: "terminal",
         args: ["--login"],

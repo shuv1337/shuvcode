@@ -107,7 +107,7 @@ export function make(input: {
       yield* Ref.set(input.capabilities, ACPCapabilities.parse(params.clientCapabilities))
       const authMethod: AuthMethod = {
         description: "Run `shuvcode auth login` in the terminal",
-        name: "Login with opencode",
+        name: "Login with Shuvcode",
         id: AuthMethodID,
         ...(params.clientCapabilities?.auth?.terminal ? { type: "terminal" as const, args: ["--login"] } : {}),
       }
