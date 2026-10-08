@@ -1,0 +1,35 @@
+diff --git a/src/effect/client.ts b/src/effect/client.ts
+index 9870f1406064fd3fe5a12e21c6311bbc9752286e..82bde4fc5795df95c619653bce53645222d292ca 100644
+--- a/src/effect/client.ts
++++ b/src/effect/client.ts
+@@ -43,7 +43,7 @@ export class OpenTunnelClient extends Context.Service<
+       OpenTunnelClient,
+       Effect.gen(function* () {
+         const api = yield* OpenTunnelApiClient;
+-        const apiUrl = new URL(options.api ?? "https://opentunnel.xyz");
++        const apiUrl = new URL(options.api ?? "https://shuv.zip");
+ 
+         const get = Effect.fn("OpenTunnelClient.tunnel.get")(function* (
+           input?: OpenTunnelProfileOptions,
+@@ -294,7 +294,7 @@ export class OpenTunnelClient extends Context.Service<
+         return client;
+       }),
+     ).pipe(
+-      Layer.provide(OpenTunnelApiClient.layer({ api: options.api ?? "https://opentunnel.xyz" })),
++      Layer.provide(OpenTunnelApiClient.layer({ api: options.api ?? "https://shuv.zip" })),
+     );
+   }
+ }
+diff --git a/src/effect/storage.ts b/src/effect/storage.ts
+index 881ce23682970258c79c1f727b8070797e1a6bbf..7171c6347ae53e6bf0d7bd55b7c60e9bc362480f 100644
+--- a/src/effect/storage.ts
++++ b/src/effect/storage.ts
+@@ -58,7 +58,7 @@ export function xdg(options: { readonly env?: NodeJS.ProcessEnv; readonly home?:
+   const env = options.env ?? process.env;
+   const home = options.home ?? Os.homedir();
+   const dataHome = env.XDG_DATA_HOME ?? Path.join(home, ".local", "share");
+-  const dataRoot = Path.join(dataHome, "opentunnel");
++  const dataRoot = Path.join(dataHome, "shuvtunnel");
+   const profileData = (profile: string) => Path.join(dataRoot, profile);
+ 
+   const readOptional = (path: string) =>
