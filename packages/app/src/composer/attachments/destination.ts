@@ -2,6 +2,7 @@ import type { Accessor } from "solid-js"
 import { useServer } from "@/runtime/server/current"
 import { useServerSDK } from "@/runtime/server/client"
 import { authTokenFromCredentials } from "@/runtime/server/api"
+import { uuid } from "@/runtime/persistence/uuid"
 import { useWorkspaceLocation } from "@/workspaces/location"
 import type { ComposerControls } from "../adapter"
 
@@ -29,7 +30,7 @@ export function useAttachmentDestination(controls: Accessor<ComposerControls>) {
       // normalizes the separators and returns the resolved path.
       const url = new URL("/api/experimental/fs/write", server.conn.http.url)
       url.searchParams.set("location[directory]", location().directory)
-      url.searchParams.set("path", `${info.paths.tmp}/uploads/${crypto.randomUUID()}/${file.name}`)
+      url.searchParams.set("path", `${info.paths.tmp}/uploads/${uuid()}/${file.name}`)
 
       return write(url, file, server.conn.http.password, report, signal)
     },
@@ -50,6 +51,7 @@ function write(url: URL, file: File, password: string | undefined, report: (load
     xhr.upload.addEventListener("progress", (event) => report(event.loaded))
     xhr.addEventListener("load", () => {
       if (xhr.status !== 200) return reject(new Error(`Upload failed with status ${xhr.status}`))
+      // SAFETY: a 200 from `fs.write` is its declared success body, `Location.response(FileSystem.Write)`.
       resolve((xhr.response as { data: { path: string } }).data.path)
     })
     xhr.addEventListener("error", () => reject(new Error("Upload failed")))

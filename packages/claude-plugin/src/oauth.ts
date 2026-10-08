@@ -12,8 +12,10 @@ const tokenEndpoint = "https://platform.claude.com/v1/oauth/token"
 export type Network = (url: string, init: RequestInit) => Promise<Response>
 export type Options = { fetch?: Network; now?: () => number }
 
-export function isSubscription(value: Credential.Value | undefined) {
-  return value?.type === "oauth" ? value.methodID === methodID : value?.key.startsWith("sk-ant-oat") === true
+export function isSubscription(value: Credential.Value | undefined): value is Credential.OAuth | Credential.Key {
+  if (value?.type === "oauth") return value.methodID === methodID
+  if (value?.type === "key") return value.key.startsWith("sk-ant-oat")
+  return false
 }
 
 const base64url = (bytes: Uint8Array) => Buffer.from(bytes).toString("base64url")

@@ -204,10 +204,12 @@ export interface MobileView {
   /**
    * Where the view is offered.
    * - `tab`: a tab of the view switcher; it replaces the conversation.
-   * - `menu`: an overflow menu entry; it replaces the conversation.
-   * - `drawer`: an overflow menu entry; it opens in a drawer over the conversation (`useDrawer`).
+   * - `menu`: an entry of the switcher's More drawer; it replaces the conversation.
+   * - `drawer`: an entry of the switcher's More drawer; it opens in that drawer over the conversation (`useDrawer`).
    */
   readonly kind: "tab" | "menu" | "drawer"
+  /** The view's icon in the More drawer. */
+  readonly icon?: IconName
 }
 
 /**
@@ -396,20 +398,7 @@ export interface ServerRow {
     /** Shows the lock. */
     readonly auth?: boolean
   }) => JSX.Element
-  /** The default server. `available` is false where the platform keeps no default. */
-  readonly default: {
-    /** The platform keeps a default server. */
-    available(): boolean
-    /** This server is the default. Reactive. */
-    current(): boolean
-    /**
-     * Makes this server the default, or clears it.
-     *
-     * @param value - True to make it the default.
-     */
-    set(value: boolean): void
-  }
-  /** Runs the entry's `remove`, then closes the server's tabs and clears it as the default. */
+  /** Runs the entry's `remove`, then closes the server's tabs. */
   remove(): Promise<void>
   /** MenuItem "server.row" items for this server, rendered as items of the row's own menu. */
   readonly Items: () => JSX.Element

@@ -2,7 +2,7 @@
   "$schema": "https://json.schemastore.org/package.json",
   "name": "opencode",
   "description": "AI-powered development tool",
-  "version": "2.0.24",
+  "version": "2.0.25",
   "private": true,
   "type": "module",
   "packageManager": "bun@1.4.2",
@@ -53,9 +53,9 @@
       "@octokit/rest": "22.0.0",
       "@hono/standard-validator": "0.2.0",
       "@hono/zod-validator": "0.4.2",
-      "@opentui/core": "0.5.14",
-      "@opentui/keymap": "0.5.14",
-      "@opentui/solid": "0.5.14",
+      "@opentui/core": "0.5.17",
+      "@opentui/keymap": "0.5.17",
+      "@opentui/solid": "0.5.17",
       "@tanstack/solid-virtual": "3.13.37",
       "@shikijs/stream": "4.4.3",
       "@standard-schema/spec": "1.1.0",
@@ -183,6 +183,8 @@
     "@ff-labs/fff-bun@0.10.5": "patches/@ff-labs%2Ffff-bun@0.10.5.patch",
     "ghostty-web@github:anomalyco/ghostty-web#83c0a07": "patches/ghostty-web@0.3.0.patch",
     "vite@8.2.2": "patches/vite@8.2.2.patch",
-    "@modelcontextprotocol/client@2.0.0": "patches/@modelcontextprotocol%2Fclient@2.0.0.patch"
+    "@modelcontextprotocol/client@2.0.0": "patches/@modelcontextprotocol%2Fclient@2.0.0.patch",
+    "@opentunnel/protocol@0.2.0": "patches/@opentunnel%2Fprotocol@0.2.0.patch",
+    "@opentunnel/client@0.2.0": "patches/@opentunnel%2Fclient@0.2.0.patch"
   }
 }
