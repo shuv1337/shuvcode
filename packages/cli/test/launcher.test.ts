@@ -46,3 +46,41 @@ test.skipIf(process.platform === "win32")("launches the installed platform binar
   expect(await new Response(child.stdout).text()).toBe('["hello","two words"]\n')
   expect(await new Response(child.stderr).text()).toBe("")
 })
+
+test.skipIf(process.platform === "win32")("rejects a stale platform package instead of launching it", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "shuvcode-launcher-stale-"))
+  directories.push(root)
+  const platform = process.platform === "darwin" || process.platform === "linux" ? process.platform : undefined
+  if (!platform) throw new Error(`Unsupported test platform: ${process.platform}`)
+  const arch = process.arch === "x64" || process.arch === "arm64" ? process.arch : undefined
+  if (!arch) throw new Error(`Unsupported test architecture: ${process.arch}`)
+  const dependency = `shuvcode-${platform}-${arch}`
+  const packageRoot = path.join(root, "node_modules", dependency)
+
+  await mkdir(path.join(root, "bin"), { recursive: true })
+  await mkdir(path.join(packageRoot, "bin"), { recursive: true })
+  await copyFile(path.join(import.meta.dir, "../script/launcher.mjs"), path.join(root, "bin", "launcher.mjs"))
+  await writeFile(
+    path.join(root, "package.json"),
+    JSON.stringify({
+      name: "shuvcode",
+      bin: { shuvcode: "./bin/launcher.mjs" },
+      optionalDependencies: { [dependency]: "2.0.25-shuv.1" },
+    }),
+  )
+  await writeFile(path.join(packageRoot, "package.json"), JSON.stringify({ name: dependency, version: "2.0.24-shuv.1" }))
+  await writeFile(
+    path.join(packageRoot, "bin", "shuvcode"),
+    '#!/usr/bin/env node\nconsole.log("stale")\nprocess.exit(0)\n',
+  )
+  await chmod(path.join(packageRoot, "bin", "shuvcode"), 0o755)
+
+  const child = Bun.spawn(["node", path.join(root, "bin", "launcher.mjs")], {
+    stdout: "pipe",
+    stderr: "pipe",
+  })
+
+  expect(await child.exited).toBe(1)
+  expect(await new Response(child.stdout).text()).toBe("")
+  expect(await new Response(child.stderr).text()).toContain(`${dependency} is 2.0.24-shuv.1, expected 2.0.25-shuv.1`)
+})

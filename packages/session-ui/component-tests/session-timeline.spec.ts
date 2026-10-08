@@ -60,6 +60,30 @@ story("aligns the retry icon with the error label", async ({ mount }) => {
   expect(iconY).toBe(labelY)
 })
 
+story("centers the error icon on the first line of short and wrapped errors", async ({ mount }) => {
+  const timeline = await mount("current-session-error-card--provider-errors")
+  const cards = timeline.locator('[data-kind="session-error-card"]')
+
+  await expect(cards).toHaveCount(2)
+
+  const geometry = await cards.evaluateAll((elements) =>
+    elements.map((card) => {
+      const icon = card.querySelector('[data-slot="icon-svg"]')!.getBoundingClientRect()
+      const message = card.querySelector('[data-slot="icon-svg"] + div')!
+      const line = parseFloat(getComputedStyle(message).lineHeight)
+      const box = message.getBoundingClientRect()
+
+      return {
+        lines: Math.round(box.height / line),
+        offset: icon.top + icon.height / 2 - (box.top + line / 2),
+      }
+    }),
+  )
+
+  expect(geometry.map((card) => card.lines > 1)).toEqual([false, true])
+  geometry.forEach((card) => expect(card.offset).toBeCloseTo(0, 0))
+})
+
 // Moved from packages/app/e2e/regression/session-timeline-context-state.spec.ts
 story("preserves a collapsed context group through count and status updates", async ({ mount }) => {
   const timeline = await mount("current-session-research-agents--agent-research", { args: { scenario: "exploration" } })
