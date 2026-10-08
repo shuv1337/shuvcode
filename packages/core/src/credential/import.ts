@@ -124,6 +124,7 @@ async function perform(input: unknown) {
       )
     )
       throw new Error("method")
+    if (value.type === "external") throw new Error("external")
     return [
       {
         sourceID: row.id,
