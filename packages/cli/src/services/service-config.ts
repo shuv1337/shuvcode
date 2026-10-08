@@ -14,7 +14,9 @@ import { RemoteTunnel } from "./remote-tunnel"
 
 export const Info = Schema.Struct({
   disabled: Schema.optional(Schema.Boolean),
-  remote: Schema.optional(Schema.Boolean),
+  // Present when remote access is on. The route is this channel's ShuvTunnel subdomain
+  // (`shuvcode` on latest, `shuvcode-<channel>` otherwise), recorded so the URL survives restarts.
+  remote: Schema.optional(Schema.Struct({ route: Schema.String })),
   hostname: Schema.optional(Schema.String),
   port: Schema.optional(Schema.Int.check(Schema.isGreaterThanOrEqualTo(1), Schema.isLessThanOrEqualTo(65_535))),
   password: Schema.optional(Schema.String),
@@ -27,6 +29,10 @@ const keys = ["disabled", "remote", "hostname", "port", "password", "cors", "env
 type Key = (typeof keys)[number]
 
 const decodeInfo = Schema.decodeUnknownEffect(Schema.fromJsonString(Info))
+// Earlier builds stored remote access as a boolean.
+const decodeLegacy = Schema.decodeUnknownOption(
+  Schema.fromJsonString(Schema.Struct({ ...Info.fields, remote: Schema.Boolean })),
+)
 const decodeRegistration = Schema.decodeUnknownEffect(Schema.fromJsonString(Service.Info))
 
 export function filename(channel = OPENCODE_CHANNEL) {
@@ -119,21 +125,24 @@ export const options = Effect.fnUntraced(function* (input: { readonly checkVersi
     file,
     version: input.checkVersion ? OPENCODE_VERSION : undefined,
     env: (yield* read()).env,
-    command: [
-      ...selfCommand(),
-      "serve",
-      "--service",
-    ],
+    command: [...selfCommand(), "serve", "--service"],
   }
 })
 
 export const read = Effect.fn("cli.service-config.read")(function* () {
   const { fs, configFile, legacyConfigFile } = yield* paths
   if (legacyConfigFile) yield* migrateConfig(legacyConfigFile, configFile)
-  return yield* fs.readFileString(configFile).pipe(
-    Effect.flatMap(decodeInfo),
-    Effect.orElseSucceed(() => ({}) as Info),
-  )
+  const text = yield* fs.readFileString(configFile).pipe(Effect.option)
+  if (Option.isNone(text)) return {} as Info
+  const info = yield* decodeInfo(text.value).pipe(Effect.option)
+  if (Option.isSome(info)) return info.value
+  const legacy = decodeLegacy(text.value)
+  if (Option.isNone(legacy)) return {} as Info
+  // Repair the file in place so every reader sees this channel's ShuvTunnel route.
+  const { remote: enabled, ...rest } = legacy.value
+  const repaired: Info = enabled ? { ...rest, remote: { route: RemoteTunnel.route() } } : rest
+  yield* write(repaired)
+  return repaired
 })
 
 const write = Effect.fn("cli.service-config.write")(function* (value: Info) {
@@ -155,6 +164,15 @@ export const password = Effect.fn("cli.service-config.password")(function* (valu
   return next
 })
 
+// Turns remote access on and returns its route, created once and kept so the remote URL survives restarts.
+export const remote = Effect.fn("cli.service-config.remote")(function* () {
+  const existing = yield* read()
+  if (existing.remote) return existing.remote.route
+  const next = RemoteTunnel.route()
+  yield* write({ ...existing, remote: { route: next } })
+  return next
+})
+
 export const get = Effect.fn("cli.service-config.get")(function* (key?: string, name?: string) {
   if (key === undefined) {
     const { password: _password, ...safe } = yield* read()
@@ -167,7 +185,7 @@ export const get = Effect.fn("cli.service-config.get")(function* (key?: string, 
       return String((yield* read()).disabled ?? false)
     }
     case "remote": {
-      return String((yield* read()).remote ?? false)
+      return String((yield* read()).remote !== undefined)
     }
     case "hostname": {
       return (yield* read()).hostname ?? ""
@@ -206,7 +224,13 @@ export const set = Effect.fn("cli.service-config.set")(function* (key: string, v
       // A tunnel that cannot be created leaves remote access off instead of a service that keeps retrying.
       if (value === "true") yield* RemoteTunnel.ensure()
       yield* Service.stop(yield* options())
-      yield* write({ ...(yield* read()), remote: value === "true" })
+      if (value === "true") {
+        yield* remote()
+        return
+      }
+      // Disabling clears the stored route. Enabling again records this channel's ShuvTunnel route.
+      const { remote: _remote, ...next } = yield* read()
+      yield* write(next)
       return
     }
     case "hostname": {
