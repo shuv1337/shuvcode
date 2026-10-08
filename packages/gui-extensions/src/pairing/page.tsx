@@ -30,7 +30,7 @@ export type PairingServer = {
 }
 
 /** The command that lets the local server accept connections from other devices. */
-const LISTEN_COMMAND = "opencode service set hostname 0.0.0.0"
+const LISTEN_COMMAND = "shuvcode service set hostname 0.0.0.0"
 
 export default function PairingPage(props: {
   server: Accessor<PairingServer | undefined>
@@ -368,7 +368,7 @@ function DialogPairing(props: {
     </button>
   )
 
-  // The QR code carries every address as `opencode pair` prints it, {"code","urls"} JSON, so the app's scanner can
+  // The QR code carries every address as `shuvcode pair` prints it, {"code","urls"} JSON, so the app's scanner can
   // reach this machine over whichever network it shares; the chosen address goes first.
   const qr = createMemo(() => {
     const target = route()

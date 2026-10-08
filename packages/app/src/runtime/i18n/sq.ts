@@ -780,8 +780,8 @@ export const dict = {
   "server.connect.failed":
     "Nuk mund të lidhej. Kontrolloni adresën dhe fjalëkalimin e serverit, më pas provoni përsëri.",
   "server.connect.scan": "Skanoni kodin QR",
-  "server.connect.scan.description": "Drejtoje kamerën drejt kodit QR të treguar nga opencode pair.",
-  "server.connect.scan.invalid": "Ky nuk është një kod çiftimi OpenCode. Skanoni kodin e treguar nga opencode pair.",
+  "server.connect.scan.description": "Drejtoje kamerën drejt kodit QR të treguar nga shuvcode pair.",
+  "server.connect.scan.invalid": "Ky nuk është një kod çiftimi OpenCode. Skanoni kodin e treguar nga shuvcode pair.",
   "server.connect.camera": "Çiftimi i kamerës",
   "server.connect.camera.starting": "Hapja e kamerës…",
   "server.connect.mixedContent":

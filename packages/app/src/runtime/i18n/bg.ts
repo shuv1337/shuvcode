@@ -795,8 +795,8 @@ export const dict = {
   "server.connect.address.invalid": "Въведете валиден HTTP или HTTPS адрес на сървър.",
   "server.connect.failed": "Свързването е неуспешно. Проверете адреса и паролата на сървъра и опитайте отново.",
   "server.connect.scan": "Сканиране на QR код",
-  "server.connect.scan.description": "Насочете камерата към QR кода, показан от opencode pair.",
-  "server.connect.scan.invalid": "Това не е код за сдвояване с OpenCode. Сканирайте кода, показан от opencode pair.",
+  "server.connect.scan.description": "Насочете камерата към QR кода, показан от shuvcode pair.",
+  "server.connect.scan.invalid": "Това не е код за сдвояване с OpenCode. Сканирайте кода, показан от shuvcode pair.",
   "server.connect.camera": "Камера за сдвояване",
   "server.connect.camera.starting": "Отваряне на камерата…",
   "server.connect.mixedContent":

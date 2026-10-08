@@ -793,8 +793,8 @@ export const dict = {
   "server.connect.address.invalid": "یک نشانی معتبر سرور HTTP یا HTTPS وارد کنید.",
   "server.connect.failed": "اتصال ممکن نشد. نشانی سرور و گذرواژه را بررسی کنید و دوباره تلاش کنید.",
   "server.connect.scan": "پویش کد QR",
-  "server.connect.scan.description": "دوربین را به‌سمت کد QR نمایش‌داده‌شده توسط opencode pair بگیرید.",
-  "server.connect.scan.invalid": "این کد جفت‌سازی OpenCode نیست. کدی را پویش کنید که opencode pair نشان می‌دهد.",
+  "server.connect.scan.description": "دوربین را به‌سمت کد QR نمایش‌داده‌شده توسط shuvcode pair بگیرید.",
+  "server.connect.scan.invalid": "این کد جفت‌سازی OpenCode نیست. کدی را پویش کنید که shuvcode pair نشان می‌دهد.",
   "server.connect.camera": "دوربین جفت‌سازی",
   "server.connect.camera.starting": "در حال باز کردن دوربین…",
   "server.connect.mixedContent":

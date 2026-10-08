@@ -23,8 +23,8 @@ export const dict = {
   "server.connect.address.invalid": "Ange en giltig HTTP- eller HTTPS-serveradress.",
   "server.connect.failed": "Kunde inte ansluta. Kontrollera serveradressen och lösenordet och försök sedan igen.",
   "server.connect.scan": "Skanna QR-koden",
-  "server.connect.scan.description": "Rikta kameran mot QR-koden som visas av opencode pair.",
-  "server.connect.scan.invalid": "Detta är inte en OpenCode parningskod. Skanna koden som visas av opencode pair.",
+  "server.connect.scan.description": "Rikta kameran mot QR-koden som visas av shuvcode pair.",
+  "server.connect.scan.invalid": "Detta är inte en OpenCode parningskod. Skanna koden som visas av shuvcode pair.",
   "server.connect.camera": "Para ihop kamera",
   "server.connect.camera.starting": "Öppnar kameran...",
   "server.connect.mixedContent":

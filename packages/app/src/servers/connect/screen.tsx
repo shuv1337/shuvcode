@@ -42,7 +42,7 @@ export function ConnectServerScreen(props: { url?: string } = {}) {
   })
 
   // A pairing token works on every address of its server. Signing in again to the server that signed out keeps its
-  // address (e.g. localhost) even when the link names another one (e.g. 127.0.0.1 from opencode pair).
+  // address (e.g. localhost) even when the link names another one (e.g. 127.0.0.1 from shuvcode pair).
   const target = async (pairing: Pairing) => {
     if (!props.url || props.url === pairing.url) return pairing
     const http = { url: props.url, password: pairing.password }
@@ -246,7 +246,7 @@ export function ConnectServerScreen(props: { url?: string } = {}) {
           <Show when={state.method === "link"}>
             <footer>
               <p>{language.t("server.connect.pair.link")}</p>
-              <code dir="ltr">opencode pair</code>
+              <code dir="ltr">shuvcode pair</code>
             </footer>
           </Show>
         </Show>

@@ -23,7 +23,7 @@ const decodePayload = Schema.decodeUnknownOption(
   Schema.fromJsonString(Schema.Struct({ code: Schema.String, urls: Schema.Array(Schema.String) })),
 )
 
-// `opencode pair` prints links carrying a single-use code that the server exchanges for a session token.
+// `shuvcode pair` prints links carrying a single-use code that the server exchanges for a session token.
 // Its QR code carries the same code with every reachable server address as {"code","urls"} JSON.
 export function pairingLink(value: string) {
   const trimmed = value.trim()

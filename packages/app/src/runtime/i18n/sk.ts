@@ -813,8 +813,8 @@ export const dict = {
   "server.connect.address.invalid": "Zadajte platnú adresu servera s protokolom HTTP alebo HTTPS.",
   "server.connect.failed": "Nepodarilo sa pripojiť. Skontrolujte adresu servera a heslo a skúste znova.",
   "server.connect.scan": "Naskenujte QR kód",
-  "server.connect.scan.description": "Namierte kameru na QR kód zobrazený pomocou opencode pair.",
-  "server.connect.scan.invalid": "Toto nie je párovací kód OpenCode. Naskenujte kód zobrazený pomocou opencode pair.",
+  "server.connect.scan.description": "Namierte kameru na QR kód zobrazený pomocou shuvcode pair.",
+  "server.connect.scan.invalid": "Toto nie je párovací kód OpenCode. Naskenujte kód zobrazený pomocou shuvcode pair.",
   "server.connect.camera": "Párovacia kamera",
   "server.connect.camera.starting": "Otvorenie kamery…",
   "server.connect.mixedContent":

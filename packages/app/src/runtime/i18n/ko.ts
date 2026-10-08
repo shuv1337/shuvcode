@@ -801,7 +801,7 @@ export const dict = {
   "server.connect.address.invalid": "유효한 HTTP 또는 HTTPS 서버 주소를 입력하세요.",
   "server.connect.failed": "연결할 수 없습니다. 서버 주소와 비밀번호를 확인한 후 다시 시도하세요.",
   "server.connect.scan": "QR 코드 스캔",
-  "server.connect.scan.description": "opencode pair에서 표시된 QR 코드를 카메라로 가리키세요.",
+  "server.connect.scan.description": "shuvcode pair에서 표시된 QR 코드를 카메라로 가리키세요.",
   "server.connect.scan.invalid":
     "이것은 OpenCode 페어링 코드가 아닙니다. opencode 페어링에서 표시된 코드를 스캔하세요.",
   "server.connect.camera": "카메라 페어링",

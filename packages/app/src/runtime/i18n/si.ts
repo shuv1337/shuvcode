@@ -790,9 +790,9 @@ export const dict = {
   "server.connect.address.invalid": "වලංගු HTTP හෝ HTTPS සේවාදායක ලිපිනයක් ඇතුළත් කරන්න.",
   "server.connect.failed": "සම්බන්ධ වීමට නොහැකි විය. සේවාදායක ලිපිනය සහ මුරපදය පරීක්ෂා කර නැවත උත්සාහ කරන්න.",
   "server.connect.scan": "QR කේතය පරිලෝකනය කරන්න",
-  "server.connect.scan.description": "opencode pair මගින් පෙන්වන QR කේතය වෙත ඔබේ කැමරාව යොමු කරන්න.",
+  "server.connect.scan.description": "shuvcode pair මගින් පෙන්වන QR කේතය වෙත ඔබේ කැමරාව යොමු කරන්න.",
   "server.connect.scan.invalid":
-    "මෙය OpenCode යුගල කිරීමේ කේතයක් නොවේ. opencode pair මගින් පෙන්වන කේතය පරිලෝකනය කරන්න.",
+    "මෙය OpenCode යුගල කිරීමේ කේතයක් නොවේ. shuvcode pair මගින් පෙන්වන කේතය පරිලෝකනය කරන්න.",
   "server.connect.camera": "කැමරාව යුගල කිරීම",
   "server.connect.camera.starting": "කැමරාව විවෘත කරමින්...",
   "server.connect.mixedContent":

@@ -88,7 +88,7 @@ const remoteURL = Effect.fnUntraced(function* (client: ReturnType<typeof OpenCod
     Effect.timeoutOrElse({
       duration: "3 minutes",
       orElse: () =>
-        Effect.fail(new Error("Timed out waiting for the remote tunnel; run `opencode pair --remote` again to retry")),
+        Effect.fail(new Error("Timed out waiting for the remote tunnel; run `shuvcode pair --remote` again to retry")),
     }),
   )
 })

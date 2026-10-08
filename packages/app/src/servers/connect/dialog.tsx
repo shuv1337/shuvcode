@@ -320,7 +320,7 @@ function createFormController(options: { onSelect?: (server: ServerConnection.Ht
     })
 
   // A pairing token works on every address of its server. Signing in again to the edited server keeps its address
-  // (e.g. localhost) even when the link names another one (e.g. 127.0.0.1 from opencode pair).
+  // (e.g. localhost) even when the link names another one (e.g. 127.0.0.1 from shuvcode pair).
   const paired = async (pairing: Pairing) => {
     const original = store.mode === "edit" ? editing() : undefined
 
