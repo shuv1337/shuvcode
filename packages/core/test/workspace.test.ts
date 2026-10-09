@@ -9,8 +9,8 @@ import { LayerNode } from "@opencode/util/effect/layer-node"
 import { eq } from "drizzle-orm"
 import { Deferred, Effect, Fiber, Sink, Stream } from "effect"
 import { TestClock } from "effect/testing"
-import { ChildProcess } from "effect/unstable/process"
-import { ExitCode, make as makeSpawner, makeHandle, ProcessId } from "effect/unstable/process/ChildProcessSpawner"
+import { ChildProcess } from "effect/process"
+import { ExitCode, make as makeSpawner, makeHandle, ProcessId } from "effect/process/ChildProcessSpawner"
 import { testEffect } from "./lib/effect"
 
 const calls: Array<{ readonly operation: string; readonly binding?: WorkspaceDriver.Binding | null }> = []
