@@ -30,7 +30,10 @@ export function createEmbeds(input: Input): Embeds {
 }
 
 function EmbedView(props: EmbedProps & { input: Input; bridge: Bridge }) {
-  const [store, setStore] = createStore<{ visible: boolean; snapshot: { id: string; url: string } | undefined }>({
+  const [store, setStore] = createStore<{
+    visible: boolean
+    snapshot: { id: string; url: string; presented: boolean } | undefined
+  }>({
     visible: typeof document === "undefined" || document.visibilityState === "visible",
     // A still of the embed shown in the DOM while floating content covers the hidden native view.
     snapshot: undefined,
@@ -74,13 +77,13 @@ function EmbedView(props: EmbedProps & { input: Input; bridge: Bridge }) {
       return r.width > 0 && r.left < rect.right && r.right > rect.left && r.top < rect.bottom && r.bottom > rect.top
     })
 
-  const replaceSnapshot = (next?: { id: string; url: string }) => {
+  const replaceSnapshot = (next?: { id: string; url: string; presented: boolean }) => {
     if (store.snapshot?.url) URL.revokeObjectURL(store.snapshot.url)
     setStore("snapshot", next)
   }
 
   // Keep the embed on screen as a still under the floating content. The native view
-  // stays visible until the still has decoded, so the box never flashes blank.
+  // stays visible until the still is on screen, so the box never flashes blank.
   const freeze = (id: string) => {
     clearTimeout(release)
     release = undefined
@@ -92,12 +95,16 @@ function EmbedView(props: EmbedProps & { input: Input; bridge: Bridge }) {
       .catch(() => undefined)
       .then(async (data) => {
         const url = data ? URL.createObjectURL(new Blob([new Uint8Array(data)], { type: "image/jpeg" })) : ""
+        const image = new Image()
 
-        if (url) {
-          const image = new Image()
-          image.src = url
-          await image.decode().catch(() => undefined)
-        }
+        if (url) image.src = url
+
+        const decoded =
+          !!url &&
+          (await image
+            .decode()
+            .then(() => true)
+            .catch(() => false))
 
         if (capturing !== id) {
           if (url) URL.revokeObjectURL(url)
@@ -106,11 +113,27 @@ function EmbedView(props: EmbedProps & { input: Input; bridge: Bridge }) {
         }
 
         capturing = undefined
-        // A failed capture still hides the embed; the box shows its background as before.
-        replaceSnapshot({ id, url })
+        // A failed capture still hides the embed; the box shows its background as before. A still that
+        // cannot decode never paints, so Element Timing would never report it.
+        replaceSnapshot({ id, url, presented: !decoded })
         schedule()
       })
   }
+
+  // Main hides the native view at once, but a still reaches the screen only a few frames after it
+  // enters the DOM, so wait for Element Timing to report the frame that presents it.
+  const presentation = new PerformanceObserver((list) => {
+    const snapshot = store.snapshot
+
+    if (!snapshot || snapshot.presented) return
+
+    if (!list.getEntries().some((entry) => "url" in entry && entry.url === snapshot.url)) return
+    setStore("snapshot", "presented", true)
+    schedule()
+  })
+
+  presentation.observe({ type: "element" })
+  onCleanup(() => presentation.disconnect())
 
   const thaw = () => {
     capturing = undefined
@@ -140,7 +163,7 @@ function EmbedView(props: EmbedProps & { input: Input; bridge: Bridge }) {
     if (shown && cover) freeze(id)
 
     if (!cover) thaw()
-    const visible = shown && !(cover && store.snapshot?.id === id)
+    const visible = shown && !(cover && store.snapshot?.id === id && store.snapshot.presented)
 
     // The cutout exposes the app backdrop outside the rounded card, not the embed inside it.
     const color =
@@ -246,6 +269,7 @@ function EmbedView(props: EmbedProps & { input: Input; bridge: Bridge }) {
           <img
             src={url()}
             alt=""
+            elementtiming="embed-snapshot"
             draggable={false}
             class="absolute inset-0 size-full pointer-events-none select-none"
           />
