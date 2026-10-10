@@ -1,4 +1,4 @@
-import { STEALTH_MODELS, statModel } from "@opencode-ai/stats-core/domain/model-normalization"
+import { STEALTH_MODELS, statModel } from "@opencode/stats-core/domain/model-normalization"
 import { query } from "@solidjs/router"
 
 export const modelCatalogSourceUrl = "https://models.opencode.ai/catalog.json"
@@ -204,6 +204,7 @@ export function buildModelCatalog(payload: unknown, pricingPayload?: unknown, la
       cost:
         costs.get(catalogIdKey(model.id)) ??
         costs.get(`${model.lab}/${model.slug}`) ??
+        costs.get(`opencode-go/${model.slug}`) ??
         costs.get(model.slug) ??
         model.cost,
     }))

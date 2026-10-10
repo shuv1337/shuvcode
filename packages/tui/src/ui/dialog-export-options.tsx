@@ -1,215 +1,288 @@
-import { TextareaRenderable, TextAttributes } from "@opentui/core"
+import { TextAttributes } from "@opentui/core"
+import { Keymap } from "../context/keymap"
 import { useTheme } from "../context/theme"
 import { useDialog, type DialogContext } from "./dialog"
 import { createStore } from "solid-js/store"
-import { onMount, Show } from "solid-js"
-import { useTuiConfig } from "../config"
-import { useBindings } from "../keymap"
+import { For, Show } from "solid-js"
+
+export type ExportFormat = "markdown" | "json"
 
 export type DialogExportOptionsProps = {
-  defaultFilename: string
   defaultThinking: boolean
-  defaultToolDetails: boolean
-  defaultAssistantMetadata: boolean
-  defaultOpenWithoutSaving: boolean
   onConfirm?: (options: {
-    filename: string
+    action: "copy" | "export"
+    format: ExportFormat
     thinking: boolean
-    toolDetails: boolean
-    assistantMetadata: boolean
-    openWithoutSaving: boolean
+    tools: boolean
+    sanitize: boolean
   }) => void
   onCancel?: () => void
 }
 
+type Active = ExportFormat | "thinking" | "tools" | "sanitize" | "copy" | "export"
+
 export function DialogExportOptions(props: DialogExportOptionsProps) {
   const dialog = useDialog()
-  const { theme } = useTheme()
-  const tuiConfig = useTuiConfig()
-  let textarea: TextareaRenderable
+  const theme = useTheme().surface("dialog")
+  const overlayTheme = useTheme()
   const [store, setStore] = createStore({
+    format: "markdown" as ExportFormat,
     thinking: props.defaultThinking,
-    toolDetails: props.defaultToolDetails,
-    assistantMetadata: props.defaultAssistantMetadata,
-    openWithoutSaving: props.defaultOpenWithoutSaving,
-    active: "filename" as "filename" | "thinking" | "toolDetails" | "assistantMetadata" | "openWithoutSaving",
+    tools: true,
+    sanitize: false,
+    active: "markdown" as Active,
   })
 
-  useBindings(() => ({
-    bindings: [
+  const confirm = (action: "copy" | "export") =>
+    props.onConfirm?.({
+      action,
+      format: store.format,
+      thinking: store.thinking,
+      tools: store.tools,
+      sanitize: store.sanitize,
+    })
+
+  const activate = () => {
+    if (store.active === "markdown" || store.active === "json") {
+      setStore("format", store.active)
+      return
+    }
+    if (store.active === "thinking") setStore("thinking", !store.thinking)
+    if (store.active === "tools") setStore("tools", !store.tools)
+    if (store.active === "sanitize") setStore("sanitize", !store.sanitize)
+    if (store.active === "copy" || store.active === "export") confirm(store.active)
+  }
+
+  Keymap.createLayer(() => ({
+    mode: "modal",
+    commands: [
       {
-        key: "tab",
-        desc: "Next export option",
+        bind: "tab",
+        title: "Next export option",
         group: "Dialog",
-        cmd: () => {
-          const order: Array<"filename" | "thinking" | "toolDetails" | "assistantMetadata" | "openWithoutSaving"> = [
-            "filename",
-            "thinking",
-            "toolDetails",
-            "assistantMetadata",
-            "openWithoutSaving",
-          ]
-          const currentIndex = order.indexOf(store.active)
-          const nextIndex = (currentIndex + 1) % order.length
-          setStore("active", order[nextIndex])
+        run: () => {
+          const order: Active[] =
+            store.format === "markdown"
+              ? ["markdown", "json", "thinking", "tools", "copy", "export"]
+              : ["markdown", "json", "sanitize", "copy", "export"]
+          setStore("active", order[(order.indexOf(store.active) + 1) % order.length])
         },
+      },
+      {
+        bind: "return",
+        title: "Select export option",
+        group: "Dialog",
+        run: activate,
       },
     ],
   }))
 
-  useBindings(() => ({
-    enabled: store.active !== "filename",
-    bindings: [
-      {
-        key: "space",
-        desc: "Toggle export option",
-        group: "Dialog",
-        cmd: () => {
-          if (store.active === "thinking") setStore("thinking", !store.thinking)
-          if (store.active === "toolDetails") setStore("toolDetails", !store.toolDetails)
-          if (store.active === "assistantMetadata") setStore("assistantMetadata", !store.assistantMetadata)
-          if (store.active === "openWithoutSaving") setStore("openWithoutSaving", !store.openWithoutSaving)
-        },
-      },
-    ],
-  }))
-
-  onMount(() => {
-    dialog.setSize("medium")
-    setTimeout(() => {
-      if (!textarea || textarea.isDestroyed) return
-      textarea.focus()
-    }, 1)
-    textarea.gotoLineEnd()
-  })
+  const selectFormat = (format: ExportFormat) => {
+    setStore("format", format)
+    setStore("active", format)
+  }
 
   return (
     <box paddingLeft={2} paddingRight={2} gap={1}>
       <box flexDirection="row" justifyContent="space-between">
-        <text attributes={TextAttributes.BOLD} fg={theme.text}>
-          Export Options
+        <text attributes={TextAttributes.BOLD} fg={theme.text.base}>
+          Export session
         </text>
-        <text fg={theme.textMuted} onMouseUp={() => dialog.clear()}>
+        <text fg={theme.text.muted} onMouseUp={() => dialog.clear()}>
           esc
         </text>
       </box>
-      <box gap={1}>
-        <box>
-          <text fg={theme.text}>Filename:</text>
+      <box flexDirection="row" gap={1}>
+        <text fg={theme.text.base}>Export as:</text>
+        <box flexDirection="row" gap={1}>
+          <For each={["markdown", "json"] as const}>
+            {(format) => (
+              <box
+                paddingLeft={1}
+                paddingRight={1}
+                backgroundColor={
+                  store.active === format
+                    ? theme.background.formfield.focused
+                    : store.format === format
+                      ? theme.background.formfield.selected
+                      : theme.background.formfield.base
+                }
+                onMouseUp={() => selectFormat(format)}
+              >
+                <text
+                  fg={
+                    store.active === format
+                      ? theme.text.formfield.focused
+                      : store.format === format
+                        ? theme.text.formfield.selected
+                        : theme.text.formfield.base
+                  }
+                >
+                  {store.format === format ? "◉" : "○"} {format === "markdown" ? "Markdown" : "JSON"}
+                </text>
+              </box>
+            )}
+          </For>
         </box>
-        <textarea
-          onSubmit={() => {
-            props.onConfirm?.({
-              filename: textarea.plainText,
-              thinking: store.thinking,
-              toolDetails: store.toolDetails,
-              assistantMetadata: store.assistantMetadata,
-              openWithoutSaving: store.openWithoutSaving,
-            })
-          }}
-          height={3}
-          ref={(val: TextareaRenderable) => {
-            textarea = val
-            val.traits = { status: "FILENAME" }
-          }}
-          initialValue={props.defaultFilename}
-          placeholder="Enter filename"
-          placeholderColor={theme.textMuted}
-          textColor={theme.text}
-          focusedTextColor={theme.text}
-          cursorColor={theme.text}
-          cursorStyle={tuiConfig.cursor}
-        />
       </box>
-      <box flexDirection="column">
+      <Show when={store.format === "markdown"}>
         <box
           flexDirection="row"
-          gap={2}
-          paddingLeft={1}
-          backgroundColor={store.active === "thinking" ? theme.backgroundElement : undefined}
-          onMouseUp={() => setStore("active", "thinking")}
+          gap={1}
+          backgroundColor={
+            store.active === "thinking"
+              ? theme.background.formfield.focused
+              : store.thinking
+                ? theme.background.formfield.selected
+                : theme.background.formfield.base
+          }
+          onMouseUp={() => {
+            setStore("active", "thinking")
+            setStore("thinking", !store.thinking)
+          }}
         >
-          <text fg={store.active === "thinking" ? theme.primary : theme.textMuted}>
+          <text
+            fg={
+              store.active === "thinking"
+                ? theme.text.formfield.focused
+                : store.thinking
+                  ? theme.text.formfield.selected
+                  : theme.text.formfield.base
+            }
+          >
             {store.thinking ? "[x]" : "[ ]"}
           </text>
-          <text fg={store.active === "thinking" ? theme.primary : theme.text}>Include thinking</text>
+          <text
+            fg={
+              store.active === "thinking"
+                ? theme.text.formfield.focused
+                : store.thinking
+                  ? theme.text.formfield.selected
+                  : theme.text.formfield.base
+            }
+          >
+            Include thinking
+          </text>
         </box>
         <box
           flexDirection="row"
-          gap={2}
-          paddingLeft={1}
-          backgroundColor={store.active === "toolDetails" ? theme.backgroundElement : undefined}
-          onMouseUp={() => setStore("active", "toolDetails")}
+          gap={1}
+          backgroundColor={
+            store.active === "tools"
+              ? theme.background.formfield.focused
+              : store.tools
+                ? theme.background.formfield.selected
+                : theme.background.formfield.base
+          }
+          onMouseUp={() => {
+            setStore("active", "tools")
+            setStore("tools", !store.tools)
+          }}
         >
-          <text fg={store.active === "toolDetails" ? theme.primary : theme.textMuted}>
-            {store.toolDetails ? "[x]" : "[ ]"}
+          <text
+            fg={
+              store.active === "tools"
+                ? theme.text.formfield.focused
+                : store.tools
+                  ? theme.text.formfield.selected
+                  : theme.text.formfield.base
+            }
+          >
+            {store.tools ? "[x]" : "[ ]"}
           </text>
-          <text fg={store.active === "toolDetails" ? theme.primary : theme.text}>Include tool details</text>
+          <text
+            fg={
+              store.active === "tools"
+                ? theme.text.formfield.focused
+                : store.tools
+                  ? theme.text.formfield.selected
+                  : theme.text.formfield.base
+            }
+          >
+            Include tools
+          </text>
         </box>
+      </Show>
+      <Show when={store.format === "json"}>
         <box
           flexDirection="row"
-          gap={2}
-          paddingLeft={1}
-          backgroundColor={store.active === "assistantMetadata" ? theme.backgroundElement : undefined}
-          onMouseUp={() => setStore("active", "assistantMetadata")}
+          gap={1}
+          backgroundColor={
+            store.active === "sanitize"
+              ? theme.background.formfield.focused
+              : store.sanitize
+                ? theme.background.formfield.selected
+                : theme.background.formfield.base
+          }
+          onMouseUp={() => {
+            setStore("active", "sanitize")
+            setStore("sanitize", !store.sanitize)
+          }}
         >
-          <text fg={store.active === "assistantMetadata" ? theme.primary : theme.textMuted}>
-            {store.assistantMetadata ? "[x]" : "[ ]"}
+          <text
+            fg={
+              store.active === "sanitize"
+                ? theme.text.formfield.focused
+                : store.sanitize
+                  ? theme.text.formfield.selected
+                  : theme.text.formfield.base
+            }
+          >
+            {store.sanitize ? "[x]" : "[ ]"}
           </text>
-          <text fg={store.active === "assistantMetadata" ? theme.primary : theme.text}>Include assistant metadata</text>
+          <text
+            fg={
+              store.active === "sanitize"
+                ? theme.text.formfield.focused
+                : store.sanitize
+                  ? theme.text.formfield.selected
+                  : theme.text.formfield.base
+            }
+          >
+            Sanitize sensitive data
+          </text>
+        </box>
+      </Show>
+      <box flexDirection="row" justifyContent="flex-end" gap={1} paddingBottom={1}>
+        <box
+          paddingLeft={4}
+          paddingRight={4}
+          backgroundColor={overlayTheme.background.raised.high}
+          onMouseUp={() => confirm("copy")}
+        >
+          <text fg={overlayTheme.text.base}>Copy</text>
         </box>
         <box
-          flexDirection="row"
-          gap={2}
-          paddingLeft={1}
-          backgroundColor={store.active === "openWithoutSaving" ? theme.backgroundElement : undefined}
-          onMouseUp={() => setStore("active", "openWithoutSaving")}
+          paddingLeft={4}
+          paddingRight={4}
+          backgroundColor={
+            store.active === "export"
+              ? theme.background.action.primary.focused
+              : theme.background.action.primary.base
+          }
+          onMouseUp={() => confirm("export")}
         >
-          <text fg={store.active === "openWithoutSaving" ? theme.primary : theme.textMuted}>
-            {store.openWithoutSaving ? "[x]" : "[ ]"}
+          <text fg={store.active === "export" ? theme.text.action.primary.focused : theme.text.action.primary.base}>
+            Export
           </text>
-          <text fg={store.active === "openWithoutSaving" ? theme.primary : theme.text}>Open without saving</text>
         </box>
       </box>
-      <Show when={store.active !== "filename"}>
-        <text fg={theme.textMuted} paddingBottom={1}>
-          Press <span style={{ fg: theme.text }}>space</span> to toggle, <span style={{ fg: theme.text }}>return</span>{" "}
-          to confirm
-        </text>
-      </Show>
-      <Show when={store.active === "filename"}>
-        <text fg={theme.textMuted} paddingBottom={1}>
-          Press <span style={{ fg: theme.text }}>return</span> to confirm, <span style={{ fg: theme.text }}>tab</span>{" "}
-          for options
-        </text>
-      </Show>
     </box>
   )
 }
 
-DialogExportOptions.show = (
-  dialog: DialogContext,
-  defaultFilename: string,
-  defaultThinking: boolean,
-  defaultToolDetails: boolean,
-  defaultAssistantMetadata: boolean,
-  defaultOpenWithoutSaving: boolean,
-) => {
+DialogExportOptions.show = (dialog: DialogContext, defaultThinking: boolean) => {
   return new Promise<{
-    filename: string
+    action: "copy" | "export"
+    format: ExportFormat
     thinking: boolean
-    toolDetails: boolean
-    assistantMetadata: boolean
-    openWithoutSaving: boolean
+    tools: boolean
+    sanitize: boolean
   } | null>((resolve) => {
     dialog.replace(
       () => (
         <DialogExportOptions
-          defaultFilename={defaultFilename}
           defaultThinking={defaultThinking}
-          defaultToolDetails={defaultToolDetails}
-          defaultAssistantMetadata={defaultAssistantMetadata}
-          defaultOpenWithoutSaving={defaultOpenWithoutSaving}
           onConfirm={(options) => resolve(options)}
           onCancel={() => resolve(null)}
         />

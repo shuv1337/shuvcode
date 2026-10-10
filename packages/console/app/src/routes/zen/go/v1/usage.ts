@@ -1,11 +1,11 @@
 import type { APIEvent } from "@solidjs/start/server"
-import { and, Database, eq, isNull } from "@opencode-ai/console-core/drizzle/index.js"
-import { BillingTable, LiteTable } from "@opencode-ai/console-core/schema/billing.sql.js"
-import { KeyTable } from "@opencode-ai/console-core/schema/key.sql.js"
-import { UserTable } from "@opencode-ai/console-core/schema/user.sql.js"
-import { WorkspaceTable } from "@opencode-ai/console-core/schema/workspace.sql.js"
-import { LiteData } from "@opencode-ai/console-core/lite.js"
-import { Subscription } from "@opencode-ai/console-core/subscription.js"
+import { and, Database, eq, isNull } from "@opencode/console-core/drizzle/index.js"
+import { BillingTable, LiteTable } from "@opencode/console-core/schema/billing.sql.js"
+import { KeyTable } from "@opencode/console-core/schema/key.sql.js"
+import { UserTable } from "@opencode/console-core/schema/user.sql.js"
+import { WorkspaceTable } from "@opencode/console-core/schema/workspace.sql.js"
+import { LiteData } from "@opencode/console-core/lite.js"
+import { Subscription } from "@opencode/console-core/subscription.js"
 import { inferenceUnavailable, proxyInference } from "~/lib/inference-proxy"
 
 export async function GET(input: APIEvent) {

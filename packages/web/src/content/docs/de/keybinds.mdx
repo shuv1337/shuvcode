@@ -99,7 +99,6 @@ OpenCode verfügt über eine Liste von Tastenkombinationen, die Sie über `tui.j
     "history_next": "down",
     "terminal_suspend": "ctrl+z",
     "terminal_title_toggle": "none",
-    "tips_toggle": "<leader>h",
     "display_thinking": "none"
   }
 }

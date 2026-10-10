@@ -13,6 +13,7 @@
     "allowJs": true,
     "resolveJsonModule": true,
     "strict": true,
+    "noUnusedLocals": true,
     "noEmit": false,
     "emitDeclarationOnly": true,
     "outDir": "node_modules/.ts-dist",
@@ -21,6 +22,12 @@
       "@/*": ["./src/*"]
     }
   },
-  "include": ["src", "package.json"],
+  "include": [
+    "src",
+    "component-tests",
+    "playwright.components.config.ts",
+    "../storybook/playwright/*.ts",
+    "package.json"
+  ],
   "exclude": ["dist", "ts-dist"]
 }

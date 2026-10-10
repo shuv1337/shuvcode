@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 
-import { Script } from "@opencode-ai/script"
+import { Script } from "@opencode/script"
 import { $ } from "bun"
 import { fileURLToPath } from "url"
 
@@ -25,7 +25,20 @@ async function prepareReleaseFiles() {
   }
 
   await $`bun install`
-  await $`./packages/sdk/js/script/build.ts`
+}
+
+async function writeChangelog() {
+  const notes = process.env["OPENCODE_RELEASE_NOTES"]?.trim()
+  if (!notes) return
+  const file = Bun.file("CHANGELOG.md")
+  const text = await file.text()
+  const lines = text.split("\n")
+  if (lines.some((line) => line === `## ${tag}` || line.startsWith(`## ${tag} `))) return
+  const index = lines.findIndex((line) => line.startsWith("## "))
+  const head = (index === -1 ? lines : lines.slice(0, index)).join("\n").trimEnd()
+  const rest = index === -1 ? "" : lines.slice(index).join("\n")
+  const entry = `## ${tag} — ${new Date().toISOString().slice(0, 10)}\n\n${notes}\n`
+  await file.write(`${head}\n\n${entry}${rest ? `\n${rest}` : ""}`)
 }
 
 if (Script.release && !Script.preview) {
@@ -35,25 +48,55 @@ if (Script.release && !Script.preview) {
 
 await prepareReleaseFiles()
 
-console.log("\n=== cli ===\n")
-await $`bun ./packages/opencode/script/publish.ts`
+if (Script.release) await $`bun ./packages/desktop/scripts/publish.ts --dry-run`
 
-console.log("\n=== sdk ===\n")
-await $`bun ./packages/sdk/js/script/publish.ts`
+console.log("\n=== schema ===\n")
+await $`bun ./packages/schema/script/publish.ts`
+
+console.log("\n=== codemode ===\n")
+await $`bun ./packages/codemode/script/publish.ts`
+
+console.log("\n=== theme ===\n")
+await $`bun ./packages/theme/script/publish.ts`
+
+console.log("\n=== ai ===\n")
+await $`bun ./packages/ai/script/publish.ts`
+
+console.log("\n=== util ===\n")
+await $`bun ./packages/util/script/publish.ts`
+
+console.log("\n=== protocol ===\n")
+await $`bun ./packages/protocol/script/publish.ts`
+
+console.log("\n=== client ===\n")
+await $`bun ./packages/client/script/publish.ts`
+
+console.log("\n=== cli ===\n")
+await $`bun ./packages/cli/script/publish.ts`
 
 console.log("\n=== plugin ===\n")
 await $`bun ./packages/plugin/script/publish.ts`
 
+console.log("\n=== plugin-browser ===\n")
+await $`bun ./packages/plugin-browser/script/publish.ts`
+
+console.log("\n=== core ===\n")
+await $`bun ./packages/core/script/publish.ts`
+
+console.log("\n=== simulation ===\n")
+await $`bun ./packages/simulation/script/publish.ts`
+
+console.log("\n=== server ===\n")
+await $`bun ./packages/server/script/publish.ts`
+
+console.log("\n=== sdk ===\n")
+await $`bun ./packages/sdk/script/publish.ts`
+
 console.log("\n=== ui ===\n")
 await $`bun ./packages/ui/script/publish.ts`
 
-if (Script.release) {
-  await $`bun ./packages/desktop/scripts/finalize-latest-json.ts`
-  await $`bun ./packages/desktop/scripts/finalize-latest-yml.ts`
-}
-
 if (Script.release && !Script.preview) {
-  await $`git commit -am "release: ${tag}"`
+  if ((await $`git diff --quiet`.nothrow()).exitCode !== 0) await $`git commit -am "release: ${tag}"`
   await $`git tag -d ${tag}`.nothrow()
   await $`git tag ${tag}`
   await $`git push origin refs/tags/${tag} --force-with-lease --no-verify`
@@ -61,10 +104,15 @@ if (Script.release && !Script.preview) {
   await $`git fetch origin`
   await $`git checkout -B dev origin/dev`
   await prepareReleaseFiles()
-  await $`git commit -am "sync release versions for ${tag}"`
-  await $`git push origin HEAD:dev --no-verify`
+  await writeChangelog()
+  if ((await $`git diff --quiet`.nothrow()).exitCode !== 0) {
+    // The release already published this code; a push-triggered dev publish of a version bump is wasted work.
+    await $`git commit -am ${`sync release versions for ${tag} [skip ci]`}`
+    await $`git push origin HEAD:dev --no-verify`
+  }
 }
 
 if (Script.release) {
-  await $`gh release edit ${tag} --draft=false --repo ${process.env.GH_REPO}`
+  console.log("\n=== desktop ===\n")
+  await $`bun ./packages/desktop/scripts/publish.ts`
 }

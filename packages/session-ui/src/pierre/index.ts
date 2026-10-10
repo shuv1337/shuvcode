@@ -2,7 +2,7 @@ import { DiffLineAnnotation, FileContents, FileDiffOptions, type SelectedLineRan
 import { ComponentProps } from "solid-js"
 import { lineCommentStyles } from "../components/line-comment-styles"
 
-export type DiffProps<T = {}> = FileDiffOptions<T> & {
+export type DiffProps<T = {}> = FileDiffOptions<T, undefined> & {
   before: FileContents
   after: FileContents
   annotations?: DiffLineAnnotation<T>[]
@@ -17,6 +17,13 @@ export type DiffProps<T = {}> = FileDiffOptions<T> & {
 const unsafeCSS = `
 :host {
   --diffs-bg: var(--opencode-diffs-bg, var(--color-background-stronger));
+  /* Pierre mixes 15% in dark mode, which makes collapsed rows read as highlighted. */
+  --diffs-bg-separator-override: light-dark(
+    color-mix(in lab, var(--diffs-bg) 98%, var(--diffs-mixer)),
+    color-mix(in lab, var(--diffs-bg) 95%, var(--diffs-mixer))
+  );
+  /* The app's code wrapping rules do not reach this shadow tree, and pretty is inherited from the page. */
+  text-wrap-style: auto;
 }
 
 [data-diff],
@@ -137,6 +144,19 @@ const unsafeCSS = `
   color: var(--diffs-selection-number-fg);
 }
 
+@media (max-width: 767px) {
+  /* File annotations share the code column; reclaim the number gutter. Pierre only measures column widths for
+     scrolling files with annotations, so derive the gutter from the code grid width instead. */
+  [data-file][data-overflow='wrap'] [data-code] {
+    container-type: inline-size;
+  }
+
+  [data-file][data-overflow='wrap'] [data-line-annotation] {
+    margin-inline-start: calc(100% - 100cqi);
+    z-index: 4;
+  }
+}
+
 @media (pointer: fine) {
   [data-gutter-utility-slot] {
     opacity: 0;
@@ -185,7 +205,7 @@ ${lineCommentStyles}
 
 `
 
-export function createDefaultOptions<T>(style: FileDiffOptions<T>["diffStyle"]) {
+export function createDefaultOptions<T>(style: FileDiffOptions<T, undefined>["diffStyle"]) {
   return {
     theme: "OpenCode",
     themeType: "system",
@@ -197,7 +217,7 @@ export function createDefaultOptions<T>(style: FileDiffOptions<T>["diffStyle"]) 
     disableBackground: false,
     expansionLineCount: 20,
     hunkSeparators: "line-info-basic",
-    lineDiffType: style === "split" ? "word-alt" : "none",
+    lineDiffType: "word-line",
     maxLineDiffLength: 1000,
     maxLineLengthForHighlighting: 1000,
     disableFileHeader: true,

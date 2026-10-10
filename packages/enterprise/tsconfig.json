@@ -1,5 +1,6 @@
 {
   "compilerOptions": {
+    "noUnusedLocals": true,
     "target": "ESNext",
     "module": "ESNext",
     "moduleResolution": "bundler",
@@ -16,5 +17,6 @@
     "paths": {
       "~/*": ["./src/*"]
     }
-  }
+  },
+  "references": [{ "path": "../core" }]
 }

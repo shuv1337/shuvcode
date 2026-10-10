@@ -1,4 +1,3 @@
-import { Resource } from "@opencode-ai/console-resource"
 import type { TraceItem } from "@cloudflare/workers-types"
 
 export default {
@@ -53,6 +52,7 @@ export default {
         { time, data: { ...data, event_type: "completions" } },
       ]
       console.log(JSON.stringify(data, null, 2))
+      void events
 
       // const honeycomb = await fetch("https://api.honeycomb.io/1/batch/zen", {
       //   method: "POST",

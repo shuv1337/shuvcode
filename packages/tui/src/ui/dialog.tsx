@@ -1,32 +1,37 @@
 import { useRenderer, useTerminalDimensions } from "@opentui/solid"
 import { batch, createContext, createEffect, onCleanup, Show, useContext, type JSX, type ParentProps } from "solid-js"
-import { useTheme } from "../context/theme"
-import { MouseButton, Renderable, RGBA } from "@opentui/core"
+import { Keymap } from "../context/keymap"
+import { ThemeContextProvider, useTheme } from "../context/theme"
+import { InputRenderable, MouseButton, Renderable, RGBA } from "@opentui/core"
 import { createStore } from "solid-js/store"
 import { useToast } from "./toast"
-import { Flag } from "@opencode-ai/core/flag/flag"
-import { useBindings, useOpencodeModeStack } from "../keymap"
 import { useClipboard } from "../context/clipboard"
+import { useConfig } from "../config"
+import { copy, copyOnSelectRelease } from "../util/selection"
+
+export type DialogSize = "medium" | "large" | "xlarge"
+
+export function dialogWidth(size: DialogSize) {
+  if (size === "xlarge") return 116
+  if (size === "large") return 88
+  return 60
+}
 
 export function Dialog(
   props: ParentProps<{
-    size?: "medium" | "large" | "xlarge"
+    size?: DialogSize
+    centered?: boolean
     onClose: () => void
   }>,
 ) {
   const dimensions = useTerminalDimensions()
-  const { theme } = useTheme()
+  const theme = useTheme().surface("dialog")
   const renderer = useRenderer()
 
   let dismiss = false
-  const width = () => {
-    if (props.size === "xlarge") return 116
-    if (props.size === "large") return 88
-    return 60
-  }
-
   return (
-    <box
+    <ThemeContextProvider context="dialog">
+      <box
       onMouseDown={() => {
         dismiss = !!renderer.getSelection()
       }}
@@ -40,9 +45,10 @@ export function Dialog(
       width={dimensions().width}
       height={dimensions().height}
       alignItems="center"
+      justifyContent={props.centered ? "center" : undefined}
       position="absolute"
       zIndex={3000}
-      paddingTop={dimensions().height / 4}
+      paddingTop={props.centered ? 0 : dimensions().height / 4}
       left={0}
       top={0}
       backgroundColor={RGBA.fromInts(0, 0, 0, 150)}
@@ -55,14 +61,15 @@ export function Dialog(
           dismiss = false
           e.stopPropagation()
         }}
-        width={width()}
+        width={dialogWidth(props.size ?? "medium")}
         maxWidth={dimensions().width - 2}
-        backgroundColor={theme.backgroundPanel}
+        backgroundColor={theme.background.base}
         paddingTop={1}
       >
         {props.children}
       </box>
-    </box>
+      </box>
+    </ThemeContextProvider>
   )
 }
 
@@ -71,22 +78,25 @@ function init() {
     stack: [] as {
       element: JSX.Element
       onClose?: () => void
+      key?: unknown
     }[],
-    size: "medium" as "medium" | "large" | "xlarge",
+    size: "medium" as DialogSize,
+    centered: false,
   })
 
   const renderer = useRenderer()
-  const modeStack = useOpencodeModeStack()
+  const keymap = Keymap.use()
 
   createEffect(() => {
     if (store.stack.length === 0) return
-    const popMode = modeStack.push("modal")
+    const popMode = keymap.mode.push("modal")
     onCleanup(popMode)
   })
 
   let focus: Renderable | null
   function refocus() {
     setTimeout(() => {
+      if (store.stack.length > 0) return
       if (!focus) return
       if (focus.isDestroyed) return
       function find(item: Renderable) {
@@ -102,16 +112,18 @@ function init() {
     }, 1)
   }
 
-  useBindings(() => ({
-    enabled: store.stack.length > 0 && !renderer.getSelection()?.getSelectedText(),
-    bindings: [
+  Keymap.createLayer(() => ({
+    mode: "modal",
+    enabled: store.stack.length > 0,
+    commands: [
       {
-        key: "escape",
-        desc: "Close dialog",
+        bind: "escape",
+        title: "Close dialog",
         group: "Dialog",
-        cmd: () => {
+        run: () => {
           if (renderer.getSelection()) {
             renderer.clearSelection()
+            return
           }
           const current = store.stack.at(-1)
           current?.onClose?.()
@@ -120,12 +132,19 @@ function init() {
         },
       },
       {
-        key: "ctrl+c",
-        desc: "Close dialog",
+        bind: "ctrl+c",
+        title: "Close dialog",
         group: "Dialog",
-        cmd: () => {
+        run: () => {
           if (renderer.getSelection()) {
             renderer.clearSelection()
+            return
+          }
+          const editor = renderer.currentFocusedEditor
+          if (editor?.plainText) {
+            if (editor instanceof InputRenderable) editor.value = ""
+            else editor.setText("")
+            return
           }
           const current = store.stack.at(-1)
           current?.onClose?.()
@@ -143,11 +162,12 @@ function init() {
       }
       batch(() => {
         setStore("size", "medium")
+        setStore("centered", false)
         setStore("stack", [])
       })
       refocus()
     },
-    replace(input: any, onClose?: () => void) {
+    replace(input: any, onClose?: () => void, options?: { key?: unknown; size?: DialogSize }) {
       if (store.stack.length === 0) {
         focus = renderer.currentFocusedRenderable
         focus?.blur()
@@ -155,13 +175,17 @@ function init() {
       for (const item of store.stack) {
         if (item.onClose) item.onClose()
       }
-      setStore("size", "medium")
-      setStore("stack", [
-        {
-          element: input,
-          onClose,
-        },
-      ])
+      batch(() => {
+        setStore("size", options?.size ?? "medium")
+        setStore("centered", false)
+        setStore("stack", [
+          {
+            element: input,
+            onClose,
+            key: options?.key,
+          },
+        ])
+      })
     },
     get stack() {
       return store.stack
@@ -169,8 +193,17 @@ function init() {
     get size() {
       return store.size
     },
+    get centered() {
+      return store.centered
+    },
+    get key() {
+      return store.stack.at(-1)?.key
+    },
     setSize(size: "medium" | "large" | "xlarge") {
       setStore("size", size)
+    },
+    setCentered(centered: boolean) {
+      setStore("centered", centered)
     },
   }
 }
@@ -184,17 +217,9 @@ export function DialogProvider(props: ParentProps) {
   const renderer = useRenderer()
   const toast = useToast()
   const clipboard = useClipboard()
-
-  function copySelection() {
-    const text = renderer.getSelection()?.getSelectedText()
-    if (!text || !clipboard.write) return false
-    void clipboard.write(text).then(
-      () => toast.show({ message: "Copied to clipboard", variant: "info" }),
-      (error) => toast.error(error),
-    )
-    renderer.clearSelection()
-    return true
-  }
+  const config = useConfig()
+  const copyOnSelectEnabled = () =>
+    (config.data.terminal?.copy ?? (process.platform === "win32" ? "manual" : "select")) === "select"
 
   return (
     <ctx.Provider value={value}>
@@ -203,17 +228,19 @@ export function DialogProvider(props: ParentProps) {
         position="absolute"
         zIndex={3000}
         onMouseDown={(evt: { button: number; preventDefault(): void; stopPropagation(): void }) => {
-          if (!Flag.OPENCODE_EXPERIMENTAL_DISABLE_COPY_ON_SELECT) return
+          if (copyOnSelectEnabled()) return
           if (evt.button !== MouseButton.RIGHT) return
 
-          if (!copySelection()) return
+          if (!copy(renderer, toast, clipboard)) return
           evt.preventDefault()
           evt.stopPropagation()
         }}
-        onMouseUp={!Flag.OPENCODE_EXPERIMENTAL_DISABLE_COPY_ON_SELECT ? copySelection : undefined}
+        onMouseUp={
+          copyOnSelectEnabled() ? (event) => copyOnSelectRelease(event, renderer, toast, clipboard) : undefined
+        }
       >
         <Show when={value.stack.length}>
-          <Dialog onClose={() => value.clear()} size={value.size}>
+          <Dialog onClose={() => value.clear()} size={value.size} centered={value.centered}>
             {value.stack.at(-1)!.element}
           </Dialog>
         </Show>

@@ -1,17 +1,13 @@
 import { bundledLanguagesInfo } from "shiki"
-import { getFilename } from "@opencode-ai/core/util/path"
-import type { FilePart } from "@opencode-ai/sdk/v2"
+import { getFilename } from "@opencode/util/path"
+import type { PromptFileAttachment } from "@opencode/client/promise"
 
-export function attached(part: FilePart) {
-  return part.url.startsWith("data:") && !inline(part)
-}
+export function attached(file: PromptFileAttachment) {
+  if (file.mention) return false
 
-export function inline(part: FilePart) {
-  return part.source?.text?.start !== undefined && part.source?.text?.end !== undefined
-}
+  if (file.source.type === "inline") return true
 
-export function kind(part: FilePart) {
-  return part.mime.startsWith("image/") ? "image" : "file"
+  return file.source.uri.startsWith("data:")
 }
 
 // language metadata only; grammars stay behind shiki's lazy imports
@@ -29,6 +25,8 @@ export function typeLabel(filename: string, mime: string, fallback: string) {
   // idx 0 is a dotfile like .gitignore, not an extension
   const idx = base.lastIndexOf(".")
   const suffix = idx <= 0 ? "" : base.slice(idx + 1).toLowerCase()
+
   if (!suffix) return fallback
+
   return LANGUAGE_NAMES.get(suffix) ?? suffix.toUpperCase()
 }

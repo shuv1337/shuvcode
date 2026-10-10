@@ -1,12 +1,12 @@
-export * as PermissionSaved from "./saved"
+export * as PermissionSaved from "./saved.js"
 
 import { eq } from "drizzle-orm"
-import { Context, Effect, Layer, Schema } from "effect"
-import { Database } from "../database/database"
-import { makeGlobalNode } from "../effect/app-node"
-import { ProjectV2 } from "../project"
-import { PermissionTable } from "./sql"
-import { PermissionSaved } from "@opencode-ai/schema/permission-saved"
+import { Context, DateTime, Effect, Layer, Schema } from "effect"
+import { Project } from "@opencode/schema/project"
+import { Database } from "../database/database.js"
+import { makeGlobalNode } from "@opencode/util/effect/app-node"
+import { PermissionTable } from "./sql.js"
+import { PermissionSaved } from "@opencode/schema/permission-saved"
 
 export const ID = PermissionSaved.ID
 export type ID = typeof ID.Type
@@ -15,12 +15,12 @@ export const Info = PermissionSaved.Info
 export type Info = typeof Info.Type
 
 export const ListInput = Schema.Struct({
-  projectID: ProjectV2.ID.pipe(Schema.optional),
+  projectID: Project.ID.pipe(Schema.optional),
 }).annotate({ identifier: "PermissionSaved.ListInput" })
 export type ListInput = typeof ListInput.Type
 
 export const AddInput = Schema.Struct({
-  projectID: ProjectV2.ID,
+  projectID: Project.ID,
   action: Schema.String,
   resources: Schema.Array(Schema.String),
 }).annotate({ identifier: "PermissionSaved.AddInput" })
@@ -32,14 +32,14 @@ export interface Interface {
   readonly remove: (id: ID) => Effect.Effect<void>
 }
 
-export class Service extends Context.Service<Service, Interface>()("@opencode/v2/PermissionSaved") {}
+export class Service extends Context.Service<Service, Interface>()("@opencode/PermissionSaved") {}
 
 const layer = Layer.effect(
   Service,
   Effect.gen(function* () {
-    const { db } = yield* Database.Service
+    const db = (yield* Database.Service).db
 
-    const list = Effect.fn("PermissionSaved.list")(function* (input?: ListInput) {
+    const list = Effect.fnUntraced(function* (input?: ListInput) {
       const rows = yield* db
         .select()
         .from(PermissionTable)
@@ -47,7 +47,16 @@ const layer = Layer.effect(
         .all()
         .pipe(Effect.orDie)
       return rows.map(
-        (row): Info => ({ id: row.id, projectID: row.project_id, action: row.action, resource: row.resource }),
+        (row): Info => ({
+          id: row.id,
+          projectID: row.project_id,
+          action: row.action,
+          resource: row.resource,
+          time: {
+            created: DateTime.makeUnsafe(row.time_created),
+            updated: DateTime.makeUnsafe(row.time_updated),
+          },
+        }),
       )
     })
 

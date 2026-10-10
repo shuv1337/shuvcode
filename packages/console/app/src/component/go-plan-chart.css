@@ -1,4 +1,4 @@
-@import "@opencode-ai/ui/v2/styles/colors.css";
+@import "@opencode/ui/styles/tokens/colors.css";
 
 [data-page="go"] {
   --go-console-bg: var(--v2-grey-50);

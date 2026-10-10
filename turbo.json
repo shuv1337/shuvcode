@@ -1,35 +1,93 @@
 {
   "$schema": "https://v2-8-13.turborepo.dev/schema.json",
+  "globalDependencies": [
+    "patches/**",
+    "bunfig.toml",
+    ".npmrc",
+    ".github/actions/setup-bun/**",
+    ".github/workflows/test.yml"
+  ],
   "globalEnv": ["CI", "OPENCODE_DISABLE_SHARE"],
   "globalPassThroughEnv": ["CI", "OPENCODE_DISABLE_SHARE"],
   "tasks": {
     "typecheck": {},
+    "@opencode/cli#typecheck": {
+      "dependsOn": ["@opencode/core#typecheck"]
+    },
+    "test:components": {
+      "outputs": [],
+      "cache": false
+    },
+    "@opencode/enterprise#typecheck": {
+      "dependsOn": ["@opencode/core#typecheck"]
+    },
+    "@opencode/sdk#typecheck": {
+      "dependsOn": ["@opencode/core#typecheck"]
+    },
+    "@opencode/server#typecheck": {
+      "dependsOn": ["@opencode/core#typecheck"]
+    },
+    "@opencode/simulation#typecheck": {
+      "dependsOn": ["@opencode/core#typecheck"]
+    },
+    "@opencode/tui#typecheck": {
+      "dependsOn": ["@opencode/core#typecheck"]
+    },
     "build": {
       "dependsOn": [],
       "outputs": ["dist/**"]
     },
-    "opencode#test": {
+    "@opencode/ai#test": {
       "dependsOn": ["^build"],
+      "outputs": []
+    },
+    "@opencode/codemode#test": {
+      "dependsOn": ["^build"],
+      "outputs": []
+    },
+    "@opencode/core#test": {
+      "dependsOn": ["^build"],
+      "outputs": []
+    },
+    "@opencode/function#test": {
+      "outputs": []
+    },
+    "@opencode/desktop#test": {
       "outputs": [],
-      "passThroughEnv": ["*"]
+      "cache": false
     },
-    "@opencode-ai/core#test": {
+    "@opencode/httpapi-codegen#test": {
+      "outputs": []
+    },
+    "@opencode/server#test": {
       "dependsOn": ["^build"],
       "outputs": []
     },
-    "@opencode-ai/function#test": {
-      "outputs": []
-    },
-    "@opencode-ai/app#test": {
+    "@opencode/cli#test": {
       "dependsOn": ["^build"],
       "outputs": []
     },
-    "@opencode-ai/ui#test": {
+    "@opencode/tui#test": {
       "dependsOn": ["^build"],
       "outputs": []
     },
-    "@opencode-ai/session-ui#test": {
+    "@opencode/latex#test": {
       "dependsOn": ["^build"],
+      "outputs": []
+    },
+    "@opencode/app#test": {
+      "dependsOn": ["^build"],
+      "outputs": []
+    },
+    "@opencode/ui#test": {
+      "dependsOn": ["^build"],
+      "outputs": []
+    },
+    "@opencode/session-ui#test": {
+      "dependsOn": ["^build"],
+      "outputs": []
+    },
+    "@opencode/sdk#verify:package": {
       "outputs": []
     }
   }

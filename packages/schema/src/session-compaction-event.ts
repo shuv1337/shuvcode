@@ -1,9 +1,9 @@
-export * as SessionCompactionEvent from "./session-compaction-event"
+export * as SessionCompactionEvent from "./session-compaction-event.js"
 
-import { Event } from "./event"
-import { SessionID } from "./session-id"
+import { Event } from "./event.js"
+import { SessionID } from "./session-id.js"
 
-export const Compacted = Event.define({
+export const Compacted = Event.ephemeral({
   type: "session.compacted",
   schema: {
     sessionID: SessionID,

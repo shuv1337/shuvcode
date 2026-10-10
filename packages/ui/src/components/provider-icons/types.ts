@@ -52,7 +52,6 @@ export const iconNames = [
   "minimax-coding-plan",
   "minimax-cn",
   "minimax-cn-coding-plan",
-  "merge-gateway",
   "meganova",
   "lucidquery",
   "lmstudio",

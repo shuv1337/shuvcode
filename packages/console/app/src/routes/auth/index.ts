@@ -1,5 +1,5 @@
 import { redirect } from "@solidjs/router"
-import { Resource } from "@opencode-ai/console-resource"
+import { Resource } from "@opencode/console-resource"
 import type { APIEvent } from "@solidjs/start/server"
 import { getLastSeenWorkspaceID } from "../workspace/common"
 import { localeFromRequest, route } from "~/lib/language"
