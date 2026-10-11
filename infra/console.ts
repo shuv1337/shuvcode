@@ -69,38 +69,6 @@ export const auth = new sst.cloudflare.Worker("AuthApi", {
 // GATEWAY
 ////////////////
 
-export const stripeWebhook = new stripe.WebhookEndpoint("StripeWebhookEndpoint", {
-  url: $interpolate`https://${domain}/stripe/webhook`,
-  enabledEvents: [
-    "checkout.session.async_payment_failed",
-    "checkout.session.async_payment_succeeded",
-    "checkout.session.completed",
-    "checkout.session.expired",
-    "charge.refunded",
-    "invoice.payment_succeeded",
-    "invoice.payment_failed",
-    "invoice.payment_action_required",
-    "customer.created",
-    "customer.deleted",
-    "customer.updated",
-    "customer.discount.created",
-    "customer.discount.deleted",
-    "customer.discount.updated",
-    "customer.source.created",
-    "customer.source.deleted",
-    "customer.source.expiring",
-    "customer.source.updated",
-    "customer.subscription.created",
-    "customer.subscription.deleted",
-    "customer.subscription.paused",
-    "customer.subscription.pending_update_applied",
-    "customer.subscription.pending_update_expired",
-    "customer.subscription.resumed",
-    "customer.subscription.trial_will_end",
-    "customer.subscription.updated",
-  ],
-})
-
 const zenLiteProduct = new stripe.Product("ZenLite", {
   name: "OpenCode Go",
 })
@@ -229,9 +197,6 @@ const consoleMigration = new sst.Linkable("ConsoleMigration", {
     inferenceUrl: migrationDomain ? `https://${migrationDomain}/inference` : "",
   },
 })
-const STRIPE_WEBHOOK_SECRET = new sst.Linkable("STRIPE_WEBHOOK_SECRET", {
-  properties: { value: stripeWebhook.secret },
-})
 
 ////////////////
 // CONSOLE
@@ -261,11 +226,8 @@ new sst.cloudflare.x.SolidStart("Console", {
     bucket,
     bucketNew,
     database,
-    SECRET.UpstashRedisRestUrl,
-    SECRET.UpstashRedisRestToken,
     AUTH_API_URL,
     consoleMigration,
-    STRIPE_WEBHOOK_SECRET,
     SECRET.SupportApiKey,
     DISCORD_INCIDENT_WEBHOOK_URL,
     SECRET.HoneycombWebhookSecret,

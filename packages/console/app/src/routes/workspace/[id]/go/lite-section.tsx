@@ -24,7 +24,6 @@ import { formatResetTime, liteResetTimeKeys } from "~/lib/format-reset-time"
 import { createReferralFromCookie } from "~/lib/referral-invite"
 import { getRequestEvent } from "solid-js/web"
 import { countryFromRequest } from "~/lib/request-country"
-import { checkCheckoutRateLimit } from "~/routes/zen/util/redis"
 
 import { IconAlipay, IconChevron, IconUpi } from "~/component/icon"
 import { buildLiteUsageBreakdown, getModelQuotaLimit, getUsagePercent } from "~/lib/lite-usage"
@@ -220,7 +219,6 @@ const createLiteCheckoutUrl = action(
     "use server"
     return json(
       await withActor(async () => {
-        await checkCheckoutRateLimit(Actor.account())
         const data = await Billing.generateLiteCheckoutUrl({ successUrl, cancelUrl, method })
         await createReferralFromCookie()
         return { error: undefined, data }

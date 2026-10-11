@@ -6,8 +6,5 @@ export function POST(input: APIEvent) {
     format: "systemone",
     modelList: "lite",
     parseApiKey: (headers: Headers) => headers.get("authorization")?.split(" ")[1],
-    parseModel: (url: string, body: any) => body.model,
-    parseVariant: () => undefined,
-    parseIsStream: () => false,
   })
 }

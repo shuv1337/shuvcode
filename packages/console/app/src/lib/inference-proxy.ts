@@ -44,7 +44,8 @@ export async function proxyInference(
       ? request.headers.get("x-goog-api-key")
       : request.headers.get("authorization")?.split(" ")[1]
   const anonymous = !key || key === "public"
-  if (anonymous && !generation?.anonymous) return undefined
+  // The destination answers keyless reads itself; keyless generation is only forwarded for free models.
+  if (anonymous && request.method !== "GET" && !generation?.anonymous) return undefined
 
   // New Console keys are never in the legacy key table; every legacy key is `sk-`.
   const legacy = !anonymous && !key.startsWith("oc_sk_")
