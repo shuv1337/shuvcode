@@ -157,7 +157,7 @@ const make = Effect.gen(function* () {
     return values.findLast((value) => value !== undefined) ?? "notify"
   })
 
-  const exec = Effect.fnUntraced(function* (command: string[], timeout: Duration.Input = "10 seconds") {
+  const exec = Effect.fnUntraced(function* (command: string[], timeout: Duration.Input = "30 seconds") {
     return yield* appProcess
       .run(ChildProcess.make(command[0], command.slice(1)), {
         timeout,
@@ -202,13 +202,15 @@ const make = Effect.gen(function* () {
     if (installedFormula) return "brew"
     if (!installedPackage) return
 
-    const checks: ReadonlyArray<{ method: Method; command: string[] }> = [
+    const parts = executable.toLowerCase().split(path.sep).map((part) => part.replace(/^\./, ""))
+    const checks: Array<{ method: Method; command: string[] }> = [
       { method: "npm", command: ["npm", "list", "-g", "--depth=0", installedPackage] },
       { method: "pnpm", command: ["pnpm", "list", "-g", "--depth=0", installedPackage] },
       { method: "bun", command: ["bun", "pm", "ls", "-g"] },
       { method: "yarn", command: ["yarn", "global", "list"] },
       { method: "vp", command: ["vp", "list", "-g", "--json", installedPackage] },
     ]
+    checks.sort((a, b) => Number(parts.includes(b.method)) - Number(parts.includes(a.method)))
     const results = yield* Effect.forEach(
       checks,
       (check) =>
