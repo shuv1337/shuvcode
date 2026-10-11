@@ -81,12 +81,12 @@ test("remote access route is random, stable once created, hidden, and forgotten 
     expect(await run(ServiceConfig.get())).not.toContain(route)
 
     await run(ServiceConfig.set("remote", "false"))
-    expect(await run(ServiceConfig.read())).toEqual({})
+    expect(await run(ServiceConfig.read())).toEqual({ remoteAccepted: true })
     expect(await run(ServiceConfig.get("remote"))).toBe("false")
     expect(await run(ServiceConfig.remote())).not.toBe(route)
 
     await run(ServiceConfig.unset("remote"))
-    expect(await run(ServiceConfig.read())).toEqual({})
+    expect(await run(ServiceConfig.read())).toEqual({ remoteAccepted: true })
   } finally {
     await fs.rm(root, { recursive: true, force: true })
   }
