@@ -3,11 +3,11 @@
   "metadata": {
     "model": "jev-1.13-free",
     "tags": [
-      "prefix:opencode-zen-evaluation",
+      "prefix:opencode-evaluation",
       "provider:opencode",
       "protocol:system-one"
     ],
-    "name": "opencode-zen-evaluation/evaluates-choice-score-and-boolean-questions",
+    "name": "opencode-evaluation/evaluates-choice-score-and-boolean-questions",
     "recordedAt": "2026-09-22T03:44:57.511Z"
   },
   "interactions": [
@@ -15,7 +15,7 @@
       "transport": "http",
       "request": {
         "method": "POST",
-        "url": "https://opencode.ai/zen/v1/systemone",
+        "url": "https://opencode.ai/inference/v1/systemone",
         "headers": {
           "content-type": "application/json"
         },

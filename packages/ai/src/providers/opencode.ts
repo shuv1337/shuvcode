@@ -3,7 +3,7 @@ import { AuthOptions, type ProviderAuthOption } from "../route/auth-options.js"
 import { SystemOne } from "../experimental/system-one.js"
 
 export const id = ProviderID.make("opencode")
-const baseURL = "https://opencode.ai/zen/v1"
+const baseURL = "https://opencode.ai/inference/v1"
 
 export type Options = ProviderAuthOption<"optional"> & {
   readonly baseURL?: string
@@ -28,4 +28,4 @@ export const configure = (input: Options = {}) => {
 export const provider = configure()
 export const experimental = provider.experimental
 
-export * as OpenCodeZen from "./opencode-zen.js"
+export * as OpenCode from "./opencode.js"
