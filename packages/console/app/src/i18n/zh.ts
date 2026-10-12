@@ -831,10 +831,6 @@ export const dict = {
   "changelog.hero.subtitle": "OpenCode 的新更新和改进",
   "changelog.empty": "未找到更新日志条目。",
   "changelog.viewJson": "查看 JSON",
-  "changelog.highlights": "亮点",
-  "changelog.error": "暂时无法加载更新日志。",
-  "changelog.viewOnGithub": "在 GitHub 上查看",
-  "changelog.v1": "OpenCode 1 的发布说明位于 GitHub Releases",
 
   "bench.list.title": "基准测试",
   "bench.list.heading": "基准测试",

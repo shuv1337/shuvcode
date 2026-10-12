@@ -72,7 +72,7 @@ export function anchor(tag: string) {
     .replace(/^-|-$/g, "")
 }
 
-function escape(value: string) {
+export function escape(value: string) {
   return value
     .replaceAll("&", "&amp;")
     .replaceAll("<", "&lt;")

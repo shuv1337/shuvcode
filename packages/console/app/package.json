@@ -20,7 +20,6 @@
     "@solidjs/router": "catalog:",
     "@solidjs/start": "catalog:",
     "aws4fetch": "1.0.20",
-    "marked": "catalog:",
     "nitro": "3.0.1-alpha.1",
     "number-flow": "0.6.2",
     "solid-js": "catalog:",

@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import { parseChangelog, renderEntry, renderInline, renderMarkdown } from "../src/lib/changelog-markdown"
+import { parseChangelog, renderEntry, renderInline, renderMarkdown } from "../src/markdown"
 
 const fixture = `# Changelog
 

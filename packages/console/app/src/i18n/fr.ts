@@ -877,10 +877,6 @@ export const dict = {
   "changelog.hero.subtitle": "Nouvelles mises à jour et améliorations pour OpenCode",
   "changelog.empty": "Aucune entrée de changelog trouvée.",
   "changelog.viewJson": "Voir le JSON",
-  "changelog.highlights": "Points forts",
-  "changelog.error": "Impossible de charger le journal des modifications pour le moment.",
-  "changelog.viewOnGithub": "Le consulter sur GitHub",
-  "changelog.v1": "Les notes de version d’OpenCode 1 sont sur GitHub Releases",
 
   "bench.list.title": "Benchmark",
   "bench.list.heading": "Benchmarks",

@@ -853,10 +853,6 @@ export const dict = {
   "changelog.hero.subtitle": "OpenCode의 새로운 업데이트 및 개선 사항",
   "changelog.empty": "변경 내역 항목을 찾을 수 없습니다.",
   "changelog.viewJson": "JSON 보기",
-  "changelog.highlights": "하이라이트",
-  "changelog.error": "지금은 변경 로그를 불러올 수 없습니다.",
-  "changelog.viewOnGithub": "GitHub에서 보기",
-  "changelog.v1": "OpenCode 1 릴리스 노트는 GitHub Releases에 있습니다",
 
   "bench.list.title": "벤치마크",
   "bench.list.heading": "벤치마크",

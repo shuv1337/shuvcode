@@ -863,10 +863,6 @@ export const dict = {
   "changelog.hero.subtitle": "OpenCodeの新しいアップデートと改善",
   "changelog.empty": "変更履歴が見つかりませんでした。",
   "changelog.viewJson": "JSONを表示",
-  "changelog.highlights": "ハイライト",
-  "changelog.error": "現在、変更履歴を読み込めません。",
-  "changelog.viewOnGithub": "GitHub で見る",
-  "changelog.v1": "OpenCode 1 のリリースノートは GitHub Releases にあります",
 
   "bench.list.title": "ベンチマーク",
   "bench.list.heading": "ベンチマーク",

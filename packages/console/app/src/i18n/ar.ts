@@ -853,10 +853,6 @@ export const dict = {
   "changelog.hero.subtitle": "تحديثات وتحسينات جديدة لـ OpenCode",
   "changelog.empty": "لم يتم العثور على مدخلات في سجل التغييرات.",
   "changelog.viewJson": "عرض JSON",
-  "changelog.highlights": "أبرز التغييرات",
-  "changelog.error": "تعذر تحميل سجل التغييرات حاليًا.",
-  "changelog.viewOnGithub": "عرضه على GitHub",
-  "changelog.v1": "ملاحظات إصدارات OpenCode 1 موجودة في GitHub Releases",
 
   "bench.list.title": "المعيار",
   "bench.list.heading": "المعايير",
