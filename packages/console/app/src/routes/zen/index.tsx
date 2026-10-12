@@ -1,5 +1,4 @@
 import "./index.css"
-import { createAsync, query } from "@solidjs/router"
 import { Title, Meta } from "@solidjs/meta"
 import { For } from "solid-js"
 //import { HttpHeader } from "@solidjs/start"
@@ -17,19 +16,12 @@ import { Faq } from "~/component/faq"
 import { Legal } from "~/component/legal"
 import { Footer } from "~/component/footer"
 import { Header } from "~/component/header"
-import { getLastSeenWorkspaceID } from "../workspace/common"
 import { IconGemini, IconMiniMax, IconZai } from "~/component/icon"
 import { useI18n } from "~/context/i18n"
 import { useLanguage } from "~/context/language"
 import { LocaleLinks } from "~/component/locale-links"
 
-const checkLoggedIn = query(async () => {
-  "use server"
-  return await getLastSeenWorkspaceID().catch(() => {})
-}, "checkLoggedIn.get")
-
 export default function Home() {
-  const loggedin = createAsync(() => checkLoggedIn())
   const i18n = useI18n()
   const language = useLanguage()
   return (
@@ -39,7 +31,6 @@ export default function Home() {
       <LocaleLinks path="/zen" />
       <Meta property="og:image" content="/social-share-zen.png" />
       <Meta name="twitter:image" content="/social-share-zen.png" />
-      <Meta name="opencode:auth" content={loggedin() ? "true" : "false"} />
 
       <div data-component="container">
         <Header zen hideGetStarted />
