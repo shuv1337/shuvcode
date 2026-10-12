@@ -55,6 +55,10 @@ export type HttpTimeout = Schema.Schema.Type<typeof HttpTimeout>
 /** Applied to `headerTimeout` and `chunkTimeout` when a request leaves them unset. */
 export const DEFAULT_HTTP_TIMEOUT_MS = 300_000
 
+/** `Content-Encoding` for JSON request bodies; `none` sends plain JSON. */
+export const RequestEncoding = Schema.Literals(["zstd", "gzip", "none"])
+export type RequestEncoding = Schema.Schema.Type<typeof RequestEncoding>
+
 export class HttpOptions extends Schema.Class<HttpOptions>("AI.HttpOptions")({
   body: Schema.optional(JsonSchema),
   headers: Schema.optional(Schema.Record(Schema.String, Schema.String)),
@@ -65,6 +69,8 @@ export class HttpOptions extends Schema.Class<HttpOptions>("AI.HttpOptions")({
   headerTimeout: Schema.optional(HttpTimeout),
   /** Time allowed between streamed response chunks once headers have arrived. */
   chunkTimeout: Schema.optional(HttpTimeout),
+  /** Compression for JSON request bodies. Only set it for endpoints known to decode it. */
+  encoding: Schema.optional(RequestEncoding),
 }) {}
 
 export namespace HttpOptions {
@@ -86,9 +92,18 @@ export const mergeHttpOptions = (...items: ReadonlyArray<HttpOptions | undefined
   const timeout = items.findLast((item) => item?.timeout !== undefined)?.timeout
   const headerTimeout = items.findLast((item) => item?.headerTimeout !== undefined)?.headerTimeout
   const chunkTimeout = items.findLast((item) => item?.chunkTimeout !== undefined)?.chunkTimeout
-  if (!body && !headers && !query && timeout === undefined && headerTimeout === undefined && chunkTimeout === undefined)
+  const encoding = items.findLast((item) => item?.encoding !== undefined)?.encoding
+  if (
+    !body &&
+    !headers &&
+    !query &&
+    timeout === undefined &&
+    headerTimeout === undefined &&
+    chunkTimeout === undefined &&
+    encoding === undefined
+  )
     return undefined
-  return new HttpOptions({ body, headers, query, timeout, headerTimeout, chunkTimeout })
+  return new HttpOptions({ body, headers, query, timeout, headerTimeout, chunkTimeout, encoding })
 }
 
 export class GenerationOptions extends Schema.Class<GenerationOptions>("LLM.GenerationOptions")({

@@ -46,6 +46,10 @@ export type Compaction = typeof Compaction.Type
 export const Transport = Schema.Literals(["http", "websocket"]).annotate({ identifier: "Provider.Transport" })
 export type Transport = typeof Transport.Type
 
+/** HTTP request body compression; only endpoints known to decode it should enable it. */
+export const Encoding = Schema.Literals(["zstd", "gzip", "none"]).annotate({ identifier: "Provider.Encoding" })
+export type Encoding = typeof Encoding.Type
+
 export const Settings = Schema.StructWithRest(
   Schema.Struct({
     timeout: Schema.Union([Schema.Finite, Schema.Literal(false)]).pipe(optional),
@@ -53,6 +57,7 @@ export const Settings = Schema.StructWithRest(
     chunkTimeout: Schema.Union([Schema.Finite, Schema.Literal(false)]).pipe(optional),
     compaction: Compaction.pipe(optional),
     transport: Transport.pipe(optional),
+    encoding: Encoding.pipe(optional),
   }),
   [Schema.Record(Schema.String, Schema.Any)],
 ).annotate({ identifier: "Provider.Settings" })

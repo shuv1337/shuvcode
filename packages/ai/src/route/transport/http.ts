@@ -88,6 +88,7 @@ export const httpJson = <Body, Frame>(input: HttpJsonInput<Body, Frame>): HttpJs
         url: parts.url,
         body: parts.bodyText,
         headers: parts.headers,
+        encoding: prepareInput.request.http?.encoding,
       })
       return {
         request,

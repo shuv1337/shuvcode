@@ -14,6 +14,7 @@ export const Settings = Schema.StructWithRest(
     chunkTimeout: Schema.Union([Schema.Finite, Schema.Literal(false)]).pipe(optional),
     compaction: Provider.Compaction.pipe(optional),
     transport: Provider.Transport.pipe(optional),
+    encoding: Provider.Encoding.pipe(optional),
   }),
   [Schema.Record(Schema.String, Schema.UndefinedOr(Schema.Json))],
 ).annotate({ identifier: "Config.Provider.Settings" })
@@ -22,6 +23,7 @@ export type Settings = typeof Settings.Type
 export const ModelSettings = Schema.StructWithRest(
   Schema.Struct({
     compaction: Provider.Compaction.pipe(optional),
+    encoding: Provider.Encoding.pipe(optional),
   }),
   [Schema.Record(Schema.String, Schema.UndefinedOr(Schema.Json))],
 ).annotate({ identifier: "Config.Model.Settings" })

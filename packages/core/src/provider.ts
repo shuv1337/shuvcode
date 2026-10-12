@@ -153,7 +153,7 @@ export const loadPackage = Effect.fn("Provider.loadPackage")(function* (input: s
 })
 
 /** opencode settings consumed in Core; native packages never receive them. */
-const CORE_KEYS = ["chunkTimeout", "compaction", "fetch", "headerTimeout", "timeout", "transport"] as const
+const CORE_KEYS = ["chunkTimeout", "compaction", "encoding", "fetch", "headerTimeout", "timeout", "transport"] as const
 const PROVIDER_ONLY_KEYS = ["chunkTimeout", "headerTimeout", "timeout", "transport"] as const
 
 export function nativeSettings(settings: Settings): Settings {
@@ -181,6 +181,13 @@ export function timeouts(settings: Readonly<Record<string, unknown>>) {
     headerTimeout: timeout(settings.headerTimeout) ?? DEFAULT_TIMEOUT_MS,
     chunkTimeout: timeout(settings.chunkTimeout) ?? DEFAULT_TIMEOUT_MS,
   }
+}
+
+const decodeEncoding = Schema.decodeUnknownOption(Provider.Encoding)
+
+/** Request body encoding from provider or model settings; invalid values are dropped. */
+export function encoding(settings: Readonly<Record<string, unknown>>) {
+  return Option.getOrUndefined(decodeEncoding(settings.encoding))
 }
 
 export function mergeOverlay(
