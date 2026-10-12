@@ -199,8 +199,9 @@ export class LanguageModelCompatibility extends Schema.Class<LanguageModelCompat
   supportsStore: Schema.optional(Schema.Boolean),
   supportsUsageInStreaming: Schema.optional(Schema.Boolean),
   supportsStrictMode: Schema.optional(Schema.Boolean),
-  // Accepts `prompt_cache_key` in the Chat Completions body. Chat omits the
-  // key unless this is set; session-affinity headers still flow regardless.
+  // Accepts `prompt_cache_key` in the request body. Chat omits the key unless
+  // this is true; other protocols omit it only when this is false.
+  // Session-affinity headers still flow regardless.
   supportsPromptCacheKey: Schema.optional(Schema.Boolean),
   zaiToolStream: Schema.optional(Schema.Boolean),
   requireSignature: Schema.optional(Schema.Boolean),

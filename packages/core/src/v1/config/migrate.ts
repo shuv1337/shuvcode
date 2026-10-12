@@ -110,11 +110,14 @@ export function migrateProvider(sourceID: string, info: ConfigProviderV1.Info) {
 }
 
 function migrateStandardProvider(info: ConfigProviderV1.Info) {
-  const options = ConfigProviderOptionsV1.provider(info.options ?? {})
+  // V1 `setCacheKey` toggled `prompt_cache_key` for the whole provider; it is not a provider package setting.
+  const { setCacheKey, ...rest } = info.options ?? {}
+  const options = ConfigProviderOptionsV1.provider(rest)
   return {
     name: info.name,
     env: info.env,
     package: info.npm ? Provider.aisdk(info.npm) : undefined,
+    compatibility: setCacheKey === undefined ? undefined : { supportsPromptCacheKey: setCacheKey },
     settings: info.api ? { ...options.settings, baseURL: info.api } : info.options ? options.settings : undefined,
     headers: info.options && options.headers,
     body: info.options && options.body,

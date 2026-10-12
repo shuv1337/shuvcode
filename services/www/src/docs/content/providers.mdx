@@ -61,6 +61,7 @@ The `providers` object is keyed by the provider ID used in model references, suc
 | `env` | Ordered environment variable names that can provide the credential. |
 | `package` | Runtime provider package. |
 | `canonical` | Built-in provider ID whose catalog defaults this provider inherits. |
+| `compatibility` | Request and response compatibility overrides for every model of this provider. Model `compatibility` overrides individual fields. `supportsThinkingBlockBinding` and `supportsEffortUpdates` are model-only. |
 | `settings` | Typed OpenCode controls and JSON options passed to the runtime package. |
 | `headers` | String-valued HTTP headers added to requests. |
 | `body` | JSON fields merged into request bodies. |

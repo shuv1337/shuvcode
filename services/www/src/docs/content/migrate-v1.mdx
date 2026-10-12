@@ -358,7 +358,8 @@ Rename the singular `provider` map to `providers`. V2 separates the runtime pack
 ```
 
 V1 `npm` becomes `package`, and AI SDK packages receive the `aisdk:` prefix. `api` becomes `settings.baseURL`. Provider
-`options` are separated into `settings`, `headers`, and `body` according to their request role. See [Providers](/providers).
+`options` are separated into `settings`, `headers`, and `body` according to their request role. `options.setCacheKey`
+becomes `compatibility.supportsPromptCacheKey` on the provider. See [Providers](/providers).
 
 V2 consolidated two legacy provider namespaces:
 

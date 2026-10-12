@@ -12,6 +12,7 @@ import { Plugin } from "@opencode/core/plugin"
 import { PluginHost } from "@opencode/core/plugin/host"
 import { AzurePlugin } from "@opencode/core/plugin/provider/azure"
 import { OpenAIPlugin } from "@opencode/core/plugin/provider/openai"
+import { PromptCacheKeyPlugin } from "@opencode/core/plugin/provider/prompt-cache-key"
 import { XAIPlugin } from "@opencode/core/plugin/provider/xai"
 import { Provider } from "@opencode/core/provider"
 import { withEnv } from "../fixture/env"
@@ -72,6 +73,143 @@ describe("ConfigProviderPlugin.Plugin", () => {
         _tag: "SessionRunnerModel.UnsupportedCompactionError",
         message: "Provider compaction is not supported by custom/unsupported (openai-chat)",
       })
+    }),
+  )
+
+  it.effect("keeps provider and model compatibility precedence across config documents", () =>
+    Effect.gen(function* () {
+      const providers = yield* Provider.Service
+      const models = yield* Model.Service
+      const providerID = Provider.ID.make("proxy")
+      yield* providers.transform((editor) => {
+        editor.update(providerID, (provider) => {
+          provider.package = "@opencode/ai/providers/openai/chat"
+        })
+        editor.models.update(providerID, Model.ID.make("catalog"), () => {})
+      })
+      yield* addPlugin([
+        new Document({
+          type: "document",
+          info: decode({
+            providers: {
+              proxy: {
+                // Model-version features are model-only and are not accepted on the provider.
+                compatibility: { requireFinishReason: false, supportsEffortUpdates: false },
+                models: { claude: { compatibility: { supportsPromptCacheKey: true } } },
+              },
+            },
+          }),
+        }),
+        new Document({
+          type: "document",
+          info: decode({
+            providers: {
+              proxy: {
+                compatibility: { supportsPromptCacheKey: false },
+                models: { alias: { modelID: "catalog" } },
+              },
+            },
+          }),
+        }),
+      ])
+
+      expect((yield* providers.get(providerID))?.compatibility).toEqual({
+        requireFinishReason: false,
+        supportsPromptCacheKey: false,
+      })
+      // A later provider default does not override an earlier model setting.
+      expect(required(yield* models.get(providerID, Model.ID.make("claude"))).compatibility).toEqual({
+        requireFinishReason: false,
+        supportsPromptCacheKey: true,
+      })
+      // A model first defined in a later document still inherits earlier provider values.
+      expect(required(yield* models.get(providerID, Model.ID.make("alias"))).compatibility).toEqual({
+        requireFinishReason: false,
+        supportsPromptCacheKey: false,
+      })
+    }),
+  )
+
+  it.effect("lets configured provider compatibility override built-in provider defaults", () =>
+    Effect.gen(function* () {
+      const plugin = yield* Plugin.Service
+      const providers = yield* Provider.Service
+      const models = yield* Model.Service
+      const providerID = Provider.ID.make("venice")
+      yield* providers.transform((editor) => {
+        editor.update(providerID, (provider) => {
+          provider.package = "@opencode/ai/providers/openai-compatible"
+        })
+        editor.models.update(providerID, Model.ID.make("chat"), () => {})
+        editor.models.update(providerID, Model.ID.make("keyed"), () => {})
+      })
+      yield* PromptCacheKeyPlugin.effect(yield* PluginHost.make(plugin))
+      expect(required(yield* models.get(providerID, Model.ID.make("chat"))).compatibility).toEqual({
+        supportsPromptCacheKey: true,
+      })
+
+      yield* addPlugin([
+        new Document({
+          type: "document",
+          info: decode({
+            providers: {
+              venice: {
+                compatibility: { supportsPromptCacheKey: false },
+                models: { keyed: { compatibility: { supportsPromptCacheKey: true } } },
+              },
+            },
+          }),
+        }),
+      ])
+      expect(required(yield* models.get(providerID, Model.ID.make("chat"))).compatibility).toEqual({
+        supportsPromptCacheKey: false,
+      })
+      expect(required(yield* models.get(providerID, Model.ID.make("keyed"))).compatibility).toEqual({
+        supportsPromptCacheKey: true,
+      })
+    }),
+  )
+
+  it.effect("applies provider compatibility to every provider model with model overrides", () =>
+    Effect.gen(function* () {
+      const providers = yield* Provider.Service
+      const models = yield* Model.Service
+      const providerID = Provider.ID.make("proxy")
+      yield* providers.transform((editor) => {
+        editor.update(providerID, (provider) => {
+          provider.package = "@opencode/ai/providers/openai/chat"
+        })
+        editor.models.update(providerID, Model.ID.make("catalog"), (model) => {
+          model.compatibility = { maxTokensField: "max_tokens" }
+        })
+      })
+      yield* addPlugin([
+        new Document({
+          type: "document",
+          info: decode({
+            providers: {
+              proxy: {
+                compatibility: { supportsPromptCacheKey: false, requireFinishReason: false },
+                models: {
+                  configured: { compatibility: { supportsPromptCacheKey: true } },
+                },
+              },
+            },
+          }),
+        }),
+      ])
+
+      const catalog = required(yield* models.get(providerID, Model.ID.make("catalog")))
+      const configured = required(yield* models.get(providerID, Model.ID.make("configured")))
+      expect(catalog.compatibility).toEqual({
+        maxTokensField: "max_tokens",
+        supportsPromptCacheKey: false,
+        requireFinishReason: false,
+      })
+      expect(configured.compatibility).toEqual({ supportsPromptCacheKey: true, requireFinishReason: false })
+      // The OpenAI chat package enables the key by default; provider config overrides it on the runtime model.
+      expect((yield* ModelResolver.fromCatalogModel(catalog)).compatibility?.supportsPromptCacheKey).toBe(false)
+      expect((yield* ModelResolver.fromCatalogModel(configured)).compatibility?.supportsPromptCacheKey).toBe(true)
     }),
   )
 

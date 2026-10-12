@@ -614,6 +614,23 @@ describe("ConfigNormalize", () => {
     expect(result.encoded.providers).not.toHaveProperty(["gateway", "models", "untouched", "compatibility"])
   })
 
+  test("migrates the legacy setCacheKey provider option into provider compatibility", () => {
+    const result = normalized({
+      provider: {
+        proxy: { npm: "@ai-sdk/openai-compatible", options: { baseURL: "https://proxy.test/v1", setCacheKey: true } },
+        openai: { options: { setCacheKey: false } },
+        untouched: { options: { baseURL: "https://untouched.test/v1" } },
+      },
+    })
+    expect(result.encoded.providers).toMatchObject({
+      proxy: { compatibility: { supportsPromptCacheKey: true }, settings: { baseURL: "https://proxy.test/v1" } },
+      openai: { compatibility: { supportsPromptCacheKey: false } },
+    })
+    expect(result.encoded.providers).not.toHaveProperty(["proxy", "settings", "setCacheKey"])
+    expect(result.encoded.providers).not.toHaveProperty(["openai", "settings", "setCacheKey"])
+    expect(result.encoded.providers).not.toHaveProperty(["untouched", "compatibility"])
+  })
+
   test("invalid legacy provider overlays skip only that provider", () => {
     const result = normalized({
       provider: {
