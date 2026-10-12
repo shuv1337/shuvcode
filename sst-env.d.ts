@@ -102,24 +102,6 @@ declare module "sst" {
       "type": "sst.cloudflare.StaticSite"
       "url": string
     }
-    "ZEN_BLACK_PRICE": {
-      "plan100": string
-      "plan20": string
-      "plan200": string
-      "product": string
-      "type": "sst.sst.Linkable"
-    }
-    "ZEN_LITE_PRICE": {
-      "firstMonth100Coupon": string
-      "firstMonth50Coupon": string
-      "price": string
-      "priceInr": number
-      "product": string
-      "sixMonths100Coupon": string
-      "threeMonths100Coupon": string
-      "twelveMonths100Coupon": string
-      "type": "sst.sst.Linkable"
-    }
     "ZenData": import("@cloudflare/workers-types").R2Bucket
     "ZenDataNew": import("@cloudflare/workers-types").R2Bucket
   }
