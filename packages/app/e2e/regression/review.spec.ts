@@ -731,9 +731,22 @@ test("restores review state and the side-panel tab per session", async ({ page }
   await selectedFile("gamma.ts")
   await review.press("End")
   await selectedTab("README.md")
+
+  // A hidden side-panel tab does not claim Close Tab while the side region is collapsed.
+  await toggle.click()
+  await expect(panel).toBeHidden()
+  await page.keyboard.press("Control+w")
+  await expect(page.locator("[data-titlebar-tab-slot]", { hasText: "Alpha review state" })).toHaveCount(0)
+  await expectSessionTitle(page, "Beta review state")
+  await page.keyboard.press("Control+Shift+T")
+  await expectSessionTitle(page, "Alpha review state")
+  await toggle.click()
+  await selectedTab("README.md")
+
   await page.keyboard.press("Control+w")
   await expect(panel.getByRole("tab", { name: "README.md", exact: true })).toHaveCount(0)
   await expect(review).toHaveAttribute("aria-selected", "true")
+  await expectSessionTitle(page, "Alpha review state")
 })
 
 test("shows and restores last turn changes from the session diff", async ({ page }) => {

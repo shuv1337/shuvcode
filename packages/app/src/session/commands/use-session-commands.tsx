@@ -71,8 +71,10 @@ export const useSessionCommands = (actions: SessionCommandContext) => {
   // The file the selected side tab shows; other tabs have no line selection.
   const activeFile = () => actions.region.selected()?.tab.file
 
-  // Pinned tabs stay open.
+  // Pinned tabs stay open, and hidden side-panel tabs do not claim Close Tab while the region is collapsed.
   const closableTab = () => {
+    if (!actions.session.layout.view().side.opened()) return
+
     const entry = actions.region.selected()
 
     return entry && !entry.tab.pinned ? entry.key : undefined
