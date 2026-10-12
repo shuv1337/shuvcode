@@ -78,6 +78,11 @@ function localeFromAcceptLanguage(header: string | null) {
 }
 
 export const onRequest = defineMiddleware((ctx, next) => {
+  const moved = /^\/docs\/(?:[^/]+\/)?(zen|go)\/?$/.exec(ctx.url.pathname)
+  if (moved) {
+    return redirect(ctx.url, moved[1] === "go" ? "/v2/docs/console/go/" : "/v2/docs/console/")
+  }
+
   const alias = docsAlias(ctx.url.pathname)
   if (alias) {
     return redirect(ctx.url, alias.path, alias.locale)
