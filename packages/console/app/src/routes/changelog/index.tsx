@@ -1,108 +1,84 @@
 import "./index.css"
 import { Title, Meta } from "@solidjs/meta"
 import { createAsync } from "@solidjs/router"
+import { HttpStatusCode } from "@solidjs/start"
 import { Header } from "~/component/header"
 import { Footer } from "~/component/footer"
 import { Legal } from "~/component/legal"
-import { changelog } from "~/lib/changelog"
-import type { HighlightGroup } from "~/lib/changelog"
-import { For, Show, createSignal } from "solid-js"
+import { CHANGELOG_FILE_URL, changelogPage } from "~/lib/changelog-source"
+import type { ChangelogEntry } from "~/lib/changelog-markdown"
+import { For, Index, Show } from "solid-js"
 import { useI18n } from "~/context/i18n"
 import { useLanguage } from "~/context/language"
 import { LocaleLinks } from "~/component/locale-links"
 
-function formatDate(dateString: string, locale: string) {
-  const date = new Date(dateString)
-  return date.toLocaleDateString(locale, {
+function formatDate(date: string, locale: string) {
+  return new Date(`${date}T00:00:00Z`).toLocaleDateString(locale, {
     year: "numeric",
-    month: "short",
+    month: "long",
     day: "numeric",
+    timeZone: "UTC",
   })
 }
 
-function ReleaseItem(props: { item: string }) {
-  const parts = () => {
-    const match = props.item.match(/^(.+?)(\s*\(@([\w-]+)\))?$/)
-    if (match) {
-      return {
-        text: match[1],
-        username: match[3],
-      }
-    }
-    return { text: props.item, username: undefined }
-  }
+function Release(props: { entry: ChangelogEntry; open: boolean }) {
+  const i18n = useI18n()
+  const language = useLanguage()
 
   return (
-    <li>
-      <span>{parts().text}</span>
-      <Show when={parts().username}>
-        <a data-slot="author" href={`https://github.com/${parts().username}`} target="_blank" rel="noopener noreferrer">
-          (@{parts().username})
-        </a>
-      </Show>
-    </li>
-  )
-}
-
-function HighlightSection(props: { group: HighlightGroup }) {
-  return (
-    <div data-component="highlight">
-      <h4>{props.group.source}</h4>
-      <hr />
-      <For each={props.group.items}>
-        {(item) => (
-          <div data-slot="highlight-item">
-            <p data-slot="title">{item.title}</p>
-            <p>{item.description}</p>
-            <Show when={item.media.type === "video"}>
-              <video src={item.media.src} controls autoplay loop muted playsinline />
-            </Show>
-            <Show when={item.media.type === "image"}>
-              <img
-                src={item.media.src}
-                alt={item.title}
-                width={(item.media as { width: string }).width}
-                height={(item.media as { height: string }).height}
-              />
-            </Show>
+    <article data-component="release" id={props.entry.anchor}>
+      <header>
+        <h2>
+          <a href={`#${props.entry.anchor}`}>{props.entry.tag}</a>
+        </h2>
+        <Show when={props.entry.date}>
+          {(date) => <time dateTime={date()}>{formatDate(date(), language.tag(language.locale()))}</time>}
+        </Show>
+      </header>
+      <div data-slot="content">
+        <Show when={props.entry.intro}>
+          <div data-slot="markdown" innerHTML={props.entry.intro} />
+        </Show>
+        <Show when={props.entry.highlights.length > 0}>
+          <section data-component="highlights">
+            <h3 data-slot="label">{i18n.t("changelog.highlights")}</h3>
+            <ul>
+              <For each={props.entry.highlights}>
+                {(item) => (
+                  <li>
+                    <Show when={item.title}>
+                      <p data-slot="title" innerHTML={item.title} />
+                    </Show>
+                    <p innerHTML={item.body} />
+                  </li>
+                )}
+              </For>
+            </ul>
+          </section>
+        </Show>
+        <Show when={props.entry.sections.length > 0}>
+          <div data-component="sections">
+            <For each={props.entry.sections}>
+              {(section) => (
+                <details data-component="section" open={props.open}>
+                  <summary>
+                    <span data-slot="label">{section.title}</span>
+                  </summary>
+                  <div data-slot="markdown" innerHTML={section.body} />
+                </details>
+              )}
+            </For>
           </div>
-        )}
-      </For>
-    </div>
-  )
-}
-
-function CollapsibleSection(props: { section: { title: string; items: string[] } }) {
-  const [open, setOpen] = createSignal(false)
-
-  return (
-    <div data-component="collapsible-section">
-      <button data-slot="toggle" onClick={() => setOpen(!open())}>
-        <span data-slot="icon">{open() ? "▾" : "▸"}</span>
-        <span>{props.section.title}</span>
-      </button>
-      <Show when={open()}>
-        <ul>
-          <For each={props.section.items}>{(item) => <ReleaseItem item={item} />}</For>
-        </ul>
-      </Show>
-    </div>
-  )
-}
-
-function CollapsibleSections(props: { sections: { title: string; items: string[] }[] }) {
-  return (
-    <div data-component="collapsible-sections">
-      <For each={props.sections}>{(section) => <CollapsibleSection section={section} />}</For>
-    </div>
+        </Show>
+      </div>
+    </article>
   )
 }
 
 export default function Changelog() {
   const i18n = useI18n()
   const language = useLanguage()
-  const data = createAsync(() => changelog())
-  const releases = () => data() ?? []
+  const data = createAsync(() => changelogPage())
 
   return (
     <main data-page="changelog">
@@ -120,51 +96,34 @@ export default function Changelog() {
           </section>
 
           <section data-component="releases">
-            <Show when={releases().length === 0}>
-              <p>
-                {i18n.t("changelog.empty")}{" "}
-                <a href={language.route("/changelog.json")}>{i18n.t("changelog.viewJson")}</a>
-              </p>
+            <Show when={data()}>
+              {(page) => (
+                <>
+                  <Show when={!page().ok}>
+                    <HttpStatusCode code={503} />
+                    <p data-slot="notice">
+                      {i18n.t("changelog.error")}{" "}
+                      <a href={CHANGELOG_FILE_URL} target="_blank" rel="noopener noreferrer">
+                        {i18n.t("changelog.viewOnGithub")}
+                      </a>
+                    </p>
+                  </Show>
+                  <Show when={page().ok && page().entries.length === 0}>
+                    <p data-slot="notice">{i18n.t("changelog.empty")}</p>
+                  </Show>
+                  <Index each={page().entries}>
+                    {(entry, index) => <Release entry={entry()} open={index === 0} />}
+                  </Index>
+                </>
+              )}
             </Show>
-            <For each={releases()}>
-              {(release) => {
-                return (
-                  <article data-component="release">
-                    <header>
-                      <div data-slot="version">
-                        <a href={release.url} target="_blank" rel="noopener noreferrer">
-                          {release.tag}
-                        </a>
-                      </div>
-                      <time dateTime={release.date}>{formatDate(release.date, language.tag(language.locale()))}</time>
-                    </header>
-                    <div data-slot="content">
-                      <Show when={release.highlights.length > 0}>
-                        <div data-component="highlights">
-                          <For each={release.highlights}>{(group) => <HighlightSection group={group} />}</For>
-                        </div>
-                      </Show>
-                      <Show when={release.highlights.length > 0 && release.sections.length > 0}>
-                        <CollapsibleSections sections={release.sections} />
-                      </Show>
-                      <Show when={release.highlights.length === 0}>
-                        <For each={release.sections}>
-                          {(section) => (
-                            <div data-component="section">
-                              <h3>{section.title}</h3>
-                              <ul>
-                                <For each={section.items}>{(item) => <ReleaseItem item={item} />}</For>
-                              </ul>
-                            </div>
-                          )}
-                        </For>
-                      </Show>
-                    </div>
-                  </article>
-                )
-              }}
-            </For>
           </section>
+
+          <p data-slot="v1">
+            <a href="https://github.com/anomalyco/opencode/releases" target="_blank" rel="noopener noreferrer">
+              {i18n.t("changelog.v1")}
+            </a>
+          </p>
         </div>
 
         <Footer />

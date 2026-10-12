@@ -1,5 +1,3 @@
-import { query } from "@solidjs/router"
-
 type Release = {
   tag_name: string
   name: string
@@ -70,12 +68,6 @@ export async function loadChangelog(): Promise<ChangelogData> {
 
   return { ok: true, releases }
 }
-
-export const changelog = query(async () => {
-  "use server"
-  const result = await loadChangelog()
-  return result.releases
-}, "changelog")
 
 function parseHighlights(body: string): HighlightGroup[] {
   const groups = new Map<string, HighlightItem[]>()

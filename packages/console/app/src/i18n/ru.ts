@@ -873,6 +873,10 @@ export const dict = {
   "changelog.hero.subtitle": "Новые обновления и улучшения OpenCode",
   "changelog.empty": "Записи в списке изменений не найдены.",
   "changelog.viewJson": "Посмотреть JSON",
+  "changelog.highlights": "Главное",
+  "changelog.error": "Сейчас не удалось загрузить список изменений.",
+  "changelog.viewOnGithub": "Посмотреть на GitHub",
+  "changelog.v1": "Примечания к выпускам OpenCode 1 находятся в GitHub Releases",
 
   "bench.list.title": "Бенчмарк",
   "bench.list.heading": "Бенчмарки",

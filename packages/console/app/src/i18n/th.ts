@@ -858,6 +858,10 @@ export const dict = {
   "changelog.hero.subtitle": "การอัปเดตและการปรับปรุงใหม่ใน OpenCode",
   "changelog.empty": "ไม่พบรายการบันทึกการเปลี่ยนแปลง",
   "changelog.viewJson": "ดู JSON",
+  "changelog.highlights": "ไฮไลต์",
+  "changelog.error": "ไม่สามารถโหลดบันทึกการเปลี่ยนแปลงได้ในขณะนี้",
+  "changelog.viewOnGithub": "ดูบน GitHub",
+  "changelog.v1": "บันทึกการเผยแพร่ของ OpenCode 1 อยู่ที่ GitHub Releases",
 
   "bench.list.title": "Benchmark",
   "bench.list.heading": "Benchmarks",
