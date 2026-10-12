@@ -4922,6 +4922,14 @@ describe("SessionRunnerLLM", () => {
           output: Schema.Struct({}),
           execute: () => Effect.die(new Permission.DeclinedError()),
         },
+        wrapped: {
+          name: "wrapped",
+          description: "Fail with a decline attached to a tool error",
+          input: Schema.Struct({}),
+          output: Schema.Struct({}),
+          execute: () =>
+            Effect.fail(new Tool.Error({ message: "Wrapped decline", error: new Permission.DeclinedError() })),
+        },
       },
       { codemode: false },
     )
@@ -4931,6 +4939,7 @@ describe("SessionRunnerLLM", () => {
       TestLLM.toolCalls(
         LLMEvent.toolCall({ id: "call-failed", name: "failed", input: {} }),
         LLMEvent.toolCall({ id: "call-declined", name: "declined", input: {} }),
+        LLMEvent.toolCall({ id: "call-wrapped", name: "wrapped", input: {} }),
       ),
     )
 
@@ -4945,6 +4954,10 @@ describe("SessionRunnerLLM", () => {
         Expected.failedTool({ id: "call-failed" }, { error: { message: "Ordinary tool failure" } }),
         Expected.failedTool(
           { id: "call-declined" },
+          { error: { type: "aborted", message: "The user declined this tool call" } },
+        ),
+        Expected.failedTool(
+          { id: "call-wrapped" },
           { error: { type: "aborted", message: "The user declined this tool call" } },
         ),
       ]),

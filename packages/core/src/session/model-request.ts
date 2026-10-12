@@ -398,17 +398,19 @@ export const layer = Layer.effect(
         retry: (event: Parameters<Prepared["retry"]>[0]) =>
           hooks.trigger("session", "retry", event).pipe(Effect.asVoid),
         // Permission.assert and the question tool throw declines as defects so tools cannot
-        // catch them and turn a "no" into model-visible output. Recover them here as failures.
+        // catch them and turn a "no" into model-visible output. Recover them here as failures,
+        // including declines a tool rethrew and its wrapper attached to a Tool.Error, as Promise
+        // plugin tools do.
         executeTool: (call: Parameters<Prepared["executeTool"]>[0]) =>
           tools.execute({ ...call, definitions: hooked }).pipe(
             Effect.catchCauseFilter(
               (cause) => {
-                const decline = cause.reasons.flatMap((r) =>
-                  Cause.isDieReason(r) &&
-                  (r.defect instanceof Permission.DeclinedError || r.defect instanceof QuestionTool.CancelledError)
-                    ? [r.defect]
-                    : [],
-                )[0]
+                const decline = cause.reasons
+                  .map((r) => (Cause.isDieReason(r) ? r.defect : Cause.isFailReason(r) ? r.error.error : undefined))
+                  .find(
+                    (value): value is Permission.DeclinedError | QuestionTool.CancelledError =>
+                      value instanceof Permission.DeclinedError || value instanceof QuestionTool.CancelledError,
+                  )
                 return decline ? Result.succeed(decline) : Result.fail(cause)
               },
               (decline) => Effect.fail(decline),

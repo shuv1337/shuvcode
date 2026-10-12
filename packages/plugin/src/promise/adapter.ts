@@ -622,10 +622,17 @@ function attempt<A>(evaluate: (signal: AbortSignal) => PromiseLike<A>) {
 type RuntimeSchema = Schema.Codec<unknown, unknown>
 
 const executePromiseTool = (tool: Info, input: any, context: Tool.Context) =>
-  Effect.promise((signal) =>
-    tool.execute(input, {
-      ...context,
-      signal,
-      progress: (update) => Effect.runPromise(context.progress(update), { signal }),
+  Effect.tryPromise({
+    try: (signal) =>
+      tool.execute(input, {
+        ...context,
+        signal,
+        progress: (update) => Effect.runPromise(context.progress(update), { signal }),
+      }),
+    catch: (error) => error,
+  }).pipe(
+    Effect.catch((error) => {
+      if (error instanceof Tool.Error) return Effect.fail(error)
+      return Effect.fail(new Tool.Error({ message: error instanceof Error ? error.message : String(error), error }))
     }),
   )
