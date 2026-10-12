@@ -499,7 +499,12 @@ const make = Effect.gen(function* () {
   })
 
   const apply = Effect.fn("cli.updater.apply")(function* (version: string) {
-    if (!(yield* install(version))) return yield* Effect.fail(new Error("Installation method not found"))
+    if (!(yield* install(version)))
+      return yield* Effect.fail(
+        new Error(
+          "Could not detect the installation method. Update with your package manager or download the latest release.",
+        ),
+      )
   })
 
   const check = Effect.fn("cli.updater.check")(function* () {
@@ -508,7 +513,14 @@ const make = Effect.gen(function* () {
         type: "unavailable" as const,
         message: "This build runs from a source checkout. Use an installed OpenCode release to check for updates.",
       }
-    const version = yield* latest()
+    const detected = yield* method()
+    if (!detected)
+      return {
+        type: "unavailable" as const,
+        message:
+          "Could not detect the installation method. Update with your package manager or download the latest release.",
+      }
+    const version = yield* latest(detected)
     if (!parseReleaseVersion(version)) return yield* Effect.fail(new Error(`Invalid version: ${version}`))
     const current = yield* Ref.get(installedVersion)
     if (action(current, version, "auto") === "none") {
