@@ -581,6 +581,73 @@ test("image files keep the review panel painted while loading", async ({ page })
   ).toEqual([])
 })
 
+test("video files expand into an in-window theatre overlay and collapse on Escape without remounting", async ({
+  page,
+}) => {
+  const directory = "C:/OpenCode/ReviewVideo"
+  const file = "demo.webm"
+
+  const webm = Buffer.from(
+    "GkXfo59ChoEBQveBAULygQRC84EIQoKEd2VibUKHgQJChYECGFOAZwEAAAAAAAH5EU2bdLpNu4tTq4QVSalmU6yBoU27i1OrhBZUrmtTrIHWTbuMU6uEElTDZ1OsggEyTbuMU6uEHFO7a1OsggHj7AEAAAAAAABZAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAVSalmsCrXsYMPQkBNgIxMYXZmNjMuMS4xMDJXQYxMYXZmNjMuMS4xMDJEiYhAj0AAAAAAABZUrmvXrgEAAAAAAABO14EBc8WIiQeUklk95R2cgQAitZyDdW5kiIEAhoVWX1ZQOIOBASPjg4Q7msoA4JCwgUC6gSSagQJVsIRVuYEBVe6BAOwBAAAAAAAAAgAAElTDZ/pzc59jwIBnyJlFo4dFTkNPREVSRIeMTGF2ZjYzLjEuMTAyc3PVY8CLY8WIiQeUklk95R1nyKBFo4dFTkNPREVSRIeTTGF2YzYzLjEuMTAyIGxpYnZweGfIoUWjiERVUkFUSU9ORIeTMDA6MDA6MDEuMDAwMDAwMDAwAB9DtnWt54EAo6iBAACAsAIAnQEqQAAkAABHCIWFiJmEiAICAAaOT8zHm/FYAP7/q1CAHFO7a5G7j7OBALeK94EB8YIBsfCBAw==",
+    "base64",
+  )
+
+  await openSession(page, {
+    name: "ReviewVideo",
+    fileList: (path) => (path ? [] : [fileNode(directory, file)]),
+    seed: {
+      panes: { ses_reviewvideo: { review: true } },
+    },
+  })
+  await page.route(`**/api/fs/read/${file}*`, (route) =>
+    route.fulfill({
+      status: 200,
+      headers: { "access-control-allow-origin": "*", "content-type": "application/octet-stream" },
+      body: webm,
+    }),
+  )
+
+  const panel = page.locator("#review-panel")
+  await panel.getByRole("button", { name: "Open file" }).click()
+  await panel.getByRole("button", { name: file }).click()
+  await expect(panel.getByRole("tab", { name: file, exact: true })).toHaveAttribute("aria-selected", "true")
+
+  const stage = panel.locator('[data-slot="artifact-stage"]')
+  const video = stage.locator('video[data-slot="artifact-media"]')
+  const fullscreen = stage.getByRole("button", { name: "Enter full screen", exact: true })
+  const exitFullscreen = stage.getByRole("button", { name: "Exit full screen", exact: true })
+
+  await expect(video).toBeVisible()
+  await expect(fullscreen).toHaveAttribute("aria-pressed", "false")
+  const inlineBounds = (await stage.boundingBox())!
+  expect(inlineBounds.width).toBeLessThan(1000)
+
+  await video.evaluate((element) => {
+    element.dataset.e2eProbe = "retained"
+  })
+
+  await fullscreen.click()
+  await expect(exitFullscreen).toHaveAttribute("aria-pressed", "true")
+  await expect(stage).toHaveAttribute("data-expanded", "")
+  expect(await stage.evaluate((element) => element.matches(":popover-open"))).toBe(true)
+  expect(await page.evaluate(() => document.fullscreenElement)).toBeNull()
+  expect(await video.evaluate((element) => element.dataset.e2eProbe)).toBe("retained")
+  await expect.poll(() => stage.boundingBox()).toEqual({ x: 0, y: 0, width: 1440, height: 900 })
+
+  await page.keyboard.press("Escape")
+  await expect(fullscreen).toHaveAttribute("aria-pressed", "false")
+  await expect(stage).not.toHaveAttribute("data-expanded")
+  expect(await stage.evaluate((element) => element.matches(":popover-open"))).toBe(false)
+  expect(await video.evaluate((element) => element.dataset.e2eProbe)).toBe("retained")
+  await expect.poll(() => stage.boundingBox()).toEqual(inlineBounds)
+
+  await video.dblclick()
+  await expect(exitFullscreen).toHaveAttribute("aria-pressed", "true")
+  await page.mouse.click(8, 8)
+  await expect(fullscreen).toHaveAttribute("aria-pressed", "false")
+  expect(await video.evaluate((element) => element.dataset.e2eProbe)).toBe("retained")
+})
+
 test("restores review state and the side-panel tab per session", async ({ page }) => {
   const sessions = [
     { id: "ses_review_state_a", title: "Alpha review state" },

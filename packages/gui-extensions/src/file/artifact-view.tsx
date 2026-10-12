@@ -1,6 +1,7 @@
 import { createMemo, createSignal, ErrorBoundary, For, Match, onCleanup, Show, Switch, untrack, type JSX } from "solid-js"
 import { createStore } from "solid-js/store"
 import { Dynamic } from "solid-js/web"
+import { makeEventListener } from "@solid-primitives/event-listener"
 import { createResizeObserver } from "@solid-primitives/resize-observer"
 import { Button } from "@opencode/ui/button"
 import { FileIcon } from "@opencode/ui/file-icon"
@@ -363,12 +364,110 @@ function ArtifactImage(props: MediaProps) {
 }
 
 function ArtifactVideo(props: MediaProps) {
+  const ctx = useExtension()
   const url = createBlobUrl(() => props.content)
+  // Fullscreen belongs to one video: a new file starts fitted in the pane.
+  const [expandedUrl, setExpandedUrl] = createSignal<string>()
+  const [paused, setPaused] = createSignal(true)
+  const [active, setActive] = createSignal(false)
+  const [box, setBox] = createStore({ left: 0, top: 0, ready: false })
+  const expanded = () => expandedUrl() === url()
+
+  let stage: HTMLDivElement | undefined
+  let video: HTMLVideoElement | undefined
+  let idleTimer: ReturnType<typeof setTimeout> | undefined
+
+  const clearIdle = () => {
+    if (idleTimer !== undefined) clearTimeout(idleTimer)
+    idleTimer = undefined
+  }
+
+  const wake = () => {
+    setActive(true)
+    clearIdle()
+    idleTimer = setTimeout(() => setActive(false), 2500)
+  }
+
+  onCleanup(clearIdle)
+
+  const close = () => setExpandedUrl(undefined)
+  const toggle = () => setExpandedUrl(expanded() ? undefined : url())
+
+  const measure = () => {
+    if (!video || video.offsetWidth === 0 || video.offsetHeight === 0) return
+
+    // Chromium's media controls place the 48x48 fullscreen slot 48px from the right edge (beside the
+    // 48px overflow button) and 24px above the bottom edge (above the 24px timeline scrubber).
+    setBox({
+      left: video.offsetLeft + video.offsetWidth - 96,
+      top: video.offsetTop + video.offsetHeight - 72,
+      ready: true,
+    })
+  }
+
+  createResizeObserver(
+    () => [stage, video],
+    () => measure(),
+  )
+
+  // Top-layer promotion escapes the side panel's stacking context and <main>'s content containment
+  // while keeping the same <video> element mounted so playback never resets.
+  createKeyed(expanded, (open) => {
+    const el = stage
+
+    if (!el || !open) return
+
+    el.setAttribute("popover", "manual")
+    el.showPopover?.()
+    measure()
+
+    makeEventListener(
+      window,
+      "keydown",
+      (event: KeyboardEvent) => {
+        if (event.key !== "Escape") return
+
+        event.preventDefault()
+        event.stopPropagation()
+        close()
+      },
+      { capture: true },
+    )
+
+    onCleanup(() => {
+      if (el.isConnected) el.hidePopover?.()
+      el.removeAttribute("popover")
+      measure()
+    })
+  })
+
+  const label = () => ctx.t(expanded() ? "view.exitFullscreen" : "view.fullscreen")
+  const controlsVisible = () => paused() || active()
 
   return (
-    <div data-slot="artifact-stage" data-zoom="fit" class="relative min-h-0 flex-1 overflow-hidden">
-      <div class="absolute inset-0 flex items-center justify-center p-6">
+    <div
+      ref={stage}
+      data-slot="artifact-stage"
+      data-zoom="fit"
+      data-expanded={expanded() ? "" : undefined}
+      class="relative min-h-0 flex-1 overflow-hidden"
+      onPointerMove={wake}
+      onPointerLeave={() => {
+        clearIdle()
+        setActive(false)
+      }}
+    >
+      <div
+        classList={{
+          "absolute inset-0 flex items-center justify-center p-6": !expanded(),
+          "absolute inset-0 flex items-center justify-center px-8 pt-12 pb-8": expanded(),
+        }}
+        onClick={(event) => {
+          if (expanded() && event.target === event.currentTarget) close()
+        }}
+      >
         <video
+          ref={video}
           data-slot="artifact-media"
           class="w-full bg-black"
           controls
@@ -376,11 +475,57 @@ function ArtifactVideo(props: MediaProps) {
           playsinline
           onError={() => props.onError()}
           src={url()}
+          onDblClick={toggle}
+          onPlay={() => setPaused(false)}
+          onPause={() => setPaused(true)}
+          onEnded={() => setPaused(true)}
           onLoadedMetadata={(event) => {
-            const video = event.currentTarget
-            props.onInfo({ width: video.videoWidth, height: video.videoHeight, duration: video.duration })
+            const el = event.currentTarget
+            setPaused(el.paused)
+            props.onInfo({ width: el.videoWidth, height: el.videoHeight, duration: el.duration })
+            measure()
           }}
         />
+        <button
+          type="button"
+          data-slot="artifact-video-fullscreen"
+          aria-label={label()}
+          aria-pressed={expanded()}
+          title={label()}
+          onClick={toggle}
+          style={box.ready ? { left: `${box.left}px`, top: `${box.top}px` } : { right: "72px", bottom: "48px" }}
+          classList={{
+            "absolute z-10 flex size-12 items-center justify-center transition-opacity focus-visible:opacity-100 focus-visible:outline-none":
+              true,
+            "opacity-100": controlsVisible(),
+            "pointer-events-none opacity-0": !controlsVisible(),
+          }}
+        >
+          <span class="flex size-9 items-center justify-center rounded-full transition-colors">
+            <Show
+              when={expanded()}
+              fallback={
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                  <path
+                    d="M3 6V3H6M10 3H13V6M13 10V13H10M6 13H3V10"
+                    stroke="currentColor"
+                    stroke-width="1.5"
+                    stroke-linecap="square"
+                  />
+                </svg>
+              }
+            >
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                <path
+                  d="M3 5.5H5.5V3M13 5.5H10.5V3M10.5 13V10.5H13M5.5 13V10.5H3"
+                  stroke="currentColor"
+                  stroke-width="1.5"
+                  stroke-linecap="square"
+                />
+              </svg>
+            </Show>
+          </span>
+        </button>
       </div>
     </div>
   )
