@@ -7,6 +7,7 @@ import os from "node:os"
 import path from "node:path"
 import { build } from "vite"
 import { Script } from "@opencode/script"
+import { embed } from "@opencode/script/highlights"
 import pkg from "../package.json"
 import { collectNodeAssets, copyNodeAssets, hashNodeAssets, seaAssetMap } from "./node-assets"
 import { appArchiveAsset, mainConfig } from "../vite.node.config"
@@ -28,6 +29,7 @@ const bundleOnly = process.argv.includes("--bundle-only")
 const single = process.argv.includes("--single")
 const skipInstall = process.argv.includes("--skip-install")
 const appArchiveOnly = process.argv.includes("--app-archive-only")
+const highlights = Script.preview ? undefined : embed(process.env.OPENCODE_RELEASE_NOTES)
 const requestedArchive = process.argv.find((arg) => arg.startsWith("--app-archive="))?.slice("--app-archive=".length)
 const archivePath = requestedArchive ? path.resolve(dir, requestedArchive) : undefined
 const requested = process.argv.find((arg) => arg.startsWith("--target="))?.slice("--target=".length)
@@ -93,6 +95,7 @@ for (const target of targets) {
   const input = {
     version: Script.version,
     channel: Script.channel,
+    highlights,
     assetHash,
     target,
   }
