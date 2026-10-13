@@ -97,6 +97,31 @@
   gap: 4px;
 }
 
+/* Each link owns half the gap, without expanding its painted background or close button. */
+[data-slot="vertical-tabs-sidebar"] [data-titlebar-tab] {
+  --tab-hit-before: 0px;
+  --tab-hit-after: 0px;
+  --tab-link-inset: 6px;
+  overflow: visible;
+  padding-inline: 0;
+}
+
+[data-slot="vertical-tabs-sidebar"] [data-titlebar-tab-link] {
+  align-self: flex-start;
+  height: calc(100% + var(--tab-hit-before) + var(--tab-hit-after));
+  margin-block-start: calc(-1 * var(--tab-hit-before));
+  padding-block: var(--tab-hit-before) var(--tab-hit-after);
+  padding-inline: var(--tab-link-inset);
+}
+
+[data-slot="vertical-tabs-sidebar"] [data-titlebar-tab-slot] + [data-titlebar-tab-slot] [data-titlebar-tab] {
+  --tab-hit-before: 2px;
+}
+
+[data-slot="vertical-tabs-sidebar"] [data-titlebar-tab-slot]:has(+ [data-titlebar-tab-slot]) [data-titlebar-tab] {
+  --tab-hit-after: 2px;
+}
+
 [data-titlebar-tab-slot] {
   --tab-separator: var(--v2-background-bg-layer-03);
   position: relative;
@@ -133,7 +158,7 @@
 
 [data-titlebar-tab][data-title-overflow="true"]:not([data-editing="true"]) [data-slot="tab-link"],
 [data-titlebar-tab]:is(:hover, [data-active="true"]):not([data-editing="true"]) [data-slot="tab-link"] {
-  --tab-title-fade-offset: 4px;
+  --tab-title-fade-offset: calc(4px + var(--tab-link-inset, 0px));
   -webkit-mask-image: linear-gradient(
     to right,
     black 0,
@@ -169,12 +194,12 @@
 }
 
 [data-titlebar-tab]:is(:hover, [data-active="true"]):not([data-editing="true"]) [data-slot="tab-link"] {
-  --tab-title-fade-offset: 24px;
+  --tab-title-fade-offset: calc(24px + var(--tab-link-inset, 0px));
 }
 
 [data-titlebar-tab][data-title-overflow="true"]:not(:hover):not([data-active="true"]):not([data-editing="true"])
   [data-slot="tab-link"] {
-  padding-inline-end: 0;
+  padding-inline-end: var(--tab-link-inset, 0px);
 }
 
 [data-titlebar-tab] [data-slot="tab-title"] {
@@ -202,7 +227,7 @@
 
   [data-titlebar-tab]:not([data-editing="true"]) [data-slot="tab-link"],
   [data-titlebar-tab][data-title-overflow="true"]:not([data-editing="true"]) [data-slot="tab-link"] {
-    --tab-title-fade-offset: 24px;
+    --tab-title-fade-offset: calc(24px + var(--tab-link-inset, 0px));
     --tab-title-fade-direction: to right;
     -webkit-mask-image: linear-gradient(
       var(--tab-title-fade-direction),

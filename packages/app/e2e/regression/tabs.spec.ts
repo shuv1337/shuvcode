@@ -202,6 +202,141 @@ test("vertical tabs resize, scroll, show shortcut hints, and navigate", async ({
   await expectPath(page, sessionHref(b.id))
 })
 
+test("vertical tab gaps hover and select the nearest row", async ({ page }) => {
+  await mockWorkspace(page, {
+    name: "Tabs",
+    sessions: [a, b, c],
+    seed: { settings: { appearance: { tabLayout: "vertical" } } },
+  })
+  await page.goto(sessionHref(a.id))
+
+  const sidebar = page.locator('[data-slot="vertical-tabs-sidebar"]')
+  const rows = sidebar.locator("[data-titlebar-tab]")
+  const tabB = rows.filter({ has: page.locator(`a[href="${sessionHref(b.id)}"]`) })
+  const tabC = rows.filter({ has: page.locator(`a[href="${sessionHref(c.id)}"]`) })
+  await expect(rows.locator("[data-titlebar-tab-title]")).toHaveText([a.title, b.title, c.title])
+  const upper = await tabB.boundingBox()
+  const lower = await tabC.boundingBox()
+
+  if (!upper || !lower) throw new Error("vertical tabs have no bounding boxes")
+  expect(lower.y - upper.y - upper.height).toBe(4)
+
+  const middle = upper.y + upper.height + 2
+
+  // The two halves belong to their nearest row; an exact tie belongs to the next row.
+  for (const [offset, id] of [
+    [-1, b.id],
+    [0, c.id],
+  ] as const) {
+    await page.mouse.move(upper.x + upper.width / 2, middle + offset)
+    await expect(sidebar.locator("[data-titlebar-tab]:hover [data-titlebar-tab-link]")).toHaveAttribute(
+      "href",
+      sessionHref(id),
+    )
+  }
+
+  await page.mouse.click(upper.x + upper.width / 2, middle + 1)
+  await expectPath(page, sessionHref(c.id))
+
+  await page.mouse.move(upper.x + upper.width / 2, middle - 1)
+  await page.mouse.down()
+  await page.mouse.move(upper.x + upper.width / 2, lower.y + lower.height - 2, { steps: 8 })
+  await page.mouse.up()
+  await expect(rows.locator("[data-titlebar-tab-title]")).toHaveText([a.title, c.title, b.title])
+
+  await tabB.getByRole("button", { name: "Close tab", exact: true }).click()
+  await expect(rows.locator("[data-titlebar-tab-title]")).toHaveText([a.title, c.title])
+  await expectPath(page, sessionHref(c.id))
+
+  const list = await sidebar.locator("[data-titlebar-tab-list]").boundingBox()
+
+  if (!list) throw new Error("vertical tab list has no bounding box")
+
+  for (const [x, y] of [
+    [list.x + list.width / 2, list.y - 1],
+    [list.x + list.width / 2, list.y + list.height + 1],
+    [list.x - 1, list.y + list.height / 2],
+    [list.x + list.width + 1, list.y + list.height / 2],
+  ]) {
+    await page.mouse.move(x, y)
+    await expect(sidebar.locator("[data-titlebar-tab]:hover")).toHaveCount(0)
+  }
+})
+
+test("tab preview opens cold, switches immediately between tabs, and closes outside the strip", async ({ page }) => {
+  const d = { id: "ses_tab_d", title: "Library" }
+  await mockWorkspace(page, {
+    name: "Tabs",
+    sessions: [a, b, c, d],
+    seed: { settings: { appearance: { tabLayout: "vertical" } } },
+  })
+  await page.goto(sessionHref(a.id))
+  const sidebar = page.locator('[data-slot="vertical-tabs-sidebar"]')
+  const rows = sidebar.locator("[data-titlebar-tab]")
+  const tabB = rows.filter({ has: page.locator(`a[href="${sessionHref(b.id)}"]`) })
+  const tabC = rows.filter({ has: page.locator(`a[href="${sessionHref(c.id)}"]`) })
+  const preview = page.locator('[data-component="session-tab-popover"]')
+  await expect(rows.locator("[data-titlebar-tab-title]")).toHaveText([a.title, b.title, c.title, d.title])
+  await page.clock.install()
+  await page.clock.pauseAt(new Date())
+  await tabB.hover()
+  await page.clock.runFor(700)
+  await expect(preview).toHaveCount(0)
+  await page.clock.runFor(50)
+  await expect(preview).toContainText(b.title)
+  await page.clock.runFor(10_000)
+  await expect(preview).toContainText(b.title)
+
+  const box = await tabB.boundingBox()
+
+  if (!box) throw new Error("vertical tab has no bounding box")
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height + 1)
+  await page.clock.runFor(1000)
+  await expect(preview).toContainText(b.title)
+  await tabB.getByRole("button", { name: "Close tab", exact: true }).hover()
+  await page.clock.runFor(1000)
+  await expect(preview).toContainText(b.title)
+  await tabC.hover({ position: { x: box.width - 1, y: box.height / 2 } })
+  await page.clock.runFor(20)
+  await expect(preview).toHaveCount(1)
+  await expect(preview).toContainText(c.title)
+
+  await expect(preview).toHaveCSS("pointer-events", "none")
+  await rows.filter({ has: page.locator(`a[href="${sessionHref(d.id)}"]`) }).hover()
+  await page.clock.runFor(20)
+  await expect(preview).toHaveCount(1)
+  await expect(preview).toContainText(d.title)
+  const card = await preview.boundingBox()
+
+  if (!card) throw new Error("tab preview has no bounding box")
+  // The card is informational: entering its painted area leaves the tab strip.
+  await page.mouse.move(card.x + card.width / 2, card.y + card.height / 2)
+  await page.clock.runFor(20)
+  await expect(preview).toHaveCount(0)
+
+  await tabB.hover()
+  await page.clock.runFor(800)
+  await expect(preview).toContainText(b.title)
+  await page.mouse.down()
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height + 20, { steps: 8 })
+  await page.clock.runFor(1000)
+  await expect(preview).toHaveCount(0)
+  await page.mouse.up()
+
+  // Removing an open tab must not leave the shared preview state permanently warm.
+  await tabB.hover()
+  await page.clock.runFor(800)
+  await expect(preview).toContainText(b.title)
+  await tabB.getByRole("button", { name: "Close tab", exact: true }).click()
+  await page.mouse.move(900, 500)
+  await page.clock.runFor(600)
+  await tabC.hover()
+  await page.clock.runFor(700)
+  await expect(preview).toHaveCount(0)
+  await page.clock.runFor(50)
+  await expect(preview).toContainText(c.title)
+})
+
 test("closing the active server's last tab opens the remaining server tab", async ({ page }) => {
   const sessionA = session({ id: "ses_server_a", directory: "C:/server-a", title: "Server A session" })
   const sessionB = session({ id: "ses_server_b", directory: "/home/server-b", title: "Server B session" })
