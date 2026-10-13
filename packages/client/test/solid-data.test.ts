@@ -52,6 +52,71 @@ test("uses the configured initial window and retains normal cursor page sizes", 
   }
 })
 
+test("keeps the previous model in a live variant notice until the projected message arrives", async () => {
+  const projected = Promise.withResolvers<void>()
+  const previous = { providerID: "provider", id: "model", variant: "high" }
+  const model = { providerID: "provider", id: "model" }
+  const listeners = new Set<Parameters<CreateDataInput["event"]["listen"]>[0]>()
+  const api = OpenCode.make({
+    baseUrl: "http://opencode.local",
+    fetch: async (input, init) => {
+      const request = input instanceof Request ? input : new Request(input, init)
+      const pathname = new URL(request.url).pathname
+      if (pathname === "/api/session/ses_refresh/message") return Response.json({ data: [], cursor: {} })
+      if (pathname === "/api/session/ses_refresh/message/msg_variant") {
+        await projected.promise
+        return Response.json({
+          data: {
+            id: "msg_variant",
+            type: "model-switched",
+            model,
+            previous,
+            metadata: { refetched: true },
+            time: { created: 2 },
+          },
+        })
+      }
+      throw new Error(`Unexpected request: ${request.url}`)
+    },
+  })
+  const setup = createRoot((dispose) => ({
+    data: createData({
+      api: () => api,
+      directory: "/project",
+      event: {
+        on: () => () => {},
+        listen(handler) {
+          listeners.add(handler)
+          return () => listeners.delete(handler)
+        },
+      },
+    }),
+    dispose,
+  }))
+
+  try {
+    await setup.data.session.message.sync("ses_refresh")
+    const event: OpenCodeEvent = {
+      id: "evt_variant",
+      created: 2,
+      type: "session.model.selected",
+      durable: { aggregateID: "ses_refresh", seq: 1, version: 1 },
+      data: { sessionID: "ses_refresh", model, previous },
+    }
+    listeners.forEach((listener) => listener({ name: event.type, details: event }))
+    expect(setup.data.session.message.get("ses_refresh", "msg_variant")).toMatchObject({
+      type: "model-switched",
+      model,
+      previous,
+    })
+    projected.resolve()
+    await wait(() => setup.data.session.message.get("ses_refresh", "msg_variant")?.metadata?.refetched === true)
+  } finally {
+    projected.resolve()
+    setup.dispose()
+  }
+})
+
 test("reconciles a stale running tool when execution settles", async () => {
   const listeners = new Set<Parameters<CreateDataInput["event"]["listen"]>[0]>()
   let completed = false
