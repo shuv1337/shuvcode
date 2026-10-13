@@ -14,7 +14,7 @@ export const names = ["opencode.json", "opencode.jsonc"]
 /** Eligible sources in priority order, including paths that may appear later. */
 export interface Sources {
   readonly system?: { readonly path: AbsolutePath; readonly present: boolean }
-  /** macOS MDM managed preferences plist (`ai.opencode.managed`), when one is deployed. */
+  /** macOS MDM managed preferences plist (`ai.shuvcode.managed`), when one is deployed. */
   readonly preferences?: AbsolutePath
   readonly global?: AbsolutePath
   readonly explicit?: AbsolutePath
@@ -24,18 +24,19 @@ export interface Sources {
   readonly agents: readonly AbsolutePath[]
 }
 
-/** Platform system configuration directory (`/Library/Application Support/opencode`, `/etc/opencode`, `%ProgramData%\opencode`). */
+/** Platform system configuration directory (`/Library/Application Support/shuvcode`, `/etc/shuvcode`, `%ProgramData%\shuvcode`). */
 export function systemDirectory(platform: NodeJS.Platform = process.platform, env: NodeJS.ProcessEnv = process.env) {
-  if (platform === "darwin") return AbsolutePath.make("/Library/Application Support/opencode")
-  if (platform === "win32") return AbsolutePath.make(path.join(env.ProgramData || "C:\\ProgramData", "opencode"))
-  return AbsolutePath.make("/etc/opencode")
+  if (platform === "darwin") return AbsolutePath.make(`/Library/Application Support/${Global.app}`)
+  if (platform === "win32") return AbsolutePath.make(path.join(env.ProgramData || "C:\\ProgramData", Global.app))
+  return AbsolutePath.make(`/etc/${Global.app}`)
 }
 
 /** macOS MDM managed preferences plists, most specific first; the first one present wins. */
 export function preferencePaths(user: string) {
+  const file = `ai.${Global.app}.managed.plist`
   return [
-    AbsolutePath.make(path.join("/Library/Managed Preferences", user, "ai.opencode.managed.plist")),
-    AbsolutePath.make("/Library/Managed Preferences/ai.opencode.managed.plist"),
+    AbsolutePath.make(path.join("/Library/Managed Preferences", user, file)),
+    AbsolutePath.make(`/Library/Managed Preferences/${file}`),
   ]
 }
 

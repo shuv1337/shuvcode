@@ -27,6 +27,21 @@ test("the same version, downgrades, and unstable versions do nothing", () => {
   expect(decide({ ...input, version: "local" })).toBe("none")
 })
 
+test("fork release versions order across upstream bases and same-base shuv increments", () => {
+  const fork = { version: "2.0.28-shuv.1", count: 5, history: true }
+  expect(decide(fork)).toBe("show")
+  expect(decide({ ...fork, history: false })).toBe("record")
+  expect(decide({ ...fork, seen: "2.0.26-shuv.1" })).toBe("show")
+  expect(decide({ ...fork, seen: "2.0.26-shuv.9", count: 0 })).toBe("record")
+  expect(decide({ ...fork, version: "2.0.28-shuv.2", seen: "2.0.28-shuv.1" })).toBe("show")
+  expect(decide({ ...fork, version: "2.0.28-shuv.10", seen: "2.0.28-shuv.2" })).toBe("show")
+  expect(decide({ ...fork, seen: "2.0.28-shuv.1" })).toBe("none")
+  expect(decide({ ...fork, seen: "2.0.28-shuv.2" })).toBe("none")
+  expect(decide({ ...fork, seen: "2.0.29-shuv.1" })).toBe("none")
+  expect(decide({ ...fork, version: "2.0.28-shuv.0" })).toBe("none")
+  expect(decide({ ...fork, version: "2.0.28-beta.1" })).toBe("none")
+})
+
 test("only one of several concurrent TUIs claims the highlights", async () => {
   await using temporary = await tmpdir()
   const storages = Array.from({ length: 4 }, () => createStorage(temporary.path, "latest"))

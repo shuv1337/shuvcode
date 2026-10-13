@@ -16,6 +16,7 @@ import { ConfigPermissionV1 } from "@opencode/core/v1/config/permission"
 import { ConfigNormalize } from "@opencode/core/config/normalize"
 import { Watcher } from "@opencode/core/filesystem/watcher"
 import { Bus } from "@opencode/core/bus"
+import { FSUtil } from "@opencode/util/fs-util"
 import { Global } from "@opencode/util/global"
 import { Location } from "@opencode/core/location"
 import { Project } from "@opencode/core/project"
@@ -64,14 +65,17 @@ function testLayer(
       ),
     ),
   )
-  const built = AppNodeBuilder.build(LayerNode.group([Config.node, Bus.node]), [
-    Config.node.replace(Config.configured({ system: false, ...options })),
-    Location.node.replace(locationLayer),
-    Global.node.replace(Global.layerWith({ config: globalDirectory, home: path.join(globalDirectory, "home") })),
-    Credential.node.replace(credentialNode),
-    WellKnown.node.replace(wellknownNode),
-    Watcher.node.replace(watcher),
-  ])
+  const built = AppNodeBuilder.build(
+    LayerNode.group([Config.node, Bus.node, FSUtil.node, Global.node, Location.node]),
+    [
+      Config.node.replace(Config.configured({ system: false, ...options })),
+      Location.node.replace(locationLayer),
+      Global.node.replace(Global.layerWith({ config: globalDirectory, home: path.join(globalDirectory, "home") })),
+      Credential.node.replace(credentialNode),
+      WellKnown.node.replace(wellknownNode),
+      Watcher.node.replace(watcher),
+    ],
+  )
   // Merge the watcher layer by reference so Watcher.Test resolves to the same
   // memoized instance the built graph uses.
   return Layer.mergeAll(built, watcher)
@@ -261,22 +265,24 @@ describe("Config", () => {
   )
 
   test("resolves the system configuration directory per platform", () => {
+    expect(Global.app).toBe("shuvcode")
+    expect(ConfigDiscovery.names).toEqual(["opencode.json", "opencode.jsonc"])
     expect(ConfigDiscovery.systemDirectory("darwin", {})).toBe(
-      AbsolutePath.make("/Library/Application Support/opencode"),
+      AbsolutePath.make("/Library/Application Support/shuvcode"),
     )
-    expect(ConfigDiscovery.systemDirectory("linux", {})).toBe(AbsolutePath.make("/etc/opencode"))
+    expect(ConfigDiscovery.systemDirectory("linux", {})).toBe(AbsolutePath.make("/etc/shuvcode"))
     expect(ConfigDiscovery.systemDirectory("win32", { ProgramData: "D:\\ProgramData" })).toBe(
-      AbsolutePath.make(path.join("D:\\ProgramData", "opencode")),
+      AbsolutePath.make(path.join("D:\\ProgramData", "shuvcode")),
     )
     expect(ConfigDiscovery.systemDirectory("win32", {})).toBe(
-      AbsolutePath.make(path.join("C:\\ProgramData", "opencode")),
+      AbsolutePath.make(path.join("C:\\ProgramData", "shuvcode")),
     )
   })
 
   test("resolves macOS managed preferences with user-specific profiles first", () => {
     expect(ConfigDiscovery.preferencePaths("alice")).toEqual([
-      AbsolutePath.make(path.join("/Library/Managed Preferences", "alice", "ai.opencode.managed.plist")),
-      AbsolutePath.make("/Library/Managed Preferences/ai.opencode.managed.plist"),
+      AbsolutePath.make(path.join("/Library/Managed Preferences", "alice", "ai.shuvcode.managed.plist")),
+      AbsolutePath.make("/Library/Managed Preferences/ai.shuvcode.managed.plist"),
     ])
   })
 
@@ -285,9 +291,9 @@ describe("Config", () => {
       JSON.parse(
         ConfigDiscovery.stripPreferenceMetadata(
           JSON.stringify({
-            PayloadDisplayName: "OpenCode",
-            PayloadIdentifier: "ai.opencode.managed",
-            PayloadType: "ai.opencode.managed",
+            PayloadDisplayName: "Shuvcode",
+            PayloadIdentifier: "ai.shuvcode.managed",
+            PayloadType: "ai.shuvcode.managed",
             PayloadUUID: "00000000-0000-0000-0000-000000000000",
             PayloadVersion: 1,
             _manualProfile: true,
@@ -297,6 +303,81 @@ describe("Config", () => {
       ),
     ).toEqual({ share: "disabled" })
   })
+
+  it.live("isolates system and global discovery to shuvcode directories while keeping opencode.json filenames", () =>
+    Effect.acquireDisposable(Effect.promise(() => tmpdir())).pipe(
+      Effect.flatMap((tmp) => {
+        const etcOpencode = path.join(tmp.path, "etc", "opencode")
+        const etcShuvcode = path.join(tmp.path, "etc", "shuvcode")
+        const globalOpencode = path.join(tmp.path, "config", "opencode")
+        const globalShuvcode = path.join(tmp.path, "config", "shuvcode")
+        const project = path.join(tmp.path, "project")
+        return Effect.promise(async () => {
+          await Promise.all([
+            fs.mkdir(etcOpencode, { recursive: true }),
+            fs.mkdir(etcShuvcode, { recursive: true }),
+            fs.mkdir(globalOpencode, { recursive: true }),
+            fs.mkdir(globalShuvcode, { recursive: true }),
+            fs.mkdir(project, { recursive: true }),
+          ])
+          await Promise.all([
+            fs.writeFile(
+              path.join(etcOpencode, "opencode.json"),
+              JSON.stringify({ shell: "upstream-system", username: "upstream-admin", share: "disabled" }),
+            ),
+            fs.writeFile(
+              path.join(etcShuvcode, "opencode.json"),
+              JSON.stringify({ shell: "shuvcode-system", username: "shuvcode-admin" }),
+            ),
+            fs.writeFile(
+              path.join(globalOpencode, "opencode.json"),
+              JSON.stringify({ shell: "upstream-global", default_agent: "upstream-agent" }),
+            ),
+            fs.writeFile(path.join(globalShuvcode, "opencode.json"), JSON.stringify({ shell: "shuvcode-global" })),
+          ])
+        }).pipe(
+          Effect.andThen(
+            ConfigDiscovery.discover().pipe(
+              Effect.tap((sources) =>
+                Effect.sync(() => {
+                  expect(sources.system?.path).toBe(ConfigDiscovery.systemDirectory())
+                  expect(path.basename(sources.system?.path ?? "")).toBe("shuvcode")
+                  expect(sources.global).toBe(AbsolutePath.make(globalShuvcode))
+                  expect(sources.preferences ?? "").not.toContain("ai.opencode.managed")
+                }),
+              ),
+              Effect.provide(testLayer(project, globalShuvcode, project)),
+            ),
+          ),
+          Effect.andThen(
+            Effect.gen(function* () {
+              const config = yield* Config.Service
+              const entries = yield* config.entries()
+              expect(
+                entries.flatMap((entry) => (entry.type === "document" && entry.info.shell ? [entry.info.shell] : [])),
+              ).toEqual(["shuvcode-system", "shuvcode-global"])
+              expect(Config.latest(entries, "username")).toBe("shuvcode-admin")
+              expect(Config.latest(entries, "share")).toBeUndefined()
+              expect(Config.latest(entries, "default_agent")).toBeUndefined()
+            }).pipe(
+              Effect.provide(
+                testLayer(
+                  project,
+                  globalShuvcode,
+                  project,
+                  undefined,
+                  undefined,
+                  emptyCredentialNode,
+                  emptyWellknownNode,
+                  { system: etcShuvcode },
+                ),
+              ),
+            ),
+          ),
+        )
+      }),
+    ),
+  )
 
   it.live("loads explicit file and content overrides in priority order", () =>
     Effect.acquireDisposable(Effect.promise(() => tmpdir())).pipe(

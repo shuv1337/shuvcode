@@ -39,10 +39,9 @@ export async function claim(storage: Storage, input: HighlightsInput) {
 }
 
 function stable(version: string) {
-  return version
-    .match(/^(\d+)\.(\d+)\.(\d+)$/)
-    ?.slice(1)
-    .map(Number)
+  const match = version.match(/^(\d+)\.(\d+)\.(\d+)(?:-shuv\.([1-9]\d*))?$/)
+  if (!match) return
+  return [Number(match[1]), Number(match[2]), Number(match[3]), Number(match[4] ?? 0)]
 }
 
 function newer(current: number[], seen: number[]) {
