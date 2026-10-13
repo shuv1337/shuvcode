@@ -29,6 +29,7 @@ import type {
   SessionMessageAssistantText,
   SessionMessageAssistantTool,
   SessionInfo,
+  SessionListInput,
   SessionInboxInfo,
   SessionInboxCompaction,
   ShellInfo,
@@ -203,6 +204,8 @@ function createSync() {
     },
   }
 }
+
+const CHILD_PAGE = 200
 
 export function createData(config: CreateDataInput) {
   const api = config.api
@@ -497,6 +500,16 @@ export function createData(config: CreateDataInput) {
     const created = new Map<string, number>()
     messageIndex.set(sessionID, created)
     return created
+  }
+
+  // Every direct subagent, not only the server's default first page, so a root's family cost
+  // counts all of them. Pages stay newest first, the order the family index has always used.
+  async function listChildren(input: SessionListInput): Promise<SessionInfo[]> {
+    const page = await api().session.list(input)
+
+    if (page.data.length < CHILD_PAGE || !page.cursor.next) return page.data
+
+    return [...page.data, ...(await listChildren({ cursor: page.cursor.next, limit: CHILD_PAGE }))]
   }
 
   // Walk parentID upward through loaded session info to the family root. When a
@@ -1619,11 +1632,7 @@ export function createData(config: CreateDataInput) {
         return sync.run(options?.children ? `session.family:${sessionID}` : `session:${sessionID}`, async () => {
           const [info, children] = await Promise.all([
             api().session.get({ sessionID }),
-            options?.children
-              ? api()
-                  .session.list({ parentID: sessionID, order: "desc" })
-                  .then((response) => response.data)
-              : [],
+            options?.children ? listChildren({ parentID: sessionID, order: "desc", limit: CHILD_PAGE }) : [],
           ])
           const sessions = [info, ...children]
           batch(() => {

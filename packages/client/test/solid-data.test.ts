@@ -52,6 +52,47 @@ test("uses the configured initial window and retains normal cursor page sizes", 
   }
 })
 
+test("counts every subagent page in a root session's cost", async () => {
+  const child = (index: number): SessionInfo => ({
+    ...session(0),
+    id: `ses_child_${index}`,
+    parentID: "ses_root",
+    cost: 1,
+  })
+  const requests: string[] = []
+  const api = OpenCode.make({
+    baseUrl: "http://opencode.local",
+    fetch: async (input, init) => {
+      const url = new URL((input instanceof Request ? input : new Request(input, init)).url)
+      requests.push(`${url.pathname}?${url.searchParams}`)
+
+      if (url.pathname === "/api/session/ses_root") return Response.json({ data: { ...session(0), id: "ses_root", cost: 0.5 } })
+
+      if (url.searchParams.get("cursor") === "page_2")
+        return Response.json({ data: Array.from({ length: 50 }, (_, index) => child(200 + index)), cursor: { next: "page_3" } })
+
+      return Response.json({ data: Array.from({ length: 200 }, (_, index) => child(index)), cursor: { next: "page_2" } })
+    },
+  })
+  const setup = createRoot((dispose) => ({
+    data: createData({ api: () => api, directory: "/project", event: { on: () => () => {}, listen: () => () => {} } }),
+    dispose,
+  }))
+
+  try {
+    await setup.data.session.sync("ses_root", { children: true })
+    expect(setup.data.session.family("ses_root")).toHaveLength(251)
+    expect(setup.data.session.cost("ses_root")).toBe(250.5)
+    expect(requests.toSorted()).toEqual([
+      "/api/session/ses_root?",
+      "/api/session?limit=200&cursor=page_2",
+      "/api/session?limit=200&order=desc&parentID=ses_root",
+    ])
+  } finally {
+    setup.dispose()
+  }
+})
+
 test("keeps the previous model in a live variant notice until the projected message arrives", async () => {
   const projected = Promise.withResolvers<void>()
   const previous = { providerID: "provider", id: "model", variant: "high" }
