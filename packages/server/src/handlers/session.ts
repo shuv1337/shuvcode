@@ -312,7 +312,7 @@ export const SessionHandler = HttpApiBuilder.group(Api, "server.session", (handl
           const unknown = Object.entries(ctx.payload)
             .filter(
               ([key, value]) =>
-                !Object.hasOwn(SessionPromptPayload.fields, key) &&
+                !Object.hasOwn(SessionPromptPayload.schema.fields, key) &&
                 !(key === "sessionID" && value === ctx.params.sessionID),
             )
             .map(([key]) => key)

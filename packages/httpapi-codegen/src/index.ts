@@ -1522,7 +1522,7 @@ export function generate<Id extends string, Groups extends HttpApiGroup.Constrai
 
 function isFlattenableStruct(schema: Schema.Top) {
   const ast = Schema.toType(schema).ast
-  return SchemaAST.isObjects(ast) && ast.indexSignatures.length === 0
+  return SchemaAST.isObjects(ast) && (ast.propertySignatures.length > 0 || ast.indexSignatures.length === 0)
 }
 
 function isOpaquePayload(endpoint: Endpoint) {
@@ -1533,8 +1533,11 @@ function isOpaquePayload(endpoint: Endpoint) {
 function inputFields(schema: Schema.Top | undefined, source: InputField["source"], operation: string) {
   if (schema === undefined) return []
   const ast = Schema.toType(schema).ast
-  if (!SchemaAST.isObjects(ast) || ast.indexSignatures.length > 0) {
+  if (!SchemaAST.isObjects(ast) || (ast.indexSignatures.length > 0 && ast.propertySignatures.length === 0)) {
     if (source === "payload") return [{ name: "payload", source, optional: false }] as const
+    throw new GenerationError({ reason: `Input schema must be a struct: ${operation}.${source}` })
+  }
+  if (source !== "payload" && ast.indexSignatures.length > 0) {
     throw new GenerationError({ reason: `Input schema must be a struct: ${operation}.${source}` })
   }
   return ast.propertySignatures.map((field) => {
