@@ -77,32 +77,38 @@ export default {
       return new Response("Not found", { status: 404 })
     }
 
-    const resolved = resolveChannel(path[0])
-    const agent = request.headers.get("User-Agent")?.match(/^opencode\/(?:([^/]+)\/([^/]+)\/cli|(.*))$/)
-    const current = url.searchParams.get("current") ?? agent?.[2] ?? agent?.[3]
-    const source = agent?.[1] ?? current?.match(/^v?0\.0\.0-(.+)-\d+(?:\.\d+)?(?:\+.*)?$/)?.[1]
-    const caller = source === undefined || resolveChannel(source) === resolved ? current : undefined
-    const rollout = await env.DB.prepare("SELECT duration_hours FROM channel_rollout WHERE channel = ?")
-      .bind(resolved)
-      .first<{ duration_hours: number }>()
-    const ip = request.headers.get("CF-Connecting-IP")
-    const hash =
-      rollout?.duration_hours && ip
-        ? new DataView(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(`${resolved}:${ip}`))).getUint32(
-            0,
-          )
-        : undefined
-    // Missing IPs wait for full rollout. The same IP keeps its position across releases.
-    const cutoff =
-      Date.now() - (rollout?.duration_hours ?? 0) * 3_600_000 * (hash === undefined ? 1 : (hash + 1) / 2 ** 32)
-    if (path.length === 4) {
-      return artifactDistribution(env.DB, resolved, path[1], path[2], caller, cutoff, path[3])
-    }
-    if (path.length === 1) return channel(env.DB, resolved, caller, cutoff)
-    if (path.length === 2) return artifactName(env.DB, resolved, path[1], caller, cutoff)
-    return artifactDistribution(env.DB, resolved, path[1], path[2], caller, cutoff)
+    // D1 rejects queries while the database is overloaded. Return a retryable 503 instead of a 1101 exception page.
+    return lookup(request, env, url, path).catch((error) => {
+      console.error("Update lookup failed", error)
+      return json({ error: "Update service temporarily unavailable" }, 503, { "Retry-After": "60" })
+    })
   },
 } satisfies ExportedHandler<Env>
+
+async function lookup(request: Request, env: Env, url: URL, path: string[]) {
+  const resolved = resolveChannel(path[0])
+  const agent = request.headers.get("User-Agent")?.match(/^opencode\/(?:([^/]+)\/([^/]+)\/cli|(.*))$/)
+  const current = url.searchParams.get("current") ?? agent?.[2] ?? agent?.[3]
+  const source = agent?.[1] ?? current?.match(/^v?0\.0\.0-(.+)-\d+(?:\.\d+)?(?:\+.*)?$/)?.[1]
+  const caller = source === undefined || resolveChannel(source) === resolved ? current : undefined
+  const rollout = await env.DB.prepare("SELECT duration_hours FROM channel_rollout WHERE channel = ?")
+    .bind(resolved)
+    .first<{ duration_hours: number }>()
+  const ip = request.headers.get("CF-Connecting-IP")
+  const hash =
+    rollout?.duration_hours && ip
+      ? new DataView(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(`${resolved}:${ip}`))).getUint32(0)
+      : undefined
+  // Missing IPs wait for full rollout. The same IP keeps its position across releases.
+  const cutoff =
+    Date.now() - (rollout?.duration_hours ?? 0) * 3_600_000 * (hash === undefined ? 1 : (hash + 1) / 2 ** 32)
+  if (path.length === 4) {
+    return artifactDistribution(env.DB, resolved, path[1], path[2], caller, cutoff, path[3])
+  }
+  if (path.length === 1) return channel(env.DB, resolved, caller, cutoff)
+  if (path.length === 2) return artifactName(env.DB, resolved, path[1], caller, cutoff)
+  return artifactDistribution(env.DB, resolved, path[1], path[2], caller, cutoff)
+}
 
 async function channel(db: D1Database, channel: string, current: string | undefined, cutoff: number) {
   const result = await db
