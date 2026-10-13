@@ -124,41 +124,117 @@ describe("GoogleAntigravityWire", () => {
     expect(GoogleAntigravityWire.unwrapSSEText(text)).toBe(`data: ${JSON.stringify(native)}\n\ndata: [DONE]\n`)
   })
 
-  test("filters Claude, GPT, tab, and image models out of the Cloud Code catalog", () => {
-    const filtered = GoogleAntigravityWire.filterGoogleModels([
-      { id: "gemini-3.8-flash-high", provider: "MODEL_PROVIDER_GOOGLE", recommended: true },
-      { id: "gemini-3.8-flash-medium", provider: "MODEL_PROVIDER_GOOGLE", recommended: true },
-      { id: "gemini-3.8-flash-low", provider: "MODEL_PROVIDER_GOOGLE", recommended: true },
-      { id: "gemini-3.7-flash-high", provider: "MODEL_PROVIDER_GOOGLE", recommended: true },
-      { id: "claude-sonnet-4-6", provider: "MODEL_PROVIDER_ANTHROPIC", recommended: true },
-      { id: "gpt-oss-120b-medium", provider: "MODEL_PROVIDER_OPENAI", recommended: true },
-      { id: "tab_flash_lite_preview", provider: "MODEL_PROVIDER_GOOGLE" },
-      { id: "gemini-3.1-flash-image", provider: "MODEL_PROVIDER_GOOGLE" },
-      { id: "chat_20706", provider: "MODEL_PROVIDER_GOOGLE", internal: true },
-    ])
+  test("filters Claude, GPT, tab, image, and disabled models out of the Cloud Code catalog", () => {
+    const parsed = GoogleAntigravityOAuth.parseCatalogModels({
+      models: [
+        {
+          id: "gemini-4-argon-high",
+          displayName: "Gemini 4 Argon (High)",
+          model: "MODEL_PLACEHOLDER_M417",
+          modelProvider: "MODEL_PROVIDER_GOOGLE",
+          recommended: true,
+        },
+        {
+          id: "gemini-4-argon-medium",
+          displayName: "Gemini 4 Argon (Medium)",
+          model: "MODEL_PLACEHOLDER_M418",
+          modelProvider: "MODEL_PROVIDER_GOOGLE",
+          recommended: true,
+        },
+        {
+          id: "gemini-4-argon-low",
+          displayName: "Gemini 4 Argon (Low)",
+          model: "MODEL_PLACEHOLDER_M419",
+          modelProvider: "MODEL_PROVIDER_GOOGLE",
+          recommended: true,
+        },
+        {
+          id: "gemini-4-argon-disabled",
+          displayName: "Gemini 4 Argon",
+          model: "MODEL_PLACEHOLDER_M421",
+          modelProvider: "MODEL_PROVIDER_GOOGLE",
+          disabled: true,
+          recommended: true,
+        },
+        { id: "gemini-3.8-flash-high", modelProvider: "MODEL_PROVIDER_GOOGLE", recommended: true },
+        { id: "gemini-3.8-flash-medium", modelProvider: "MODEL_PROVIDER_GOOGLE", recommended: true },
+        { id: "gemini-3.8-flash-low", modelProvider: "MODEL_PROVIDER_GOOGLE", recommended: true },
+        { id: "gemini-3.7-flash-high", modelProvider: "MODEL_PROVIDER_GOOGLE", recommended: true },
+        { id: "claude-sonnet-4-6", modelProvider: "MODEL_PROVIDER_ANTHROPIC", recommended: true },
+        { id: "gpt-oss-120b-medium", modelProvider: "MODEL_PROVIDER_OPENAI", recommended: true },
+        { id: "tab_flash_lite_preview", modelProvider: "MODEL_PROVIDER_GOOGLE" },
+        { id: "gemini-3.1-flash-image", modelProvider: "MODEL_PROVIDER_GOOGLE" },
+        { id: "chat_20706", modelProvider: "MODEL_PROVIDER_GOOGLE", isInternal: true },
+      ],
+    })
+    const filtered = GoogleAntigravityWire.filterGoogleModels(parsed)
     expect(filtered.map((model) => model.id)).toEqual([
+      "gemini-4-argon-high",
+      "gemini-4-argon-medium",
+      "gemini-4-argon-low",
       "gemini-3.8-flash-high",
       "gemini-3.8-flash-medium",
       "gemini-3.8-flash-low",
       "gemini-3.7-flash-high",
     ])
+    expect(GoogleAntigravityWire.isBlockedModelID("gemini-4-argon-disabled")).toBe(true)
+    const disabled = GoogleAntigravityWire.disabledModelsFrom(parsed)
+    expect(disabled.has("gemini-4-argon-high")).toBe(true)
+    expect(disabled.has("gemini-4-argon-medium")).toBe(true)
+    expect(disabled.has("gemini-4-argon-low")).toBe(true)
+    expect(disabled.has("gemini-3.8-flash-high")).toBe(false)
+    const enums = GoogleAntigravityWire.modelEnumsFrom(parsed)
+    expect(enums.has("gemini-4-argon-high")).toBe(false)
+    expect(enums.has("gemini-4-argon-medium")).toBe(false)
+    expect(enums.has("gemini-4-argon-low")).toBe(false)
+    expect(enums.get("gemini-3.8-flash-high")).toBe("MODEL_PLACEHOLDER_M318")
   })
 
-  test("ships the gemini-3.8-flash variants and forwards their IDs unchanged", () => {
+  test("ships the gemini-4-argon and gemini-3.8-flash variants with authoritative enums and forwards IDs unchanged", () => {
     const ids = GoogleAntigravityWire.shippedModels.map((model) => model.id)
+    expect(ids).not.toContain("gemini-4-argon")
     expect(ids).not.toContain("gemini-3.8-flash")
-    for (const model of ["gemini-3.8-flash-high", "gemini-3.8-flash-medium", "gemini-3.8-flash-low"]) {
+    expect(GoogleAntigravityWire.modelEnumDefaults.get("gemini-4-argon-high")).toBe("MODEL_PLACEHOLDER_M417")
+    expect(GoogleAntigravityWire.modelEnumDefaults.get("gemini-4-argon-medium")).toBe("MODEL_PLACEHOLDER_M418")
+    expect(GoogleAntigravityWire.modelEnumDefaults.get("gemini-4-argon-low")).toBe("MODEL_PLACEHOLDER_M419")
+    expect(GoogleAntigravityWire.modelEnumDefaults.get("gemini-3.8-flash-high")).toBe("MODEL_PLACEHOLDER_M318")
+    expect(GoogleAntigravityWire.modelEnumDefaults.get("gemini-3.8-flash-medium")).toBe("MODEL_PLACEHOLDER_M319")
+    expect(GoogleAntigravityWire.modelEnumDefaults.get("gemini-3.8-flash-low")).toBe("MODEL_PLACEHOLDER_M320")
+    for (const [model, level] of [
+      ["gemini-4-argon-high", "high"],
+      ["gemini-4-argon-medium", "medium"],
+      ["gemini-4-argon-low", "low"],
+      ["gemini-3.8-flash-high", "high"],
+      ["gemini-3.8-flash-medium", "medium"],
+      ["gemini-3.8-flash-low", "low"],
+    ] as const) {
       expect(ids).toContain(model)
       const wrapped = GoogleAntigravityWire.wrapGenerateRequest({
-        body: nativeBody,
+        body: {
+          ...nativeBody,
+          generationConfig: { maxOutputTokens: 65536, thinkingConfig: { thinkingLevel: level } },
+        },
         projectId: "canvas-wallaby-dvmxc",
         model,
         sessionID: "ses_test",
+        modelEnum: GoogleAntigravityWire.modelEnumDefaults.get(model),
         now: 1_700_000_000_000,
-        trajectory: "traj-38",
-      }) as { model: string; project: string }
+        trajectory: "traj-argon",
+      }) as {
+        model: string
+        project: string
+        request: {
+          labels: Record<string, string>
+          generationConfig: { thinkingConfig: { includeThoughts: boolean; thinkingLevel: string } }
+        }
+      }
       expect(wrapped.model).toBe(model)
       expect(wrapped.project).toBe("canvas-wallaby-dvmxc")
+      expect(wrapped.request.labels.model_enum).toBe(GoogleAntigravityWire.modelEnumDefaults.get(model)!)
+      expect(wrapped.request.generationConfig.thinkingConfig).toEqual({
+        includeThoughts: true,
+        thinkingLevel: level,
+      })
     }
   })
 })

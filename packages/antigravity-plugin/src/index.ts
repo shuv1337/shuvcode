@@ -83,6 +83,7 @@ export const GoogleAntigravityPlugin = Plugin.define({
     const mapped = new WeakSet<Request>()
     let subscription = false
     let modelEnums = new Map(GoogleAntigravityWire.modelEnumDefaults)
+    let disabledModels: ReadonlySet<string> = new Set<string>()
     const load = Effect.fn("GoogleAntigravityPlugin.load")(function* () {
       const connection = yield* ctx.integration.connection.active(GoogleAntigravityOAuth.integrationID)
       // Keep login and reload subscriptions alive when stored auth expires. Inference
@@ -92,6 +93,7 @@ export const GoogleAntigravityPlugin = Plugin.define({
         : undefined
       subscription = GoogleAntigravityOAuth.isSubscription(resolved)
       modelEnums = new Map(GoogleAntigravityWire.modelEnumDefaults)
+      disabledModels = new Set<string>()
       // Imported access-only credentials must activate without discovery network I/O.
       if (!subscription || resolved?.type !== "oauth" || resolved.metadata?.shuvcodeAuthImport === "access-only") return
       const projectId = GoogleAntigravityOAuth.projectId(resolved.metadata)
@@ -100,7 +102,9 @@ export const GoogleAntigravityPlugin = Plugin.define({
         try: (signal) => GoogleAntigravityOAuth.fetchAvailableModels(resolved.access, projectId, undefined, signal),
         catch: (cause) => cause,
       }).pipe(Effect.orElseSucceed(() => undefined))
-      if (models) modelEnums = GoogleAntigravityWire.modelEnumsFrom(GoogleAntigravityWire.filterGoogleModels(models))
+      if (!models) return
+      disabledModels = GoogleAntigravityWire.disabledModelsFrom(models)
+      modelEnums = GoogleAntigravityWire.modelEnumsFrom(models)
     })
     yield* ctx.integration.transform((draft) => {
       draft.update(GoogleAntigravityOAuth.integrationID, (integration) => {
@@ -110,7 +114,7 @@ export const GoogleAntigravityPlugin = Plugin.define({
     })
     yield* load()
     yield* ctx.provider.transform((evt) => GoogleAntigravityWire.applyProvider(evt, subscription))
-    yield* ctx.model.transform((evt) => GoogleAntigravityWire.applyModels(evt, subscription))
+    yield* ctx.model.transform((evt) => GoogleAntigravityWire.applyModels(evt, subscription, disabledModels))
     yield* ctx.session.hook(
       "http.request",
       (evt) =>
