@@ -68,6 +68,7 @@ export const dict = {
   "command.prompt.mode.normal": "Prompt",
   "command.permissions.autoaccept.enable": "Auto-accept permissions",
   "command.permissions.autoaccept.disable": "Stop auto-accepting permissions",
+  "command.permissions.autoaccept.project": "Auto-accept permissions for this project",
   "command.session.undo": "Undo",
   "command.session.undo.description": "Undo the last message",
   "command.session.redo": "Redo",
@@ -397,6 +398,9 @@ export const dict = {
 
   "toast.permissions.autoaccept.on.title": "Auto-accepting permissions",
   "toast.permissions.autoaccept.on.description": "Permission requests will be automatically approved",
+  "toast.permissions.autoaccept.project.title": "Auto-accepting permissions for this project",
+  "toast.permissions.autoaccept.project.description":
+    "Permission requests in this project will be automatically approved",
   "toast.permissions.autoaccept.off.title": "Stopped auto-accepting permissions",
   "toast.permissions.autoaccept.off.description": "Permission requests will require approval",
 
@@ -720,6 +724,11 @@ export const dict = {
   "settings.extensions.manageConfig": "Manage in opencode.json",
   "settings.extensions.addSkills": "How to add skills",
   "project.settings.title": "Edit project",
+  "project.settings.autoAccept.description": "Approve this project's permission requests without asking",
+  "project.settings.autoAccept.default.on": "Use default (On)",
+  "project.settings.autoAccept.default.off": "Use default (Off)",
+  "project.settings.autoAccept.on": "On",
+  "project.settings.autoAccept.off": "Off",
   "project.settings.name.title": "Project name",
   "project.settings.name.description": "The name shown for this project throughout OpenCode",
   "project.settings.icon.description": "Recommended: 128×128px. Click or drag to upload an image.",
@@ -997,6 +1006,8 @@ export const dict = {
   "settings.workspaces.delete.blocked.active": "The active worktree cannot be deleted.",
   "settings.workspaces.delete.blocked.linked":
     "Linked sessions will remain, but their working directory will no longer exist.",
+  "settings.permissions.autoAccept.default.description":
+    "Approve permission requests without asking. Projects can override this in their settings.",
   "settings.workspaces.default.title": "Default environment",
   "settings.workspaces.default.description": "Choose where new sessions start",
   "settings.workspaces.default.lastUsed": "Last used per project",

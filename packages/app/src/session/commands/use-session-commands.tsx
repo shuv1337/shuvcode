@@ -8,7 +8,7 @@ import { useComposerState } from "@/composer/persistence"
 import { useServerSDK } from "@/runtime/server/client"
 import { useData } from "@/runtime/server/current"
 import { formatServerError } from "@/runtime/server/errors"
-import { useSettings } from "@/settings/model"
+import { projectSettingsKey, useSettings } from "@/settings/model"
 import { showToast } from "@/shell/notifications/toast"
 import { fetchSessionExport, saveSessionExport, sessionExportFilename } from "@/session/commands/export"
 import { usePlatform } from "@/runtime/platform/platform"
@@ -229,16 +229,38 @@ export const useSessionCommands = (actions: SessionCommandContext) => {
     )
   }
 
+  const sessionProject = () => projectSettingsKey(serverSDK.scope, actions.session.data.info()?.projectID)
+
+  const autoAccepting = () => settings.permissions.autoApproves(sessionProject())
+
+  // From a session the toggle sets this project's choice, falling back to the default when they match.
   const toggleAutoAccept = () => {
-    const active = !settings.permissions.autoApprove()
-    settings.permissions.setAutoApprove(active)
+    const project = sessionProject()
+    const active = !autoAccepting()
+
+    if (!project) settings.permissions.setAutoApproveDefault(active)
+    else
+      settings.permissions.setAutoApproveOverride(
+        project,
+        active === settings.permissions.autoApproveDefault() ? undefined : active,
+      )
+
+    if (!active) {
+      showToast({
+        title: language.t("toast.permissions.autoaccept.off.title"),
+        description: language.t("toast.permissions.autoaccept.off.description"),
+      })
+
+      return
+    }
+
     showToast({
-      title: active
-        ? language.t("toast.permissions.autoaccept.on.title")
-        : language.t("toast.permissions.autoaccept.off.title"),
-      description: active
-        ? language.t("toast.permissions.autoaccept.on.description")
-        : language.t("toast.permissions.autoaccept.off.description"),
+      title: project
+        ? language.t("toast.permissions.autoaccept.project.title")
+        : language.t("toast.permissions.autoaccept.on.title"),
+      description: project
+        ? language.t("toast.permissions.autoaccept.project.description")
+        : language.t("toast.permissions.autoaccept.on.description"),
     })
   }
 
@@ -429,9 +451,11 @@ export const useSessionCommands = (actions: SessionCommandContext) => {
   const permissionsCmds = () => [
     permissionsCommand({
       id: "permissions.autoaccept",
-      title: settings.permissions.autoApprove()
+      title: autoAccepting()
         ? language.t("command.permissions.autoaccept.disable")
-        : language.t("command.permissions.autoaccept.enable"),
+        : sessionProject()
+          ? language.t("command.permissions.autoaccept.project")
+          : language.t("command.permissions.autoaccept.enable"),
       keybind: "mod+shift+a",
       disabled: false,
       onSelect: toggleAutoAccept,
