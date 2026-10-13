@@ -48,7 +48,6 @@ new sst.cloudflare.x.SolidStart("Console", {
     SALESFORCE_CLIENT_ID,
     SALESFORCE_CLIENT_SECRET,
     SALESFORCE_INSTANCE_URL,
-    new sst.Secret("CLOUDFLARE_ACCESS_CLIENT_ID"),
   ],
   environment: {
     //VITE_DOCS_URL: web.url.apply((url) => url!),
@@ -64,6 +63,12 @@ new sst.cloudflare.x.SolidStart("Console", {
             ...(flags ?? []),
             "global_fetch_strictly_public",
           ])
+          // Same-zone fetch to inference re-enters as a public request and loses the client IP.
+          if (migrationDomain)
+            args.bindings = $resolve(args.bindings).apply((bindings) => [
+              ...(bindings ?? []),
+              { type: "service", name: "INFERENCE", service: `opencode-inference-${$app.stage}` },
+            ])
           args.tailConsumers = [{ service: logProcessor.nodes.worker.scriptName }]
         },
       },
