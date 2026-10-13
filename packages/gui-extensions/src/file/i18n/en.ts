@@ -7,6 +7,7 @@ export default {
   "mobile.title": "Files",
   "mobile.openTabs": "Open files",
   "view.preview": "Preview",
+  "view.fit": "Fit",
   "view.source": "Source",
   "view.openInBrowser": "Open in browser",
   "view.fullscreen": "Enter full screen",
