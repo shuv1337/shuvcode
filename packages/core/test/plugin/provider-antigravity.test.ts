@@ -1,5 +1,7 @@
 import { expect } from "bun:test"
 import { Effect } from "effect"
+import { LLM, Message, ToolCallPart, ToolDefinition } from "@opencode/ai"
+import { Gemini } from "@opencode/ai/protocols"
 import { Agent } from "@opencode/schema/agent"
 import { Session } from "@opencode/schema/session"
 import { Credential } from "@opencode/core/credential"
@@ -221,4 +223,175 @@ it.effect("Antigravity fails resolution and invalid request metadata without API
       (yield* Effect.exit(hooks.trigger("session", "http.request", { ...identity, request: request("invalid") })))._tag,
     ).toBe("Failure")
   }),
+)
+
+it.effect(
+  "Antigravity rewrites gemini-4-argon-high tool-call and continuation requests with model_enum and thoughtSignature",
+  () =>
+    Effect.gen(function* () {
+      const credentials = yield* Credential.Service
+      const hooks = yield* PluginHooks.Service
+      yield* source()
+      yield* credentials.create({ integrationID: Integration.ID.make("google"), value: imported })
+      yield* addPlugin()
+
+      const argonIdentity = {
+        ...identity,
+        model: Model.Ref.make({ providerID: Provider.ID.google, id: Model.ID.make("gemini-4-argon-high") }),
+      }
+      const routeModel = Gemini.route.model({ id: "gemini-4-argon-high" })
+      const tool = ToolDefinition.make({
+        name: "echo",
+        description: "Echo text back",
+        inputSchema: {
+          type: "object",
+          required: ["text"],
+          properties: { text: { type: "string" } },
+        },
+      })
+
+      const step1Body = yield* Gemini.protocol.body.from(
+        LLM.request({
+          id: "req_argon_1",
+          model: routeModel,
+          system: "Be concise.",
+          prompt: "Call echo.",
+          tools: [tool],
+          providerOptions: { thinkingConfig: { thinkingLevel: "high" } },
+        }),
+      )
+      const step1Event = yield* hooks.trigger("session", "http.request", {
+        ...argonIdentity,
+        request: new Request(
+          "https://generativelanguage.googleapis.com/v1beta/models/gemini-4-argon-high:streamGenerateContent?alt=sse",
+          {
+            method: "POST",
+            body: JSON.stringify(step1Body),
+          },
+        ),
+      })
+      expect(step1Event.request.url).toBe(GoogleAntigravityWire.generateURL)
+      const step1Envelope = yield* Effect.promise(() => step1Event.request.clone().json())
+      expect(step1Envelope).toMatchObject({
+        project: "fixture-project",
+        model: "gemini-4-argon-high",
+        request: {
+          systemInstruction: { role: "user", parts: [{ text: "Be concise." }] },
+          toolConfig: { functionCallingConfig: { mode: "VALIDATED" } },
+          generationConfig: { thinkingConfig: { includeThoughts: true, thinkingLevel: "high" } },
+          labels: {
+            model_enum: "MODEL_PLACEHOLDER_M417",
+            used_claude: "false",
+            used_non_gemini_model: "false",
+          },
+        },
+      })
+
+      const step1SSE = [
+        `data: ${JSON.stringify({
+          response: {
+            candidates: [
+              {
+                content: {
+                  role: "model",
+                  parts: [
+                    { text: "Thinking about calling echo.", thought: true, thoughtSignature: "sig_thought_argon" },
+                    {
+                      functionCall: { id: "call_argon_1", name: "echo", args: { text: "hello" } },
+                      thoughtSignature: "sig_call_argon",
+                    },
+                  ],
+                },
+                finishReason: "STOP",
+              },
+            ],
+            modelVersion: "gemini-4-argon-high",
+          },
+        })}`,
+        "data: [DONE]",
+        "",
+      ].join("\n\n")
+      const step1Response = yield* hooks.trigger("session", "http.response", {
+        ...argonIdentity,
+        request: step1Event.request,
+        response: new Response(step1SSE, { status: 200, headers: { "content-type": "text/event-stream" } }),
+      })
+      const unwrappedStep1 = yield* Effect.promise(() => step1Response.response.text())
+      expect(unwrappedStep1).toContain('"functionCall":{"id":"call_argon_1","name":"echo","args":{"text":"hello"}}')
+      expect(unwrappedStep1).toContain('"thoughtSignature":"sig_call_argon"')
+
+      const step2Body = yield* Gemini.protocol.body.from(
+        LLM.request({
+          id: "req_argon_2",
+          model: routeModel,
+          system: "Be concise.",
+          messages: [
+            Message.user("Call echo."),
+            Message.assistant([
+              {
+                type: "reasoning",
+                text: "Thinking about calling echo.",
+                providerMetadata: { google: { thoughtSignature: "sig_thought_argon" } },
+              },
+              ToolCallPart.make({
+                id: "call_argon_1",
+                name: "echo",
+                input: { text: "hello" },
+                providerMetadata: { google: { thoughtSignature: "sig_call_argon" } },
+              }),
+            ]),
+            Message.tool({
+              id: "call_argon_1",
+              name: "echo",
+              result: { type: "text", value: "ECHOED: hello" },
+            }),
+          ],
+          tools: [tool],
+          providerOptions: { thinkingConfig: { thinkingLevel: "high" } },
+        }),
+      )
+      const step2Event = yield* hooks.trigger("session", "http.request", {
+        ...argonIdentity,
+        request: new Request(
+          "https://generativelanguage.googleapis.com/v1beta/models/gemini-4-argon-high:streamGenerateContent?alt=sse",
+          {
+            method: "POST",
+            body: JSON.stringify(step2Body),
+          },
+        ),
+      })
+      const step2Envelope = yield* Effect.promise(() => step2Event.request.clone().json())
+      expect(step2Envelope).toMatchObject({
+        project: "fixture-project",
+        model: "gemini-4-argon-high",
+        request: {
+          labels: { model_enum: "MODEL_PLACEHOLDER_M417" },
+          contents: [
+            { role: "user", parts: [{ text: "Call echo." }] },
+            {
+              role: "model",
+              parts: [
+                { text: "Thinking about calling echo.", thought: true, thoughtSignature: "sig_thought_argon" },
+                {
+                  functionCall: { id: "call_argon_1", name: "echo", args: { text: "hello" } },
+                  thoughtSignature: "sig_call_argon",
+                },
+              ],
+            },
+            {
+              role: "user",
+              parts: [
+                {
+                  functionResponse: {
+                    id: "call_argon_1",
+                    name: "echo",
+                    response: { name: "echo", content: "ECHOED: hello" },
+                  },
+                },
+              ],
+            },
+          ],
+        },
+      })
+    }),
 )
