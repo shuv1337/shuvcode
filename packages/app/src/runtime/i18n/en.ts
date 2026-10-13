@@ -553,6 +553,7 @@ export const dict = {
   "session.messages.jumpToLatest": "Jump to latest",
 
   "session.question.progress": "{{current}} of {{total}} questions",
+  "session.question.title": "Question",
   "session.websearch.title": "Third-party web search",
   "session.websearch.description": "Select the search provider agents use to search the web",
   "session.websearch.provider": "Search provider",
