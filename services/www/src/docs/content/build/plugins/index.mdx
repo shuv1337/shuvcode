@@ -591,6 +591,22 @@ interface IntegrationEditor {
 }
 ```
 
+### Credentials
+
+Make a saved credential the active one for its integration.
+
+```ts
+await ctx.credential.activate({ credentialID })
+```
+
+#### Reference
+
+```ts
+interface CredentialContext {
+  activate(input: CredentialActivateInput, requestOptions?: RequestOptions): Promise<void>
+}
+```
+
 ### MCP
 
 List MCP servers and their current connection state.
