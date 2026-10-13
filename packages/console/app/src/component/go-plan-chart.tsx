@@ -50,7 +50,7 @@ export function GoPlanChart(props: { href: string }) {
         <table id={id}>
           <colgroup>
             <col style={{ width: "26%" }} />
-            <col style={{ width: "44%" }} />
+            <col />
             <col style={{ width: "16%" }} />
             <col style={{ width: "14%" }} />
           </colgroup>
