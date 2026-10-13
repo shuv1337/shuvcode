@@ -10,11 +10,9 @@ import {
   DateTimeUtcFromMillis,
   NonNegativeInt,
   PositiveInt,
-  optional,
   RelativePath,
   statics,
 } from "@opencode/schema/schema"
-import { AgentAttachment } from "@opencode/schema/prompt"
 import { Event } from "@opencode/schema/event"
 import { Context, Effect, Result, Schema, SchemaGetter, SchemaParser, Struct } from "effect"
 import { Base64Url } from "effect/encoding"
@@ -83,22 +81,18 @@ const SessionsProjectQuery = Schema.Struct({
 
 const SessionsAllQuery = Schema.Struct(SessionsQueryFields)
 
-// Nested attachments keep the default lenient decode so persisted composer
-// state with extra keys stays accepted; only top-level keys are strict.
-const lenient = { parseOptions: { onExcessProperty: "ignore" } } as const
-
 // Unknown top-level keys are preserved so the server can reject them instead
 // of silently dropping them (a codegen-portable schema cannot carry the check).
-export const SessionPromptPayload = Schema.Struct({
-  id: SessionMessage.ID.pipe(Schema.optional),
-  ...PromptInput.Prompt.fields,
-  files: Schema.Array(PromptInput.FileAttachment).annotate(lenient).pipe(optional),
-  agents: Schema.Array(AgentAttachment).annotate(lenient).pipe(optional),
-  skills: Schema.Array(PromptInput.SkillAttachment).annotate(lenient).pipe(optional),
-  metadata: SessionInbox.UserPayload.fields.metadata,
-  delivery: SessionInbox.Delivery.pipe(Schema.optional),
-  resume: Schema.Boolean.pipe(Schema.optional),
-}).annotate({ parseOptions: { onExcessProperty: "preserve" } })
+export const SessionPromptPayload = Schema.StructWithRest(
+  Schema.Struct({
+    id: SessionMessage.ID.pipe(Schema.optional),
+    ...PromptInput.Prompt.fields,
+    metadata: SessionInbox.UserPayload.fields.metadata,
+    delivery: SessionInbox.Delivery.pipe(Schema.optional),
+    resume: Schema.Boolean.pipe(Schema.optional),
+  }),
+  [Schema.Record(Schema.String, Schema.UndefinedOr(Schema.Unknown))],
+)
 
 const withCursor = <Fields extends Schema.Struct.Fields>(schema: Schema.Struct<Fields>) =>
   schema.mapFields((fields) => ({
