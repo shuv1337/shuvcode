@@ -135,9 +135,8 @@ export default function SessionContextTab(props: { session: MountedSession }) {
 
   const formatter = createMemo(() => createSessionContextFormatter(i18n.locale()))
 
-  const cost = createMemo(() => {
-    return usd().format(info()?.cost ?? 0)
-  })
+  // A root session's cost includes its subagent sessions, as in the TUI.
+  const cost = createMemo(() => usd().format(props.session.id ? data().session.cost(props.session.id) : 0))
 
   const counts = createMemo(() => {
     const all = messages()
