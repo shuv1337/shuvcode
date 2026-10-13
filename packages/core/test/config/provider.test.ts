@@ -170,6 +170,31 @@ describe("ConfigProviderPlugin.Plugin", () => {
     }),
   )
 
+  it.effect("carries a configured provider cache format to the runtime model", () =>
+    Effect.gen(function* () {
+      const models = yield* Model.Service
+      yield* addPlugin([
+        new Document({
+          type: "document",
+          info: decode({
+            providers: {
+              litellm: {
+                package: "@opencode/ai/providers/openai-compatible",
+                settings: { baseURL: "https://litellm.test/v1" },
+                compatibility: { cacheFormat: "anthropic" },
+                models: { "claude-sonnet-5": {} },
+              },
+            },
+          }),
+        }),
+      ])
+
+      const model = required(yield* models.get(Provider.ID.make("litellm"), Model.ID.make("claude-sonnet-5")))
+      expect(model.compatibility).toEqual({ cacheFormat: "anthropic" })
+      expect((yield* ModelResolver.fromCatalogModel(model)).compatibility?.cacheFormat).toBe("anthropic")
+    }),
+  )
+
   it.effect("applies provider compatibility to every provider model with model overrides", () =>
     Effect.gen(function* () {
       const providers = yield* Provider.Service

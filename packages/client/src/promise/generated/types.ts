@@ -166,6 +166,8 @@ export type ModelReasoningField = "reasoning" | "reasoning_content" | "reasoning
 
 export type ModelMaxTokensField = "max_completion_tokens" | "max_tokens"
 
+export type ModelCacheFormat = "anthropic" | "alibaba"
+
 export type ModelCapabilities = { tools: boolean; input: Array<string>; output: Array<string> }
 
 export type MoneyUSDPerMillionTokens = number
@@ -632,6 +634,7 @@ export type ModelCompatibility = {
   requireFinishReason?: boolean
   requireAssistantAfterTool?: boolean
   supportsPromptCacheKey?: boolean
+  cacheFormat?: ModelCacheFormat
   supportsThinkingBlockBinding?: boolean
   supportsEffortUpdates?: boolean
 }
@@ -643,6 +646,7 @@ export type ProviderCompatibility = {
   requireFinishReason?: boolean
   requireAssistantAfterTool?: boolean
   supportsPromptCacheKey?: boolean
+  cacheFormat?: ModelCacheFormat
 }
 
 export type ModelCost = {

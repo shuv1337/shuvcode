@@ -16600,6 +16600,10 @@
         "required": ["_tag", "sessionID", "messageID", "message"],
         "additionalProperties": false
       },
+      "Model.CacheFormat": {
+        "type": "string",
+        "enum": ["anthropic", "alibaba"]
+      },
       "Model.Capabilities": {
         "type": "object",
         "properties": {
@@ -16642,6 +16646,9 @@
           },
           "supportsPromptCacheKey": {
             "type": "boolean"
+          },
+          "cacheFormat": {
+            "$ref": "#/components/schemas/Model.CacheFormat"
           },
           "supportsThinkingBlockBinding": {
             "type": "boolean"
@@ -17741,6 +17748,9 @@
           },
           "supportsPromptCacheKey": {
             "type": "boolean"
+          },
+          "cacheFormat": {
+            "$ref": "#/components/schemas/Model.CacheFormat"
           }
         },
         "additionalProperties": false
