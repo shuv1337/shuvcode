@@ -18,6 +18,8 @@ import { ConfigNormalize } from "./config/normalize.js"
 import { ConfigDiscovery } from "./config/discovery.js"
 import { ConfigWatch } from "./config/watch.js"
 import { WellKnown } from "./wellknown.js"
+import { AppProcess } from "@opencode/util/process"
+import { ChildProcess } from "effect/process"
 
 export function latest<K extends keyof Info>(entries: readonly Entry[], key: K): Info[K] | undefined {
   return entries.findLast((entry): entry is Document => entry.type === "document" && entry.info[key] !== undefined)
@@ -44,9 +46,10 @@ export interface Interface {
 
 export const Options = Schema.Struct({
   project: Schema.optional(Schema.Boolean),
-  // false skips the global config dir, ~/.claude, and ~/.agents; wellknown,
-  // file, and content entries still load.
+  // false skips the system and global config dirs, ~/.claude, and ~/.agents;
+  // wellknown, file, and content entries still load.
   global: Schema.optional(Schema.Boolean),
+  system: Schema.optional(Schema.Union([Schema.Boolean, Schema.String])),
   file: Schema.optional(Schema.String),
   content: Schema.optional(Schema.String),
 })
@@ -97,6 +100,7 @@ export const layer = (options?: Options) =>
       const credentials = yield* Credential.Service
       const globalService = yield* Global.Service
       const wellknown = yield* WellKnown.Service
+      const processes = yield* AppProcess.Service
       const reloadLock = Semaphore.makeUnsafe(1)
       const updateLock = Semaphore.makeUnsafe(1)
       const decodeOptions = { errors: "all", onExcessProperty: "ignore" } as const
@@ -182,6 +186,26 @@ export const layer = (options?: Options) =>
         return yield* Effect.forEach(entries, loadWellknownEntry).pipe(Effect.map((documents) => documents.flat()))
       })
 
+      const loadPreferences = Effect.fn("Config.loadPreferences")(function* (plist: AbsolutePath) {
+        const result = yield* processes
+          .run(ChildProcess.make("plutil", ["-convert", "json", "-o", "-", plist], { stdin: "ignore" }), {
+            timeout: "10 seconds",
+          })
+          .pipe(Effect.flatMap(AppProcess.requireSuccess), Effect.option)
+        if (Option.isNone(result)) {
+          yield* Effect.logWarning("failed to convert managed preferences", { source: plist })
+          return []
+        }
+        const text = yield* ConfigVariable.substitute({
+          type: "virtual",
+          source: plist,
+          dir: path.dirname(plist),
+          text: ConfigDiscovery.stripPreferenceMetadata(result.value.stdout.toString()),
+        })
+        const info = yield* parseInfo(text, plist)
+        return info ? [new Document({ type: "document", path: plist, info })] : []
+      })
+
       const loadDirectory = Effect.fnUntraced(function* (directory: AbsolutePath) {
         return [
           ...(yield* Effect.forEach(ConfigDiscovery.names, (file) => loadFile(path.join(directory, file))).pipe(
@@ -217,8 +241,16 @@ export const layer = (options?: Options) =>
               )
             : []
 
-        // Global entries sit below explicit and direct files; project
-        // directories rank above them.
+        // System entries sit at lowest priority so users and projects can
+        // override ordinary defaults while reversed policy evaluation gives
+        // system policies highest file-based authority. Global entries sit
+        // below explicit and direct files; project directories rank above them.
+        // MDM preferences rank below the system directory so their policies
+        // carry the most file-based authority, matching V1 where they won.
+        const systemSupplementary = [
+          ...(sources.preferences ? yield* loadPreferences(sources.preferences).pipe(Effect.orDie) : []),
+          ...(sources.system?.present ? yield* loadDirectory(sources.system.path).pipe(Effect.orDie) : []),
+        ]
         const globalSupplementary = sources.global ? yield* loadDirectory(sources.global).pipe(Effect.orDie) : []
         const projectSupplementary = yield* Effect.forEach(
           sources.project.filter((root) => root.present),
@@ -228,6 +260,7 @@ export const layer = (options?: Options) =>
           Effect.map((entries) => entries.flat()),
         )
         return [
+          ...systemSupplementary,
           ...(yield* loadWellknown().pipe(Effect.orDie)),
           ...globalSupplementary,
           ...explicit,
@@ -368,7 +401,7 @@ export function configured(options?: Options) {
   return makeLocationNode({
     service: Service,
     layer: layer(options),
-    deps: [Watcher.node, Bus.node, FSUtil.node, Global.node, Location.node, Credential.node, WellKnown.node],
+    deps: [Watcher.node, Bus.node, FSUtil.node, Global.node, Location.node, Credential.node, WellKnown.node, AppProcess.node],
   })
 }
 

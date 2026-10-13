@@ -48,9 +48,14 @@ This section covers both JSON/JSONC configuration and file-based definitions und
 
 ### Use your existing configuration
 
-V2 reads existing global and project configuration from the same locations as V1:
+V2 reads existing system, global, and project configuration from the same locations as V1:
 
 ```text
+/Library/Application Support/opencode/opencode.json(c)
+/etc/opencode/opencode.json(c)
+%ProgramData%\opencode\opencode.json(c)
+/Library/Managed Preferences/<user>/ai.opencode.managed.plist
+/Library/Managed Preferences/ai.opencode.managed.plist
 ~/.config/opencode/opencode.json(c)
 <project>/opencode.json(c)
 <project>/.opencode/opencode.json(c)
@@ -59,6 +64,12 @@ V2 reads existing global and project configuration from the same locations as V1
 V2 reads these same locations. It normalizes supported V1 and native V2 fields in memory without rewriting the source
 file. Existing supported V1 configuration is intended to keep working, so you do not need to convert it to try or adopt
 V2.
+
+In V2, the system configuration directory loads at the lowest precedence for ordinary settings so it provides
+machine-wide defaults, while [policies](/policies#precedence) evaluate in the reverse order so system
+`experimental.policies` (including migrated `enabled_providers` and `disabled_providers`) cannot be overridden by global
+or project files. Express admin-enforced restrictions as `experimental.policies` rather than ordinary settings such as
+`permissions`.
 
 ### Ask OpenCode to migrate
 

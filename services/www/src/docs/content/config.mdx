@@ -27,7 +27,40 @@ OpenCode supports JSON and JSONC. Use JSONC when you want comments or trailing c
 
 ## Locations
 
-Put settings for every project in the global configuration:
+Put machine-wide defaults in the system configuration directory:
+
+| Platform | Directory                               |
+| -------- | --------------------------------------- |
+| macOS    | `/Library/Application Support/opencode` |
+| Linux    | `/etc/opencode`                         |
+| Windows  | `%ProgramData%\opencode`                |
+
+The system directory works like the global directory. Besides
+`opencode.json(c)`, it loads `agents/`, `commands/`, `skills/`, and `plugins/`
+for every user on the machine:
+
+```text
+/etc/opencode/
+├── opencode.json
+├── agents/review.md
+├── commands/release.md
+└── skills/deploy/SKILL.md
+```
+
+On macOS, OpenCode also reads managed preferences that MDM tools deploy for the
+`ai.opencode.managed` domain. A user-specific profile replaces the
+machine-wide one:
+
+```text
+/Library/Managed Preferences/<user>/ai.opencode.managed.plist
+/Library/Managed Preferences/ai.opencode.managed.plist
+```
+
+Managed preferences load just below the system directory, so their
+[policies](/policies#precedence) have the most authority of any file. OpenCode
+reads them at startup and whenever another config change triggers a reload.
+
+Put user settings for every project in the global configuration:
 
 ```text
 ~/.config/opencode/opencode.json(c)
@@ -49,6 +82,7 @@ Use one form throughout a directory tree unless you need that behavior.
 For example, start OpenCode from `/home/user/projects/acme/packages/web`:
 
 ```text
+/etc/opencode/opencode.json
 ~/.config/opencode/opencode.json
 
 /home/user/projects/acme/
@@ -61,12 +95,15 @@ For example, start OpenCode from `/home/user/projects/acme/packages/web`:
 
 OpenCode applies these files from lowest to highest precedence:
 
-1. `~/.config/opencode/opencode.json`
-2. `/home/user/projects/acme/opencode.json`
-3. `/home/user/projects/acme/packages/web/opencode.json`
+1. `/etc/opencode/opencode.json`
+2. `~/.config/opencode/opencode.json`
+3. `/home/user/projects/acme/opencode.json`
+4. `/home/user/projects/acme/packages/web/opencode.json`
 
 The package config overrides matching settings from the repository config,
-which overrides the global config. Settings that do not conflict are preserved.
+which overrides the global and system configs. Settings that do not conflict
+are preserved, and [policies](/policies#precedence) evaluate in the reverse
+order so system policies outrank global and project policies.
 
 ## Schema
 
