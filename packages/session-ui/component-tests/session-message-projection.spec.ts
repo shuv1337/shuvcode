@@ -79,4 +79,11 @@ story("renders user image, file attachment, file reference, and agent reference"
   await expect(timeline.getByText("tsconfig.json")).toBeVisible()
   await expect(timeline.getByText("@src/a.ts", { exact: true })).toBeVisible()
   await expect(timeline.getByText("@explore", { exact: true })).toBeVisible()
+
+  const attachments = timeline.locator('[data-slot="user-message-attachments"]')
+  const body = timeline.locator('[data-slot="user-message-body"]')
+  const [attachmentsBox, bodyBox] = await Promise.all([attachments.boundingBox(), body.boundingBox()])
+  expect(attachmentsBox).not.toBeNull()
+  expect(bodyBox).not.toBeNull()
+  expect(bodyBox!.y - (attachmentsBox!.y + attachmentsBox!.height)).toBe(8)
 })
