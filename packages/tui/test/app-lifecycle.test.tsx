@@ -3,7 +3,9 @@ import { EmbeddedTerminalRenderable } from "@opentui/core"
 import { createTestRenderer } from "@opentui/core/testing"
 import { Effect, FileSystem } from "effect"
 import { Global } from "@opencode/util/global"
+import { SimulationRenderer } from "@opencode/simulation/frontend/renderer"
 import path from "node:path"
+import { Writable } from "node:stream"
 import { createEventStream, createFetch, directory, json } from "./fixture/tui-client"
 import { tmpdir } from "./fixture/fixture"
 import { createAppFixture } from "./fixture/app"
@@ -214,17 +216,42 @@ test.each(["dismissed", "refreshing"])(
   },
 )
 
+test("boots on the simulation renderer with the terminal title enabled", async () => {
+  await Effect.runPromise(
+    Effect.scoped(
+      Effect.gen(function* () {
+        const setup = SimulationRenderer.setupFor(yield* SimulationRenderer.create({}))
+        yield* Effect.promise(async () => {
+          await using app = await createAppFixture({ setup })
+          await app.ready
+          await app.waitForFrame((frame) => frame.includes("commands"))
+        })
+      }),
+    ),
+  )
+})
+
 test("SIGHUP clears title and disposes scoped resources once", async () => {
   await using state = await tmpdir()
-  const setup = await createTestRenderer({ width: 80, height: 24, useThread: false })
-  const titles: string[] = []
+  const output: string[] = []
+  const setup = await createTestRenderer({
+    width: 80,
+    height: 24,
+    bufferedOutput: "stdout",
+    stdout: new Writable({
+      write(chunk, _encoding, callback) {
+        output.push(chunk.toString())
+        callback()
+      },
+    }) as NodeJS.WriteStream,
+  })
+  await setup.renderer.setupTerminal()
   let started!: () => void
   const ready = new Promise<void>((resolve) => {
     started = resolve
   })
   const setTitle = setup.renderer.setTerminalTitle.bind(setup.renderer)
   setup.renderer.setTerminalTitle = (title) => {
-    titles.push(title)
     if (title === "OpenCode") started()
     setTitle(title)
   }
@@ -250,17 +277,19 @@ test("SIGHUP clears title and disposes scoped resources once", async () => {
     await task
 
     expect(setup.renderer.isDestroyed).toBe(true)
-    expect(titles.at(-1)).toBe("")
+    expect(output.join("")).toContain("\x1b]0;\x07")
     expect(process.listeners("SIGHUP").every((listener) => listeners.has(listener))).toBe(true)
   } finally {
     if (!setup.renderer.isDestroyed) setup.renderer.destroy()
+    await setup.renderer.closed
     await server.stop()
   }
 })
 
 test("session lifecycle updates the terminal title and prints the epilogue after cleanup", async () => {
   await using state = await tmpdir()
-  const setup = await createTestRenderer({ width: 80, height: 24, useThread: false })
+  const setup = await createTestRenderer({ width: 80, height: 24 })
+  await setup.renderer.setupTerminal()
   let initialTitle!: () => void
   const initialTitleSet = new Promise<void>((resolve) => {
     initialTitle = resolve
@@ -347,7 +376,8 @@ test("session lifecycle updates the terminal title and prints the epilogue after
 
 test("session title generated while an untitled session is loading remains visible", async () => {
   await using state = await tmpdir()
-  const setup = await createTestRenderer({ width: 80, height: 24, useThread: false })
+  const setup = await createTestRenderer({ width: 80, height: 24 })
+  await setup.renderer.setupTerminal()
   const titles: string[] = []
   const setTitle = setup.renderer.setTerminalTitle.bind(setup.renderer)
   const generatedTitle = Promise.withResolvers<void>()
@@ -805,7 +835,8 @@ test("keeps assistant footer metrics current after prepend, same-length refresh,
 
 test("session startup prompt is submitted exactly once", async () => {
   await using state = await tmpdir()
-  const setup = await createTestRenderer({ width: 80, height: 24, useThread: false })
+  const setup = await createTestRenderer({ width: 80, height: 24 })
+  await setup.renderer.setupTerminal()
   const events = createEventStream()
   const cwd = process.cwd()
   const location = { directory: cwd, project: { id: "project", directory: cwd } }
@@ -1346,9 +1377,10 @@ test("ctrl+c dismisses autocomplete and shell mode before exiting", async () => 
 
 test.skipIf(process.platform === "win32").each(["manual", "select"] as const)(
   "selection copy and pane management respect %s mode in the prompt and terminal pane",
-  async (copy) => {
-    await using state = await tmpdir()
-    const setup = await createTestRenderer({ width: 100, height: 30, useThread: false, kittyKeyboard: true })
+    async (copy) => {
+      await using state = await tmpdir()
+      const setup = await createTestRenderer({ width: 100, height: 30, kittyKeyboard: true })
+      await setup.renderer.setupTerminal()
     setup.renderer.start()
     const ready = Promise.withResolvers<void>()
     const session = {
