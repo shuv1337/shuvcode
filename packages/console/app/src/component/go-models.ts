@@ -71,6 +71,15 @@ export const goModels = [
     fresh: true,
     limitedTime: true,
   },
+  {
+    id: "cat-jam-free",
+    name: "Cat Jam Free",
+    requests: Infinity,
+    allowance: Infinity,
+    featured: true,
+    fresh: true,
+    limitedTime: true,
+  },
 ].sort((a, b) => a.requests - b.requests)
 
 // Go Plus limits are published per model in the Console, not a fixed multiplier of Go.
@@ -106,6 +115,7 @@ const plusLimits: Record<string, [number, number]> = {
   "muse-spark-1.2-contributor": [90600, 120],
   "longcat-2.5-preview-free": [Infinity, Infinity],
   "step-5-preview-free": [Infinity, Infinity],
+  "cat-jam-free": [Infinity, Infinity],
 }
 
 export const goPlanModels = goModels.map((model) => ({
