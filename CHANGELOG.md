@@ -2,6 +2,81 @@
 
 Release notes for OpenCode V2, newest first.
 
+## v2.0.28 — 2026-10-13
+
+### Highlights
+
+- **Per-Project Auto-Accept**: Set **Settings → Projects → Auto-accept permissions** to override the default for one project. You can also press `mod+shift+a` in a session. ([#54839](https://github.com/anomalyco/opencode/pull/54839))
+- **Release Highlights in the TUI**: After updating, the home screen shows the release highlights once. Run `/highlights` to reopen them, or disable automatic display with `highlights: false` in `cli.json`. ([#54969](https://github.com/anomalyco/opencode/pull/54969))
+- **Native Windows ARM64 Support**: Windows ARM64 downloads, CLI installs, and desktop updates now use native ARM64 builds instead of x64 emulation. ([#54689](https://github.com/anomalyco/opencode/pull/54689), [#54971](https://github.com/anomalyco/opencode/pull/54971))
+- **Continuous Gemini Responses**: Long Gemini and Vertex Gemini responses split by the provider now continue automatically as one response, including recovery from a dropped stream after a continuation checkpoint. ([#55056](https://github.com/anomalyco/opencode/pull/55056))
+- **Official WinGet Packages**: Install V2 with `winget install --id Anomaly.OpenCode -e` or `winget install --id Anomaly.OpenCode.Desktop -e`. OpenCode upgrades WinGet installations through WinGet. ([#54808](https://github.com/anomalyco/opencode/pull/54808))
+
+### Core
+
+#### Improvements
+
+- Continued split Gemini and Vertex Gemini responses automatically using provider continuation tokens. ([#55056](https://github.com/anomalyco/opencode/pull/55056))
+- Added `settings.encoding` with `zstd`, `gzip`, and `none` values for provider, model, and variant HTTP request bodies. ChatGPT authentication defaults to Zstandard compression when no custom `baseURL` is set. Thanks [@esafak](https://github.com/esafak). ([#54932](https://github.com/anomalyco/opencode/pull/54932))
+- Added provider-level compatibility defaults and `compatibility.cacheFormat` for Anthropic- and Alibaba-style prompt-cache markers. ([#54911](https://github.com/anomalyco/opencode/pull/54911), [#54945](https://github.com/anomalyco/opencode/pull/54945))
+- Added official WinGet packages and WinGet-aware upgrade and uninstall support. ([#54808](https://github.com/anomalyco/opencode/pull/54808))
+- Raised the default streamed-chunk timeout from 5 to 15 minutes for models that pause while reasoning. ([#55032](https://github.com/anomalyco/opencode/pull/55032))
+
+#### Bug fixes
+
+- Disabled Bun’s fetch idle timeout for provider requests, preventing long-running streams from ending early. ([#55007](https://github.com/anomalyco/opencode/pull/55007))
+- Preserved mixed CRLF and LF line endings when the edit tool changes files. ([#53166](https://github.com/anomalyco/opencode/pull/53166))
+- Preserved unknown V1 OpenAI-compatible model options in migrated request bodies. ([#54694](https://github.com/anomalyco/opencode/pull/54694))
+- Stopped querying Azure resources during startup; Azure connections now ask for the resource name directly. ([#54870](https://github.com/anomalyco/opencode/pull/54870))
+- Loaded the system configuration directory at the lowest precedence. Thanks [@rntdrts](https://github.com/rntdrts). ([#54921](https://github.com/anomalyco/opencode/pull/54921))
+- Installed the native CLI and extracted ripgrep without PowerShell on Windows ARM64. ([#54955](https://github.com/anomalyco/opencode/pull/54955), [#54981](https://github.com/anomalyco/opencode/pull/54981))
+
+### TUI
+
+#### Improvements
+
+- Added the post-update highlights dialog, `/highlights`, and the `highlights` alert setting. ([#54969](https://github.com/anomalyco/opencode/pull/54969))
+
+#### Bug fixes
+
+- Restricted slash-command autocomplete to the start of the prompt. Thanks [@OpeOginni](https://github.com/OpeOginni). ([#54857](https://github.com/anomalyco/opencode/pull/54857))
+- Reported x64 emulation correctly when the TUI runs on Windows ARM64. ([#54984](https://github.com/anomalyco/opencode/pull/54984))
+- Removed the stale `todowrite` label from tool output. ([#53966](https://github.com/anomalyco/opencode/pull/53966))
+
+### Desktop
+
+#### Improvements
+
+- Added per-project auto-accept permission overrides under **Settings → Projects**, with `mod+shift+a` controlling the current project. ([#54839](https://github.com/anomalyco/opencode/pull/54839))
+- Added a native **Windows (ARM64)** option to the download page. ([#54971](https://github.com/anomalyco/opencode/pull/54971))
+
+#### Bug fixes
+
+- Bundled native ARM64 terminal and CLI binaries in Windows ARM64 desktop builds, and moved emulated x64 installations to native ARM64 updates. Thanks [@mweinbach](https://github.com/mweinbach). ([#54689](https://github.com/anomalyco/opencode/pull/54689), [#54983](https://github.com/anomalyco/opencode/pull/54983))
+- Included subagent sessions in displayed session costs. ([#55052](https://github.com/anomalyco/opencode/pull/55052))
+- Loaded image and audio attachments in the review panel and opened video previews in an in-window theatre view. ([#55015](https://github.com/anomalyco/opencode/pull/55015), [#54696](https://github.com/anomalyco/opencode/pull/54696))
+- Showed submitted prompts immediately and kept the **Working** marker above undelivered steers. ([#54047](https://github.com/anomalyco/opencode/pull/54047), [#55023](https://github.com/anomalyco/opencode/pull/55023))
+- Fixed tab closing when collapsed side-panel tabs exist and restored focus correctly after stacked dialogs close. ([#54695](https://github.com/anomalyco/opencode/pull/54695), [#55038](https://github.com/anomalyco/opencode/pull/55038))
+
+### SDK
+
+#### Improvements
+
+- Added request-body encoding and model/provider cache-format fields to generated client types. ([#54932](https://github.com/anomalyco/opencode/pull/54932), [#54945](https://github.com/anomalyco/opencode/pull/54945))
+- Exported `CredentialApi` from the Promise client API. ([#52797](https://github.com/anomalyco/opencode/pull/52797))
+
+### Extensions
+
+#### Improvements
+
+- Added an optional official Figma plugin with its MCP connection and six bundled Figma skills. ([#55049](https://github.com/anomalyco/opencode/pull/55049), [#55061](https://github.com/anomalyco/opencode/pull/55061))
+- Exposed `credential.activate` to Effect and Promise server plugins. Thanks [@remorses](https://github.com/remorses). ([#52797](https://github.com/anomalyco/opencode/pull/52797))
+
+#### Bug fixes
+
+- Converted rejected Promise-based plugin tools into normal tool failures instead of crashing their execution path. ([#54913](https://github.com/anomalyco/opencode/pull/54913))
+- Fixed the VS Code extension launching the V2 CLI with the removed `--port` argument. Thanks [@uyencss](https://github.com/uyencss). ([#49084](https://github.com/anomalyco/opencode/pull/49084))
+
 ## v2.0.27 — 2026-10-12
 
 ### Highlights
