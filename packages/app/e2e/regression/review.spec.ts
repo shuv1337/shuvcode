@@ -183,7 +183,7 @@ test("open file tab browses, searches, and tracks missing files", async ({ page 
   const missingResponse = page.waitForResponse((response) => response.url().includes("/api/fs/read/README.md"))
   await workspace.push([filesystemEvent(directory, "README.md", "unlink")])
   await missingResponse
-  await expect(page.getByText("Failed to load file", { exact: true })).toBeVisible()
+  await expect(page.getByText("Failed to load file", { exact: true })).toHaveCount(0)
   await expect(tab("File not found: README.md")).toHaveAttribute("aria-selected", "true")
   await expect(panel.getByText("File not found: README.md", { exact: true })).toBeVisible()
 
@@ -495,6 +495,29 @@ test("rereads a file each time an artifact link opens it", async ({ page }) => {
   await expect(tab).toHaveAttribute("aria-selected", "true")
   await expect(panel.getByText("second draft", { exact: true })).toBeVisible()
   await expect(panel.getByText("first draft", { exact: true })).toHaveCount(0)
+
+  // A restored file tab whose file was deleted shows its inline not-found state without a toast; clicking a broken link
+  // when no tab is open for it shows the toast.
+  await page.route("**/api/fs/read/shopping.txt*", (route) =>
+    route.fulfill({
+      status: 404,
+      headers: { "access-control-allow-origin": "*" },
+      // SAFETY: the server's wire body for a missing file, which the client decodes into its own error.
+      // oxlint-disable-next-line anti-slop-effect/no-manual-tagged-construction -- see SAFETY above
+      json: { _tag: "FileNotFoundError", path: "shopping.txt", message: "File not found: shopping.txt" },
+    }),
+  )
+  await page.reload()
+  const missingTab = panel.getByRole("tab", { name: "File not found: shopping.txt", exact: true })
+  await expect(missingTab).toHaveAttribute("aria-selected", "true")
+  await expect(panel.getByText("File not found: shopping.txt", { exact: true })).toBeVisible()
+  await expect(page.getByText("Failed to load file", { exact: true })).toHaveCount(0)
+
+  await missingTab.locator("..").getByRole("button", { name: "Close tab" }).click()
+  await expect(missingTab).toHaveCount(0)
+  await link.click()
+  await expect(page.getByText("Failed to load file", { exact: true })).toBeVisible()
+  await expect(missingTab).toHaveCount(0)
 })
 
 /** What the image case's frame probe records on the window. */
