@@ -4318,7 +4318,7 @@ export type SessionMoveOutput = void
 
 export type SessionPromptInput = {
   readonly sessionID: { readonly sessionID: string }["sessionID"]
-  readonly id?: {
+  readonly id?: ({
     readonly id?: string | null
     readonly text: string
     readonly files?: ReadonlyArray<{
@@ -4338,8 +4338,8 @@ export type SessionPromptInput = {
     readonly metadata?: { readonly [x: string]: JsonValue }
     readonly delivery?: ("steer" | "queue") | null
     readonly resume?: boolean | null
-  }["id"]
-  readonly text: {
+  } & { readonly [x: string]: JsonValue | null })["id"]
+  readonly text: ({
     readonly id?: string | null
     readonly text: string
     readonly files?: ReadonlyArray<{
@@ -4359,8 +4359,8 @@ export type SessionPromptInput = {
     readonly metadata?: { readonly [x: string]: JsonValue }
     readonly delivery?: ("steer" | "queue") | null
     readonly resume?: boolean | null
-  }["text"]
-  readonly files?: {
+  } & { readonly [x: string]: JsonValue | null })["text"]
+  readonly files?: ({
     readonly id?: string | null
     readonly text: string
     readonly files?: ReadonlyArray<{
@@ -4380,8 +4380,8 @@ export type SessionPromptInput = {
     readonly metadata?: { readonly [x: string]: JsonValue }
     readonly delivery?: ("steer" | "queue") | null
     readonly resume?: boolean | null
-  }["files"]
-  readonly agents?: {
+  } & { readonly [x: string]: JsonValue | null })["files"]
+  readonly agents?: ({
     readonly id?: string | null
     readonly text: string
     readonly files?: ReadonlyArray<{
@@ -4401,8 +4401,8 @@ export type SessionPromptInput = {
     readonly metadata?: { readonly [x: string]: JsonValue }
     readonly delivery?: ("steer" | "queue") | null
     readonly resume?: boolean | null
-  }["agents"]
-  readonly skills?: {
+  } & { readonly [x: string]: JsonValue | null })["agents"]
+  readonly skills?: ({
     readonly id?: string | null
     readonly text: string
     readonly files?: ReadonlyArray<{
@@ -4422,8 +4422,8 @@ export type SessionPromptInput = {
     readonly metadata?: { readonly [x: string]: JsonValue }
     readonly delivery?: ("steer" | "queue") | null
     readonly resume?: boolean | null
-  }["skills"]
-  readonly metadata?: {
+  } & { readonly [x: string]: JsonValue | null })["skills"]
+  readonly metadata?: ({
     readonly id?: string | null
     readonly text: string
     readonly files?: ReadonlyArray<{
@@ -4443,8 +4443,8 @@ export type SessionPromptInput = {
     readonly metadata?: { readonly [x: string]: JsonValue }
     readonly delivery?: ("steer" | "queue") | null
     readonly resume?: boolean | null
-  }["metadata"]
-  readonly delivery?: {
+  } & { readonly [x: string]: JsonValue | null })["metadata"]
+  readonly delivery?: ({
     readonly id?: string | null
     readonly text: string
     readonly files?: ReadonlyArray<{
@@ -4464,8 +4464,8 @@ export type SessionPromptInput = {
     readonly metadata?: { readonly [x: string]: JsonValue }
     readonly delivery?: ("steer" | "queue") | null
     readonly resume?: boolean | null
-  }["delivery"]
-  readonly resume?: {
+  } & { readonly [x: string]: JsonValue | null })["delivery"]
+  readonly resume?: ({
     readonly id?: string | null
     readonly text: string
     readonly files?: ReadonlyArray<{
@@ -4485,7 +4485,7 @@ export type SessionPromptInput = {
     readonly metadata?: { readonly [x: string]: JsonValue }
     readonly delivery?: ("steer" | "queue") | null
     readonly resume?: boolean | null
-  }["resume"]
+  } & { readonly [x: string]: JsonValue | null })["resume"]
 }
 
 export type SessionPromptOutput = { data: SessionInboxUser }["data"]

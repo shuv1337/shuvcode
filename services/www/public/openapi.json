@@ -2208,7 +2208,19 @@
                   }
                 },
                 "required": ["text"],
-                "additionalProperties": false
+                "allOf": [
+                  {
+                    "type": "object",
+                    "additionalProperties": {
+                      "anyOf": [
+                        {},
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    }
+                  }
+                ]
               }
             }
           },
