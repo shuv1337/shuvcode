@@ -21,9 +21,12 @@ export type ShippedModel = {
 }
 
 export const shippedModels: readonly ShippedModel[] = [
-  { id: "gemini-3.8-flash-high", name: "Gemini 3.8 Flash (High)" },
-  { id: "gemini-3.8-flash-medium", name: "Gemini 3.8 Flash (Medium)" },
-  { id: "gemini-3.8-flash-low", name: "Gemini 3.8 Flash (Low)" },
+  { id: "gemini-4-argon-high", name: "Gemini 4 Argon (High)", modelEnum: "MODEL_PLACEHOLDER_M417" },
+  { id: "gemini-4-argon-medium", name: "Gemini 4 Argon (Medium)", modelEnum: "MODEL_PLACEHOLDER_M418" },
+  { id: "gemini-4-argon-low", name: "Gemini 4 Argon (Low)", modelEnum: "MODEL_PLACEHOLDER_M419" },
+  { id: "gemini-3.8-flash-high", name: "Gemini 3.8 Flash (High)", modelEnum: "MODEL_PLACEHOLDER_M318" },
+  { id: "gemini-3.8-flash-medium", name: "Gemini 3.8 Flash (Medium)", modelEnum: "MODEL_PLACEHOLDER_M319" },
+  { id: "gemini-3.8-flash-low", name: "Gemini 3.8 Flash (Low)", modelEnum: "MODEL_PLACEHOLDER_M320" },
   { id: "gemini-3.7-flash-high", name: "Gemini 3.7 Flash (High)", modelEnum: "MODEL_PLACEHOLDER_M298" },
   { id: "gemini-3.7-flash-medium", name: "Gemini 3.7 Flash (Medium)", modelEnum: "MODEL_PLACEHOLDER_M299" },
   { id: "gemini-3.7-flash-low", name: "Gemini 3.7 Flash (Low)", modelEnum: "MODEL_PLACEHOLDER_M300" },
@@ -59,12 +62,12 @@ export const isBlockedModelID = (id: string) => {
   const lower = id.toLowerCase()
   if (lower.startsWith("claude") || lower.startsWith("gpt") || lower.includes("gpt-oss")) return true
   if (lower.startsWith("tab_") || lower.startsWith("chat_")) return true
-  if (lower.includes("image")) return true
+  if (lower.includes("image") || lower.endsWith("-disabled")) return true
   return false
 }
 
 export const isGoogleCatalogModel = (model: GoogleAntigravityOAuth.CatalogModel) => {
-  if (model.internal) return false
+  if (model.internal || model.disabled) return false
   if (isBlockedModelID(model.id)) return false
   if (model.provider && model.provider !== "MODEL_PROVIDER_GOOGLE") return false
   return true

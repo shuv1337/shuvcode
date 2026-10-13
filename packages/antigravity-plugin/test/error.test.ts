@@ -73,29 +73,32 @@ describe("Cloud Code 429 bodies", () => {
     })
   })
 
-  test("surfaces remainingFraction and resetTime and marks an empty 5h bucket as quota", () => {
-    const explained = GoogleAntigravityWire.explainCloudCodeError({
-      error: {
-        status: "RESOURCE_EXHAUSTED",
-        message: "Resource has been exhausted (e.g. check quota).",
-        reason: "RATE_LIMIT_EXCEEDED",
-      },
-      summary,
-      httpStatus: 429,
-      modelID: "gemini-3.8-flash-high",
-    })
-    expect(explained?.quota).toBe(true)
-    expect(explained?.message).toContain("RESOURCE_EXHAUSTED: Resource has been exhausted (e.g. check quota).")
-    expect(explained?.message).toContain("gemini:5h remainingFraction=0 resetTime=2026-08-14T18:00:00Z")
-    expect(explained?.message).toContain("gemini:weekly remainingFraction=0.4 resetTime=2026-08-20T00:00:00Z")
-    expect(JSON.parse(explained?.body ?? "{}")).toMatchObject({
-      error: {
-        code: 429,
-        status: "RESOURCE_EXHAUSTED",
-        details: [{ reason: "QUOTA_EXHAUSTED" }],
-      },
-    })
-  })
+  test.each(["gemini-4-argon-high", "gemini-4-argon-medium", "gemini-4-argon-low", "gemini-3.8-flash-high"])(
+    "surfaces remainingFraction and resetTime and marks an empty 5h bucket as quota for %s",
+    (modelID) => {
+      const explained = GoogleAntigravityWire.explainCloudCodeError({
+        error: {
+          status: "RESOURCE_EXHAUSTED",
+          message: "Resource has been exhausted (e.g. check quota).",
+          reason: "RATE_LIMIT_EXCEEDED",
+        },
+        summary,
+        httpStatus: 429,
+        modelID,
+      })
+      expect(explained?.quota).toBe(true)
+      expect(explained?.message).toContain("RESOURCE_EXHAUSTED: Resource has been exhausted (e.g. check quota).")
+      expect(explained?.message).toContain("gemini:5h remainingFraction=0 resetTime=2026-08-14T18:00:00Z")
+      expect(explained?.message).toContain("gemini:weekly remainingFraction=0.4 resetTime=2026-08-20T00:00:00Z")
+      expect(JSON.parse(explained?.body ?? "{}")).toMatchObject({
+        error: {
+          code: 429,
+          status: "RESOURCE_EXHAUSTED",
+          details: [{ reason: "QUOTA_EXHAUSTED" }],
+        },
+      })
+    },
+  )
 
   test("keeps a short throttle retryable when the 5h bucket still has quota", () => {
     const explained = GoogleAntigravityWire.explainCloudCodeError({
@@ -113,7 +116,7 @@ describe("Cloud Code 429 bodies", () => {
         ],
       },
       httpStatus: 429,
-      modelID: "gemini-3.8-flash-high",
+      modelID: "gemini-4-argon-high",
     })
     expect(explained?.quota).toBe(false)
     expect(explained?.message).toContain("gemini:5h remainingFraction=0.5 resetTime=2026-08-14T18:00:00Z")
@@ -124,15 +127,24 @@ describe("Cloud Code 429 bodies", () => {
 
   test.each([
     {
+      modelID: "gemini-4-argon-high",
+      groups: [{ displayName: "Claude + GPT", buckets: [{ window: "5h", remainingFraction: 0 }] }],
+    },
+    {
       modelID: "gemini-3.8-flash-high",
       groups: [{ displayName: "Claude + GPT", buckets: [{ window: "5h", remainingFraction: 0 }] }],
     },
     { modelID: "claude-sonnet-4-6", groups: summary.groups },
     { modelID: "gpt-oss-120b", groups: summary.groups },
     {
+      modelID: "gemini-4-argon-high",
+      groups: [{ displayName: "Unknown models", buckets: [{ window: "5h", remainingFraction: 0 }] }],
+    },
+    {
       modelID: "gemini-3.8-flash-high",
       groups: [{ displayName: "Unknown models", buckets: [{ window: "5h", remainingFraction: 0 }] }],
     },
+    { modelID: "gemini-4-argon-high", groups: [] },
     { modelID: "gemini-3.8-flash-high", groups: [] },
     { modelID: "unknown-model", groups: summary.groups },
     { modelID: undefined, groups: summary.groups },
