@@ -8,6 +8,7 @@ import { ChatGPTPlugin } from "./provider/chatgpt.js"
 import { CloudflareAIGatewayPlugin } from "./provider/cloudflare-ai-gateway.js"
 import { CloudflareWorkersAIPlugin } from "./provider/cloudflare-workers-ai.js"
 import { CoherePlugin } from "./provider/cohere.js"
+import { DatabricksPlugin } from "./provider/databricks.js"
 import { DigitalOceanPlugin } from "./provider/digitalocean.js"
 import { DynamicProviderPlugin } from "./provider/dynamic.js"
 import { GithubCopilotPlugin } from "./provider/github-copilot.js"
@@ -17,6 +18,7 @@ import { KiloPlugin } from "./provider/kilo.js"
 import { LLMGatewayPlugin } from "./provider/llmgateway.js"
 import { LMStudioPlugin } from "./provider/lmstudio.js"
 import { ModalPlugin } from "./provider/modal.js"
+import { NeonPlugin } from "./provider/neon.js"
 import { NvidiaPlugin } from "./provider/nvidia.js"
 import { OllamaPlugin } from "./provider/ollama.js"
 import { OpenAIPlugin } from "./provider/openai.js"
@@ -43,6 +45,7 @@ export const ProviderPlugins: PluginInternal.InternalPlugin[] = [
   CloudflareAIGatewayPlugin,
   CloudflareWorkersAIPlugin,
   CoherePlugin,
+  DatabricksPlugin,
   DigitalOceanPlugin,
   GithubCopilotPlugin,
   GitLabPlugin,
@@ -51,6 +54,7 @@ export const ProviderPlugins: PluginInternal.InternalPlugin[] = [
   LLMGatewayPlugin,
   LMStudioPlugin,
   ModalPlugin,
+  NeonPlugin,
   NvidiaPlugin,
   OllamaPlugin,
   OpencodePlugin,

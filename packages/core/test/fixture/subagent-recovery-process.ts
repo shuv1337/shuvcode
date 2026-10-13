@@ -30,6 +30,7 @@ import { SessionRunnerModel } from "@opencode/core/session/runner/model"
 import { SessionRunCoordinator } from "@opencode/core/session/run-coordinator"
 import type { SessionRunner } from "@opencode/core/session/runner/index"
 import { SessionStore } from "@opencode/core/session/store"
+import { SubagentJob } from "@opencode/core/session/subagent-job"
 import { SubagentRecovery } from "@opencode/core/session/subagent-recovery"
 import { Tool } from "@opencode/core/tool"
 import { SubagentTool } from "@opencode/core/tool/plugin/subagent"
@@ -144,6 +145,7 @@ const subagentPluginSupervisor = makeLocationNode({
     Permission.node,
     Session.node,
     SessionRunnerModel.node,
+    SubagentJob.node,
     Job.node,
     Tool.node,
     PluginHooks.node,

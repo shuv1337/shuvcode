@@ -13,6 +13,7 @@
   },
   "exports": {
     ".": "./src/index.ts",
+    "./highlights": "./src/highlights.ts",
     "./version": "./src/version.ts"
   },
   "scripts": {

@@ -1,5 +1,6 @@
 import { createEffect, createMemo, createSignal, For, onCleanup, Show, type ComponentProps, type JSX } from "solid-js"
 import { createStore } from "solid-js/store"
+import { createMediaQuery } from "@solid-primitives/media"
 import { useData } from "../context"
 import { useDialog } from "@opencode/ui/context/dialog"
 import { useI18n } from "@opencode/ui/context/i18n"
@@ -270,10 +271,16 @@ export function CurrentUserMessageDisplay(props: {
   const model = createMemo(() => modelLabel(data, i18n, props.model))
   const timefmt = createMemo(() => new Intl.DateTimeFormat(i18n.locale(), { timeStyle: "short" }))
 
+  // Mobile shows the current agent and model in the composer and switch notices, so repeating them per message is noise.
+  const mobile = createMediaQuery("(max-width: 767px)")
+
   const metaHead = createMemo(() => {
     const agent = props.agent
+    const pendingLabel = waiting() ? i18n.t("ui.message.pending") : ""
 
-    return [waiting() ? i18n.t("ui.message.pending") : "", agent ? agent[0]?.toUpperCase() + agent.slice(1) : "", model()]
+    if (mobile()) return pendingLabel
+
+    return [pendingLabel, agent ? agent[0]?.toUpperCase() + agent.slice(1) : "", model()]
       .filter(Boolean)
       .join("\u00A0\u00B7\u00A0")
   })
@@ -641,12 +648,14 @@ export function AssistantTextContent(props: {
     })
   })
 
+  // Mobile omits the per-response agent and model; see CurrentUserMessageDisplay.
+  const mobile = createMediaQuery("(max-width: 767px)")
+
   const meta = createMemo(() => {
     const agent = props.message.agent
 
     return [
-      agent ? agent[0]?.toUpperCase() + agent.slice(1) : "",
-      model(),
+      ...(mobile() ? [] : [agent ? agent[0]?.toUpperCase() + agent.slice(1) : "", model()]),
       duration(),
       interrupted() ? i18n.t("ui.message.interrupted") : "",
     ]
