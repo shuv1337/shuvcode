@@ -57,12 +57,14 @@ const make = Effect.fn("DesktopCli.resolve")(function* () {
   const cli = development
     ? {
         version,
+        // Bun's transpiler cache key includes the define table, and the dev version changes on every
+        // run. Reading it from the inherited environment keeps the define fixed and the cache warm.
         command: [
           "bun",
           "run",
           "--cwd",
           development,
-          `--define=OPENCODE_VERSION=${JSON.stringify(version)}`,
+          "--define=OPENCODE_VERSION=process.env.OPENCODE_VERSION",
           "src/index.ts",
         ],
         binary: undefined,
@@ -137,7 +139,9 @@ const ExecFailure = Schema.Struct({ stdout: Schema.optional(Schema.String), stde
 const installCli = Effect.fn("DesktopCli.install")(function* (source: string, version: string) {
   const fs = yield* FileSystem.FileSystem
   const path = yield* Path.Path
-  const directory = path.join(app.getPath("userData"), "cli", version.replace(/[^a-zA-Z0-9._-]/g, "-"))
+  // x64 and ARM64 installers share userData on Windows ARM64, so a same-version switch must not reuse the other copy.
+  const stage = `${version}-${process.arch}`.replace(/[^a-zA-Z0-9._-]/g, "-")
+  const directory = path.join(app.getPath("userData"), "cli", stage)
   const destination = path.join(directory, executableName())
 
   if (existsSync(destination)) {

@@ -72,6 +72,11 @@ export namespace TimelineRow {
     inboxID: string
   }> {}
 
+  /** Where the host shows the active turn's live status when undelivered input waits below it. */
+  export class Activity extends Data.TaggedClass("Activity")<{
+    userMessageID: string
+  }> {}
+
   export type TimelineRow =
     | TurnGap
     | UserMessage
@@ -83,6 +88,7 @@ export namespace TimelineRow {
     | Error
     | Retry
     | CompactionQueued
+    | Activity
 
   export const key: (row: TimelineRow) => string = Match.typeTags<TimelineRow>()({
     TurnGap: (row) => `turn-gap:${row.userMessageID}`,
@@ -98,6 +104,8 @@ export namespace TimelineRow {
     Error: (row) => `error:${row.userMessageID}`,
     Retry: (row) => `retry:${row.userMessageID}`,
     CompactionQueued: (row) => `compaction-queued:${row.inboxID}`,
+    // One live status exists at a time; it keeps its identity when the active turn changes.
+    Activity: () => "activity",
   })
 
   export function equals(a: TimelineRow, b: TimelineRow) {
@@ -121,4 +129,5 @@ export type TimelineRowMap = {
   Retry: { userMessageID: string }
   Error: { userMessageID: string; text: string }
   CompactionQueued: { userMessageID: string; inboxID: string }
+  Activity: { userMessageID: string }
 }

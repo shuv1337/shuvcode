@@ -1,8 +1,8 @@
 import { Effect, Option } from "effect"
-import { Flag, GlobalFlag } from "effect/unstable/cli"
+import { Flag, GlobalFlag } from "effect/cli"
 
-export const StandaloneSetting = GlobalFlag.setting("standalone")({
-  flag: Flag.boolean("standalone").pipe(
+export const StandaloneSetting = GlobalFlag.Setting("standalone")({
+  flag: Flag.Boolean("standalone").pipe(
     Flag.withDescription(
       "Run client commands with a private server; unsupported by service, pair, acp, serve, mcp add, and plugin add/update/remove",
     ),
@@ -10,8 +10,8 @@ export const StandaloneSetting = GlobalFlag.setting("standalone")({
   ),
 })
 
-export const ServerSetting = GlobalFlag.setting("server")({
-  flag: Flag.string("server").pipe(
+export const ServerSetting = GlobalFlag.Setting("server")({
+  flag: Flag.String("server").pipe(
     Flag.withDescription(
       "Connect client commands to a server URL; unsupported by service, pair, acp, serve, mcp add, and plugin add/update/remove",
     ),

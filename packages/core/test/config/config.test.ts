@@ -1,9 +1,9 @@
 import path from "path"
 import fs from "fs/promises"
 import { describe, expect, test } from "bun:test"
-import { Effect, Fiber, Layer, Logger, Schema, Stream } from "effect"
-import { FastCheck } from "effect/testing"
+import { Arbitrary, Effect, Fiber, Layer, Logger, Schema, Stream } from "effect"
 import { Config } from "@opencode/core/config"
+import { ConfigDiscovery } from "@opencode/core/config/discovery"
 import { Directory, Document, type Entry, Event, Info } from "@opencode/schema/config"
 import { ConfigModel } from "@opencode/schema/config/model"
 import { ConfigProvider } from "@opencode/schema/config/provider"
@@ -12,6 +12,7 @@ import { makeGlobalNode } from "@opencode/util/effect/app-node"
 import { LayerNode } from "@opencode/util/effect/layer-node"
 import { Credential } from "@opencode/core/credential"
 import { ConfigV1 } from "../fixture/v1-config/config"
+import { ConfigPermissionV1 } from "@opencode/core/v1/config/permission"
 import { ConfigNormalize } from "@opencode/core/config/normalize"
 import { Watcher } from "@opencode/core/filesystem/watcher"
 import { Bus } from "@opencode/core/bus"
@@ -30,11 +31,7 @@ import { testEffect } from "../lib/effect"
 
 const it = testEffect(Layer.empty)
 const selection = Schema.decodeUnknownSync(ConfigModel.Selection)
-const decodeInfo = Schema.decodeUnknownSync(Info, {
-  errors: "all",
-  onExcessProperty: "ignore",
-  propertyOrder: "original",
-})
+const decodeInfo = Schema.decodeUnknownSync(Info, { errors: "all", onExcessProperty: "ignore" })
 const encodeInfo = Schema.encodeSync(Info)
 
 function migrateV1(input: unknown) {
@@ -68,7 +65,7 @@ function testLayer(
     ),
   )
   const built = AppNodeBuilder.build(LayerNode.group([Config.node, Bus.node]), [
-    Config.node.replace(Config.configured(options)),
+    Config.node.replace(Config.configured({ system: false, ...options })),
     Location.node.replace(locationLayer),
     Global.node.replace(Global.layerWith({ config: globalDirectory, home: path.join(globalDirectory, "home") })),
     Credential.node.replace(credentialNode),
@@ -204,6 +201,102 @@ describe("Config", () => {
       }),
     ),
   )
+
+  it.live("loads system configuration at lowest priority", () =>
+    Effect.acquireDisposable(Effect.promise(() => tmpdir())).pipe(
+      Effect.flatMap((tmp) => {
+        const system = path.join(tmp.path, "system")
+        const global = path.join(tmp.path, "global")
+        const project = path.join(tmp.path, "project")
+        return Effect.promise(async () => {
+          await fs.mkdir(system, { recursive: true })
+          await fs.mkdir(global, { recursive: true })
+          await fs.mkdir(project, { recursive: true })
+          await fs.writeFile(
+            path.join(system, "opencode.json"),
+            JSON.stringify({ shell: "system", username: "system-user" }),
+          )
+          await fs.writeFile(path.join(global, "opencode.json"), JSON.stringify({ shell: "global" }))
+          await fs.writeFile(path.join(project, "opencode.json"), JSON.stringify({ shell: "project" }))
+        }).pipe(
+          Effect.andThen(
+            Effect.gen(function* () {
+              const config = yield* Config.Service
+              const entries = yield* config.entries()
+              expect(
+                entries.flatMap((entry) => (entry.type === "document" && entry.info.shell ? [entry.info.shell] : [])),
+              ).toEqual(["system", "global", "project"])
+              expect(entries.flatMap((entry) => (entry.type === "directory" ? [entry.path] : []))).toEqual([
+                AbsolutePath.make(system),
+                AbsolutePath.make(global),
+              ])
+              expect(Config.latest(entries, "shell")).toBe("project")
+              expect(Config.latest(entries, "username")).toBe("system-user")
+            }).pipe(
+              Effect.provide(
+                testLayer(project, global, project, undefined, undefined, emptyCredentialNode, emptyWellknownNode, {
+                  system,
+                }),
+              ),
+            ),
+          ),
+          Effect.andThen(
+            Effect.gen(function* () {
+              const config = yield* Config.Service
+              const entries = yield* config.entries()
+              expect(
+                entries.flatMap((entry) => (entry.type === "document" && entry.info.shell ? [entry.info.shell] : [])),
+              ).toEqual(["global", "project"])
+            }).pipe(
+              Effect.provide(
+                testLayer(project, global, project, undefined, undefined, emptyCredentialNode, emptyWellknownNode, {
+                  system: false,
+                }),
+              ),
+            ),
+          ),
+        )
+      }),
+    ),
+  )
+
+  test("resolves the system configuration directory per platform", () => {
+    expect(ConfigDiscovery.systemDirectory("darwin", {})).toBe(
+      AbsolutePath.make("/Library/Application Support/opencode"),
+    )
+    expect(ConfigDiscovery.systemDirectory("linux", {})).toBe(AbsolutePath.make("/etc/opencode"))
+    expect(ConfigDiscovery.systemDirectory("win32", { ProgramData: "D:\\ProgramData" })).toBe(
+      AbsolutePath.make(path.join("D:\\ProgramData", "opencode")),
+    )
+    expect(ConfigDiscovery.systemDirectory("win32", {})).toBe(
+      AbsolutePath.make(path.join("C:\\ProgramData", "opencode")),
+    )
+  })
+
+  test("resolves macOS managed preferences with user-specific profiles first", () => {
+    expect(ConfigDiscovery.preferencePaths("alice")).toEqual([
+      AbsolutePath.make(path.join("/Library/Managed Preferences", "alice", "ai.opencode.managed.plist")),
+      AbsolutePath.make("/Library/Managed Preferences/ai.opencode.managed.plist"),
+    ])
+  })
+
+  test("strips MDM payload metadata from managed preferences", () => {
+    expect(
+      JSON.parse(
+        ConfigDiscovery.stripPreferenceMetadata(
+          JSON.stringify({
+            PayloadDisplayName: "OpenCode",
+            PayloadIdentifier: "ai.opencode.managed",
+            PayloadType: "ai.opencode.managed",
+            PayloadUUID: "00000000-0000-0000-0000-000000000000",
+            PayloadVersion: 1,
+            _manualProfile: true,
+            share: "disabled",
+          }),
+        ),
+      ),
+    ).toEqual({ share: "disabled" })
+  })
 
   it.live("loads explicit file and content overrides in priority order", () =>
     Effect.acquireDisposable(Effect.promise(() => tmpdir())).pipe(
@@ -399,6 +492,7 @@ describe("Config", () => {
           }).pipe(
             Effect.provide(
               AppNodeBuilder.build(LayerNode.group([Config.node, Bus.node]), [
+                Config.node.replace(Config.configured({ system: false })),
                 Location.node.replace(
                   Layer.succeed(
                     Location.Service,
@@ -622,6 +716,7 @@ describe("Config", () => {
           // Each build is a fresh process sharing one persisted KV store.
           const instance = () =>
             AppNodeBuilder.build(LayerNode.group([Config.node, Bus.node, WellKnown.node]), [
+              Config.node.replace(Config.configured({ system: false })),
               Location.node.replace(
                 Layer.succeed(
                   Location.Service,
@@ -785,13 +880,58 @@ describe("Config", () => {
   })
 
   test("migrates arbitrary v1 configuration into valid v2 configuration", () => {
-    FastCheck.assert(
-      FastCheck.property(Schema.toArbitrary(ConfigV1.Info)(FastCheck), (info) => {
-        migrateV1(JSON.parse(JSON.stringify(info)))
-      }),
-      { numRuns: 100 },
+    const json = Schema.fromJsonString(Schema.toCodecJson(ConfigV1.Info))
+    const result = Effect.runSync(
+      Arbitrary.checkEffect(
+        Arbitrary.schema(ConfigV1.Info),
+        (info) => {
+          migrateV1(JSON.parse(Schema.encodeUnknownSync(json)(info)))
+          return true
+        },
+        { runs: 100 },
+      ),
     )
+    expect(Arbitrary.formatCheckFailure(result)).toBeUndefined()
   }, 30_000)
+
+  // Effect leaves decoded key order unspecified, but these maps' order is user-visible: agents cycle
+  // in this order, the first matching formatter wins, and providers fold aliases in sequence.
+  test("decodes configuration maps in source order", () => {
+    const keys = ["zeta", "build", "alpha", "plan", "mid"]
+    const map = <A>(value: A) => Object.fromEntries(keys.map((key) => [key, value]))
+    const info = Schema.decodeUnknownSync(Info)(
+      migrateV1({
+        agents: map({}),
+        formatter: map({ command: ["fmt"], extensions: [".ts"] }),
+        providers: map({}),
+        commands: map({ template: "run" }),
+      }),
+      { errors: "all", onExcessProperty: "ignore" },
+    )
+    expect(Object.keys(info.agents ?? {})).toEqual(keys)
+    expect(Object.keys(typeof info.formatter === "object" ? info.formatter : {})).toEqual(keys)
+    expect(Object.keys(info.providers ?? {})).toEqual(keys)
+    expect(Object.keys(info.commands ?? {})).toEqual(keys)
+  })
+
+  test("decodes v1 permissions in source order at every level", () => {
+    const decode = Schema.decodeUnknownSync(ConfigPermissionV1.Info)
+    expect(decode({ "*": "allow", custom: "deny", bash: { "git *": "ask", "*": "deny" }, edit: "deny" })).toEqual([
+      ["*", "allow"],
+      ["custom", "deny"],
+      [
+        "bash",
+        [
+          ["git *", "ask"],
+          ["*", "deny"],
+        ],
+      ],
+      ["edit", "deny"],
+    ])
+    expect(decode("ask")).toEqual([["*", "ask"]])
+    for (const invalid of [["allow"], { bash: ["allow"] }, { question: { "*": "allow" } }, { read: null }])
+      expect(() => decode(invalid)).toThrow()
+  })
 
   test("migrates the v1 experimental subagent depth", () => {
     expect(migrateV1({ experimental: { subagent_depth: 2 } }).experimental?.subagent_depth).toBe(2)
@@ -1523,6 +1663,16 @@ describe("Config", () => {
                       },
                     },
                   },
+                  litellm: {
+                    npm: "@ai-sdk/openai-compatible",
+                    options: { baseURL: "https://litellm.example/v1" },
+                    models: {
+                      "glm-5.3-flashx": {
+                        options: { reasoningEffort: "high", allowed_openai_params: ["reasoning_effort"] },
+                        variants: { thinking: { chat_template_kwargs: { enable_thinking: true } } },
+                      },
+                    },
+                  },
                 },
                 compaction: { auto: true, tail_turns: 3, preserve_recent_tokens: 2000, reserved: 10000 },
                 experimental: { mcp_timeout: 5000 },
@@ -1599,6 +1749,11 @@ describe("Config", () => {
                   },
                 },
               },
+            })
+            expect(documents[0]?.info.providers?.litellm?.models?.["glm-5.3-flashx"]).toMatchObject({
+              settings: { reasoningEffort: "high" },
+              body: { allowed_openai_params: ["reasoning_effort"] },
+              variants: [{ id: "thinking", settings: {}, body: { chat_template_kwargs: { enable_thinking: true } } }],
             })
             expect(documents[0]?.info.compaction).toEqual({
               auto: true,
