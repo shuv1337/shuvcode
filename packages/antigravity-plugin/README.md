@@ -18,8 +18,9 @@ There are no Core imports, SDK transport wrappers, or proxy servers.
   and older subscription variants without overriding the user's default model.
   Fallback requests without a model ID resolve to `gemini-3.8-flash-high`.
 - Access-only imports activate using shipped models without discovery requests.
-  Normal OAuth connections may discover model enums, with shipped defaults if
-  discovery is unavailable.
+  Normal OAuth connections may discover model enums and suppress shipped variants
+  explicitly denied by catalog entries (such as `gemini-4-argon-disabled` or a
+  disabled shipped model ID), with shipped defaults if discovery is unavailable.
 - Native Gemini requests resolve the active credential afresh, then use the
   Cloud Code envelope and `metadata.projectId`. Only responses belonging to
   rewritten requests are unwrapped. API-key connections are unchanged.

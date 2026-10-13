@@ -178,6 +178,16 @@ describe("GoogleAntigravityWire", () => {
       "gemini-3.7-flash-high",
     ])
     expect(GoogleAntigravityWire.isBlockedModelID("gemini-4-argon-disabled")).toBe(true)
+    const disabled = GoogleAntigravityWire.disabledModelsFrom(parsed)
+    expect(disabled.has("gemini-4-argon-high")).toBe(true)
+    expect(disabled.has("gemini-4-argon-medium")).toBe(true)
+    expect(disabled.has("gemini-4-argon-low")).toBe(true)
+    expect(disabled.has("gemini-3.8-flash-high")).toBe(false)
+    const enums = GoogleAntigravityWire.modelEnumsFrom(parsed)
+    expect(enums.has("gemini-4-argon-high")).toBe(false)
+    expect(enums.has("gemini-4-argon-medium")).toBe(false)
+    expect(enums.has("gemini-4-argon-low")).toBe(false)
+    expect(enums.get("gemini-3.8-flash-high")).toBe("MODEL_PLACEHOLDER_M318")
   })
 
   test("ships the gemini-4-argon and gemini-3.8-flash variants with authoritative enums and forwards IDs unchanged", () => {

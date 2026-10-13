@@ -76,10 +76,42 @@ export const isGoogleCatalogModel = (model: GoogleAntigravityOAuth.CatalogModel)
 export const filterGoogleModels = (models: readonly GoogleAntigravityOAuth.CatalogModel[]) =>
   models.filter(isGoogleCatalogModel)
 
-export function modelEnumsFrom(models: readonly GoogleAntigravityOAuth.CatalogModel[]) {
-  const next = new Map(modelEnumDefaults)
+export function disabledModelsFrom(models: readonly GoogleAntigravityOAuth.CatalogModel[]): ReadonlySet<string> {
+  const disabled = new Set<string>()
   for (const model of models) {
+    if (model.internal) continue
+    if (model.provider && model.provider !== "MODEL_PROVIDER_GOOGLE") continue
+    const suffix = model.id.toLowerCase().endsWith("-disabled")
+    if (!model.disabled && !suffix) continue
+    const base = suffix ? model.id.slice(0, -"-disabled".length) : model.id
+    if (!base) continue
+    disabled.add(model.id)
+    disabled.add(base)
+    for (const shipped of shippedModels) {
+      const api = catalogID(shipped.id)
+      if (
+        shipped.id === model.id ||
+        shipped.id === base ||
+        shipped.id.startsWith(`${base}-`) ||
+        api === model.id ||
+        api === base ||
+        api.startsWith(`${base}-`)
+      ) {
+        disabled.add(shipped.id)
+      }
+    }
+  }
+  return disabled
+}
+
+export function modelEnumsFrom(models: readonly GoogleAntigravityOAuth.CatalogModel[]) {
+  const disabled = disabledModelsFrom(models)
+  const next = new Map(modelEnumDefaults)
+  for (const model of filterGoogleModels(models)) {
     if (model.modelEnum) next.set(model.id, model.modelEnum)
+  }
+  for (const id of disabled) {
+    next.delete(id)
   }
   return next
 }
@@ -426,18 +458,19 @@ export function applyProvider(evt: ProviderEditor, active: boolean) {
   })
 }
 
-export function applyModels(evt: ModelEditor, active: boolean) {
+export function applyModels(evt: ModelEditor, active: boolean, disabled?: ReadonlySet<string>) {
   if (!active) return
   // Antigravity model ids are absent from the upstream catalog, so synthesized
   // entries receive the generic fallback limits (200k/32k), not real Gemini
   // limits. Only a real catalog entry's limit wins over the Flash numbers.
   const cataloged = new Set(evt.provider.get(googleProviderID)?.models.keys() ?? [])
   for (const model of shippedModels) {
+    const denied = disabled?.has(model.id) === true || disabled?.has(catalogID(model.id)) === true
     evt.update(googleProviderID, model.id, (draft) => {
       draft.modelID = Model.ID.make(model.apiID ?? model.id)
       draft.name = model.name
       draft.cost = []
-      draft.enabled = true
+      draft.enabled = !denied
       draft.status = "active"
       if (!cataloged.has(model.id)) draft.limit = { ...FLASH_LIMIT }
       draft.capabilities = { tools: true, input: ["text", "image"], output: ["text"] }
@@ -447,7 +480,7 @@ export function applyModels(evt: ModelEditor, active: boolean) {
   const item = evt.provider.get(googleProviderID)
   if (item) {
     for (const id of item.models.keys()) {
-      if (shippedIDs.has(id)) continue
+      if (shippedIDs.has(id) && !disabled?.has(id) && !disabled?.has(catalogID(id))) continue
       evt.update(googleProviderID, id, (draft) => {
         draft.enabled = false
       })
