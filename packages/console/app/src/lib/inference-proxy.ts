@@ -37,17 +37,7 @@ export async function proxyInference(request: Request) {
   destination.hash = ""
 
   const forwarded = new Request(destination, request)
-  for (const name of [
-    "x-zen",
-    "x-zen-model",
-    "x-zen-ip",
-    "x-real-ip",
-    "cf-access-client-id",
-    "cf-access-client-secret",
-    "host",
-    "content-length",
-  ])
-    forwarded.headers.delete(name)
+  for (const name of ["host", "content-length"]) forwarded.headers.delete(name)
   // Keyless requests must reach new inference without credentials; `public` is not an API key there.
   const anonymous = !key || key === "public"
   if (anonymous) for (const name of ["authorization", "x-api-key", "x-goog-api-key"]) forwarded.headers.delete(name)
