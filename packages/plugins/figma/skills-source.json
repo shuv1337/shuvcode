@@ -2,11 +2,19 @@
   "repository": "https://github.com/figma/mcp-server-guide.git",
   "revision": "f0493295acf5f7cbdebcbcc483c06de814420cb1",
   "skills": [
-    "figma-design-to-code",
-    "figma-use",
-    "figma-generate-design",
-    "figma-generate-library",
     "figma-code-connect",
-    "figma-create-new-file"
+    "figma-create-new-file",
+    "figma-design-to-code",
+    "figma-generate-design",
+    "figma-generate-diagram",
+    "figma-generate-library",
+    "figma-generative-plugins",
+    "figma-implement-motion",
+    "figma-shaders",
+    "figma-swiftui",
+    "figma-use",
+    "figma-use-figjam",
+    "figma-use-motion",
+    "figma-use-slides"
   ]
 }

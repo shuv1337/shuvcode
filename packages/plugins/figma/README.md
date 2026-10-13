@@ -37,9 +37,9 @@ Existing `mcp.servers.figma` configuration takes precedence, including disabled 
 
 ## Official skills
 
-`skills/` contains selected skills copied unchanged from [Figma's official plugin](https://github.com/figma/mcp-server-guide/tree/main/skills). [skills-source.json](skills-source.json) records the exact upstream revision and the selected skill IDs.
+`skills/` contains the complete skill bundle copied unchanged from the pinned revision of [Figma's official plugin](https://github.com/figma/mcp-server-guide/tree/main/skills). [skills-source.json](skills-source.json) records the exact upstream revision and the discovered skill IDs; it is not an allowlist.
 
-The bundle contains `figma-design-to-code`, `figma-use`, `figma-generate-design`, `figma-generate-library`, `figma-code-connect`, and `figma-create-new-file`, along with their supporting references and scripts. No replacement instructions are authored by OpenCode. Existing skills with the same IDs are preserved. Specialized skills remain available through Figma's MCP skill resources when needed.
+The bundle covers design-to-code, canvas editing, screen and library generation, Code Connect, file creation, diagrams, FigJam, Slides, motion, SwiftUI, shaders, and generative plugins. Supporting references and scripts are included. No replacement instructions are authored by OpenCode. Existing skills with the same IDs are preserved.
 
 The vendored Figma materials remain Figma's materials, not OpenCode-authored MIT code. See [skills/NOTICE.md](skills/NOTICE.md) for attribution and the Figma Developer Terms.
 
@@ -51,9 +51,9 @@ From `packages/plugins/figma`, explicitly run:
 bun run sync:skills
 ```
 
-This fetches upstream `main`, replaces only the selected skill directories, and updates the recorded commit. To use a particular branch, tag, or commit, pass it as an argument. To reproduce the current bundle, pass the revision in `skills-source.json`.
+This fetches upstream `main`, discovers every skill directory containing `SKILL.md`, copies all of them with their supporting files, removes previously bundled skills that no longer exist upstream, and records the resolved commit and skill IDs. No skill names are filtered or hardcoded in the sync script. To use a particular branch, tag, or commit, pass it as an argument. To reproduce the current bundle, pass the revision in `skills-source.json`.
 
-Review and commit `skills/` and `skills-source.json` together. Sync replaces local edits within selected directories, so keep the upstream files unchanged and review updates before releasing them.
+Review and commit `skills/` and `skills-source.json` together. Sync replaces local edits within bundled skill directories, so keep the upstream files unchanged and review updates before releasing them.
 
 Sync never runs automatically during installation, plugin startup, typechecking, or CI. The plugin loads only the checked-in files. Supporting Figma scripts are guidance assets; the plugin does not execute them.
 
