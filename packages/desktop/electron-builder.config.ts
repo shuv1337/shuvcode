@@ -1,11 +1,12 @@
 import { execFile } from "node:child_process"
-import { stat } from "node:fs/promises"
+import { readdir, stat } from "node:fs/promises"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
 import { promisify } from "node:util"
 
 import type { CustomMacSignOptions } from "app-builder-lib"
-import type { Configuration } from "electron-builder"
+import { Arch, type Configuration } from "electron-builder"
+import { NativeArch } from "../../script/native-arch"
 import { CLI_BINARIES, getCurrentCli, nodePtyPackage } from "./scripts/utils"
 
 const execFileAsync = promisify(execFile)
@@ -116,28 +117,47 @@ const getBase = (appId: string): Configuration => {
       },
     ],
     afterPack: async (context) => {
+      const arch = Arch[context.arch]
+
+      // The --arm64 flag picks Electron while OPENCODE_CLI_TARGET picks the CLI and node-pty, so they can disagree.
+      if (arch !== "x64" && arch !== "arm64") throw new Error(`Unsupported desktop architecture: ${arch}`)
+
+      if (arch !== target.cpu) throw new Error(`Packaging ${arch} Electron with the ${target.target} CLI`)
       const resources = context.packager.getResourcesDir(context.appOutDir)
       const cli = path.join(resources, context.electronPlatformName === "win32" ? "opencode-cli.exe" : "opencode-cli")
 
       const file = await stat(cli)
 
       if (!file.isFile() || file.size === 0) throw new Error(`Bundled CLI must be a non-empty file: ${cli}`)
+      await NativeArch.verify(cli, arch)
       const version = path.join(path.dirname(cli), "opencode-cli.version")
 
       if ((await stat(version)).size === 0) throw new Error(`Bundled CLI version must be a non-empty file: ${version}`)
 
       if (context.electronPlatformName !== "win32") return
 
-      const addon = path.join(
+      const prebuilds = path.join(
         resources,
         "app.asar.unpacked/node_modules",
         nodePtyPackage(target.target),
         "prebuilds",
         `${target.os}-${target.cpu}`,
-        "conpty.node",
       )
 
+      const addon = path.join(prebuilds, "conpty.node")
+
       if ((await stat(addon)).size === 0) throw new Error(`Bundled node-pty must be a non-empty file: ${addon}`)
+      const entries = await readdir(prebuilds, { recursive: true, withFileTypes: true })
+
+      await Promise.all(
+        entries
+          .filter((entry) => entry.isFile())
+          .map(async (entry) => {
+            const file = path.join(entry.parentPath, entry.name)
+
+            if (await NativeArch.isNative(file)) await NativeArch.verify(file, arch)
+          }),
+      )
     },
     mac: {
       category: "public.app-category.developer-tools",
