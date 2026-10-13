@@ -254,6 +254,9 @@ export const make = Effect.fn("PluginHost.make")(function* (
       reload: commands.reload,
       transform: commands.transform,
     },
+    credential: {
+      activate: (input) => integration.connection.activate(input.credentialID),
+    },
     event: {
       subscribe: () =>
         bus

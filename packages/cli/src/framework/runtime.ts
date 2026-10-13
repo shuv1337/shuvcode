@@ -1,5 +1,5 @@
 import { Effect, FileSystem, Scope } from "effect"
-import { Command } from "effect/unstable/cli"
+import { Command } from "effect/cli"
 import { PrintLogs } from "../commands/commands"
 import { ServerFlags, ServerSetting, StandaloneSetting } from "../services/server-flags"
 import { Spec } from "./spec"

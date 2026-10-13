@@ -1053,6 +1053,7 @@ export function createData(config: CreateDataInput) {
               : event.type === "session.execution.failed"
                 ? "failed"
                 : "interrupted",
+          ...(event.type === "session.execution.failed" ? { error: event.data.error } : {}),
           time: { created: event.created },
         })
         if (
@@ -1060,7 +1061,8 @@ export function createData(config: CreateDataInput) {
             (item) =>
               item.type === "assistant" &&
               item.content.some(
-                (part) => part.type === "tool" && (part.state.status === "streaming" || part.state.status === "running"),
+                (part) =>
+                  part.type === "tool" && (part.state.status === "streaming" || part.state.status === "running"),
               ),
           )
         ) {
@@ -1869,7 +1871,9 @@ export function createData(config: CreateDataInput) {
     },
     project: {
       list() {
-        return Object.values(store.project.info).toSorted((a, b) => b.time.active - a.time.active)
+        return Object.values(store.project.info)
+          .filter((project) => project.time.archived === undefined)
+          .toSorted((a, b) => b.time.active - a.time.active)
       },
       get(projectID: string) {
         return store.project.info[projectID]
