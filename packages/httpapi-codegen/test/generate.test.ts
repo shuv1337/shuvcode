@@ -1303,6 +1303,31 @@ describe("HttpApiCodegen.generate", () => {
     }
   })
 
+  test("flattens declared struct fields when a payload also carries an index signature", () => {
+    const payload = Schema.StructWithRest(
+      Schema.Struct({
+        text: Schema.String,
+        resume: Schema.Boolean.pipe(Schema.optional),
+      }),
+      [Schema.Record(Schema.String, Schema.UndefinedOr(Schema.Unknown))],
+    )
+    const contract = compileContract(
+      api(
+        HttpApiEndpoint.post("prompt", "/session/:sessionID", {
+          params: { sessionID: Schema.String },
+          payload,
+          success: Schema.String,
+        }),
+      ),
+    )
+
+    expect(contract.groups[0]?.endpoints[0]?.operation.input).toEqual([
+      { name: "sessionID", source: "params" },
+      { name: "text", source: "payload" },
+      { name: "resume", source: "payload" },
+    ])
+  })
+
   test("rejects an opaque payload field that collides with another input channel", () => {
     expect(() =>
       compileContract(
