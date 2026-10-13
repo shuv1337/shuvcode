@@ -31,10 +31,6 @@ export function SessionContextUsage(props: {
     props.session.id ? props.session.server.data.session.message.list(props.session.id) : [],
   )
 
-  const info = createMemo(() =>
-    props.session.id ? props.session.server.data.session.get(props.session.id) : undefined,
-  )
-
   const usd = createMemo(
     () =>
       new Intl.NumberFormat(i18n.locale(), {
@@ -62,9 +58,10 @@ export function SessionContextUsage(props: {
     }
   })
 
-  const cost = createMemo(() => {
-    return usd().format(info()?.cost ?? 0)
-  })
+  // A root session's cost includes its subagent sessions, as in the TUI.
+  const cost = createMemo(() =>
+    usd().format(props.session.id ? props.session.server.data.session.cost(props.session.id) : 0),
+  )
 
   const openContext = () => {
     if (!props.session.id) return

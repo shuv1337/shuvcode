@@ -1,5 +1,7 @@
 import { ErrorBoundary, createEffect, createMemo, Show, type ParentProps } from "solid-js"
 import { useParams } from "@solidjs/router"
+import { createStore } from "solid-js/store"
+import { makeEventListener } from "@solid-primitives/event-listener"
 import { DataProvider } from "@opencode/session-ui/context"
 import { SessionUserMessage } from "@opencode/session-ui/message"
 import { TextShimmer } from "@opencode/ui/text-shimmer"
@@ -36,7 +38,7 @@ export function TargetSessionRouteContent() {
 
   return (
     <>
-      <MarkSessionNotificationsViewed sessionID={() => params.id} />
+      <MarkSessionViewed sessionID={() => params.id} />
       <ModelsProvider directory={directory}>
         <TargetSessionSettingsCommand />
         <SessionRouteErrorBoundary sessionID={params.id} serverKey={requireServerKey(params.serverKey)}>
@@ -66,7 +68,7 @@ function PreparingSession(props: { sessionID: string; pending: PendingSession })
       >
         <div data-component="session-preparing" data-workspace-session class="min-h-0 flex-1 overflow-y-auto">
           <SessionIdentityHeader sessionID={props.sessionID} />
-          <div class="mx-auto w-full min-w-0 max-w-[1000px] px-4 pb-5 md:px-5">
+          <div class="mx-auto w-full min-w-0 px-4 pb-5 md:max-w-session md:px-6">
             <SessionUserMessage
               sessionID={props.sessionID}
               message={props.pending.message}
@@ -186,14 +188,20 @@ function SessionPage() {
   return <SessionScreenView session={session} />
 }
 
-function MarkSessionNotificationsViewed(props: { sessionID: () => string | undefined }) {
+function MarkSessionViewed(props: { sessionID: () => string | undefined }) {
   const notification = useNotification()
+  const [focus, setFocus] = createStore({ window: document.hasFocus() })
+  const update = () => setFocus("window", document.hasFocus())
+  makeEventListener(window, "focus", update)
+  makeEventListener(window, "blur", update)
+  makeEventListener(document, "visibilitychange", update)
+
+  // Viewed state is shared by every client, so only a focused window reports what its user has seen.
+  // markViewed reads the session's idle watermark, so a turn finishing while it stays open re-runs this.
   createEffect(() => {
     const sessionID = props.sessionID()
 
-    if (!notification.ready() || !sessionID) return
-
-    if (notification.session.unseenCount(sessionID) === 0) return
+    if (!sessionID || !focus.window) return
     notification.session.markViewed(sessionID)
   })
 
