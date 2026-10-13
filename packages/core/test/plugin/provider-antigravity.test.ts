@@ -1,6 +1,6 @@
 import { expect, spyOn } from "bun:test"
 import { Effect, Layer, Stream } from "effect"
-import { HttpClientResponse } from "effect/unstable/http"
+import { HttpClientResponse } from "effect/http"
 import { LLM, Message, ToolDefinition } from "@opencode/ai"
 import { LLMClient, RequestExecutor } from "@opencode/ai/route"
 import { Gemini } from "@opencode/ai/protocols"
