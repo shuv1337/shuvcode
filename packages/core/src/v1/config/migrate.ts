@@ -116,7 +116,7 @@ function migrateStandardProvider(info: ConfigProviderV1.Info) {
   return {
     name: info.name,
     env: info.env,
-    package: info.npm ? Provider.aisdk(info.npm) : undefined,
+    package: info.npm ? packageSpecifier(info.npm) : undefined,
     compatibility: setCacheKey === undefined ? undefined : { supportsPromptCacheKey: setCacheKey },
     settings: info.api ? { ...options.settings, baseURL: info.api } : info.options ? options.settings : undefined,
     headers: info.options && options.headers,
@@ -160,6 +160,12 @@ function migrateGoogleVertexAnthropicProvider(info: ConfigProviderV1.Info) {
         ]),
       ),
   }
+}
+
+// Built-in provider routes are already native package specifiers; only npm packages load through the AI SDK.
+function packageSpecifier(npm: string) {
+  const name = Provider.packageName(npm)
+  return name.startsWith("@opencode/ai/") ? name : Provider.aisdk(npm)
 }
 
 // Renames retired provider IDs in V1 fields and the shared top-level model.
@@ -229,7 +235,7 @@ function migrateModel(info: typeof ConfigProviderV1.Model.Type, npm: string | un
     compatibility: disableThinkingBlockBinding
       ? { ...compatibility, supportsThinkingBlockBinding: false }
       : compatibility,
-    package: info.provider?.npm ? Provider.aisdk(info.provider.npm) : undefined,
+    package: info.provider?.npm ? packageSpecifier(info.provider.npm) : undefined,
     settings: info.provider?.api ? { ...settings, baseURL: info.provider.api } : settings,
     capabilities,
     headers: info.headers,

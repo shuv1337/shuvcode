@@ -587,6 +587,21 @@ describe("ConfigProviderPlugin.Plugin", () => {
       },
     },
     {
+      name: "built-in provider routes",
+      legacy: {
+        npm: "@opencode/ai/providers/google-vertex",
+        options: { project: "my-project", location: "europe-west4" },
+        models: {
+          chat: { provider: { npm: "@opencode-ai/ai/providers/google-vertex/mistral" } },
+        },
+      },
+      native: {
+        package: "@opencode/ai/providers/google-vertex",
+        settings: { project: "my-project", location: "europe-west4" },
+        models: { chat: { package: "@opencode/ai/providers/google-vertex/mistral" } },
+      },
+    },
+    {
       name: "zero costs and omitted cache costs",
       legacy: { models: { chat: { cost: { input: 0, output: 0 } } } },
       native: { models: { chat: { cost: { input: 0, output: 0 } } } },
