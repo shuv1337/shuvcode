@@ -498,7 +498,7 @@ test("rereads a file each time an artifact link opens it", async ({ page }) => {
 /** What the image case's frame probe records on the window. */
 type ImageProbe = { problems: string[]; frames: number; running: boolean }
 
-test("image files keep the review panel painted while loading", async ({ page }) => {
+test("image files load into the review panel and keep it painted while loading", async ({ page }) => {
   await page.setViewportSize({ width: 960, height: 900 })
   const directory = "C:/OpenCode/ReviewImage"
   const image = "assets/preview.png"
@@ -512,7 +512,13 @@ test("image files keep the review panel painted while loading", async ({ page })
       read.resolve()
       await release.promise
 
-      return { type: "binary", content: "iVBORw0KGgo=", encoding: "base64", mimeType: "image/png" }
+      // A 1x1 PNG.
+      return {
+        type: "binary",
+        content: "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=",
+        encoding: "base64",
+        mimeType: "image/png",
+      }
     },
     fileList: (path) => {
       if (!path) return [fileNode(directory, "assets", "directory"), fileNode(directory, "src", "directory")]
@@ -568,6 +574,10 @@ test("image files keep the review panel painted while loading", async ({ page })
   release.resolve()
   await response
   await expect(page.locator('[data-slot="session-review-v2-file-name"]')).toHaveText("preview.png")
+  await expect(page.locator("#review-panel").getByRole("img", { name: image, exact: true })).toHaveJSProperty(
+    "naturalWidth",
+    1,
+  )
   const loaded = await frames()
   await expect.poll(frames).toBeGreaterThan(loaded)
   expect(
