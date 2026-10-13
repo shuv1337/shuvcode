@@ -533,6 +533,70 @@ test("each session tab shows its own file tab after a switch to a session in ano
   }
 })
 
+test("tab shortcuts cycle side-panel tabs when the side panel is focused with multiple tabs", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 })
+  const directory = "C:/OpenCode/SidePanelTabs"
+  const alpha = { id: "ses_side_tabs_alpha", title: "Side tabs alpha" }
+  const beta = { id: "ses_side_tabs_beta", title: "Side tabs beta" }
+  await openSession(page, {
+    name: "SidePanelTabs",
+    sessions: [alpha, beta],
+    fileList: (path) => (path ? [] : ["README.md"].map((file) => fileNode(directory, file))),
+    fileContent: (path) => ({ type: "text", content: `contents:${path}` }),
+    seed: { panes: { [alpha.id]: { review: true }, [beta.id]: { review: true } } },
+  })
+
+  const panel = page.locator("#review-panel")
+  const reviewTab = panel.getByRole("tab", { name: "Review", exact: true })
+  const fileTab = panel.getByRole("tab", { name: "README.md", exact: true })
+  const composer = page.getByRole("textbox", { name: "Prompt", exact: true })
+
+  await panel.getByRole("button", { name: "Open file" }).click()
+  await panel.getByRole("button", { name: "README.md", exact: true }).click()
+  await expect(fileTab).toHaveAttribute("aria-selected", "true")
+  await expect(panel.getByText("contents:README.md", { exact: true })).toBeVisible()
+
+  // Focus outside the side panel still cycles session tabs even when multiple side-panel tabs are open.
+  await composer.click()
+  await page.keyboard.press("Control+Tab")
+  await expectPath(page, sessionHref(beta.id))
+  await page.keyboard.press("ControlOrMeta+Alt+ArrowLeft")
+  await expectPath(page, sessionHref(alpha.id))
+  await expect(fileTab).toHaveAttribute("aria-selected", "true")
+
+  // Focus inside the side panel cycles the drawn side-panel tabs and keeps focus inside the side panel.
+  await panel.getByText("contents:README.md", { exact: true }).click()
+  await page.keyboard.press("Control+Tab")
+  await expect(reviewTab).toHaveAttribute("aria-selected", "true")
+  await expectPath(page, sessionHref(alpha.id))
+
+  await page.keyboard.press("Control+Tab")
+  await expect(fileTab).toHaveAttribute("aria-selected", "true")
+  await expectPath(page, sessionHref(alpha.id))
+
+  await page.keyboard.press("Control+Shift+Tab")
+  await expect(reviewTab).toHaveAttribute("aria-selected", "true")
+  await expectPath(page, sessionHref(alpha.id))
+
+  await page.keyboard.press("ControlOrMeta+Alt+ArrowRight")
+  await expect(fileTab).toHaveAttribute("aria-selected", "true")
+  await expectPath(page, sessionHref(alpha.id))
+
+  await page.keyboard.press("ControlOrMeta+Alt+ArrowLeft")
+  await expect(reviewTab).toHaveAttribute("aria-selected", "true")
+  await expectPath(page, sessionHref(alpha.id))
+
+  // Once only one side-panel tab remains, the shortcut returns to cycling session tabs.
+  await page.keyboard.press("Control+Tab")
+  await expect(fileTab).toHaveAttribute("aria-selected", "true")
+  await page.keyboard.press("ControlOrMeta+w")
+  await expect(fileTab).toHaveCount(0)
+  await expect(reviewTab).toHaveAttribute("aria-selected", "true")
+  await reviewTab.click()
+  await page.keyboard.press("Control+Tab")
+  await expectPath(page, sessionHref(beta.id))
+})
+
 // Windows has no native menu bar: the titlebar menu owns Paste, which only the desktop edit action can perform.
 test("the Windows titlebar menu pastes through the desktop edit action", async ({ page }) => {
   await mockWorkspace(page, { name: "WindowsMenu", sessions: [] })
