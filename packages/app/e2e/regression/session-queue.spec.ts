@@ -1027,10 +1027,23 @@ for (const delivery of ["steer", "queue"] as const) {
       })
       .toBe(true)
 
+    // Working ends the work the model has seen, so the steer it has not seen yet waits below it.
+    const working = transcript.locator('[data-component="session-working"]')
+    await expect(tools.or(working).or(pending)).toHaveText([
+      /^Used\s*2\s*Read, Grep$/,
+      /Working/,
+      /U2: Also check the retry path\./,
+    ])
+
     mock.rows.splice(0, 1)
     mock.emit("session.inbox.delivered", { sessionID, inboxID })
     await expect(thinking).toHaveCount(0)
     await expect(pending).toHaveCount(1)
+    await expect(tools.or(pending).or(working)).toHaveText([
+      /^Used\s*2\s*Read, Grep$/,
+      /U2: Also check the retry path\./,
+      /Working/,
+    ])
 
     if (colors) {
       await expect(bubble).toHaveAttribute("data-delivery-marker", "pending")

@@ -701,6 +701,9 @@ export function createSessionTimelineRowRenderer(input: {
   const render = (row: Accessor<TimelineRow.TimelineRow>, onSizeChange?: () => void) => {
     if (Predicate.isTagged(row(), "TurnGap")) return <div data-timeline-row="TurnGap" aria-hidden="true" class="h-6" />
 
+    // The host owns live status and renders this slot itself.
+    if (Predicate.isTagged(row(), "Activity")) return null
+
     if (Predicate.isTagged(row(), "UserMessage")) {
       const current = () => {
         const value = row()

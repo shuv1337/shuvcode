@@ -393,6 +393,10 @@ export namespace Timeline {
     rows.splice(
       pendingAt < 0 ? rows.length : pendingAt,
       0,
+      // Live status ends the work the model has seen, so it stays above everything still waiting for delivery.
+      ...(status.type !== "idle" && activeMessageID && (pendingAt >= 0 || queuedCompactionIDs.length > 0)
+        ? [new TimelineRow.Activity({ userMessageID: activeMessageID })]
+        : []),
       ...queuedCompactionIDs.map(
         (inboxID) => new TimelineRow.CompactionQueued({ userMessageID: activeMessageID ?? inboxID, inboxID }),
       ),
@@ -603,6 +607,8 @@ function shellFailed(message: SessionMessageShell) {
 function groupMessages(rows: TimelineRow.TimelineRow[], detail: TimelineDetail, separate: ReadonlySet<string>) {
   return rows.reduce<TimelineRow.TimelineRow[]>((result, row) => {
     const previous = result.at(-1)
+    // Live status renders nothing while other feedback shows, so a group below it spaces from the content above it.
+    const above = Predicate.isTagged(previous, "Activity") ? result.at(-2) : previous
 
     const current =
       ((Predicate.isTagged(row, "Notice") && detail.notices.placement === "grouped") ||
@@ -610,11 +616,9 @@ function groupMessages(rows: TimelineRow.TimelineRow[], detail: TimelineDetail, 
       !separate.has(row.messageID)
         ? new TimelineRow.AssistantPart({
             userMessageID: row.userMessageID,
-            previousAssistantPart: Predicate.isTagged(previous, "AssistantPart"),
+            previousAssistantPart: Predicate.isTagged(above, "AssistantPart"),
             spacing:
-              Predicate.isTagged(previous, "AssistantPart") || Predicate.isTagged(previous, "Error")
-                ? "tool"
-                : undefined,
+              Predicate.isTagged(above, "AssistantPart") || Predicate.isTagged(above, "Error") ? "tool" : undefined,
             group: {
               type: "context",
               key: `message:${row.messageID}`,

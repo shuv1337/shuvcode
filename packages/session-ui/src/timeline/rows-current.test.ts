@@ -187,9 +187,11 @@ describe("current session timeline rows", () => {
     expect(result.activeMessageID).toBe("msg_active")
     expect(result.rows.map(TimelineRow.key)).toEqual([
       "user-message:msg_active",
+      "activity",
       "turn-gap:msg_queued",
       "user-message:msg_queued",
     ])
+    expect(result.rows[1].userMessageID).toBe("msg_active")
   })
 
   test("suppresses thinking while a subagent is delegating or running", () => {
@@ -380,11 +382,17 @@ describe("current session timeline rows", () => {
       new Set(["queued"]),
     )
 
-    expect(result.rows.map((row) => row._tag)).toEqual(["UserMessage", "Thinking", "TurnGap", "UserMessage"])
+    expect(result.rows.map((row) => row._tag)).toEqual([
+      "UserMessage",
+      "Thinking",
+      "Activity",
+      "TurnGap",
+      "UserMessage",
+    ])
     expect(result.rows[1].userMessageID).toBe(document.messages[0].id)
   })
 
-  test("places a queued compaction after the active turn and before undelivered prompts", () => {
+  test("places live status, then a queued compaction, after the active turn and before undelivered prompts", () => {
     const document = storyDocument([{ type: "text", text: "Working" }], true)
 
     const result = Timeline.constructSessionMessageRows(
@@ -402,11 +410,12 @@ describe("current session timeline rows", () => {
     expect(result.rows.map((row) => row._tag)).toEqual([
       "UserMessage",
       "AssistantPart",
+      "Activity",
       "CompactionQueued",
       "TurnGap",
       "UserMessage",
     ])
-    expect(result.rows[2].userMessageID).toBe(document.messages[0].id)
+    expect(result.rows[3].userMessageID).toBe(document.messages[0].id)
   })
 
   test("places a queued compaction ahead of a pending notice, which the server delivers after it", () => {
@@ -432,7 +441,42 @@ describe("current session timeline rows", () => {
       ["inb_compact"],
     )
 
-    expect(result.rows.map((row) => row._tag)).toEqual(["UserMessage", "AssistantPart", "CompactionQueued", "Notice"])
+    expect(result.rows.map((row) => row._tag)).toEqual([
+      "UserMessage",
+      "AssistantPart",
+      "Activity",
+      "CompactionQueued",
+      "Notice",
+    ])
+  })
+
+  test("keeps a grouped undelivered notice out of accepted work and spaced from it", () => {
+    const document = storyDocument([{ type: "text", text: "Working" }], true)
+
+    const notice = {
+      id: "notice",
+      type: "synthetic",
+      text: "done",
+      description: "Background work completed",
+      time: { created: 10 },
+    } satisfies SessionMessageInfo
+
+    const result = Timeline.constructSessionMessageRows(
+      [...document.messages, notice],
+      true,
+      document.status,
+      new Set(["notice"]),
+      false,
+      false,
+      undefined,
+      timelinePresets[2].value,
+    )
+
+    expect(result.rows.map((row) => row._tag)).toEqual(["UserMessage", "AssistantPart", "Activity", "AssistantPart"])
+    expect(result.rows[3]).toMatchObject({
+      spacing: "tool",
+      group: { type: "context", refs: [{ messageID: "notice", partID: "notice" }] },
+    })
   })
 
   test("keeps live thinking above a notice that arrives while it streams", () => {
