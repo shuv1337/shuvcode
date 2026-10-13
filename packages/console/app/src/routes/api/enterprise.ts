@@ -1,9 +1,10 @@
 import type { APIEvent } from "@solidjs/start/server"
-import { AWS } from "@opencode/console-core/aws.js"
+import { sendEmail } from "~/lib/aws"
 import { Resource } from "@opencode/console-resource"
 import { i18n } from "~/i18n"
 import { localeFromRequest } from "~/lib/language"
 import { createLead } from "~/lib/salesforce"
+import { inferenceSpendOptions } from "~/lib/inference-spend"
 
 interface EnterpriseFormData {
   name: string
@@ -11,6 +12,7 @@ interface EnterpriseFormData {
   company?: string
   email: string
   phone?: string
+  inferenceSpend?: string
   alias?: string
   message: string
 }
@@ -77,8 +79,14 @@ export async function POST(event: APIEvent) {
       return Response.json({ error: dict["enterprise.form.error.invalidEmailFormat"] }, { status: 400 })
     }
 
+    const inferenceSpend = inferenceSpendOptions.find((option) => option.value === body.inferenceSpend)
+    if (body.inferenceSpend && !inferenceSpend) {
+      return Response.json({ error: dict["enterprise.form.error.invalidInferenceSpend"] }, { status: 400 })
+    }
+
     const emailContent = `
 ${body.message}<br><br>
+${inferenceSpend ? `Current monthly inference spend: ${inferenceSpend.salesforceValue}<br><br>` : ""}
 --<br>
 ${body.name}<br>
 ${body.role}<br>
@@ -92,12 +100,13 @@ ${body.phone ? `${body.phone}<br>` : ""}`.trim()
         company: body.company,
         email: body.email,
         phone: body.phone,
+        inferenceSpend: inferenceSpend?.salesforceValue,
         message: body.message,
       }).catch((err) => {
         console.error("Failed to create Salesforce lead:", err)
         return false
       }),
-      AWS.sendEmail({
+      sendEmail({
         to: Resource.ENTERPRISE_SALES_INBOX_EMAIL.value,
         subject: `Enterprise Inquiry from ${body.name}`,
         body: emailContent,

@@ -227,6 +227,35 @@ test("keeps a narrow session composer contained when invoking a built-in", async
   await expect(editor).toBeEmpty()
 })
 
+test("keeps focus in a dialog that replaces the model dialog and returns it to the composer caret", async ({
+  page,
+}) => {
+  const { editor } = await openSession(page, { name: "ComposerDialogFocus", provider: NO_PROVIDER })
+  await editor.fill("keep me")
+  await editor.press("End")
+  await editor.press("ArrowLeft")
+  await editor.press("ArrowLeft")
+  await editor.press("ArrowLeft")
+  await editor.press("ControlOrMeta+'")
+
+  const models = page.getByRole("dialog", { name: "Select model", exact: true })
+  await expect(models.getByRole("searchbox", { name: "Search models", exact: true })).toBeFocused()
+  await models.getByRole("button", { name: "Manage models", exact: true }).click()
+  await expect(models).toBeHidden()
+
+  const manage = page.getByRole("dialog", { name: "Manage models", exact: true })
+  const search = manage.getByRole("searchbox", { name: "Search models", exact: true })
+  await expect(search).toBeFocused()
+  // Code behind the dialog that focuses the composer must not pull focus out of the open dialog.
+  await editor.evaluate((element) => element.focus())
+  await expect(search).toBeFocused()
+  await page.keyboard.press("Escape")
+  await expect(manage).toBeHidden()
+  await expect(editor).toBeFocused()
+  await page.keyboard.type(",")
+  await expect(editor).toHaveText("keep, me")
+})
+
 test("lists slash commands in their built-in order", async ({ page }) => {
   const { editor } = await openSession(page, {
     name: "ComposerSlash",

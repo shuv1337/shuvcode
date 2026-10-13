@@ -498,7 +498,7 @@ test("rereads a file each time an artifact link opens it", async ({ page }) => {
 /** What the image case's frame probe records on the window. */
 type ImageProbe = { problems: string[]; frames: number; running: boolean }
 
-test("image files keep the review panel painted while loading", async ({ page }) => {
+test("image files load into the review panel and keep it painted while loading", async ({ page }) => {
   await page.setViewportSize({ width: 960, height: 900 })
   const directory = "C:/OpenCode/ReviewImage"
   const image = "assets/preview.png"
@@ -512,7 +512,13 @@ test("image files keep the review panel painted while loading", async ({ page })
       read.resolve()
       await release.promise
 
-      return { type: "binary", content: "iVBORw0KGgo=", encoding: "base64", mimeType: "image/png" }
+      // A 1x1 PNG.
+      return {
+        type: "binary",
+        content: "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=",
+        encoding: "base64",
+        mimeType: "image/png",
+      }
     },
     fileList: (path) => {
       if (!path) return [fileNode(directory, "assets", "directory"), fileNode(directory, "src", "directory")]
@@ -568,6 +574,10 @@ test("image files keep the review panel painted while loading", async ({ page })
   release.resolve()
   await response
   await expect(page.locator('[data-slot="session-review-v2-file-name"]')).toHaveText("preview.png")
+  await expect(page.locator("#review-panel").getByRole("img", { name: image, exact: true })).toHaveJSProperty(
+    "naturalWidth",
+    1,
+  )
   const loaded = await frames()
   await expect.poll(frames).toBeGreaterThan(loaded)
   expect(
@@ -579,6 +589,73 @@ test("image files keep the review panel painted while loading", async ({ page })
       return probe.problems
     }),
   ).toEqual([])
+})
+
+test("video files expand into an in-window theatre overlay and collapse on Escape without remounting", async ({
+  page,
+}) => {
+  const directory = "C:/OpenCode/ReviewVideo"
+  const file = "demo.webm"
+
+  const webm = Buffer.from(
+    "GkXfo59ChoEBQveBAULygQRC84EIQoKEd2VibUKHgQJChYECGFOAZwEAAAAAAAH5EU2bdLpNu4tTq4QVSalmU6yBoU27i1OrhBZUrmtTrIHWTbuMU6uEElTDZ1OsggEyTbuMU6uEHFO7a1OsggHj7AEAAAAAAABZAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAVSalmsCrXsYMPQkBNgIxMYXZmNjMuMS4xMDJXQYxMYXZmNjMuMS4xMDJEiYhAj0AAAAAAABZUrmvXrgEAAAAAAABO14EBc8WIiQeUklk95R2cgQAitZyDdW5kiIEAhoVWX1ZQOIOBASPjg4Q7msoA4JCwgUC6gSSagQJVsIRVuYEBVe6BAOwBAAAAAAAAAgAAElTDZ/pzc59jwIBnyJlFo4dFTkNPREVSRIeMTGF2ZjYzLjEuMTAyc3PVY8CLY8WIiQeUklk95R1nyKBFo4dFTkNPREVSRIeTTGF2YzYzLjEuMTAyIGxpYnZweGfIoUWjiERVUkFUSU9ORIeTMDA6MDA6MDEuMDAwMDAwMDAwAB9DtnWt54EAo6iBAACAsAIAnQEqQAAkAABHCIWFiJmEiAICAAaOT8zHm/FYAP7/q1CAHFO7a5G7j7OBALeK94EB8YIBsfCBAw==",
+    "base64",
+  )
+
+  await openSession(page, {
+    name: "ReviewVideo",
+    fileList: (path) => (path ? [] : [fileNode(directory, file)]),
+    seed: {
+      panes: { ses_reviewvideo: { review: true } },
+    },
+  })
+  await page.route(`**/api/fs/read/${file}*`, (route) =>
+    route.fulfill({
+      status: 200,
+      headers: { "access-control-allow-origin": "*", "content-type": "application/octet-stream" },
+      body: webm,
+    }),
+  )
+
+  const panel = page.locator("#review-panel")
+  await panel.getByRole("button", { name: "Open file" }).click()
+  await panel.getByRole("button", { name: file }).click()
+  await expect(panel.getByRole("tab", { name: file, exact: true })).toHaveAttribute("aria-selected", "true")
+
+  const stage = panel.locator('[data-slot="artifact-stage"]')
+  const video = stage.locator('video[data-slot="artifact-media"]')
+  const fullscreen = stage.getByRole("button", { name: "Enter full screen", exact: true })
+  const exitFullscreen = stage.getByRole("button", { name: "Exit full screen", exact: true })
+
+  await expect(video).toBeVisible()
+  await expect(fullscreen).toHaveAttribute("aria-pressed", "false")
+  const inlineBounds = (await stage.boundingBox())!
+  expect(inlineBounds.width).toBeLessThan(1000)
+
+  await video.evaluate((element) => {
+    element.dataset.e2eProbe = "retained"
+  })
+
+  await fullscreen.click()
+  await expect(exitFullscreen).toHaveAttribute("aria-pressed", "true")
+  await expect(stage).toHaveAttribute("data-expanded", "")
+  expect(await stage.evaluate((element) => element.matches(":popover-open"))).toBe(true)
+  expect(await page.evaluate(() => document.fullscreenElement)).toBeNull()
+  expect(await video.evaluate((element) => element.dataset.e2eProbe)).toBe("retained")
+  await expect.poll(() => stage.boundingBox()).toEqual({ x: 0, y: 0, width: 1440, height: 900 })
+
+  await page.keyboard.press("Escape")
+  await expect(fullscreen).toHaveAttribute("aria-pressed", "false")
+  await expect(stage).not.toHaveAttribute("data-expanded")
+  expect(await stage.evaluate((element) => element.matches(":popover-open"))).toBe(false)
+  expect(await video.evaluate((element) => element.dataset.e2eProbe)).toBe("retained")
+  await expect.poll(() => stage.boundingBox()).toEqual(inlineBounds)
+
+  await video.dblclick()
+  await expect(exitFullscreen).toHaveAttribute("aria-pressed", "true")
+  await page.mouse.click(8, 8)
+  await expect(fullscreen).toHaveAttribute("aria-pressed", "false")
+  expect(await video.evaluate((element) => element.dataset.e2eProbe)).toBe("retained")
 })
 
 test("restores review state and the side-panel tab per session", async ({ page }) => {
@@ -664,9 +741,22 @@ test("restores review state and the side-panel tab per session", async ({ page }
   await selectedFile("gamma.ts")
   await review.press("End")
   await selectedTab("README.md")
+
+  // A hidden side-panel tab does not claim Close Tab while the side region is collapsed.
+  await toggle.click()
+  await expect(panel).toBeHidden()
+  await page.keyboard.press("Control+w")
+  await expect(page.locator("[data-titlebar-tab-slot]", { hasText: "Alpha review state" })).toHaveCount(0)
+  await expectSessionTitle(page, "Beta review state")
+  await page.keyboard.press("Control+Shift+T")
+  await expectSessionTitle(page, "Alpha review state")
+  await toggle.click()
+  await selectedTab("README.md")
+
   await page.keyboard.press("Control+w")
   await expect(panel.getByRole("tab", { name: "README.md", exact: true })).toHaveCount(0)
   await expect(review).toHaveAttribute("aria-selected", "true")
+  await expectSessionTitle(page, "Alpha review state")
 })
 
 test("shows and restores last turn changes from the session diff", async ({ page }) => {

@@ -1,8 +1,8 @@
 {
   "version": "7",
   "dialect": "sqlite",
-  "id": "a53f1d1d-f214-4983-940c-77625e2cb3f2",
-  "prevIds": ["e98619ef-c334-45e3-8c48-9932ed1ef290"],
+  "id": "5067fae0-90ff-4601-82d7-dd050ea9dc8f",
+  "prevIds": ["a53f1d1d-f214-4983-940c-77625e2cb3f2"],
   "ddl": [
     {
       "name": "account_state",
@@ -711,6 +711,16 @@
       "default": "0",
       "generated": null,
       "name": "time_active",
+      "entityType": "columns",
+      "table": "project"
+    },
+    {
+      "type": "integer",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "time_archived",
       "entityType": "columns",
       "table": "project"
     },

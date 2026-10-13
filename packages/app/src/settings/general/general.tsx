@@ -27,12 +27,12 @@ const AutoApprovePermissionsSetting: Component = () => {
   return (
     <SettingsRow
       title={language.t("command.permissions.autoaccept.enable")}
-      description={language.t("toast.permissions.autoaccept.on.description")}
+      description={language.t("settings.permissions.autoAccept.default.description")}
     >
       <div data-action="settings-auto-accept-permissions">
         <Switch
-          checked={settings.permissions.autoApprove()}
-          onChange={(checked) => settings.permissions.setAutoApprove(checked)}
+          checked={settings.permissions.autoApproveDefault()}
+          onChange={(checked) => settings.permissions.setAutoApproveDefault(checked)}
         />
       </div>
     </SettingsRow>

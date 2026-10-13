@@ -100,9 +100,17 @@ else
       fi
     fi
 
+    # Git Bash and MSYS2 run as emulated x64 on Windows ARM64, so `uname -m` reports x86_64.
+    # The host CPU still shows in the `uname -s` suffix and in PROCESSOR_IDENTIFIER.
+    if [ "$os" = "windows" ] && [ "$arch" = "x64" ]; then
+      if [[ "$raw_os" == *-ARM64 || "${PROCESSOR_IDENTIFIER:-}" == ARM* ]]; then
+        arch="arm64"
+      fi
+    fi
+
     combo="$os-$arch"
     case "$combo" in
-      linux-x64|linux-arm64|darwin-x64|darwin-arm64|windows-x64)
+      linux-x64|linux-arm64|darwin-x64|darwin-arm64|windows-x64|windows-arm64)
         ;;
       *)
         echo -e "${RED}Unsupported OS/Arch: $os/$arch${NC}"

@@ -18,6 +18,7 @@ import { SessionExecution } from "@opencode/core/session/execution"
 import { ToolActivity } from "@opencode/core/tool-activity"
 import { execute } from "@opencode/core/tool/runtime"
 import { SessionRestart } from "@opencode/core/session/execution/restart"
+import { SubagentJob } from "@opencode/core/session/subagent-job"
 import { SessionEvent } from "@opencode/core/session/event"
 import { SessionInbox } from "@opencode/core/session/inbox"
 import { SessionMessage } from "@opencode/core/session/message"
@@ -1431,6 +1432,7 @@ function buildExecution(
     )
     return yield* Layer.buildWithScope(
       SessionRestart.layer(options).pipe(
+        Layer.provide(SubagentJob.layer),
         Layer.provideMerge(sessionLayer),
         Layer.provideMerge(Layer.fresh(SessionExecution.layer)),
         Layer.provide(ToolActivity.layer),
