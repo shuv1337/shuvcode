@@ -59,6 +59,7 @@ export type CatalogModel = {
   modelEnum?: string
   provider?: string
   internal?: boolean
+  disabled?: boolean
   recommended?: boolean
 }
 
@@ -284,6 +285,7 @@ export function parseCatalogModels(payload: unknown): CatalogModel[] {
         modelEnum: stringField(model.model) ?? stringField(model.model_enum) ?? stringField(model.modelEnum),
         provider: stringField(model.modelProvider) ?? stringField(model.model_provider),
         internal: model.isInternal === true || model.is_internal === true,
+        disabled: model.disabled === true,
         recommended: model.recommended === true,
       },
     ]

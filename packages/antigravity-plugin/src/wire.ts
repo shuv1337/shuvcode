@@ -21,9 +21,12 @@ export type ShippedModel = {
 }
 
 export const shippedModels: readonly ShippedModel[] = [
-  { id: "gemini-3.8-flash-high", name: "Gemini 3.8 Flash (High)" },
-  { id: "gemini-3.8-flash-medium", name: "Gemini 3.8 Flash (Medium)" },
-  { id: "gemini-3.8-flash-low", name: "Gemini 3.8 Flash (Low)" },
+  { id: "gemini-4-argon-high", name: "Gemini 4 Argon (High)", modelEnum: "MODEL_PLACEHOLDER_M417" },
+  { id: "gemini-4-argon-medium", name: "Gemini 4 Argon (Medium)", modelEnum: "MODEL_PLACEHOLDER_M418" },
+  { id: "gemini-4-argon-low", name: "Gemini 4 Argon (Low)", modelEnum: "MODEL_PLACEHOLDER_M419" },
+  { id: "gemini-3.8-flash-high", name: "Gemini 3.8 Flash (High)", modelEnum: "MODEL_PLACEHOLDER_M318" },
+  { id: "gemini-3.8-flash-medium", name: "Gemini 3.8 Flash (Medium)", modelEnum: "MODEL_PLACEHOLDER_M319" },
+  { id: "gemini-3.8-flash-low", name: "Gemini 3.8 Flash (Low)", modelEnum: "MODEL_PLACEHOLDER_M320" },
   { id: "gemini-3.7-flash-high", name: "Gemini 3.7 Flash (High)", modelEnum: "MODEL_PLACEHOLDER_M298" },
   { id: "gemini-3.7-flash-medium", name: "Gemini 3.7 Flash (Medium)", modelEnum: "MODEL_PLACEHOLDER_M299" },
   { id: "gemini-3.7-flash-low", name: "Gemini 3.7 Flash (Low)", modelEnum: "MODEL_PLACEHOLDER_M300" },
@@ -59,12 +62,12 @@ export const isBlockedModelID = (id: string) => {
   const lower = id.toLowerCase()
   if (lower.startsWith("claude") || lower.startsWith("gpt") || lower.includes("gpt-oss")) return true
   if (lower.startsWith("tab_") || lower.startsWith("chat_")) return true
-  if (lower.includes("image")) return true
+  if (lower.includes("image") || lower.endsWith("-disabled")) return true
   return false
 }
 
 export const isGoogleCatalogModel = (model: GoogleAntigravityOAuth.CatalogModel) => {
-  if (model.internal) return false
+  if (model.internal || model.disabled) return false
   if (isBlockedModelID(model.id)) return false
   if (model.provider && model.provider !== "MODEL_PROVIDER_GOOGLE") return false
   return true
@@ -73,10 +76,42 @@ export const isGoogleCatalogModel = (model: GoogleAntigravityOAuth.CatalogModel)
 export const filterGoogleModels = (models: readonly GoogleAntigravityOAuth.CatalogModel[]) =>
   models.filter(isGoogleCatalogModel)
 
-export function modelEnumsFrom(models: readonly GoogleAntigravityOAuth.CatalogModel[]) {
-  const next = new Map(modelEnumDefaults)
+export function disabledModelsFrom(models: readonly GoogleAntigravityOAuth.CatalogModel[]): ReadonlySet<string> {
+  const disabled = new Set<string>()
   for (const model of models) {
+    if (model.internal) continue
+    if (model.provider && model.provider !== "MODEL_PROVIDER_GOOGLE") continue
+    const suffix = model.id.toLowerCase().endsWith("-disabled")
+    if (!model.disabled && !suffix) continue
+    const base = suffix ? model.id.slice(0, -"-disabled".length) : model.id
+    if (!base) continue
+    disabled.add(model.id)
+    disabled.add(base)
+    for (const shipped of shippedModels) {
+      const api = catalogID(shipped.id)
+      if (
+        shipped.id === model.id ||
+        shipped.id === base ||
+        shipped.id.startsWith(`${base}-`) ||
+        api === model.id ||
+        api === base ||
+        api.startsWith(`${base}-`)
+      ) {
+        disabled.add(shipped.id)
+      }
+    }
+  }
+  return disabled
+}
+
+export function modelEnumsFrom(models: readonly GoogleAntigravityOAuth.CatalogModel[]) {
+  const disabled = disabledModelsFrom(models)
+  const next = new Map(modelEnumDefaults)
+  for (const model of filterGoogleModels(models)) {
     if (model.modelEnum) next.set(model.id, model.modelEnum)
+  }
+  for (const id of disabled) {
+    next.delete(id)
   }
   return next
 }
@@ -423,18 +458,19 @@ export function applyProvider(evt: ProviderEditor, active: boolean) {
   })
 }
 
-export function applyModels(evt: ModelEditor, active: boolean) {
+export function applyModels(evt: ModelEditor, active: boolean, disabled?: ReadonlySet<string>) {
   if (!active) return
   // Antigravity model ids are absent from the upstream catalog, so synthesized
   // entries receive the generic fallback limits (200k/32k), not real Gemini
   // limits. Only a real catalog entry's limit wins over the Flash numbers.
   const cataloged = new Set(evt.provider.get(googleProviderID)?.models.keys() ?? [])
   for (const model of shippedModels) {
+    const denied = disabled?.has(model.id) === true || disabled?.has(catalogID(model.id)) === true
     evt.update(googleProviderID, model.id, (draft) => {
       draft.modelID = Model.ID.make(model.apiID ?? model.id)
       draft.name = model.name
       draft.cost = []
-      draft.enabled = true
+      draft.enabled = !denied
       draft.status = "active"
       if (!cataloged.has(model.id)) draft.limit = { ...FLASH_LIMIT }
       draft.capabilities = { tools: true, input: ["text", "image"], output: ["text"] }
@@ -444,7 +480,7 @@ export function applyModels(evt: ModelEditor, active: boolean) {
   const item = evt.provider.get(googleProviderID)
   if (item) {
     for (const id of item.models.keys()) {
-      if (shippedIDs.has(id)) continue
+      if (shippedIDs.has(id) && !disabled?.has(id) && !disabled?.has(catalogID(id))) continue
       evt.update(googleProviderID, id, (draft) => {
         draft.enabled = false
       })
