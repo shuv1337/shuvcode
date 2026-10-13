@@ -1,6 +1,6 @@
 import "./index.css"
-import { createAsync, query } from "@solidjs/router"
 import { Title, Meta } from "@solidjs/meta"
+import { For } from "solid-js"
 //import { HttpHeader } from "@solidjs/start"
 import zenLogoLight from "../../asset/zen-ornate-light.svg"
 import zenLogoDark from "../../asset/zen-ornate-dark.svg"
@@ -16,19 +16,12 @@ import { Faq } from "~/component/faq"
 import { Legal } from "~/component/legal"
 import { Footer } from "~/component/footer"
 import { Header } from "~/component/header"
-import { getLastSeenWorkspaceID } from "../workspace/common"
 import { IconGemini, IconMiniMax, IconZai } from "~/component/icon"
 import { useI18n } from "~/context/i18n"
 import { useLanguage } from "~/context/language"
 import { LocaleLinks } from "~/component/locale-links"
 
-const checkLoggedIn = query(async () => {
-  "use server"
-  return await getLastSeenWorkspaceID().catch(() => {})
-}, "checkLoggedIn.get")
-
 export default function Home() {
-  const loggedin = createAsync(() => checkLoggedIn())
   const i18n = useI18n()
   const language = useLanguage()
   return (
@@ -38,7 +31,6 @@ export default function Home() {
       <LocaleLinks path="/zen" />
       <Meta property="og:image" content="/social-share-zen.png" />
       <Meta name="twitter:image" content="/social-share-zen.png" />
-      <Meta name="opencode:auth" content={loggedin() ? "true" : "false"} />
 
       <div data-component="container">
         <Header zen hideGetStarted />
@@ -320,6 +312,15 @@ export default function Home() {
               </li>
               <li>
                 <Faq question={i18n.t("zen.faq.q8")}>{i18n.t("zen.faq.a8")}</Faq>
+              </li>
+              <li>
+                <Faq question={i18n.t("zen.faq.q9")}>
+                  <For each={i18n.t("zen.faq.a9").split(/(\{\{contact\}\})/g)}>
+                    {(part) =>
+                      part === "{{contact}}" ? <a href="mailto:help@anoma.ly">{i18n.t("common.contactUs")}</a> : part
+                    }
+                  </For>
+                </Faq>
               </li>
             </ul>
           </section>

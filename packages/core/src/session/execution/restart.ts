@@ -76,7 +76,7 @@ export const layer = (options?: Options) =>
       const bus = yield* Bus.Service
       const jobs = yield* Job.Service
       const sessions = yield* Session.Service
-      const subagents = yield* SubagentJob.make
+      const subagents = yield* SubagentJob.Service
       const scope = yield* Effect.scope
       const maxAttempts = options?.maxAttempts ?? DEFAULT_MAX_ATTEMPTS
       const preparedInFlight = new Set<SessionSchema.ID>()
@@ -582,5 +582,5 @@ export const layer = (options?: Options) =>
 export const node = makeGlobalNode({
   service: Service,
   layer: layer(),
-  deps: [SessionStore.node, SessionExecution.node, Bus.node, Job.node, Session.node],
+  deps: [SessionStore.node, SessionExecution.node, Bus.node, Job.node, Session.node, SubagentJob.node],
 })

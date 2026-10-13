@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect } from "bun:test"
 import { Effect, Layer } from "effect"
-import { HttpClient, HttpClientResponse } from "effect/unstable/http"
+import { HttpClient, HttpClientResponse } from "effect/http"
 import { Document, Info, type Entry } from "@opencode/schema/config"
 import { ConfigExperimental } from "@opencode/schema/config/experimental"
 import { Bus } from "@opencode/core/bus"

@@ -3,7 +3,7 @@ import type { Rpc } from "@opencode/schema/rpc"
 import type { RpcCallOptions, RpcEventPayload } from "@opencode/client/promise/api"
 import { Effect, Schema, SchemaAST, Stream } from "effect"
 import type { Scope } from "effect"
-import { HttpApiEndpoint, HttpApiSchema } from "effect/unstable/httpapi"
+import { HttpApiEndpoint, HttpApiSchema } from "effect/http-api"
 import { define } from "../effect/plugin.js"
 import type { Plugin } from "./plugin.js"
 import type { Info } from "./tool.js"
@@ -223,6 +223,7 @@ export function fromPromise(plugin: Plugin) {
         )
         const AgentEndpoints = ClientApi.groups["server.agent"].endpoints
         const CommandEndpoints = ClientApi.groups["server.command"].endpoints
+        const CredentialEndpoints = ClientApi.groups["server.credential"].endpoints
         const ExperimentalEndpoints = ClientApi.groups["server.experimental"].endpoints
         const GenerateEndpoints = ClientApi.groups["server.generate"].endpoints
         const IntegrationEndpoints = ClientApi.groups["server.integration"].endpoints
@@ -321,6 +322,9 @@ export function fromPromise(plugin: Plugin) {
                 ),
               ),
             reload: () => run(host.command.reload()),
+          },
+          credential: {
+            activate: adaptApiMethod(CredentialEndpoints["credential.activate"], host.credential.activate),
           },
           event: {
             subscribe: (options) =>
@@ -623,10 +627,17 @@ function attempt<A>(evaluate: (signal: AbortSignal) => PromiseLike<A>) {
 type RuntimeSchema = Schema.Codec<unknown, unknown>
 
 const executePromiseTool = (tool: Info, input: any, context: Tool.Context) =>
-  Effect.promise((signal) =>
-    tool.execute(input, {
-      ...context,
-      signal,
-      progress: (update) => Effect.runPromise(context.progress(update), { signal }),
+  Effect.tryPromise({
+    try: (signal) =>
+      tool.execute(input, {
+        ...context,
+        signal,
+        progress: (update) => Effect.runPromise(context.progress(update), { signal }),
+      }),
+    catch: (error) => error,
+  }).pipe(
+    Effect.catch((error) => {
+      if (error instanceof Tool.Error) return Effect.fail(error)
+      return Effect.fail(new Tool.Error({ message: error instanceof Error ? error.message : String(error), error }))
     }),
   )
