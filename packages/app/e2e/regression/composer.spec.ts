@@ -4,6 +4,89 @@ import { openDraft, openSession } from "../utils/workspace"
 
 test.use({ permissions: ["clipboard-read", "clipboard-write"] })
 
+test("a catalog refresh cannot replace an existing session's model", async ({ page }) => {
+  const alpha = { id: "alpha", name: "Alpha", variants: { high: {} } }
+  const beta = { id: "beta", name: "Beta" }
+  const catalog = { current: provider(alpha, beta) }
+  const switches: unknown[] = []
+  const prompts: unknown[] = []
+  const sessionID = "ses_catalog_selection"
+  page.on("request", (request) => {
+    if (request.method() === "POST" && new URL(request.url()).pathname === `/api/session/${sessionID}/model`)
+      switches.push(request.postDataJSON())
+  })
+
+  const view = await openSession(page, {
+    name: "CatalogSelection",
+    sessions: [{ id: sessionID, agent: "build", model: { id: "alpha", providerID: "opencode", variant: "high" } }],
+    provider: () => catalog.current,
+    onPrompt: (input) => void prompts.push(input.body),
+    seed: { storage: { "opencode.global.dat:model": { recent: [{ providerID: "opencode", modelID: "beta" }] } } },
+  })
+
+  const control = page.locator('[data-action="composer-model"]')
+  await expect(control).toHaveText("Alpha")
+  await view.editor.fill("Keep my selected model")
+
+  catalog.current = provider(beta)
+  await view.push([
+    {
+      id: "evt_catalog_missing",
+      created: T0 + 1,
+      type: "model.updated",
+      location: { directory: view.directory },
+      data: {},
+    },
+  ])
+  await expect(control).toHaveText("Select model")
+  await view.editor.press("Enter")
+  await expect(page.getByText("Select an agent and model", { exact: true })).toBeVisible()
+  await expect(view.editor).toHaveText("Keep my selected model")
+  expect(switches).toEqual([])
+  expect(prompts).toEqual([])
+
+  catalog.current = provider(alpha, beta)
+  await view.push([
+    {
+      id: "evt_catalog_restored",
+      created: T0 + 2,
+      type: "model.updated",
+      location: { directory: view.directory },
+      data: {},
+    },
+  ])
+  await expect(control).toHaveText("Alpha")
+  await expect(page.getByRole("button", { name: "Choose model variant", exact: true })).toHaveText("high")
+  await view.editor.press("Enter")
+  await expect.poll(() => prompts.length).toBe(1)
+  expect(switches).toEqual([{ model: { id: "alpha", providerID: "opencode", variant: "high" } }])
+
+  catalog.current = provider(beta)
+  await view.push([
+    {
+      id: "evt_catalog_removed",
+      created: T0 + 3,
+      type: "model.updated",
+      location: { directory: view.directory },
+      data: {},
+    },
+  ])
+  await expect(control).toHaveText("Select model")
+  await control.click()
+  await page
+    .getByRole("dialog", { name: "Select model" })
+    .getByRole("button", { name: "Beta Free", exact: true })
+    .click()
+  await expect(control).toHaveText("Beta")
+  await view.editor.fill("Use the replacement I chose")
+  await view.editor.press("Enter")
+  await expect.poll(() => prompts.length).toBe(2)
+  expect(switches).toEqual([
+    { model: { id: "alpha", providerID: "opencode", variant: "high" } },
+    { model: { id: "beta", providerID: "opencode" } },
+  ])
+})
+
 async function draft(page: Page) {
   const { editor } = await openDraft(page, { name: "ComposerDraft", provider: NO_PROVIDER })
   await editor.click()

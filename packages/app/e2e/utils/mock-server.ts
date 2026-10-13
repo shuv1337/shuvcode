@@ -1477,7 +1477,7 @@ export function currentSession(session: MockSession, fallbackDirectory?: string)
     parentID: session.parentID,
     projectID: session.projectID ?? "project",
     agent: session.agent ?? "build",
-    model: session.model ?? { id: "mock-model", providerID: "mock-provider" },
+    model: session.model,
     cost: session.cost ?? 0,
     tokens: session.tokens ?? { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
     ...decodeSessionOutcome(session),
