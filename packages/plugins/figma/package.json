@@ -30,7 +30,7 @@
     "gray-matter": "4.0.3"
   },
   "peerDependencies": {
-    "@opencode/plugin": "workspace:^"
+    "@opencode/plugin": "^2.0.27 || ^0.0.0-dev"
   },
   "devDependencies": {
     "@tsconfig/bun": "1.0.9",
