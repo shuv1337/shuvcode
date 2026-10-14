@@ -69,6 +69,28 @@ test("closing the diff viewer returns to the route it opened from", async () => 
   }
 })
 
+test.each([80, 160])("standalone full-screen diff does not expose panel-only toggling at %i columns", async (width) => {
+  const viewer = await renderDiffViewer([], {
+    width,
+    initialRoute: {
+      type: "plugin",
+      id: "opencode.diffs",
+      name: "diff",
+      data: { sessionID: "session-1", returnRoute: startRoute, split: true },
+    },
+  })
+  try {
+    const command = viewer.commands.get("diff.toggle_fullscreen")
+    expect(typeof command?.enabled === "function" ? command.enabled() : command?.enabled).toBe(false)
+    const route = viewer.current()
+    viewer.app.mockInput.pressKey("f")
+    await viewer.app.flush()
+    expect(viewer.current()).toEqual(route)
+  } finally {
+    viewer.app.renderer.destroy()
+  }
+})
+
 test("ctrl+c closes the diff viewer without exiting the application", async () => {
   const viewer = await renderDiffViewer([])
 
@@ -300,10 +322,13 @@ test.each([50, 80, 160])(
       const header = viewer.app.renderer.root.findDescendantById("diff-source-header")!
       const source = viewer.app.renderer.root.findDescendantById("diff-source-switch")!
       const count = viewer.app.renderer.root.findDescendantById("diff-review-count")!
-      expect(header.height).toBe(1)
-      expect(source.y).toBe(header.y)
-      expect(count.y).toBe(header.y)
-      expect(viewer.app.captureCharFrame().split("\n")[header.y]).toMatch(/All · vs release\s+0\/1/)
+      // Without the file tree, the header has one row of padding above and below its title.
+      const padded = width < 100
+      expect(header.height).toBe(padded ? 3 : 1)
+      const title = header.y + (padded ? 1 : 0)
+      expect(source.y).toBe(title)
+      expect(count.y).toBe(title)
+      expect(viewer.app.captureCharFrame().split("\n")[title]).toMatch(/All · vs release\s+0\/1/)
       expect(viewer.app.captureCharFrame()).not.toContain("reviewed")
       expect(viewer.vcsDiffInput()).toMatchObject({ base: "refs/remotes/origin/release" })
       await viewer.app.mockMouse.click(source.x, source.y)
@@ -323,7 +348,7 @@ test.each([50, 80, 160])(
       await viewer.app.waitForFrame((frame) => !frame.includes("Diff source"))
       viewer.commands.get("diff.mark_reviewed")!.run()
       await viewer.app.flush()
-      expect(viewer.app.captureCharFrame().split("\n")[header.y]).toMatch(/All · vs release\s+1\/1/)
+      expect(viewer.app.captureCharFrame().split("\n")[title]).toMatch(/All · vs release\s+1\/1/)
       await chooseSource(viewer, 2)
       await viewer.app.waitForFrame((frame) => frame.includes("Uncommitted · vs HEAD"))
       viewer.app.mockInput.pressKey("d")
@@ -348,18 +373,20 @@ test.each([50, 80, 100, 160])(
     try {
       const header = viewer.app.renderer.root.findDescendantById("diff-source-header")!
       const count = viewer.app.renderer.root.findDescendantById("diff-review-count")!
-      const row = viewer.app.captureCharFrame().split("\n")[header.y]
-      expect(header.height).toBe(1)
+      const padded = width < 100
+      const title = header.y + (padded ? 1 : 0)
+      const row = viewer.app.captureCharFrame().split("\n")[title]
+      expect(header.height).toBe(padded ? 3 : 1)
       expect(row).toContain("Committed · vs")
       expect(row).toContain("0/1")
       expect(row).not.toContain("release/very-long-comparison-branch-name-that-does-not-fit-in-the-header")
-      expect(count.y).toBe(header.y)
+      expect(count.y).toBe(title)
       expect(count.x + count.width).toBeLessThanOrEqual(header.x + header.width)
       const hint = viewer.app.renderer.root.findDescendantById("diff-help-shortcut")!
       if (width < 90) {
-        expect(hint.y).toBe(header.y)
+        expect(hint.y).toBe(title)
         expect(hint.x).toBeGreaterThan(count.x + count.width)
-        expect(findScrollBox(viewer.app.renderer.root)!.viewport.y).toBeGreaterThan(header.y)
+        expect(findScrollBox(viewer.app.renderer.root)!.viewport.y).toBeGreaterThan(header.y + header.height - 1)
       }
     } finally {
       viewer.app.renderer.destroy()
@@ -1015,7 +1042,7 @@ test.each([100, 160])("shared pane edges align headings and stay fixed at %i col
     await viewer.app.flush()
     expect(viewer.app.renderer.root.findDescendantById("diff-tree-top-edge")).toBeUndefined()
     expect(viewer.app.renderer.root.findDescendantById("diff-patch-top-edge")).toBeDefined()
-    expect(viewer.app.captureCharFrame().split("\n")[title + 1]).toContain("file01.txt")
+    expect(viewer.app.captureCharFrame().split("\n")[title + 3]).toContain("file01.txt")
   } finally {
     viewer.app.renderer.destroy()
   }
@@ -1032,7 +1059,9 @@ test.each(["dark", "light"] as const)("the pane edge matches the visible reviewe
     const scroll = findScrollBox(viewer.app.renderer.root)!
     const expectEdge = (file: string, collapsed = false) => {
       const frame = viewer.app.captureSpans()
-      const edge = frame.lines[scroll.viewport.y - 1].spans.find((span) => span.width === scroll.viewport.width)!
+      // Full-screen cards are inset two columns from each pane edge.
+      const card = scroll.viewport.width - 4
+      const edge = frame.lines[scroll.viewport.y - 1].spans.find((span) => span.width === card)!
       const page = frame.lines[scroll.viewport.y - 1].spans.at(-1)!.bg
       const title = frame.lines[scroll.viewport.y].spans.find((span) => span.text.includes(file))!
       expect(title, viewer.app.captureCharFrame()).toBeDefined()
@@ -1040,12 +1069,14 @@ test.each(["dark", "light"] as const)("the pane edge matches the visible reviewe
       expect(edge.bg).toEqual(title.bg)
       expect(edge.bg).not.toEqual(page)
       expect(frame.lines[0].spans[0].bg).toEqual(frame.lines[1].spans.find((span) => span.text.includes("All"))!.bg)
-      const bottom = frame.lines[scroll.viewport.y + 1].spans.findLast((span) => span.text.includes("▀"))
+      const bottom = frame.lines[scroll.viewport.y + 1].spans.find(
+        (span) => span.text.includes("▀") && span.width === card,
+      )
       if (!collapsed) {
         expect(bottom).toBeUndefined()
         return
       }
-      expect(bottom?.text.trim()).toBe("▀".repeat(scroll.viewport.width))
+      expect(bottom?.text.trim()).toBe("▀".repeat(card))
       expect(bottom?.fg).toEqual(edge.bg)
       expect(bottom?.bg).toEqual(page)
     }
@@ -1069,7 +1100,8 @@ test.each(["dark", "light"] as const)("the pane edge matches the visible reviewe
     expectEdge("file0.txt", true)
     const second = viewer.app.renderer.root.findDescendantById("diff-file-header-1")!
     const frame = viewer.app.captureSpans()
-    expect(frame.lines[second.y - 1].spans.findLast((span) => span.text.includes("▄"))!.fg).toEqual(
+    // The gap's card segment sits between the two inset segments.
+    expect(frame.lines[second.y - 1].spans.find((span) => span.text.includes("▄") && span.width > 2)!.fg).toEqual(
       frame.lines[second.y].spans.find((span) => span.text.includes("file1.txt"))!.bg,
     )
 
@@ -1135,9 +1167,9 @@ test("compact gutter help leaves the full patch viewport available when the side
     await viewer.app.flush()
     const scroll = findScrollBox(viewer.app.renderer.root)!
     const hint = viewer.app.renderer.root.findDescendantById("diff-help-shortcut")!
-    expect(hint.y).toBe(0)
+    expect(hint.y).toBe(1)
     expect(hint.x).toBe(159)
-    expect(scroll.viewport.y).toBe(2)
+    expect(scroll.viewport.y).toBe(4)
     expect(scroll.viewport.y + scroll.viewport.height).toBe(24)
     await viewer.app.mockMouse.click(hint.x, hint.y)
     await viewer.app.waitForFrame((frame) => frame.includes("Diff shortcuts"))
@@ -1150,11 +1182,11 @@ test("compact gutter help leaves the full patch viewport available when the side
     expect(viewer.app.renderer.root.findDescendantById("diff-help-shortcut")!.y).toBe(21)
     viewer.app.resize(80, 24)
     await viewer.app.flush()
-    expect(viewer.app.renderer.root.findDescendantById("diff-help-shortcut")!.y).toBe(0)
+    expect(viewer.app.renderer.root.findDescendantById("diff-help-shortcut")!.y).toBe(1)
     expect(viewer.app.renderer.root.findDescendantById("diff-help-shortcut")!.x).toBe(79)
     expect(scroll.viewport.y + scroll.viewport.height).toBe(24)
     expect(viewer.app.captureCharFrame()).not.toContain("? help")
-    expect(viewer.app.captureCharFrame().split("\n")[0].at(-1)).toBe("?")
+    expect(viewer.app.captureCharFrame().split("\n")[1].at(-1)).toBe("?")
     viewer.app.mockInput.pressKey("d")
     await viewer.app.waitForFrame((frame) => frame.includes("Diff source"))
     viewer.app.mockInput.pressEscape()
@@ -1332,7 +1364,7 @@ test.each(["patch", "image", "fallback"] as const)(
       if (!(header instanceof BoxRenderable)) throw new Error("Missing reviewed file title")
       expect(header.parent?.height).toBe(header.height)
       expect(header.height).toBe(2)
-      expect(viewer.app.captureCharFrame().split("\n")[header.y + 1].trim()).toBe("▀".repeat(header.width))
+      expect(viewer.app.captureCharFrame().split("\n")[header.y + 1].trim()).toBe("▀".repeat(header.width + 4))
       expect(header.y).toBe(scroll.viewport.y)
       expect(viewer.app.captureCharFrame()).toContain(file.file)
       expect(viewer.app.captureCharFrame()).toContain("✓")
@@ -2001,6 +2033,7 @@ async function renderDiffViewer(
         },
         ui: {
           dialog: createDialogApi(dialog, (render) => render()),
+          panel: { open: () => false, close: () => {}, current: () => undefined },
           router: {
             register(page: Page) {
               if (page.name === "diff") renderDiff = page.render
