@@ -307,7 +307,6 @@ export const dict = {
     "Se generan registros de supervisión de abusos para todo el uso de funciones de la API y se conservan durante un máximo de 30 días.",
   "go.faq.a5.museRetention":
     "Precios de tokens muy reducidos a cambio de permitir que tus prompts y las respuestas generadas se utilicen para entrenar futuros modelos de Meta.",
-  "go.faq.a5.catJamRetention": "Durante su periodo gratuito, los datos recopilados pueden usarse para mejorar el modelo.",
   "go.faq.a5.geminiRetention":
     "Tus prompts y las respuestas generadas pueden utilizarse para entrenar futuros modelos de Google.",
   "go.faq.a5.learnMore": "Más información",

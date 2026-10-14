@@ -304,7 +304,6 @@ export const dict = {
     "ZDR, durum bilgisi tutan Responses API, Files and Collections ve Batch API dahil olmak üzere saklanan verilere bağlı önemli API özelliklerini devre dışı bırakır.",
   "go.faq.a5.gptRetention":
     "Tüm API özelliklerinin kullanımı için kötüye kullanım izleme günlükleri oluşturulur ve 30 güne kadar saklanır.",
-  "go.faq.a5.catJamRetention": "Ücretsiz dönem boyunca toplanan veriler modeli geliştirmek için kullanılabilir.",
   "go.faq.a5.geminiRetention":
     "İstemleriniz ve tamamlamalarınız gelecekteki Google modellerini eğitmek için kullanılabilir.",
   "go.faq.a5.learnMore": "Daha fazla bilgi",

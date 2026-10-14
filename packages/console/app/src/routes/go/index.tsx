@@ -35,7 +35,7 @@ const models = [
   { name: "Space Bunny", training: "go.faq.a5.notUsed", retention: "go.faq.a5.retention0" },
   { name: "LongCat 2.5 Preview Free", training: "go.faq.a5.notUsed", retention: "go.faq.a5.retention0" },
   { name: "Step 5 Preview Free", training: "go.faq.a5.notUsed", retention: "go.faq.a5.retention0" },
-  { name: "Cat Jam Free", training: "go.faq.a5.used", retention: "go.faq.a5.notZdr" },
+  { name: "Cat Jam Free", training: "go.faq.a5.notUsed", retention: "go.faq.a5.retention30" },
   { name: "Grok 4.7", training: "go.faq.a5.notUsed", retention: "go.faq.a5.retention30" },
   { name: "Grok 4.6", training: "go.faq.a5.notUsed", retention: "go.faq.a5.retention30" },
   { name: "GPT 6 Luna", training: "go.faq.a5.notUsed", retention: "go.faq.a5.retention30" },
@@ -342,9 +342,6 @@ export default function Home() {
                         {i18n.t("go.faq.a5.learnMore")}
                       </a>
                       .
-                    </p>
-                    <p>
-                      <strong>Cat Jam Free:</strong> {i18n.t("go.faq.a5.catJamRetention")}
                     </p>
                     <p>
                       <strong>DeepSeek:</strong> {i18n.t("go.faq.a5.deepseekRetention")}

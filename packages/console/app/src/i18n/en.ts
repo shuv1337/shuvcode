@@ -304,7 +304,6 @@ export const dict = {
     "Heavily discounted token pricing in exchange for permission to use your prompts and completions to train future Meta models.",
   "go.faq.a5.deepseekRetention":
     "ZDR agreement is renewed monthly. The current agreement is valid through October 31, 2026.",
-  "go.faq.a5.catJamRetention": "During its free period, collected data may be used to improve the model.",
   "go.faq.a5.geminiRetention": "Your prompts and completions may be used to train future Google models.",
   "go.faq.a5.learnMore": "Learn more",
 

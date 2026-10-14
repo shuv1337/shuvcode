@@ -306,7 +306,6 @@ export const dict = {
     "Logs de monitoramento de abuso são gerados para todo uso de recursos da API e retidos por até 30 dias.",
   "go.faq.a5.museRetention":
     "Preços de tokens com grandes descontos em troca da permissão para usar seus prompts e respostas geradas para treinar futuros modelos da Meta.",
-  "go.faq.a5.catJamRetention": "Durante o período gratuito, os dados coletados podem ser usados para melhorar o modelo.",
   "go.faq.a5.geminiRetention":
     "Seus prompts e respostas geradas podem ser usados para treinar futuros modelos do Google.",
   "go.faq.a5.learnMore": "Saiba mais",

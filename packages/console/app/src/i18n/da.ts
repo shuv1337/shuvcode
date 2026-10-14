@@ -304,7 +304,6 @@ export const dict = {
     "Logfiler til overvågning af misbrug genereres ved al brug af API-funktioner og opbevares i op til 30 dage.",
   "go.faq.a5.museRetention":
     "Kraftigt nedsatte tokenpriser til gengæld for tilladelse til at bruge dine prompts og modelsvar til at træne fremtidige Meta-modeller.",
-  "go.faq.a5.catJamRetention": "I gratisperioden kan indsamlede data blive brugt til at forbedre modellen.",
   "go.faq.a5.geminiRetention": "Dine prompts og modelsvar kan blive brugt til at træne fremtidige Google-modeller.",
   "go.faq.a5.learnMore": "Læs mere",
   "go.faq.a5.deepseekRetention":

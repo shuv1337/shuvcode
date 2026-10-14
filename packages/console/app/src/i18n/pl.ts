@@ -303,7 +303,6 @@ export const dict = {
     "ZDR wyłącza ważne funkcje API zależne od przechowywanych danych, w tym stanowy Responses API, Files and Collections oraz Batch API.",
   "go.faq.a5.gptRetention":
     "Dzienniki monitorowania nadużyć są generowane dla każdego użycia funkcji API i przechowywane przez maksymalnie 30 dni.",
-  "go.faq.a5.catJamRetention": "W okresie bezpłatnego dostępu zebrane dane mogą być wykorzystywane do ulepszania modelu.",
   "go.faq.a5.geminiRetention":
     "Twoje prompty i odpowiedzi mogą być wykorzystywane do trenowania przyszłych modeli Google.",
   "go.faq.a5.learnMore": "Dowiedz się więcej",

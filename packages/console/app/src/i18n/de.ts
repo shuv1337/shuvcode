@@ -306,7 +306,6 @@ export const dict = {
     "Für die Nutzung aller API-Funktionen werden Protokolle zur Missbrauchsüberwachung erstellt und bis zu 30 Tage lang aufbewahrt.",
   "go.faq.a5.museRetention":
     "Stark vergünstigte Tokenpreise im Gegenzug für die Erlaubnis, deine Prompts und Vervollständigungen zum Trainieren zukünftiger Meta-Modelle zu verwenden.",
-  "go.faq.a5.catJamRetention": "Während des kostenlosen Zeitraums können gesammelte Daten zur Verbesserung des Modells verwendet werden.",
   "go.faq.a5.geminiRetention":
     "Deine Prompts und Vervollständigungen können zum Trainieren zukünftiger Google-Modelle verwendet werden.",
   "go.faq.a5.learnMore": "Mehr erfahren",
