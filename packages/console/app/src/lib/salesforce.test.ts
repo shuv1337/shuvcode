@@ -64,7 +64,7 @@ test("a fake entry keeps the visitor message, spend range, and enterprise lead s
 })
 
 test("the local Enterprise request handler applies the updated mapping to a form submission", async () => {
-  const { handleEnterpriseRequest } = await import("../routes/api/enterprise")
+  const { handleEnterpriseRequest } = await import("./enterprise")
   const response = await handleEnterpriseRequest(
     new Request("http://localhost/api/enterprise", {
       method: "POST",

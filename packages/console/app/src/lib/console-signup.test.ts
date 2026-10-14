@@ -1,6 +1,6 @@
 import { afterEach, expect, test } from "bun:test"
 import { syncConsoleAccount, type SalesforceRequest } from "./salesforce"
-import { handleConsoleSignup } from "../routes/api/console-signup"
+import { handleConsoleSignup } from "./console-signup"
 import { z } from "zod"
 
 const account = {

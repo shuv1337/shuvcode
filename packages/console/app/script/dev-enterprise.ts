@@ -1,7 +1,7 @@
-import { handleEnterpriseRequest } from "../src/routes/api/enterprise"
+import { handleEnterpriseRequest } from "../src/lib/enterprise"
 import { z } from "zod"
 import { SalesforceCliError, salesforceCliResponse } from "./salesforce-cli-response"
-import { handleConsoleSignup } from "../src/routes/api/console-signup"
+import { handleConsoleSignup } from "../src/lib/console-signup"
 import { consoleAccountSchema } from "../src/lib/console-account"
 
 const org = process.env.SF_TARGET_ORG || "opencode"
