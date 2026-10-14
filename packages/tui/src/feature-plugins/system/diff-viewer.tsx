@@ -326,7 +326,7 @@ export function DiffViewerContent(props: {
   // The side panel sits on the slot's raised surface; full screen keeps the base background.
   const surface = () => (docked() ? theme.background.raised.base : theme.background.base)
   // Cards are inset from the pane edges; the gaps between them run edge to edge.
-  const inset = () => (docked() ? 1 : 2)
+  const inset = () => (docked() ? 0 : 2)
   const width = () => props.panel?.width ?? dimensions().width
   const mode = () => props.mode
   const [fileTreeEnabled, setFileTreeEnabled] = createSignal(props.preferences?.tree ?? true)
@@ -337,7 +337,7 @@ export function DiffViewerContent(props: {
   const fileTreeWidth = createMemo(() =>
     Math.max(FILE_TREE_MIN_WIDTH, Math.min(FILE_TREE_MAX_WIDTH, Math.floor(width() / 4))),
   )
-  const patchPaneWidth = createMemo(() => width() - (showFileTree() ? fileTreeWidth() : 0) - (docked() ? 2 : 4))
+  const patchPaneWidth = createMemo(() => width() - (showFileTree() ? fileTreeWidth() : 0) - inset() * 2)
   const splitAvailable = createMemo(() => patchPaneWidth() >= MIN_SPLIT_WIDTH)
   const [viewOverride, setViewOverride] = createSignal<DiffView | undefined>(storedView(props.preferences?.view))
   const view = createMemo(() =>
@@ -839,10 +839,10 @@ export function DiffViewerContent(props: {
         <box
           id="diff-source-header"
           paddingLeft={2}
-          paddingRight={2}
+          // Docked, the header lines up with the card text below it; the card edge row supplies the gap underneath.
+          paddingRight={docked() ? 1 : 2}
           paddingTop={docked() ? 1 : 0}
-          paddingBottom={docked() ? 1 : 0}
-          height={docked() ? 3 : 1}
+          height={docked() ? 2 : 1}
           flexShrink={0}
           flexDirection="row"
           gap={1}
@@ -881,12 +881,12 @@ export function DiffViewerContent(props: {
       <box flexGrow={1} minHeight={0}>
         <Switch>
           <Match when={props.loading}>
-            <box flexGrow={1} padding={2}>
+            <box flexGrow={1} padding={2} paddingTop={docked() ? 1 : 2}>
               <text fg={theme.text.muted}>Loading diff…</text>
             </box>
           </Match>
           <Match when={!props.loading && props.error}>
-            <box flexGrow={1} padding={2}>
+            <box flexGrow={1} padding={2} paddingTop={docked() ? 1 : 2}>
               <text fg={theme.text.feedback.error.base}>
                 {!props.sourceBase && needsBase(mode())
                   ? "Could not load diff. Choose a base branch from Diff source, or select Uncommitted."
@@ -895,14 +895,14 @@ export function DiffViewerContent(props: {
             </box>
           </Match>
           <Match when={!props.loading && props.unavailable}>
-            <box flexGrow={1} padding={2}>
+            <box flexGrow={1} padding={2} paddingTop={docked() ? 1 : 2}>
               <text fg={theme.text.muted}>
                 Committed comparison unavailable without base metadata. Choose a base branch from Diff source.
               </text>
             </box>
           </Match>
           <Match when={!props.loading && files().length === 0}>
-            <box flexGrow={1} padding={2}>
+            <box flexGrow={1} padding={2} paddingTop={docked() ? 1 : 2}>
               <text fg={theme.text.muted}>No changes to show</text>
             </box>
           </Match>
@@ -1001,8 +1001,8 @@ export function DiffViewerContent(props: {
                               height={FILE_HEADER_HEIGHT}
                               zIndex={1}
                               backgroundColor={background()}
-                              paddingLeft={1}
-                              paddingRight={docked() ? 0 : 1}
+                              paddingLeft={docked() ? 2 : 1}
+                              paddingRight={1}
                               paddingBottom={1}
                             >
                               <box flexGrow={1} minWidth={0}>
@@ -1070,6 +1070,7 @@ export function DiffViewerContent(props: {
                                       filetype={filetype(entry.file.file)}
                                       syntaxStyle={currentSyntax()}
                                       showLineNumbers={true}
+                                      gutterPadding={docked() ? 1 : 0}
                                       width="100%"
                                       wrapMode="char"
                                       fg={theme.text.base}
@@ -1109,7 +1110,7 @@ export function DiffViewerContent(props: {
             backgroundColor={theme.background.base}
             customBorderChars={{ ...EmptyBorder, horizontal: "▀" }}
           />
-          <box height={1} flexShrink={0} flexDirection="row" paddingLeft={2} paddingRight={2}>
+          <box height={1} flexShrink={0} flexDirection="row" paddingRight={1}>
             <text
               fg={props.panel?.focused ? theme.background.action.primary.focused : theme.text.action.primary.disabled}
               attributes={props.panel?.focused ? 0 : TextAttributes.DIM}
