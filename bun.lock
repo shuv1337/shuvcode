@@ -610,7 +610,7 @@
         "@typescript/native-preview": "7.0.0-dev.20251207.1",
       },
       "peerDependencies": {
-        "@opencode/plugin": "^2.0.27",
+        "@opencode/plugin": "workspace:^",
       },
     },
     "packages/posts": {
