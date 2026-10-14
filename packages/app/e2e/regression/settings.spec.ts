@@ -1,7 +1,7 @@
 import { expect, test, type Page } from "@playwright/test"
 import type { ConfigEntry, OpenCodeEvent, WorktreeDirectory } from "@opencode/client/promise"
 import { NO_PROVIDER, REMOTE_SERVER, SERVER, holdRoute, project, session } from "../utils/app"
-import { mockOpenCodeServer } from "../utils/mock-server"
+import { mockMissingLocation, mockOpenCodeServer } from "../utils/mock-server"
 import { mockRemoteServer, mockWorkspace, openSettings, type WorkspaceInput } from "../utils/workspace"
 
 const directory = "C:/Projects/settings-demo"
@@ -246,6 +246,41 @@ test("project settings open as a nested view that keeps its route", async ({ pag
   await expect(page).toHaveURL(route)
   await page.keyboard.press("Escape")
   await expect(settings.getByRole("heading", { name: "Projects", exact: true })).toBeVisible()
+})
+
+// The desktop app reopens its last settings URL on launch, so a crash on this page would repeat on every restart.
+test("a project whose folder is gone opens its settings with a notice", async ({ page }) => {
+  await mockWorkspace(page, {
+    name: "Settings demo",
+    directory,
+    provider: NO_PROVIDER,
+    sessions: [],
+    seed: { tabs: [] },
+  })
+  await mockMissingLocation(page, directory)
+
+  const plugins = page.waitForResponse((response) => {
+    const url = new URL(response.url())
+
+    return url.pathname === "/api/plugin" && url.searchParams.get("location[directory]") === directory
+  })
+
+  await page.goto(
+    `/settings?server=${encodeURIComponent(SERVER)}&project=${encodeURIComponent(directory)}&tab=extensions`,
+  )
+  expect((await plugins).status()).toBe(404)
+  const settings = page.getByTestId("settings-screen")
+  const notice = settings.getByRole("status").filter({ hasText: "Project folder not found" })
+  await expect(notice).toContainText(directory)
+  await settings.getByRole("tab", { name: "Plugins", exact: true }).click()
+
+  await expect(
+    settings.getByRole("tabpanel", { name: "Plugins", exact: true }).getByText("No plugins yet", { exact: true }),
+  ).toBeVisible()
+
+  await settings.getByRole("tab", { name: "General", exact: true }).click()
+  await expect(settings.getByRole("textbox", { name: "Project name", exact: true })).toBeVisible()
+  await expect(notice).toContainText(directory)
 })
 
 for (const field of [

@@ -751,6 +751,8 @@ export const dict = {
   "project.settings.worktree.startup.description": "Runs once after creating a new worktree",
   "project.settings.worktree.startup.hint.base": "Use $OPENCODE_WORKTREE_BASE for the base worktree.",
   "project.settings.worktree.startup.hint.new": "Use $OPENCODE_WORKTREE_PATH for the new worktree.",
+  "project.settings.folderMissing.title": "Project folder not found",
+  "project.settings.folderMissing.description": "Restore the folder or close this project.",
   "project.settings.extensions.description": "View extensions available to this project",
   "project.settings.extensions.tab.lsps": "LSPs",
   "project.settings.extensions.added": "Added to this project",

@@ -476,6 +476,21 @@ export async function mockOpenCodeServer(page: Page, config: MockServerConfig) {
   return { server, pty: transport.pty, push }
 }
 
+// Answers every Location-scoped request for `directory` as the server does once that folder is deleted.
+export function mockMissingLocation(page: Page, directory: string) {
+  return page.route(
+    (url) => url.pathname.startsWith("/api/") && url.searchParams.get("location[directory]") === directory,
+    (route) =>
+      route.fulfill({
+        status: 404,
+        // SAFETY: the server's wire body for a missing Location, which the client decodes into its own error.
+        // oxlint-disable-next-line anti-slop-effect/no-manual-tagged-construction -- see SAFETY above
+        json: { _tag: "LocationNotFoundError", location: { directory }, message: `Location not found: ${directory}` },
+        headers: { "access-control-allow-origin": "*" },
+      }),
+  )
+}
+
 // Mocks several servers on one page. Each origin gets its own handler and its own SSE transport for events.
 export async function mockServers(page: Page, servers: Record<string, Omit<MockServerConfig, "server" | "events">>) {
   return Object.fromEntries(
