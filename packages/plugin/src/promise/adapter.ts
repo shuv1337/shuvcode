@@ -5,6 +5,7 @@ import { Effect, Schema, SchemaAST, Stream } from "effect"
 import type { Scope } from "effect"
 import { HttpApiEndpoint, HttpApiSchema } from "effect/http-api"
 import { define } from "../effect/plugin.js"
+import type { ToolFailures, ToolHooks } from "../effect/tool.js"
 import type { Plugin } from "./plugin.js"
 import type { Info } from "./tool.js"
 import type { RpcDomain, RpcHandlers } from "./rpc.js"
@@ -510,7 +511,7 @@ export function fromPromise(plugin: Plugin) {
                 ),
               ),
             hook: (name, callback) =>
-              register(host.tool.hook(name, (event) => Effect.promise(() => Promise.resolve(callback(event))))),
+              register(host.tool.hook(name, (event) => toolHook[name](() => Promise.resolve(callback(event))))),
           },
           vcs: {
             get: adaptApiMethod(VcsEndpoints["vcs.get"], host.vcs.get),
@@ -625,6 +626,19 @@ function attempt<A>(evaluate: (signal: AbortSignal) => PromiseLike<A>) {
 
 type RuntimeSchema = Schema.Codec<unknown, unknown>
 
+const toolError = (error: unknown) =>
+  error instanceof Tool.Error
+    ? error
+    : new Tool.Error({ message: error instanceof Error ? error.message : String(error), error })
+
+// Only execute.before may reject a call; a rejection fails that call alone, like an Effect hook.
+const toolHook: {
+  readonly [Name in keyof ToolHooks]: (run: () => Promise<void>) => Effect.Effect<void, ToolFailures[Name]>
+} = {
+  "execute.before": (run) => Effect.tryPromise({ try: run, catch: toolError }),
+  "execute.after": (run) => Effect.promise(run),
+}
+
 const executePromiseTool = (tool: Info, input: any, context: Tool.Context) =>
   Effect.tryPromise({
     try: (signal) =>
@@ -633,10 +647,5 @@ const executePromiseTool = (tool: Info, input: any, context: Tool.Context) =>
         signal,
         progress: (update) => Effect.runPromise(context.progress(update), { signal }),
       }),
-    catch: (error) => error,
-  }).pipe(
-    Effect.catch((error) => {
-      if (error instanceof Tool.Error) return Effect.fail(error)
-      return Effect.fail(new Tool.Error({ message: error instanceof Error ? error.message : String(error), error }))
-    }),
-  )
+    catch: toolError,
+  })
