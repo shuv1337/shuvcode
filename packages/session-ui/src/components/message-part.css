@@ -1279,9 +1279,16 @@
   color: var(--v2-blue-300);
 }
 
+/* Only delivery animates. A steer can render once before its admission marks it pending, and must not fade from the
+   delivered color. */
 :root body [data-component="user-message"][data-pending] [data-slot="user-message-text"] {
   --user-message-mention-prefix-color: currentColor;
 
   background: var(--v2-background-bg-layer-02);
   color: var(--v2-text-text-base);
+  transition: none;
+
+  [data-slot="user-message-mention-prefix"] {
+    transition: none;
+  }
 }
