@@ -1306,7 +1306,7 @@ describe("Config", () => {
                   fs.writeFile(
                     path.join(tmp.path, "opencode.jsonc"),
                     `{
-                      // Ignored reference: {file:missing.txt}
+                      // Ignored reference: {file:.}
                       "username": "user-{env:OPENCODE_TEST_MISSING}",
                       "mcp": {
                         "servers": {
@@ -1315,7 +1315,8 @@ describe("Config", () => {
                             "url": "https://example.com/mcp",
                             "headers": {
                               "Authorization": "Bearer {env:OPENCODE_TEST_MCP_TOKEN}",
-                              "X-Token": "{file:token.txt}"
+                              "X-Token": "{file:token.txt}",
+                              "X-Missing": "Bearer {file:~/.opencode-test-missing/key}"
                             }
                           }
                         }
@@ -1335,6 +1336,7 @@ describe("Config", () => {
                 expect(remote.headers).toEqual({
                   Authorization: "Bearer secret",
                   "X-Token": 'file\n"token"',
+                  "X-Missing": "Bearer ",
                 })
               }).pipe(Effect.provide(testLayer(tmp.path)))
             }),
