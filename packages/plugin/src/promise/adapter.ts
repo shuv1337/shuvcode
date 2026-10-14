@@ -6,6 +6,7 @@ import type { Scope } from "effect"
 import { HttpApiEndpoint, HttpApiSchema } from "effect/http-api"
 import { define } from "../effect/plugin.js"
 import type { ToolFailures, ToolHooks } from "../effect/tool.js"
+import { AssertInput } from "../permission.js"
 import type { Plugin } from "./plugin.js"
 import type { Info } from "./tool.js"
 import type { RpcDomain, RpcHandlers } from "./rpc.js"
@@ -450,6 +451,8 @@ export function fromPromise(plugin: Plugin) {
             list: adaptApiMethod(PermissionEndpoints["session.permission.list"], host.permission.list),
             get: adaptApiMethod(PermissionEndpoints["session.permission.get"], host.permission.get),
             reply: adaptApiMethod(PermissionEndpoints["session.permission.reply"], host.permission.reply),
+            assert: (input) =>
+              run(Schema.decodeUnknownEffect(AssertInput)(input).pipe(Effect.flatMap(host.permission.assert))),
           },
           plugin: {
             list: adaptApiMethod(PluginEndpoints["plugin.list"], host.plugin.list),
