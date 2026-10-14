@@ -98,7 +98,7 @@ export function PromptFooter(props: {
           </Match>
           <Match when={props.showDetails && layout().shortcuts}>
             <text
-              fg={interactive() ? props.context.theme.text.base : props.context.theme.text.formfield.disabled}
+              fg={interactive() ? props.context.theme.text.base : props.context.theme.text.action.primary.disabled}
               attributes={interactive() ? 0 : TextAttributes.DIM}
               flexShrink={0}
             >
@@ -109,7 +109,7 @@ export function PromptFooter(props: {
         </Switch>
         <Show when={props.showDetails && layout().shortcuts}>
           <text
-            fg={interactive() ? props.context.theme.text.base : props.context.theme.text.formfield.disabled}
+            fg={interactive() ? props.context.theme.text.base : props.context.theme.text.action.primary.disabled}
             attributes={interactive() ? 0 : TextAttributes.DIM}
             wrapMode="none"
             flexShrink={0}

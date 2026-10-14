@@ -809,7 +809,7 @@ export function DiffViewerContent(props: {
       {(shortcut) => (
         <text
           id="diff-help-shortcut"
-          fg={props.muted ? theme.text.formfield.disabled : theme.text.base}
+          fg={props.muted ? theme.text.action.primary.disabled : theme.text.base}
           attributes={props.muted ? TextAttributes.DIM : 0}
           selectable={false}
           flexShrink={0}
@@ -1111,7 +1111,7 @@ export function DiffViewerContent(props: {
           />
           <box height={1} flexShrink={0} flexDirection="row" paddingLeft={2} paddingRight={2}>
             <text
-              fg={props.panel?.focused ? theme.background.action.primary.focused : theme.text.formfield.disabled}
+              fg={props.panel?.focused ? theme.background.action.primary.focused : theme.text.action.primary.disabled}
               attributes={props.panel?.focused ? 0 : TextAttributes.DIM}
               flexGrow={1}
               minWidth={0}
