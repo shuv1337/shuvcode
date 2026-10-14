@@ -18,7 +18,6 @@ import { ConfigNormalize } from "./config/normalize.js"
 import { ConfigDiscovery } from "./config/discovery.js"
 import { ConfigWatch } from "./config/watch.js"
 import { WellKnown } from "./wellknown.js"
-import { ConfigExperimental } from "@opencode/schema/config/experimental"
 import { AppProcess } from "@opencode/util/process"
 import { ChildProcess } from "effect/process"
 
@@ -252,28 +251,20 @@ export const layer = (options?: Options) =>
         ]
         const managedPolicies = managed
           .flatMap((entry) =>
-            entry.type === "document" && entry.info.experimental?.policies
+            entry.type === "document" && entry.info.policies
               ? [
                   new Document({
                     type: "document",
                     path: entry.path,
-                    info: new Info({
-                      experimental: new ConfigExperimental.Info({ policies: entry.info.experimental.policies }),
-                    }),
+                    info: new Info({ policies: entry.info.policies }),
                   }),
                 ]
               : [],
           )
           .toReversed()
         const managedSettings = managed.map((entry) =>
-          entry.type === "document" && entry.info.experimental?.policies
-            ? new Document({
-                ...entry,
-                info: new Info({
-                  ...entry.info,
-                  experimental: new ConfigExperimental.Info({ ...entry.info.experimental, policies: undefined }),
-                }),
-              })
+          entry.type === "document" && entry.info.policies
+            ? new Document({ ...entry, info: new Info({ ...entry.info, policies: undefined }) })
             : entry,
         )
         // Global entries sit below explicit and direct files; project directories rank above them.
@@ -428,7 +419,16 @@ export function configured(options?: Options) {
   return makeLocationNode({
     service: Service,
     layer: layer(options),
-    deps: [Watcher.node, Bus.node, FSUtil.node, Global.node, Location.node, Credential.node, WellKnown.node, AppProcess.node],
+    deps: [
+      Watcher.node,
+      Bus.node,
+      FSUtil.node,
+      Global.node,
+      Location.node,
+      Credential.node,
+      WellKnown.node,
+      AppProcess.node,
+    ],
   })
 }
 

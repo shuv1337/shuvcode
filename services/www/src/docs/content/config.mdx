@@ -227,13 +227,11 @@ override.
 
 ```jsonc
 {
-  "experimental": {
-    "policies": [
-      { "action": "provider.use", "resource": "*", "effect": "deny" },
-      { "action": "provider.use", "resource": "anthropic", "effect": "allow" },
-      { "action": "tool.use", "resource": "shell:git push *", "effect": "deny" },
-    ],
-  },
+  "policies": [
+    { "action": "provider.use", "resource": "*", "effect": "deny" },
+    { "action": "provider.use", "resource": "anthropic", "effect": "allow" },
+    { "action": "tool.use", "resource": "shell:git push *", "effect": "deny" },
+  ],
 }
 ```
 

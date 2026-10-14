@@ -2154,6 +2154,11 @@ export type ConfigEntry =
         enterprise?: { url?: string }
         username?: string
         permissions?: PermissionRuleset
+        policies?: Array<{
+          action: "provider.use" | "tool.use" | "integration.use"
+          resource: string
+          effect: "allow" | "deny"
+        }>
         agents?: {
           [x: string]: {
             model?: string | { providerID: string; model: string; variant?: string }

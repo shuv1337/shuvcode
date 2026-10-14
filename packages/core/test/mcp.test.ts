@@ -311,7 +311,7 @@ function resourceMcpLayer(
               new Document({
                 type: "document",
                 info: new Info({
-                  experimental: { policies: overrides?.policies ?? [] },
+                  policies: overrides?.policies ?? [],
                   mcp: new ConfigMCP.Info({
                     servers: {
                       resources:
@@ -2635,7 +2635,7 @@ for (const source of ["config", "organization"] as const) {
               mcp: new ConfigMCP.Info({
                 servers: { resources: new ConfigMCP.Remote({ type: "remote", url: server.url, oauth: false }) },
               }),
-              experimental: { policies: [{ action: "integration.use", resource: "mcp:*", effect }] },
+              policies: [{ action: "integration.use", resource: "mcp:*", effect }],
             }),
           })
         yield* test.setEntries([document("allow")])
