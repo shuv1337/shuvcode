@@ -220,7 +220,7 @@ export const dict = {
     "All Zen models are hosted in the US. Providers follow a zero-retention policy and do not use your data for model training, with the",
   "zen.privacy.exceptionsLink": "following exceptions",
 
-  "go.promo.catJam": "Cat Jam Free, a stealth model, is available for a limited time.",
+  "go.promo.gemini": "Gemini 4 Argon is now available with 2× usage for a limited time.",
   "go.title": "OpenCode Go | Low cost coding models for everyone",
   "go.meta.description": "Go costs $10/month, with generous usage limits and reliable access to leading coding models.",
   "go.hero.title": "Low cost coding models for everyone",
@@ -246,6 +246,7 @@ export const dict = {
   "go.graph.requests": "Est. requests / 5h",
   "go.graph.allowance": "Monthly usage",
   "go.graph.new": "New",
+  "go.graph.bonus": "{{count}}× usage",
   "go.graph.scale": "Nonlinear request scale",
   "go.graph.showAll": "View all {{count}} models",
   "go.graph.showLess": "Show fewer models",
@@ -304,6 +305,7 @@ export const dict = {
   "go.faq.a5.deepseekRetention":
     "ZDR agreement is renewed monthly. The current agreement is valid through October 31, 2026.",
   "go.faq.a5.catJamRetention": "During its free period, collected data may be used to improve the model.",
+  "go.faq.a5.geminiRetention": "Your prompts and completions may be used to train future Google models.",
   "go.faq.a5.learnMore": "Learn more",
 
   "go.faq.q6": "Can I top up credit?",

@@ -221,7 +221,7 @@ export const dict = {
     "Alle Zen-modeller hostes i USA. Leverandører følger en policy om null oppbevaring og bruker ikke dataene dine til modelltrening, med",
   "zen.privacy.exceptionsLink": "følgende unntak",
 
-  "go.promo.catJam": "Den anonyme modellen Cat Jam Free er gratis i en begrenset periode.",
+  "go.promo.gemini": "Gemini 4 Argon er nå tilgjengelig med 2× bruk i en begrenset periode.",
   "go.title": "OpenCode Go | Rimelige kodemodeller for alle",
   "go.meta.description":
     "Go koster $10/måned, med sjenerøse bruksgrenser og pålitelig tilgang til ledende kodemodeller.",
@@ -248,6 +248,7 @@ export const dict = {
   "go.graph.requests": "Estimerte forespørsler / 5 timer",
   "go.graph.allowance": "Månedlig bruk",
   "go.graph.new": "Ny",
+  "go.graph.bonus": "{{count}}× bruk",
   "go.graph.scale": "Ikke-lineær skala for forespørsler",
   "go.graph.showAll": "Vis alle {{count}} modeller",
   "go.graph.showLess": "Vis færre modeller",
@@ -302,6 +303,7 @@ export const dict = {
   "go.faq.a5.gptRetention":
     "Logger for overvåking av misbruk genereres for all bruk av API-funksjoner og oppbevares i opptil 30 dager.",
   "go.faq.a5.catJamRetention": "I gratisperioden kan innsamlede data brukes til å forbedre modellen.",
+  "go.faq.a5.geminiRetention": "Ledetekstene og fullføringene dine kan brukes til å trene fremtidige Google-modeller.",
   "go.faq.a5.learnMore": "Les mer",
   "go.faq.a5.deepseekRetention":
     "ZDR-avtalen fornyes månedlig. Den gjeldende avtalen er gyldig til og med 31. oktober 2026.",

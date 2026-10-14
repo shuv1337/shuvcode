@@ -5,6 +5,16 @@ export const goModels = [
   { id: "grok-4.7", name: "Grok 4.7", requests: 169, allowance: 15 },
   { id: "grok-4.6", name: "Grok 4.6", requests: 169, allowance: 15 },
   { id: "glm-5.3", name: "GLM-5.3", requests: 220, allowance: 15 },
+  {
+    id: "gemini-4-argon-contributor",
+    name: "Gemini 4 Argon Contributor",
+    requests: 440,
+    allowance: 60,
+    bonus: 2,
+    featured: true,
+    fresh: true,
+    limitedTime: true,
+  },
   { id: "glm-5.2", name: "GLM-5.2", requests: 880, allowance: 60 },
   { id: "deepseek-v4-pro", name: "DeepSeek V4 Pro", requests: 1050, allowance: 15 },
   { id: "kimi-k2.7-code", name: "Kimi K2.7 Code", requests: 1350, allowance: 60, featured: true },
@@ -89,6 +99,7 @@ const plusLimits: Record<string, [number, number]> = {
   "grok-4.7": [676, 60],
   "grok-4.6": [676, 60],
   "glm-5.3": [1760, 120],
+  "gemini-4-argon-contributor": [1760, 240],
   "glm-5.2": [2640, 180],
   "deepseek-v4-pro": [4200, 60],
   "kimi-k2.7-code": [4050, 180],
@@ -118,8 +129,22 @@ const plusLimits: Record<string, [number, number]> = {
   "cat-jam-free": [Infinity, Infinity],
 }
 
-export const goPlanModels = goModels.map((model) => ({
-  ...model,
-  plusRequests: plusLimits[model.id]![0],
-  plusAllowance: plusLimits[model.id]![1],
-}))
+// A bonus multiplies a model's usual allowance, which is shown crossed out beside the current limits.
+export const goPlanModels = goModels.map((model) => {
+  const [plusRequests, plusAllowance] = plusLimits[model.id]!
+  const bonus = "bonus" in model ? model.bonus : undefined
+  return {
+    ...model,
+    plusRequests,
+    plusAllowance,
+    previous:
+      bonus === undefined
+        ? undefined
+        : {
+            requests: model.requests / bonus,
+            allowance: model.allowance / bonus,
+            plusRequests: plusRequests / bonus,
+            plusAllowance: plusAllowance / bonus,
+          },
+  }
+})

@@ -223,7 +223,7 @@ export const dict = {
     "Tüm Zen modelleri ABD'de barındırılmaktadır. Sağlayıcılar sıfır saklama politikası izler ve verilerinizi model eğitimi için kullanmaz; şu",
   "zen.privacy.exceptionsLink": "aşağıdaki istisnalar",
 
-  "go.promo.catJam": "Anonim model Cat Jam Free, sınırlı bir süre ücretsiz olarak kullanılabilir.",
+  "go.promo.gemini": "Gemini 4 Argon artık sınırlı bir süre için 2× kullanımla sunuluyor.",
   "go.title": "OpenCode Go | Herkes için düşük maliyetli kodlama modelleri",
   "go.meta.description":
     "Go ayda 10$'dır; cömert kullanım limitleri ve önde gelen kodlama modellerine güvenilir erişim sunar.",
@@ -250,6 +250,7 @@ export const dict = {
   "go.graph.requests": "Tahmini istek / 5 saat",
   "go.graph.allowance": "Aylık kullanım",
   "go.graph.new": "Yeni",
+  "go.graph.bonus": "{{count}}× kullanım",
   "go.graph.scale": "Doğrusal olmayan istek ölçeği",
   "go.graph.showAll": "{{count}} modelin tümünü göster",
   "go.graph.showLess": "Daha az model göster",
@@ -304,6 +305,8 @@ export const dict = {
   "go.faq.a5.gptRetention":
     "Tüm API özelliklerinin kullanımı için kötüye kullanım izleme günlükleri oluşturulur ve 30 güne kadar saklanır.",
   "go.faq.a5.catJamRetention": "Ücretsiz dönem boyunca toplanan veriler modeli geliştirmek için kullanılabilir.",
+  "go.faq.a5.geminiRetention":
+    "İstemleriniz ve tamamlamalarınız gelecekteki Google modellerini eğitmek için kullanılabilir.",
   "go.faq.a5.learnMore": "Daha fazla bilgi",
   "go.faq.a5.deepseekRetention":
     "ZDR anlaşması aylık olarak yenilenir. Mevcut anlaşma 31 Ekim 2026 tarihine kadar geçerlidir.",

@@ -41,6 +41,7 @@ const models = [
   { name: "GPT 6 Luna", training: "go.faq.a5.notUsed", retention: "go.faq.a5.retention30" },
   { name: "GPT 5.6 Luna", training: "go.faq.a5.notUsed", retention: "go.faq.a5.retention30" },
   { name: "Claude Haiku 5.5", training: "go.faq.a5.notUsed", retention: "go.faq.a5.retention30" },
+  { name: "Gemini 4 Argon Contributor", training: "go.faq.a5.used", retention: "go.faq.a5.notZdr" },
   { name: "GLM-5.3-Flash", training: "go.faq.a5.notUsed", retention: "go.faq.a5.retention0" },
   { name: "GLM-5.3", training: "go.faq.a5.notUsed", retention: "go.faq.a5.retention0" },
   { name: "GLM-5.2", training: "go.faq.a5.notUsed", retention: "go.faq.a5.retention0" },
@@ -101,7 +102,7 @@ export default function Home() {
             <div data-component="desktop-app-banner">
               <span data-slot="badge">{i18n.t("home.banner.badge")}</span>
               <div data-slot="content">
-                <span data-slot="text">{i18n.t("go.promo.catJam")}</span>
+                <span data-slot="text">{i18n.t("go.promo.gemini")}</span>
               </div>
             </div>
             <Show when={searchParams.ref}>
@@ -326,6 +327,9 @@ export default function Home() {
                         {i18n.t("go.faq.a5.learnMore")}
                       </a>
                       .
+                    </p>
+                    <p>
+                      <strong>Gemini 4 Argon Contributor:</strong> {i18n.t("go.faq.a5.geminiRetention")}
                     </p>
                     <p>
                       <strong>Muse Spark 1.3 Contributor:</strong> {i18n.t("go.faq.a5.museRetention")}{" "}

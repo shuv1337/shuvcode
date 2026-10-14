@@ -222,7 +222,7 @@ export const dict = {
     "Wszystkie modele Zen są hostowane w USA. Dostawcy stosują politykę zerowej retencji i nie wykorzystują Twoich danych do trenowania modeli, z",
   "zen.privacy.exceptionsLink": "następującymi wyjątkami",
 
-  "go.promo.catJam": "Cat Jam Free, anonimowy model, jest dostępny bezpłatnie przez ograniczony czas.",
+  "go.promo.gemini": "Gemini 4 Argon jest już dostępny z 2× większym limitem przez ograniczony czas.",
   "go.title": "OpenCode Go | Niskokosztowe modele do kodowania dla każdego",
   "go.meta.description":
     "Go kosztuje $10/miesiąc, oferując hojne limity użycia i niezawodny dostęp do wiodących modeli do kodowania.",
@@ -249,6 +249,7 @@ export const dict = {
   "go.graph.requests": "Szac. żądania / 5 godz.",
   "go.graph.allowance": "Miesięczne użycie",
   "go.graph.new": "Nowość",
+  "go.graph.bonus": "{{count}}× większy limit",
   "go.graph.scale": "Nieliniowa skala liczby żądań",
   "go.graph.showAll": "Pokaż wszystkie modele ({{count}})",
   "go.graph.showLess": "Pokaż mniej modeli",
@@ -303,6 +304,8 @@ export const dict = {
   "go.faq.a5.gptRetention":
     "Dzienniki monitorowania nadużyć są generowane dla każdego użycia funkcji API i przechowywane przez maksymalnie 30 dni.",
   "go.faq.a5.catJamRetention": "W okresie bezpłatnego dostępu zebrane dane mogą być wykorzystywane do ulepszania modelu.",
+  "go.faq.a5.geminiRetention":
+    "Twoje prompty i odpowiedzi mogą być wykorzystywane do trenowania przyszłych modeli Google.",
   "go.faq.a5.learnMore": "Dowiedz się więcej",
   "go.faq.a5.deepseekRetention": "Umowa ZDR jest odnawiana co miesiąc. Obecna umowa obowiązuje do 31 października 2026 r.",
   "go.faq.a5.museRetention":

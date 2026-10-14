@@ -223,7 +223,7 @@ export const dict = {
     "Todos os modelos Zen são hospedados nos EUA. Os provedores seguem uma política de retenção zero e não usam seus dados para treinamento de modelo, com as",
   "zen.privacy.exceptionsLink": "seguintes exceções",
 
-  "go.promo.catJam": "Cat Jam Free, um modelo anônimo, está disponível gratuitamente por tempo limitado.",
+  "go.promo.gemini": "Gemini 4 Argon já está disponível com 2× mais uso por tempo limitado.",
   "go.title": "OpenCode Go | Modelos de codificação de baixo custo para todos",
   "go.meta.description":
     "O Go custa $10/mês, com limites generosos de uso e acesso confiável aos principais modelos de codificação.",
@@ -250,6 +250,7 @@ export const dict = {
   "go.graph.requests": "Requisições estimadas / 5 h",
   "go.graph.allowance": "Uso mensal",
   "go.graph.new": "Novo",
+  "go.graph.bonus": "{{count}}× mais uso",
   "go.graph.scale": "Escala não linear de requisições",
   "go.graph.showAll": "Ver todos os {{count}} modelos",
   "go.graph.showLess": "Mostrar menos modelos",
@@ -306,6 +307,8 @@ export const dict = {
   "go.faq.a5.museRetention":
     "Preços de tokens com grandes descontos em troca da permissão para usar seus prompts e respostas geradas para treinar futuros modelos da Meta.",
   "go.faq.a5.catJamRetention": "Durante o período gratuito, os dados coletados podem ser usados para melhorar o modelo.",
+  "go.faq.a5.geminiRetention":
+    "Seus prompts e respostas geradas podem ser usados para treinar futuros modelos do Google.",
   "go.faq.a5.learnMore": "Saiba mais",
   "go.faq.a5.deepseekRetention":
     "O acordo de ZDR é renovado mensalmente. O acordo atual é válido até 31 de outubro de 2026.",
