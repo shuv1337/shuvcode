@@ -18,6 +18,7 @@ import { ConfigNormalize } from "./config/normalize.js"
 import { ConfigDiscovery } from "./config/discovery.js"
 import { ConfigWatch } from "./config/watch.js"
 import { WellKnown } from "./wellknown.js"
+import { ConfigExperimental } from "@opencode/schema/config/experimental"
 import { AppProcess } from "@opencode/util/process"
 import { ChildProcess } from "effect/process"
 
@@ -241,16 +242,41 @@ export const layer = (options?: Options) =>
               )
             : []
 
-        // System entries sit at lowest priority so users and projects can
-        // override ordinary defaults while reversed policy evaluation gives
-        // system policies highest file-based authority. Global entries sit
-        // below explicit and direct files; project directories rank above them.
-        // MDM preferences rank below the system directory so their policies
-        // carry the most file-based authority, matching V1 where they won.
-        const systemSupplementary = [
-          ...(sources.preferences ? yield* loadPreferences(sources.preferences).pipe(Effect.orDie) : []),
+        // Managed settings load last so they override everything, and MDM
+        // preferences outrank the system directory as in V1. Policies evaluate
+        // in reverse load order, so managed policies split off and load first
+        // to keep final file-based authority.
+        const managed = [
           ...(sources.system?.present ? yield* loadDirectory(sources.system.path).pipe(Effect.orDie) : []),
+          ...(sources.preferences ? yield* loadPreferences(sources.preferences).pipe(Effect.orDie) : []),
         ]
+        const managedPolicies = managed
+          .flatMap((entry) =>
+            entry.type === "document" && entry.info.experimental?.policies
+              ? [
+                  new Document({
+                    type: "document",
+                    path: entry.path,
+                    info: new Info({
+                      experimental: new ConfigExperimental.Info({ policies: entry.info.experimental.policies }),
+                    }),
+                  }),
+                ]
+              : [],
+          )
+          .toReversed()
+        const managedSettings = managed.map((entry) =>
+          entry.type === "document" && entry.info.experimental?.policies
+            ? new Document({
+                ...entry,
+                info: new Info({
+                  ...entry.info,
+                  experimental: new ConfigExperimental.Info({ ...entry.info.experimental, policies: undefined }),
+                }),
+              })
+            : entry,
+        )
+        // Global entries sit below explicit and direct files; project directories rank above them.
         const globalSupplementary = sources.global ? yield* loadDirectory(sources.global).pipe(Effect.orDie) : []
         const projectSupplementary = yield* Effect.forEach(
           sources.project.filter((root) => root.present),
@@ -260,13 +286,14 @@ export const layer = (options?: Options) =>
           Effect.map((entries) => entries.flat()),
         )
         return [
-          ...systemSupplementary,
+          ...managedPolicies,
           ...(yield* loadWellknown().pipe(Effect.orDie)),
           ...globalSupplementary,
           ...explicit,
           ...direct,
           ...projectSupplementary,
           ...content,
+          ...managedSettings,
         ]
       })
 

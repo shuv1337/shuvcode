@@ -27,7 +27,7 @@ OpenCode supports JSON and JSONC. Use JSONC when you want comments or trailing c
 
 ## Locations
 
-Put machine-wide defaults in the system configuration directory:
+Put managed, machine-wide settings in the system configuration directory:
 
 | Platform | Directory                               |
 | -------- | --------------------------------------- |
@@ -56,9 +56,11 @@ machine-wide one:
 /Library/Managed Preferences/ai.opencode.managed.plist
 ```
 
-Managed preferences load just below the system directory, so their
-[policies](/policies#precedence) have the most authority of any file. OpenCode
-reads them at startup and whenever another config change triggers a reload.
+Managed settings have the highest precedence, so users and projects cannot
+override the values they set, and managed preferences override the system
+directory. Settings alone cannot stop users from adding providers, MCP servers,
+agents, or plugins; use [policies](/policies#precedence) in managed
+configuration to enforce restrictions.
 
 Put user settings for every project in the global configuration:
 
@@ -95,15 +97,16 @@ For example, start OpenCode from `/home/user/projects/acme/packages/web`:
 
 OpenCode applies these files from lowest to highest precedence:
 
-1. `/etc/opencode/opencode.json`
-2. `~/.config/opencode/opencode.json`
-3. `/home/user/projects/acme/opencode.json`
-4. `/home/user/projects/acme/packages/web/opencode.json`
+1. `~/.config/opencode/opencode.json`
+2. `/home/user/projects/acme/opencode.json`
+3. `/home/user/projects/acme/packages/web/opencode.json`
+4. `/etc/opencode/opencode.json`
 
 The package config overrides matching settings from the repository config,
-which overrides the global and system configs. Settings that do not conflict
-are preserved, and [policies](/policies#precedence) evaluate in the reverse
-order so system policies outrank global and project policies.
+which overrides the global config. The system config overrides all of them.
+Settings that do not conflict are preserved. [Policies](/policies#precedence)
+from global and project files evaluate in the reverse order, and system
+policies outrank all of them.
 
 ## Schema
 
