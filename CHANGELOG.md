@@ -2,6 +2,76 @@
 
 Release notes for OpenCode V2, newest first.
 
+## v2.0.29 — 2026-10-14
+
+### Highlights
+
+- **Remote Device Pairing**: In **Settings → Pairing**, select **Pair device** to enable OpenTunnel remote access and get a QR code or copyable link. ([#55306](https://github.com/anomalyco/opencode/pull/55306))
+- **Provider Account Management**: Use the connect dialog or **Settings → Providers** to switch, rename, remove, or add provider accounts. ([#54101](https://github.com/anomalyco/opencode/pull/54101))
+- **Automatic Response Continuation**: Responses that reach their output-token limit now continue automatically, preserving partial output instead of stopping abruptly. ([#53876](https://github.com/anomalyco/opencode/pull/53876))
+- **Trackpad Image Navigation**: Pinch to zoom and use two-finger scrolling to pan image and SVG previews. Select **Fit** to reset the view. ([#54590](https://github.com/anomalyco/opencode/pull/54590))
+
+### Core
+
+#### Improvements
+
+- Automatically continue responses after an output-token limit, with bounded retries and clearer recovery for truncated tool calls. ([#53876](https://github.com/anomalyco/opencode/pull/53876))
+- Stabilize access policies under the top-level `policies` configuration key while retaining compatibility with `experimental.policies`. ([#55297](https://github.com/anomalyco/opencode/pull/55297))
+
+#### Bug fixes
+
+- Give centrally managed configuration precedence over local and user configuration. ([#55267](https://github.com/anomalyco/opencode/pull/55267))
+- Allow migrated V1 npm provider configuration to target built-in provider routes. ([#55254](https://github.com/anomalyco/opencode/pull/55254))
+
+### TUI
+
+#### Improvements
+
+- Report working sessions and sessions awaiting permission or input through terminal program-status notifications. ([#55172](https://github.com/anomalyco/opencode/pull/55172))
+
+### Desktop
+
+#### Improvements
+
+- Pair devices from **Settings → Pairing** through OpenTunnel remote access, with a QR code and copyable link. ([#55306](https://github.com/anomalyco/opencode/pull/55306))
+- Manage provider accounts from the connect dialog and **Settings → Providers**, including switching, renaming, removal, and adding another account. ([#54101](https://github.com/anomalyco/opencode/pull/54101))
+- Show session context tokens and accumulated family cost in the session view. ([#53785](https://github.com/anomalyco/opencode/pull/53785))
+- Pinch to zoom and use two-finger scrolling to pan image and SVG previews; select **Fit** to reset. ([#54590](https://github.com/anomalyco/opencode/pull/54590))
+- Cycle side-panel tabs with the configured previous-tab and next-tab shortcuts while the side panel is focused. ([#54899](https://github.com/anomalyco/opencode/pull/54899))
+- Refresh the question composer and clarify timeline notices that apply only to a model variant. ([#54822](https://github.com/anomalyco/opencode/pull/54822), [#54880](https://github.com/anomalyco/opencode/pull/54880))
+- Refine diff colors and move unread indicators into session tabs. ([#52551](https://github.com/anomalyco/opencode/pull/52551), [#53570](https://github.com/anomalyco/opencode/pull/53570))
+
+#### Bug fixes
+
+- Show steered messages as pending immediately and render inline attachments before their server echo arrives. ([#55251](https://github.com/anomalyco/opencode/pull/55251), [#54650](https://github.com/anomalyco/opencode/pull/54650))
+- Preserve raw media data up to 256 MiB so artifact previews remain available. ([#55018](https://github.com/anomalyco/opencode/pull/55018))
+- Retain session model selections when the model catalog refreshes. ([#54481](https://github.com/anomalyco/opencode/pull/54481))
+- Close browser tabs from the address field and suppress incorrect missing-file notices for restored or already-open tabs. ([#54501](https://github.com/anomalyco/opencode/pull/54501), [#55022](https://github.com/anomalyco/opencode/pull/55022))
+- Prevent a project-store eviction loop during launch and remove hover gaps between vertical tabs. ([#55078](https://github.com/anomalyco/opencode/pull/55078), [#54866](https://github.com/anomalyco/opencode/pull/54866))
+
+### SDK
+
+#### Improvements
+
+- Export `lastAssistantWithUsage` from the Solid client to consistently locate the assistant step that determines current context usage. ([#53785](https://github.com/anomalyco/opencode/pull/53785))
+
+#### Bug fixes
+
+- Include all paginated child sessions when loading a session family for usage totals. ([#53785](https://github.com/anomalyco/opencode/pull/53785))
+- Admit inline data-URL files into optimistic pending messages so attachments render immediately. ([#54650](https://github.com/anomalyco/opencode/pull/54650))
+
+### Extensions
+
+#### Improvements
+
+- Add `ctx.permission.assert` for Effect and Promise plugins, allowing plugins to use configured permission rules and the native approval prompt. ([#54930](https://github.com/anomalyco/opencode/pull/54930))
+
+#### Bug fixes
+
+- Use Figma's public endpoint and default OAuth configuration, and support Git installations and development releases. ([#55252](https://github.com/anomalyco/opencode/pull/55252), [#55304](https://github.com/anomalyco/opencode/pull/55304))
+- Resolve the Figma plugin peer dependency from its workspace. ([#55269](https://github.com/anomalyco/opencode/pull/55269))
+- Associate each rejected Promise hook with its own tool call. Thanks [@1052326311](https://github.com/1052326311). ([#55263](https://github.com/anomalyco/opencode/pull/55263))
+
 ## v2.0.28 — 2026-10-13
 
 ### Highlights
