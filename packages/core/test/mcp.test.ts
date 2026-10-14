@@ -1575,6 +1575,8 @@ test("adds, disconnects, and reconnects MCP servers at runtime", async () => {
   await Effect.runPromise(
     Effect.scoped(
       Effect.gen(function* () {
+        const server = yield* resourceServer({ modern: true, resources: false })
+        const config = { type: "remote", url: server.url, oauth: false, protocol: "2026-07-28" } as const
         yield* Effect.gen(function* () {
           const service = yield* Mcp.Service
 
@@ -1582,25 +1584,12 @@ test("adds, disconnects, and reconnects MCP servers at runtime", async () => {
           expect(published).toContain(McpEvent.StatusChanged.type)
           expect(yield* service.connect("missing").pipe(Effect.flip)).toBeInstanceOf(Mcp.NotFoundError)
           expect(yield* service.disconnect("missing").pipe(Effect.flip)).toBeInstanceOf(Mcp.NotFoundError)
-          yield* service.add(
-            "dynamic",
-            new ConfigMCP.Local({
-              type: "local",
-              command: [process.execPath, path.join(import.meta.dir, "fixture/mcp-output-schema.ts")],
-            }),
-          )
+          yield* service.add("dynamic", new ConfigMCP.Remote(config))
           expect((yield* service.servers()).find((server) => server.name === "dynamic")?.status).toEqual({
             status: "connected",
           })
 
-          yield* service.add(
-            "dynamic",
-            new ConfigMCP.Local({
-              type: "local",
-              command: [process.execPath, path.join(import.meta.dir, "fixture/mcp-output-schema.ts")],
-              disabled: true,
-            }),
-          )
+          yield* service.add("dynamic", new ConfigMCP.Remote({ ...config, disabled: true }))
           expect((yield* service.servers()).find((server) => server.name === "dynamic")?.status).toEqual({
             status: "disabled",
           })
@@ -1628,11 +1617,7 @@ test("adds, disconnects, and reconnects MCP servers at runtime", async () => {
         }).pipe(
           Effect.provide(
             resourceMcpLayer(
-              new ConfigMCP.Local({
-                type: "local",
-                command: [process.execPath, path.join(import.meta.dir, "fixture/mcp-output-schema.ts")],
-                disabled: true,
-              }),
+              new ConfigMCP.Local({ type: "local", command: ["unused"], disabled: true }),
               undefined,
               undefined,
               { published },
@@ -1719,22 +1704,20 @@ testEffect(resourceMcpLayer(new ConfigMCP.Local({ type: "local", command: ["unus
   () =>
     Effect.gen(function* () {
       const service = yield* Mcp.Service
+      const server = yield* resourceServer({ modern: true, resources: false })
 
       yield* Effect.scoped(
         Effect.gen(function* () {
           yield* service.transform((editor) => {
-            editor.set("dynamic", {
-              type: "local",
-              command: [process.execPath, path.join(import.meta.dir, "fixture/mcp-output-schema.ts")],
-            })
+            editor.set("dynamic", { type: "remote", url: server.url, oauth: false, protocol: "2026-07-28" })
           })
           expect((yield* service.servers()).find((server) => server.name === "dynamic")?.status.status).toBe(
             "connected",
           )
-          expect(yield* service.tools()).toHaveLength(2)
+          expect(yield* service.tools()).toHaveLength(1)
 
           yield* service.transform((editor) => editor.update("dynamic", (server) => (server.codemode = false)))
-          expect((yield* service.tools()).map((tool) => tool.codemode)).toEqual([false, false])
+          expect((yield* service.tools()).map((tool) => tool.codemode)).toEqual([false])
 
           const settings = { disabled: true }
           yield* service.transform((editor) => {
@@ -1750,7 +1733,7 @@ testEffect(resourceMcpLayer(new ConfigMCP.Local({ type: "local", command: ["unus
           expect((yield* service.servers()).find((server) => server.name === "dynamic")?.status.status).toBe(
             "connected",
           )
-          expect(yield* service.tools()).toHaveLength(2)
+          expect(yield* service.tools()).toHaveLength(1)
 
           const removed = yield* service.transform((editor) => editor.remove("dynamic"))
           expect((yield* service.servers()).some((server) => server.name === "dynamic")).toBe(false)
@@ -1760,7 +1743,7 @@ testEffect(resourceMcpLayer(new ConfigMCP.Local({ type: "local", command: ["unus
           expect((yield* service.servers()).find((server) => server.name === "dynamic")?.status.status).toBe(
             "connected",
           )
-          expect(yield* service.tools()).toHaveLength(2)
+          expect(yield* service.tools()).toHaveLength(1)
         }),
       )
 
@@ -2088,6 +2071,7 @@ test("serializes concurrent MCP lifecycle operations", async () => {
   await Effect.runPromise(
     Effect.scoped(
       Effect.gen(function* () {
+        const server = yield* resourceServer({ modern: true, resources: false })
         yield* Effect.gen(function* () {
           const service = yield* Mcp.Service
 
@@ -2116,9 +2100,11 @@ test("serializes concurrent MCP lifecycle operations", async () => {
         }).pipe(
           Effect.provide(
             resourceMcpLayer(
-              new ConfigMCP.Local({
-                type: "local",
-                command: [process.execPath, path.join(import.meta.dir, "fixture/mcp-output-schema.ts")],
+              new ConfigMCP.Remote({
+                type: "remote",
+                url: server.url,
+                oauth: false,
+                protocol: "2026-07-28",
                 disabled: true,
               }),
             ),
