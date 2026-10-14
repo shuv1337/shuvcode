@@ -359,10 +359,7 @@ function ThoughtEntry(props: { entry: SessionEntry; message: Renderers["message"
   const ctx = use()
   const theme = useTheme()
   const { currentSyntax: syntax } = useThemes()
-  const renderer = useRenderer()
-  const thinkingSyntax = createSyntaxStyleMemo(() =>
-    generateThinkingSyntax(syntax(), theme.text.muted, renderer.nativeScene),
-  )
+  const thinkingSyntax = createSyntaxStyleMemo(() => generateThinkingSyntax(syntax(), theme.text.muted))
   const message = createMemo(() => {
     if (props.entry.type !== "part") return
     const item = props.message(props.entry.ref.messageID)

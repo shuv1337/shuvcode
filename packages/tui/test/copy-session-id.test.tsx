@@ -8,8 +8,7 @@ import { tmpdir } from "./fixture/fixture"
 
 test.each(["success", "failure", "home"])("Copy session ID from Ctrl+P (%s)", async (mode) => {
   await using state = await tmpdir()
-  const setup = await createTestRenderer({ width: 100, height: 30, kittyKeyboard: true })
-  await setup.renderer.setupTerminal()
+  const setup = await createTestRenderer({ width: 100, height: 30, useThread: false, kittyKeyboard: true })
   setup.renderer.start()
   Object.defineProperty(setup.renderer, "capabilities", { get: () => null })
   const copy = spyOn(setup.renderer, "copyToClipboardOSC52").mockReturnValue(mode === "success")

@@ -1,6 +1,5 @@
 import type { CliRenderer, CliRendererConfig } from "@opentui/core"
 import { createTestRenderer, type TestRendererSetup } from "@opentui/core/testing"
-import { Writable } from "node:stream"
 import { Effect } from "effect"
 import { Timeline, type Pointer } from "../recording"
 
@@ -45,24 +44,17 @@ export const create = Effect.fn("SimulationRenderer.create")(function* (
         kittyKeyboard: Boolean(options.useKittyKeyboard),
         ...(recording
           ? {
-              // Finishing a recording must not close the live renderer's output sink.
-              stdout: new Writable({
-                write(chunk, encoding, callback) {
-                  recording.write(chunk, encoding, callback)
-                },
-              }) as unknown as NodeJS.WriteStream,
+              stdout: recording as unknown as NodeJS.WriteStream,
               bufferedOutput: "stdout" as const,
             }
           : {}),
       }),
     ),
     (setup) =>
-      Effect.promise(async () => {
+      Effect.sync(() => {
         if (!setup.renderer.isDestroyed) setup.renderer.destroy()
-        await setup.renderer.closed
       }),
   )
-  yield* Effect.tryPromise(() => setup.renderer.setupTerminal())
   setups.set(setup.renderer, setup)
   if (recording) recordings.set(setup.renderer, recording)
   return setup.renderer
@@ -83,10 +75,7 @@ export function setupFor(renderer: CliRenderer): TestRendererSetup | undefined {
 export function finish(renderer: CliRenderer) {
   const recording = recordings.get(renderer)
   if (!recording) return Effect.fail(new Error("UI recording is not available"))
-  return Effect.tryPromise(async () => {
-    if (renderer.isDestroyed) await renderer.closed
-    return recording.finish()
-  })
+  return Effect.tryPromise(() => recording.finish())
 }
 
 export * as SimulationRenderer from "./renderer"

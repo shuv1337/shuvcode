@@ -1,9 +1,13 @@
-import { SyntaxStyle, TextAttributes, type ColorInput, type NativeResourceOwner } from "@opentui/core"
+import { SyntaxStyle, TextAttributes, type ColorInput } from "@opentui/core"
 import { type RunEntryTheme, type RunTheme } from "./theme"
 import type { StreamCommit } from "./types"
 
-export function entrySyntax(theme: RunTheme, owner: NativeResourceOwner): SyntaxStyle {
-  return SyntaxStyle.fromStyles(theme.block.syntax?.getAllStyles() ?? {}, owner)
+function syntax(style?: SyntaxStyle): SyntaxStyle {
+  return style ?? SyntaxStyle.fromTheme([])
+}
+
+export function entrySyntax(theme: RunTheme): SyntaxStyle {
+  return syntax(theme.block.syntax)
 }
 
 function entryFailed(commit: StreamCommit): boolean {

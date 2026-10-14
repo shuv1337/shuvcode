@@ -233,7 +233,6 @@ export function Session(props: {
   })
   const disabled = createMemo(() => promptedPermissions().length > 0 || forms().length > 0)
 
-  const renderer = useRenderer()
   const dimensions = useTerminalDimensions()
   const thinkingMode = createMemo<ThinkingMode>(() => config.session?.thinking ?? "hide")
   const showScrollbar = createMemo(() => config.session?.scrollbar ?? false)
@@ -393,8 +392,8 @@ export function Session(props: {
 
   /** Runs after layout has settled (two frames), unless the transcript was torn down. */
   const afterLayout = (continuation: () => void) => {
-    renderer.requestAnimationFrame(() => {
-      renderer.requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
         if (!scroll || scroll.isDestroyed) return
         continuation()
       })
@@ -406,7 +405,7 @@ export function Session(props: {
   // Renderable positions are still stale at that point; read the computed layout instead.
   let held: { node: Renderable; top: number } | undefined
   const layoutTop = (node: Renderable): number =>
-    node === scroll.content || !node.parent ? 0 : node.getComputedLayout().top + layoutTop(node.parent)
+    node === scroll.content || !node.parent ? 0 : node.getLayoutNode().getComputedTop() + layoutTop(node.parent)
   const holdAnchor = () => {
     if (held && !held.node.isDestroyed) scroll.scrollTo(layoutTop(held.node) - held.top)
   }
@@ -623,6 +622,7 @@ export function Session(props: {
     current.submit()
   })
   const dialog = useDialog()
+  const renderer = useRenderer()
   const runPendingAction = createSingleFlight<string>()
   const mutatePending = async (action: PendingAction, inboxID: string, failureLabel?: string) => {
     const result = await runPendingAction(inboxID, async () => {
@@ -682,13 +682,7 @@ export function Session(props: {
               void mutatePending("cancel", queued.id, "undo").then((undone) => {
                 if (!undone) return
                 target.setMode("normal")
-                target.set(
-                  appendPrompt(
-                    target.current,
-                    { ...projectedPromptInput(queued.payload), pasted: [] },
-                    renderer.widthMethod,
-                  ),
-                )
+                target.set(appendPrompt(target.current, { ...projectedPromptInput(queued.payload), pasted: [] }))
                 dialog.clear()
                 target.focus()
               })

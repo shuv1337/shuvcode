@@ -26,8 +26,7 @@ test.each([
   "prepend-failure",
 ])("Home loads a stable, bounded beginning (%s)", async (mode) => {
   await using state = await tmpdir()
-  const setup = await createTestRenderer({ width: 100, height: 30, kittyKeyboard: true })
-  await setup.renderer.setupTerminal()
+  const setup = await createTestRenderer({ width: 100, height: 30, useThread: false, kittyKeyboard: true })
   setup.renderer.start()
   const session = {
     id: "ses_test",

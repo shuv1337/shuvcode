@@ -13,19 +13,11 @@ import { createTestRenderer } from "@opentui/core/testing"
 import { renderLatex } from "./render"
 import { createLatexCodeBlockRenderer } from "./markdown"
 
-const renderers: {
-  renderer: Awaited<ReturnType<typeof createTestRenderer>>["renderer"]
-  syntaxStyle: SyntaxStyle
-}[] = []
+const renderers: Awaited<ReturnType<typeof createTestRenderer>>["renderer"][] = []
+const syntaxStyle = SyntaxStyle.fromStyles({ default: { fg: "#ffffff" } })
 
-afterEach(async () => {
-  await Promise.all(
-    renderers.splice(0).map(async (output) => {
-      output.renderer.destroy()
-      await output.renderer.closed
-      output.syntaxStyle.destroy()
-    }),
-  )
+afterEach(() => {
+  renderers.splice(0).forEach((renderer) => renderer.destroy())
 })
 
 async function setup(content: string, width = 80) {
@@ -33,9 +25,9 @@ async function setup(content: string, width = 80) {
     width,
     height: 24,
     remote: true,
+    useThread: false,
   })
-  const syntaxStyle = SyntaxStyle.fromStyles({ default: { fg: "#ffffff" } }, output.renderer.nativeScene)
-  renderers.push({ renderer: output.renderer, syntaxStyle })
+  renderers.push(output.renderer)
   const palette = { text: "#abcdef", subdued: "#667788" }
   const render = createLatexCodeBlockRenderer(output.renderer, () => palette)
   const markdown = new MarkdownRenderable(output.renderer, {

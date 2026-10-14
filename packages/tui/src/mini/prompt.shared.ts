@@ -7,8 +7,9 @@
 // the current browse position. When the user arrows up at cursor offset 0,
 // the current draft is saved and history begins. Arrowing past the end
 // restores the draft.
-export { mentionTriggerIndex, slashTriggerIndex } from "../prompt/display"
-import { measureEditText, type WidthMethod } from "@opentui/core"
+export { displayCharAt, displaySlice, mentionTriggerIndex, slashTriggerIndex } from "../prompt/display"
+import { promptOffsetWidth } from "../prompt/display"
+import { stringWidth } from "../util/string-width"
 import type { RunPrompt } from "./types"
 
 const HISTORY_LIMIT = 200
@@ -35,10 +36,10 @@ export function promptCopy(prompt: RunPrompt): RunPrompt {
   }
 }
 
-// Part ranges are textarea offsets, so shift by the measured offset rather than string length.
-export function promptAppend(prompt: RunPrompt, following: RunPrompt, widthMethod: WidthMethod): RunPrompt {
+// Part ranges are textarea offsets, so shift by display width rather than string length.
+export function promptAppend(prompt: RunPrompt, following: RunPrompt): RunPrompt {
   const text = prompt.text ? `${prompt.text}\n\n` : ""
-  const offset = measureEditText(text, { widthMethod })
+  const offset = promptOffsetWidth(text)
   const shift = <T extends { start: number; end: number }>(range: T) => ({
     ...range,
     start: range.start + offset,
@@ -126,13 +127,7 @@ export function pushPromptHistory(state: PromptHistoryState, prompt: RunPrompt):
   }
 }
 
-export function movePromptHistory(
-  state: PromptHistoryState,
-  dir: -1 | 1,
-  text: string,
-  cursor: number,
-  widthMethod: WidthMethod,
-): PromptMove {
+export function movePromptHistory(state: PromptHistoryState, dir: -1 | 1, text: string, cursor: number): PromptMove {
   if (state.items.length === 0) {
     return { state, apply: false }
   }
@@ -141,7 +136,7 @@ export function movePromptHistory(
     return { state, apply: false }
   }
 
-  if (dir === 1 && cursor !== measureEditText(text, { widthMethod })) {
+  if (dir === 1 && cursor !== stringWidth(text)) {
     return { state, apply: false }
   }
 
@@ -175,7 +170,7 @@ export function movePromptHistory(
         index: null,
       },
       text: state.draft,
-      cursor: measureEditText(state.draft, { widthMethod }),
+      cursor: stringWidth(state.draft),
       apply: true,
     }
   }
@@ -186,7 +181,7 @@ export function movePromptHistory(
       index: idx,
     },
     text: state.items[idx].text,
-    cursor: dir === -1 ? 0 : measureEditText(state.items[idx].text, { widthMethod }),
+    cursor: dir === -1 ? 0 : stringWidth(state.items[idx].text),
     apply: true,
   }
 }

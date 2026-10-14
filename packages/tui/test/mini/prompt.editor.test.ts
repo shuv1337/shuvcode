@@ -1,5 +1,4 @@
 import { describe, expect, test } from "bun:test"
-import { measureEditText } from "@opentui/core"
 import { realignEditorPromptParts, resolveEditorSlashValue } from "../../src/mini/prompt.editor"
 import type { RunPromptPart } from "../../src/mini/types"
 
@@ -37,7 +36,7 @@ describe("run prompt editor helpers", () => {
     } satisfies RunPromptPart
     const parts = [filePart, agentPart]
 
-    expect(realignEditorPromptParts("Please check @helper before @src/app.ts", parts, "unicode")).toEqual([
+    expect(realignEditorPromptParts("Please check @helper before @src/app.ts", parts)).toEqual([
       {
         ...filePart,
         source: {
@@ -88,7 +87,7 @@ describe("run prompt editor helpers", () => {
     } satisfies RunPromptPart
     const parts = [filePart, agentPart]
 
-    expect(realignEditorPromptParts("Only @helper remains", parts, "unicode")).toEqual([
+    expect(realignEditorPromptParts("Only @helper remains", parts)).toEqual([
       {
         ...agentPart,
         source: {
@@ -100,18 +99,17 @@ describe("run prompt editor helpers", () => {
     ])
   })
 
-  test.each(["wcwidth", "unicode"] as const)("uses %s editor offsets when realigning Mini parts", (widthMethod) => {
+  test("uses display offsets when realigning Mini parts", () => {
     const part = {
       type: "agent",
-      name: "助手",
-      source: { start: 0, end: 5, value: "@助手" },
+      name: "helper",
+      source: { start: 0, end: 7, value: "@helper" },
     } satisfies RunPromptPart
-    const start = measureEditText("\t\f中文👨‍👩‍👧\r\n", { widthMethod })
 
-    expect(realignEditorPromptParts("\t\f中文👨‍👩‍👧\r\n@助手", [part], widthMethod)).toEqual([
+    expect(realignEditorPromptParts("中文🙂\n@helper", [part])).toEqual([
       {
         ...part,
-        source: { start, end: start + 5, value: "@助手" },
+        source: { start: 7, end: 14, value: "@helper" },
       },
     ])
   })

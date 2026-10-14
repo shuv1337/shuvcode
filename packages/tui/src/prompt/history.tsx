@@ -1,5 +1,4 @@
 import path from "path"
-import { measureEditText, type WidthMethod } from "@opentui/core"
 import { onMount } from "solid-js"
 import { createStore, produce, unwrap } from "solid-js/store"
 import type { PromptInput } from "@opencode/schema"
@@ -7,6 +6,7 @@ import type { Types } from "effect"
 import { createSimpleContext } from "../context/helper"
 import { useTuiPaths } from "../context/runtime"
 import { appendText, readText, writeText } from "../util/persistence"
+import { promptOffsetWidth } from "./display"
 
 export type PastedText = {
   text: string
@@ -29,10 +29,10 @@ export type PromptPartRef = {
 
 export const emptyPrompt = (): PromptInfo => ({ text: "", files: [], agents: [], skills: [], pasted: [] })
 
-// Part ranges are textarea offsets, so shift by the measured offset rather than string length.
-export function appendPrompt(prompt: PromptInfo, following: PromptInfo, widthMethod: WidthMethod): PromptInfo {
+// Part ranges are textarea offsets, so shift by display width rather than string length.
+export function appendPrompt(prompt: PromptInfo, following: PromptInfo): PromptInfo {
   const text = prompt.text ? `${prompt.text}\n\n` : ""
-  const offset = measureEditText(text, { widthMethod })
+  const offset = promptOffsetWidth(text)
   const shift = <T extends { start: number; end: number }>(range: T, by: number) => ({
     ...range,
     start: range.start + by,

@@ -1,6 +1,6 @@
 import { createMemo, createSignal, Match, Show, Switch } from "solid-js"
 import { RGBA, TextAttributes, type MouseEvent } from "@opentui/core"
-import { useRenderer, type JSX } from "@opentui/solid"
+import type { JSX } from "@opentui/solid"
 import type {
   SessionMessageAssistant,
   SessionMessageAssistantReasoning,
@@ -46,10 +46,7 @@ export function ReasoningPart(props: {
 }) {
   const theme = useTheme()
   const { currentSyntax: syntax } = useThemes()
-  const renderer = useRenderer()
-  const thinkingSyntax = createSyntaxStyleMemo(() =>
-    generateThinkingSyntax(syntax(), theme.text.muted, renderer.nativeScene),
-  )
+  const thinkingSyntax = createSyntaxStyleMemo(() => generateThinkingSyntax(syntax(), theme.text.muted))
   const ctx = use()
   // Collapsed by default in hide mode: a single line throughout, so the
   // layout never shifts. Click to open the full markdown block, click to close.

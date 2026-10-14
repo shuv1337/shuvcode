@@ -4,7 +4,7 @@
 import { createCliRenderer, RGBA, TextAttributes, type CliRenderer } from "@opentui/core"
 import { render, useTerminalDimensions } from "@opentui/solid"
 import { OPENCODE_VERSION } from "../version"
-import "@opencode/tui/component/spinner-renderable"
+import { registerOpencodeSpinner } from "@opencode/tui/component/register-spinner"
 import { SPINNER_FRAMES } from "@opencode/tui/component/spinner"
 import { go } from "@opencode/tui/logo"
 import { setTimeout } from "node:timers/promises"
@@ -72,6 +72,7 @@ type Session = {
 }
 
 async function open(from?: string): Promise<Session> {
+  registerOpencodeSpinner()
   const [active, setActive] = createSignal(0)
   const [outcome, setOutcome] = createSignal<"running" | "success" | "failure">("running")
   const [failure, setFailure] = createSignal("")
@@ -106,9 +107,8 @@ async function open(from?: string): Promise<Session> {
       />
     ),
     renderer,
-  ).catch(async (error) => {
+  ).catch((error) => {
     if (!renderer.isDestroyed) renderer.destroy()
-    await renderer.closed
     throw error
   })
   let shownAt = performance.now()
@@ -141,12 +141,10 @@ async function open(from?: string): Promise<Session> {
   const close = () =>
     (closing ??= (async () => {
       setAnimating(false)
-      // closed rejects when the terminal is gone or the final flush times out; nothing is left to restore.
-      if (renderer.isDestroyed) return renderer.closed.catch(() => {})
+      if (renderer.isDestroyed) return
       renderer.pause()
       await Promise.race([renderer.idle(), setTimeout(500)])
       renderer.destroy()
-      await renderer.closed.catch(() => {})
     })())
   let loading: Promise<void> | undefined
   const load = () =>

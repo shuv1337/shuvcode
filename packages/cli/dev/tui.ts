@@ -106,6 +106,7 @@ export const run: Run = Effect.fn("Tui.vite")(function* (input: Parameters<Run>[
                 "solid-refresh",
                 "@opentui/solid",
                 "@opentui/keymap",
+                "opentui-spinner",
                 /^@solid-primitives\//,
                 "@opencode/plugin",
                 "@opencode/client",

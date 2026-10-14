@@ -165,12 +165,14 @@ export class RetryProviderRenderable extends TextNodeRenderable {
     this.show(this.target, 1)
   }
 
-  override mergeStyles(parentStyle: Parameters<TextNodeRenderable["mergeStyles"]>[0]) {
-    const style = super.mergeStyles(parentStyle)
-    if (this.opacity === 1) return style
-    const fg = RGBA.clone(style.fg ?? RGBA.defaultForeground())
-    fg.a *= this.opacity
-    return { ...style, fg }
+  override gatherWithInheritedStyle(style?: Parameters<TextNodeRenderable["gatherWithInheritedStyle"]>[0]) {
+    const chunks = super.gatherWithInheritedStyle(style)
+    if (this.opacity === 1) return chunks
+    return chunks.map((chunk) => {
+      const fg = RGBA.clone(chunk.fg ?? RGBA.defaultForeground())
+      fg.a *= this.opacity
+      return { ...chunk, fg }
+    })
   }
 
   override destroy() {

@@ -108,7 +108,7 @@ test.each(["pointer", "output"])("joins both recording streams after an early %s
   }
 })
 
-test.each(["destroy", "scope"])("records terminal restoration before finishing on %s", async (close) => {
+test("captures native renderer output and finishes on destroy", async () => {
   const directory = await mkdtemp(join(tmpdir(), "simulation-renderer-recording-"))
   const path = join(directory, "timeline.jsonl")
 
@@ -116,25 +116,19 @@ test.each(["destroy", "scope"])("records terminal restoration before finishing o
     await Effect.runPromise(
       Effect.scoped(
         Effect.gen(function* () {
-          const renderer = yield* SimulationRenderer.create({ screenMode: "alternate-screen" }, path)
+          const renderer = yield* SimulationRenderer.create({}, path)
           yield* Effect.promise(() => SimulationRenderer.setupFor(renderer)?.renderOnce() ?? Promise.resolve())
-          if (close === "destroy") {
-            renderer.destroy()
-            expect(yield* SimulationRenderer.finish(renderer)).toBe(path)
-          }
+          renderer.destroy()
+          expect(yield* SimulationRenderer.finish(renderer)).toBe(path)
+
+          const events = (yield* Effect.promise(() => Bun.file(path).text()))
+            .trim()
+            .split("\n")
+            .map((line) => JSON.parse(line) as Event)
+          expect(events.some((event) => event.type === "output")).toBe(true)
         }),
       ),
     )
-    const events = (await Bun.file(path).text())
-      .trim()
-      .split("\n")
-      .map((line) => JSON.parse(line) as Event)
-    const output = events.flatMap((event) =>
-      event.type === "output" ? [Buffer.from(event.data, "base64").toString()] : [],
-    )
-    expect(output.join("")).toContain("\u001b[?1049l")
-    expect(output.at(-2)).toContain("\u001b[?25h")
-    expect(output.at(-1)).toBe("")
   } finally {
     await rm(directory, { recursive: true, force: true })
   }
@@ -153,9 +147,6 @@ test("matches live screen text while recording", async () => {
           yield* Effect.promise(() => SimulationRenderer.setupFor(renderer)?.renderOnce() ?? Promise.resolve())
 
           expect(matches(createHarness(renderer), "recorded screen text")).toBe(true)
-          expect(yield* SimulationRenderer.finish(renderer)).toBe(path)
-          yield* Effect.promise(() => SimulationRenderer.setupFor(renderer)?.renderOnce() ?? Promise.resolve())
-          expect(renderer.isDestroyed).toBe(false)
         }),
       ),
     )

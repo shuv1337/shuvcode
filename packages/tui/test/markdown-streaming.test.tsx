@@ -1,37 +1,25 @@
 import { afterEach, expect, test } from "bun:test"
 import { CodeRenderable, MarkdownRenderable, SyntaxStyle } from "@opentui/core"
-import { testRender, useRenderer } from "@opentui/solid"
+import { testRender } from "@opentui/solid"
 import { batch, createSignal } from "solid-js"
 
-const renderers: {
-  renderer: Awaited<ReturnType<typeof testRender>>["renderer"]
-  syntaxStyle: SyntaxStyle
-}[] = []
+const renderers: Awaited<ReturnType<typeof testRender>>["renderer"][] = []
+const syntaxStyle = SyntaxStyle.fromStyles({ default: { fg: "#ffffff" } })
 
-afterEach(async () => {
-  await Promise.all(
-    renderers.splice(0).map(async (output) => {
-      output.renderer.destroy()
-      await output.renderer.closed
-      output.syntaxStyle.destroy()
-    }),
-  )
+afterEach(() => {
+  renderers.splice(0).forEach((renderer) => renderer.destroy())
 })
 
 test.each(["completion-first", "content-first"])("applies final fence text in a Solid batch: %s", async (order) => {
   const [content, setContent] = createSignal("```text\ninitial")
   const [streaming, setStreaming] = createSignal(true)
   const output = await testRender(
-    () => {
-      const renderer = useRenderer()
-      const syntaxStyle = SyntaxStyle.fromStyles({ default: { fg: "#ffffff" } }, renderer.nativeScene)
-      renderers.push({ renderer, syntaxStyle })
-      return (
-        <markdown syntaxStyle={syntaxStyle} content={content()} streaming={streaming()} internalBlockMode="top-level" />
-      )
-    },
-    { width: 80, height: 12, remote: true },
+    () => (
+      <markdown syntaxStyle={syntaxStyle} content={content()} streaming={streaming()} internalBlockMode="top-level" />
+    ),
+    { width: 80, height: 12, remote: true, useThread: false },
   )
+  renderers.push(output.renderer)
   await output.renderOnce()
 
   batch(() => {

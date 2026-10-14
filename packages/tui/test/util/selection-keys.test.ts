@@ -9,6 +9,7 @@ async function setup(copyOnSelect = false) {
   const app = await createTestRenderer({
     width: 24,
     height: 3,
+    useThread: false,
     exitOnCtrlC: false,
     useKittyKeyboard: {},
     clock,
