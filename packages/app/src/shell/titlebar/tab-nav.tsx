@@ -12,7 +12,6 @@ import { useLanguage } from "@/runtime/i18n/language"
 import { ServerConnection, serverName, useServers } from "@/runtime/server/registry"
 import { displayName } from "@opencode/ui/project-avatar"
 import { SessionTabAvatarView } from "@/shell/layout/session-tab-avatar"
-import { useSessionTabAvatarState } from "@/shell/layout/project-avatar-state"
 import { SessionProgressIndicatorV2 } from "@opencode/session-ui/v2/session-progress-indicator-v2"
 import type { SessionInfo } from "@opencode/client/promise"
 import { sessionTabTitle } from "./tab-title"
@@ -28,6 +27,8 @@ export function TabNavItem(props: {
   server: ServerConnection.Key
   session: SessionInfo | undefined
   preparing: boolean
+  unread: boolean
+  loading: boolean
   fallbackTitle?: string
   onRename: (title: string) => Promise<void>
   onClose: () => void
@@ -57,13 +58,7 @@ export function TabNavItem(props: {
   const servers = useServers()
   const serverCtx = useServerCtx(() => servers.list.find((item) => ServerConnection.key(item) === props.server))
 
-  const avatar = useSessionTabAvatarState(
-    () => props.server,
-    () => props.session?.id ?? "",
-    () => true,
-  )
-
-  const unread = () => !!props.session && !props.active && avatar.unread() && !avatar.loading()
+  const unread = () => !!props.session && !props.active && props.unread
 
   const project = createMemo(() => {
     const session = props.session
@@ -312,7 +307,7 @@ export function TabNavItem(props: {
                 project={project()}
                 directory={session.location.directory}
                 unread={false}
-                loading={avatar.loading()}
+                loading={props.loading}
               />
             )}
           </Show>

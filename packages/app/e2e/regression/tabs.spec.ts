@@ -162,6 +162,32 @@ test("keyboard navigation follows the visible tab order and skips unresolved tab
   await expectPath(page, sessionHref(c.id))
 })
 
+test("option arrows move to the previous or next tab, and with shift to the next unread one", async ({ page }) => {
+  await mockWorkspace(page, {
+    name: "Tabs",
+    sessions: [a, b, c],
+    sessionPermissions: {
+      [c.id]: [
+        { id: "permission-tab-c", sessionID: c.id, action: "shell", resources: ["git status"], metadata: {}, save: [] },
+      ],
+    },
+  })
+  await page.goto(sessionHref(a.id))
+  await page.mouse.move(0, 0)
+  await expect(
+    page.locator(`[data-titlebar-tab-slot]:has(a[href="${sessionHref(c.id)}"]) [data-slot="tab-unread-dot"]`),
+  ).toBeVisible()
+
+  await page.keyboard.press("Alt+ArrowDown")
+  await expectPath(page, sessionHref(b.id))
+
+  await page.keyboard.press("Alt+ArrowUp")
+  await expectPath(page, sessionHref(a.id))
+
+  await page.keyboard.press("Shift+Alt+ArrowDown")
+  await expectPath(page, sessionHref(c.id))
+})
+
 for (const row of [
   { tabLayout: "horizontal", width: 360, hasTouch: false, direction: "ltr" },
   { tabLayout: "vertical", width: 390, hasTouch: true, direction: "rtl" },
