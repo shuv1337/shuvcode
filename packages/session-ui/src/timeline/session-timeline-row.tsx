@@ -6,7 +6,8 @@ import type {
 } from "@opencode/client/promise"
 import { useI18n } from "@opencode/ui/context/i18n"
 import { Option, Predicate, Schema } from "effect"
-import { For, Show, createMemo, type Accessor, type JSX } from "solid-js"
+import { For, Show, createEffect, createMemo, type Accessor, type JSX } from "solid-js"
+import { DiffChanges } from "@opencode/ui/diff-changes"
 import { Dynamic } from "solid-js/web"
 import type { SessionUserActions, SessionUserAttachmentReference, SessionUserComment } from "../actions"
 import { useData } from "../context"
@@ -25,7 +26,8 @@ import {
   SessionCompactionMessage,
   SessionCompactionQueued,
 } from "../message/message-content"
-import type { ContextGroupPart } from "../tools/tool-renderer"
+import { ToolRegistry, type ContextGroupPart } from "../tools/tool-renderer"
+import { GenericTool } from "../components/basic-tool"
 import { SessionRetry } from "../components/session-retry"
 import { SessionError } from "../components/session-error"
 import { timelineCategory, type TimelineDetail } from "./detail"
@@ -40,6 +42,9 @@ import {
 } from "./projection"
 
 const emptyAssistantMessages: SessionMessageAssistant[] = []
+
+// Past this many files, the rest of a turn's changes wait behind "Show all".
+const turnDiffFileLimit = 5
 
 const decodeMetadataFile = Schema.decodeUnknownOption(Schema.Struct({ file: Schema.String }))
 
@@ -704,6 +709,56 @@ export function createSessionTimelineRowRenderer(input: {
     )
   }
 
+  function TurnDiff(props: { row: TimelineRow.TurnDiff; onSizeChange?: () => void }) {
+    const render = ToolRegistry.render("patch") ?? GenericTool
+    // Until the diff loads, list the paths the turn's steps recorded, without change counts.
+    const turn = () => ({ sessionID: input.sessionID(), from: props.row.from })
+    const diffs = () => data.turnDiff?.get(turn())
+    const paths = () => diffs()?.map((diff) => diff.file) ?? props.row.files
+    const showAllKey = () => `turn-diff:${props.row.messageID}`
+    const showAll = () => input.disclosure.value(showAllKey()) === true
+    const limit = <T,>(items: readonly T[]) => (showAll() ? items : items.slice(0, turnDiffFileLimit))
+    const overflow = () => paths().length > turnDiffFileLimit
+    const fileKey = (path: string) => `turn-diff:${props.row.messageID}:file:${path}`
+
+    createEffect(() => data.turnDiff?.load(turn()))
+
+    return (
+      <Show when={data.turnDiff && paths().length > 0}>
+        <div data-slot="session-turn-diffs" class="flex flex-col gap-2 pt-4">
+          <div class="flex h-6 min-w-0 items-center gap-2">
+            <span class="text-14-medium text-text-strong tabular-nums">
+              {i18n.plural("ui.sessionTurn.diffs.changed", paths().length)}
+            </span>
+            <DiffChanges changes={[...(diffs() ?? [])]} />
+            <Show when={overflow()}>
+              <button
+                type="button"
+                class="ml-auto text-14-regular text-text-interactive-base"
+                onClick={() => input.disclosure.set(showAllKey(), !showAll())}
+              >
+                {showAll() ? i18n.t("ui.sessionTurn.diffs.showLess") : i18n.t("ui.sessionTurn.diffs.showAll")}
+              </button>
+            </Show>
+          </div>
+          <Dynamic
+            component={render}
+            tool="patch"
+            input={{}}
+            metadata={{ files: limit(diffs() ?? []) }}
+            pendingFiles={diffs() ? undefined : limit(props.row.files)}
+            status="completed"
+            fileOpen={(path: string) => input.disclosure.value(fileKey(path))}
+            onFileOpenChange={(path: string, open: boolean) => input.disclosure.set(fileKey(path), open)}
+            deferContent
+            virtualizeDiff={false}
+            onContentRendered={props.onSizeChange}
+          />
+        </div>
+      </Show>
+    )
+  }
+
   const render = (row: Accessor<TimelineRow.TimelineRow>, onSizeChange?: () => void) => {
     if (Predicate.isTagged(row(), "TurnGap")) return <div data-timeline-row="TurnGap" aria-hidden="true" class="h-6" />
 
@@ -893,6 +948,24 @@ export function createSessionTimelineRowRenderer(input: {
                 )}
               </Show>
             </div>
+          </div>
+        </Frame>
+      )
+    }
+
+    if (Predicate.isTagged(row(), "TurnDiff")) {
+      const current = () => {
+        const value = row()
+
+        if (!Predicate.isTagged(value, "TurnDiff")) throw new Error("Expected a turn-diff timeline row")
+
+        return value
+      }
+
+      return (
+        <Frame row={current()}>
+          <div data-slot="session-turn-message-container" class={`w-full ${padding()}`}>
+            <TurnDiff row={current()} onSizeChange={onSizeChange} />
           </div>
         </Frame>
       )

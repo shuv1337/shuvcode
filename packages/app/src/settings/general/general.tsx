@@ -317,6 +317,17 @@ export const SettingsGeneral: Component = () => {
                 onChange={settings.general.setTimelineDetail}
               />
             </div>
+            <SettingsRow
+              title={language.t("settings.timeline.row.turnDiffs.title")}
+              description={language.t("settings.timeline.row.turnDiffs.description")}
+            >
+              <div data-action="settings-show-turn-diffs">
+                <Switch
+                  checked={settings.general.showTurnDiffs()}
+                  onChange={(checked) => settings.general.setShowTurnDiffs(checked)}
+                />
+              </div>
+            </SettingsRow>
           </SettingsList>
         </section>
 
