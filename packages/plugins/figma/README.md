@@ -31,7 +31,7 @@ The plugin is not activated merely by being present in the repository. Installin
 2. Confirm that the server is connected.
 3. Ask the agent to call Figma's `whoami` tool.
 
-The connection uses the approved app-specific endpoint `https://mcp.figma.com/mcp/8CKW0Mgge6TtIHM5ko0YxQ`. The app ID belongs in that URL, not in `oauth.client_id`; setting a configured client ID would skip DCR.
+The connection uses Figma's public endpoint with dynamic client registration (DCR). OAuth discovery supplies the scope, and OpenCode chooses an available loopback callback port; no client credentials or explicit OAuth settings are needed.
 
 Existing `mcp.servers.figma` configuration takes precedence, including disabled servers and custom endpoints.
 
