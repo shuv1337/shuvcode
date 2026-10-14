@@ -13,6 +13,22 @@ import { createAppFixture } from "./fixture/app"
 import { directory, json } from "./fixture/tui-client"
 import { tmpdir } from "./fixture/fixture"
 
+test("/diff opens the full-screen diff when the side panel experiment is off", async () => {
+  await using state = await tmpdir()
+  await using setup = await createSessionFixture(state.path, { panel: false })
+  await ready(setup)
+  await setup.mockInput.typeText("/diff")
+  await setup.waitForFrame((frame) => frame.includes("Open diff viewer"))
+  setup.mockInput.pressEnter()
+  await setup.waitForFrame((frame) => frame.includes("file00.txt"), { maxPasses: 120 })
+  expect(setup.renderer.root.findDescendantById("session-panel")).toBeUndefined()
+  expect(setup.renderer.root.findDescendantById("diff-footer")).toBeUndefined()
+  expect(setup.captureCharFrame()).not.toContain("Transcript item 11")
+  setup.mockInput.pressKey("q")
+  await setup.waitForFrame((frame) => frame.includes("Transcript item 11") && !frame.includes("file00.txt"))
+  expect(setup.renderer.root.findDescendantById("session-panel")).toBeUndefined()
+})
+
 test("/diff focuses the production session panel without sending typing to the prompt", async () => {
   await using state = await tmpdir()
   await using setup = await createSessionFixture(state.path)
@@ -458,6 +474,7 @@ async function createSessionFixture(
     keybinds?: Config.Info["keybinds"]
     permission?: boolean
     form?: boolean
+    panel?: boolean
   } = {},
 ) {
   // Drafts survive app disposal in memory, so each production app needs its own session identity.
@@ -512,6 +529,7 @@ async function createSessionFixture(
       session: { sidebar: "hide" },
       // Keep patch geometry stable while testing host presentation changes, not split/unified diff layout.
       diffs: { tree: false, view: "unified", ...input.diffs },
+      experimental: { "diff-panel": input.panel ?? true },
       keybinds: { "diff.open": "f6", ...input.keybinds },
     },
     fetch: async (url, request) => {

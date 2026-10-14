@@ -840,9 +840,9 @@ export function DiffViewerContent(props: {
           id="diff-source-header"
           paddingLeft={2}
           paddingRight={2}
-          paddingTop={1}
-          paddingBottom={1}
-          height={3}
+          paddingTop={docked() ? 1 : 0}
+          paddingBottom={docked() ? 1 : 0}
+          height={docked() ? 3 : 1}
           flexShrink={0}
           flexDirection="row"
           gap={1}
@@ -1134,7 +1134,7 @@ export function DiffViewerContent(props: {
         </box>
       </Show>
       <Show when={!showFileTree() && !docked()}>
-        <box position="absolute" top={1} right={0} width={1} height={1}>
+        <box position="absolute" top={0} right={0} width={1} height={1}>
           <HelpShortcut compact />
         </box>
       </Show>
@@ -1276,6 +1276,7 @@ function DiffViewerHelpDialog(props: { context: Plugin.Context; single: boolean;
 }
 
 function Commands(props: { context: Plugin.Context }) {
+  const config = useConfig()
   props.context.keymap.layer(() => ({
     mode: "global",
     commands: [
@@ -1293,7 +1294,7 @@ function Commands(props: { context: Plugin.Context }) {
             props.context.ui.panel.close()
             return
           }
-          if (props.context.ui.panel.open(ROUTE)) return
+          if (config.data.experimental?.["diff-panel"] === true && props.context.ui.panel.open(ROUTE)) return
           const returnRoute: Route =
             route.type === "home"
               ? { type: "home" }
