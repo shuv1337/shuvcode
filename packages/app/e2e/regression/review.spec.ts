@@ -890,6 +890,12 @@ test("video files over 25 MB play in the viewer, expand into the theatre overlay
   await page.mouse.click(8, 8)
   await expect(fullscreen).toHaveAttribute("aria-pressed", "false")
   expect(await video.evaluate((element) => element.dataset.e2eProbe)).toBe("retained")
+
+  // Chromium's controls also answer a double click with native fullscreen, which covers the backdrop. Opting out with
+  // controlslist="nofullscreen" would end their click-to-play as well.
+  await video.click()
+  await expect.poll(() => video.evaluate((element: HTMLVideoElement) => element.currentTime)).toBeGreaterThan(0)
+  expect(await page.evaluate(() => document.fullscreenElement)).toBeNull()
 })
 
 test("restores review state and the side-panel tab per session", async ({ page }) => {

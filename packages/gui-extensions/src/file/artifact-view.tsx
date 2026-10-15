@@ -606,6 +606,19 @@ function ArtifactVideo(props: MediaProps) {
           playsinline
           onError={() => props.onError()}
           src={url()}
+          onClick={(event) => {
+            // Chromium's controls answer the second click of a double click with a native fullscreen request, which
+            // covers the theatre the double click opens. Opting out with controlslist="nofullscreen" would also end
+            // their click-to-play. The fullscreen element ready check refuses an open popover, so the video is one
+            // while its controls handle this click, and is released before the next frame renders.
+            const el = event.currentTarget
+
+            // In native fullscreen, the controls' own exit must run; showPopover would throw there.
+            if (event.detail < 2 || document.fullscreenElement === el) return
+            el.setAttribute("popover", "manual")
+            el.showPopover?.()
+            requestAnimationFrame(() => el.removeAttribute("popover"))
+          }}
           onDblClick={toggle}
           onPlay={() => setPaused(false)}
           onPause={() => setPaused(true)}

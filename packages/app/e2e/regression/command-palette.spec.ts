@@ -48,6 +48,15 @@ test("lists recent sessions before a query is entered", async ({ page }) => {
   await expect(page.getByRole("heading", { name: paletteSession.title, exact: true })).toBeVisible()
 })
 
+test("reopens from its shortcut as soon as it closes", async ({ page }) => {
+  const { dialog, input } = await openCommandPalette(page)
+  await input.press("Escape")
+  await expect(dialog).toHaveCount(0)
+  // A closed dialog stops blocking shortcuts when it leaves the screen, not when it is disposed afterwards.
+  await page.keyboard.press("ControlOrMeta+Shift+P")
+  await expect(dialog.getByRole("textbox")).toBeFocused()
+})
+
 test("appends search results without resetting the selected command", async ({ page }) => {
   const { dialog, input } = await openCommandPalette(page)
   const files = Promise.withResolvers<void>()

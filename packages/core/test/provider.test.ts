@@ -8,7 +8,8 @@ describe("Provider", () => {
     const providers = path.join(import.meta.dir, "../../ai/src/providers")
     const entrypoints = await Promise.all(
       Array.from(new Bun.Glob("**/*.ts").scanSync(providers)).map(async (file) => {
-        const specifier = `@opencode/ai/providers/${file.replace(/\.ts$/, "")}`
+        // Bun.Glob yields native separators, and package specifiers always use "/".
+        const specifier = `@opencode/ai/providers/${file.replace(/\.ts$/, "").replaceAll(path.sep, "/")}`
         const module = await import(specifier)
         return typeof module.model === "function" ? specifier : undefined
       }),
