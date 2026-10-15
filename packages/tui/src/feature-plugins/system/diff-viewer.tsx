@@ -1325,8 +1325,8 @@ function Commands(props: { context: Plugin.Context }) {
             props.context.ui.panel.close()
             return
           }
+          // Outside a session there is no panel slot, so /diff falls back to the full-screen route.
           if (
-            config.data.experimental?.["diff-panel"] === true &&
             props.context.ui.panel.open(ROUTE, {
               presentation: config.data.diffs?.fullscreen === true ? "fullscreen" : "panel",
             })
