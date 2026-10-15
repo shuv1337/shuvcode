@@ -29,7 +29,6 @@ import {
 import { useI18n } from "~/context/i18n"
 import { useLanguage } from "~/context/language"
 import { LocaleLinks } from "~/component/locale-links"
-import { goUsageLimits } from "~/lib/language"
 
 const models = [
   { name: "Space Bunny", training: "go.faq.a5.notUsed", retention: "go.faq.a5.retention0" },
@@ -185,7 +184,7 @@ export default function Home() {
           </section>
 
           <section data-component="comparison">
-            <GoPlanChart href={goUsageLimits(language.locale())} />
+            <GoPlanChart href="/v2/docs/console/go/#usage-limits" />
           </section>
 
           <section data-component="problem">
@@ -224,7 +223,7 @@ export default function Home() {
                 <span>[1]</span>
                 <div>
                   <strong>{i18n.t("go.how.step1.title")}</strong> - {i18n.t("go.how.step1.beforeLink")}{" "}
-                  <a href={language.route("/docs/go/#how-it-works")} title={i18n.t("go.how.step1.link")}>
+                  <a href="/v2/docs/console/go/#how-it-works" title={i18n.t("go.how.step1.link")}>
                     {i18n.t("go.how.step1.link")}
                   </a>
                 </div>
@@ -233,7 +232,7 @@ export default function Home() {
                 <span>[2]</span>
                 <div>
                   <strong>{i18n.t("go.how.step2.title")}</strong> -{" "}
-                  <a href={language.route("/docs/go/#pricing")}>{i18n.t("go.how.step2.link")}</a>{" "}
+                  <a href="/v2/docs/console/go/">{i18n.t("go.how.step2.link")}</a>{" "}
                   {i18n.t("go.how.step2.afterLink")} · {i18n.t("go.plans.plus.description")}
                 </div>
               </li>
@@ -273,7 +272,7 @@ export default function Home() {
               <li>
                 <Faq question={i18n.t("go.faq.q4")}>
                   {i18n.t("go.faq.a4.p1.beforePricing")}{" "}
-                  <a href={language.route("/docs/go/#pricing")}>{i18n.t("go.faq.a4.p1.pricingLink")}</a>{" "}
+                  <a href="/v2/docs/console/go/">{i18n.t("go.faq.a4.p1.pricingLink")}</a>{" "}
                   {i18n.t("go.faq.a4.p1.afterPricing")} {i18n.t("go.plans.plus.description")}{" "}
                   {i18n.t("go.faq.a4.p2.beforeAccount")} <a href={subscribeUrl}>{i18n.t("go.faq.a4.p2.accountLink")}</a>
                   . {i18n.t("go.faq.a4.p3")}
