@@ -1,6 +1,6 @@
 import { Keymap } from "../context/keymap"
 import { useTheme } from "../context/theme"
-import { DIALOG_INSET, DialogHeader, useDialog } from "./dialog"
+import { DialogHeader, DialogLayout, useDialog } from "./dialog"
 
 export type DialogAlertProps = {
   title: string
@@ -27,24 +27,25 @@ export function DialogAlert(props: DialogAlertProps) {
     ],
   }))
   return (
-    <box paddingLeft={DIALOG_INSET} paddingRight={DIALOG_INSET} gap={1}>
-      <DialogHeader title={props.title} />
-      <box paddingBottom={1}>
-        <text fg={theme.text.muted}>{props.message}</text>
-      </box>
-      <box flexDirection="row" justifyContent="flex-end" paddingBottom={1}>
-        <box
-          paddingLeft={3}
-          paddingRight={3}
-          backgroundColor={theme.background.action.primary.focused}
-          onMouseUp={() => {
-            props.onConfirm?.()
-            dialog.clear()
-          }}
-        >
-          <text fg={theme.text.action.primary.focused}>ok</text>
+    <DialogLayout
+      header={<DialogHeader title={props.title} />}
+      footer={
+        <box flexDirection="row" justifyContent="flex-end">
+          <box
+            paddingLeft={3}
+            paddingRight={3}
+            backgroundColor={theme.background.action.primary.focused}
+            onMouseUp={() => {
+              props.onConfirm?.()
+              dialog.clear()
+            }}
+          >
+            <text fg={theme.text.action.primary.focused}>ok</text>
+          </box>
         </box>
-      </box>
-    </box>
+      }
+    >
+      <text fg={theme.text.muted}>{props.message}</text>
+    </DialogLayout>
   )
 }

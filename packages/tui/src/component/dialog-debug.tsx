@@ -1,7 +1,7 @@
 import { createMemo, createSignal, For } from "solid-js"
 import { Keymap } from "../context/keymap"
 import { useTheme } from "../context/theme"
-import { DIALOG_INSET, DialogFooter, DialogHeader, useDialog } from "../ui/dialog"
+import { DialogFooter, DialogHeader, DialogLayout, useDialog } from "../ui/dialog"
 import { useRoute } from "../context/route"
 import { useLocal } from "../context/local"
 import { useClipboard } from "../context/clipboard"
@@ -52,37 +52,38 @@ export function DialogDebug() {
   }))
 
   return (
-    <box paddingLeft={DIALOG_INSET} paddingRight={DIALOG_INSET} gap={1} paddingBottom={1}>
-      <DialogHeader title="Debug" />
+    <DialogLayout
+      header={<DialogHeader title="Debug" />}
+      footer={
+        <DialogFooter
+          actions={[
+            {
+              title: copied() ? "✓ copied" : "copy",
+              key: "enter",
+              side: "right",
+              color: copied() ? theme.text.feedback.success.base : undefined,
+              onTrigger: copy,
+            },
+          ]}
+        >
+          <text fg={theme.text.muted}>Share this when reporting an issue.</text>
+        </DialogFooter>
+      }
+    >
       {/* No click-to-copy here: releasing a mouse selection must trigger the
           global copy-on-select so users can copy a single value, e.g. the session id. */}
-      <box>
-        <For each={entries()}>
-          {(entry) => (
-            <box flexDirection="row" gap={1}>
-              <text flexShrink={0} fg={theme.text.muted}>
-                {entry.label.padEnd(10)}
-              </text>
-              <text fg={theme.text.base} wrapMode="word">
-                {entry.value}
-              </text>
-            </box>
-          )}
-        </For>
-      </box>
-      <DialogFooter
-        actions={[
-          {
-            title: copied() ? "✓ copied" : "copy",
-            key: "enter",
-            side: "right",
-            color: copied() ? theme.text.feedback.success.base : undefined,
-            onTrigger: copy,
-          },
-        ]}
-      >
-        <text fg={theme.text.muted}>Share this when reporting an issue.</text>
-      </DialogFooter>
-    </box>
+      <For each={entries()}>
+        {(entry) => (
+          <box flexDirection="row" gap={1}>
+            <text flexShrink={0} fg={theme.text.muted}>
+              {entry.label.padEnd(10)}
+            </text>
+            <text fg={theme.text.base} wrapMode="word">
+              {entry.value}
+            </text>
+          </box>
+        )}
+      </For>
+    </DialogLayout>
   )
 }

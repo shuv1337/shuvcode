@@ -1,5 +1,5 @@
 import { useTheme } from "../context/theme"
-import { DIALOG_INSET, DialogHeader } from "../ui/dialog"
+import { DialogHeader, DialogLayout } from "../ui/dialog"
 import { useData } from "../context/data"
 import { For, Match, Switch, Show, createMemo } from "solid-js"
 
@@ -15,8 +15,7 @@ export function DialogStatus() {
     return theme.text.muted
   }
   return (
-    <box paddingLeft={DIALOG_INSET} paddingRight={DIALOG_INSET} gap={1} paddingBottom={1}>
-      <DialogHeader title="Status" />
+    <DialogLayout header={<DialogHeader title="Status" />}>
       <Show when={mcp().length > 0} fallback={<text fg={theme.text.base}>No MCP servers</text>}>
         <box>
           <text fg={theme.text.base}>
@@ -46,6 +45,6 @@ export function DialogStatus() {
           </For>
         </box>
       </Show>
-    </box>
+    </DialogLayout>
   )
 }

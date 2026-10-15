@@ -4,7 +4,7 @@ import { createMemo, createResource, createSignal, For, Show } from "solid-js"
 import { renderUnicodeCompact } from "uqr"
 import { useClient } from "../context/client"
 import { useTheme } from "../context/theme"
-import { DIALOG_INSET, DialogHeader, useDialog } from "../ui/dialog"
+import { DialogHeader, DialogLayout, useDialog } from "../ui/dialog"
 import { Link } from "../ui/link"
 import { errorMessage } from "../util/error"
 
@@ -87,8 +87,7 @@ export function DialogPair() {
   }
 
   return (
-    <box paddingLeft={DIALOG_INSET} paddingRight={DIALOG_INSET} paddingBottom={1} gap={1}>
-      <DialogHeader title="Pair" />
+    <DialogLayout header={<DialogHeader title="Pair" />}>
       <Show
         when={loadError()}
         fallback={
@@ -119,6 +118,6 @@ export function DialogPair() {
           </box>
         )}
       </Show>
-    </box>
+    </DialogLayout>
   )
 }

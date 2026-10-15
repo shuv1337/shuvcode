@@ -123,6 +123,28 @@ export function DialogHeader(
   )
 }
 
+/**
+ * Standard dialog layout: header, body and an optional footer, one blank row between
+ * each and one blank row at the bottom, with the shared side padding.
+ */
+export function DialogLayout(
+  props: ParentProps<{
+    id?: string
+    /** Usually a `DialogHeader`. */
+    header: JSX.Element
+    /** Usually a `DialogFooter` or a row of buttons. */
+    footer?: JSX.Element
+  }>,
+) {
+  return (
+    <box id={props.id} paddingLeft={DIALOG_INSET} paddingRight={DIALOG_INSET} paddingBottom={1} gap={1}>
+      {props.header}
+      <box>{props.children}</box>
+      {props.footer}
+    </box>
+  )
+}
+
 export type DialogFooterAction = {
   title: string
   /** Literal key label, e.g. "enter". */

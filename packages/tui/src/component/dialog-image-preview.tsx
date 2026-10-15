@@ -2,7 +2,7 @@ import { useTerminalDimensions } from "@opentui/solid"
 import { createMemo, createSignal } from "solid-js"
 import { Keymap } from "../context/keymap"
 import { useTheme } from "../context/theme"
-import { DIALOG_INSET, DialogHeader, useDialog } from "../ui/dialog"
+import { DialogHeader, DialogLayout, useDialog } from "../ui/dialog"
 
 type ImagePreviewItem = Readonly<{
   uri: string
@@ -36,8 +36,23 @@ export function DialogImagePreview(props: { images: readonly ImagePreviewItem[];
   }))
 
   return (
-    <box id="prompt-image-viewer" paddingLeft={DIALOG_INSET} paddingRight={DIALOG_INSET} paddingBottom={1} gap={1}>
-      <DialogHeader title={`Image ${index() + 1} of ${props.images.length}`} />
+    <DialogLayout
+      id="prompt-image-viewer"
+      header={<DialogHeader title={`Image ${index() + 1} of ${props.images.length}`} />}
+      footer={
+        <box flexDirection="row" justifyContent="space-between">
+          <text fg={theme.text.muted} onMouseUp={() => move(-1)}>
+            {props.images.length > 1 ? "← previous" : ""}
+          </text>
+          <text fg={failed() ? theme.text.feedback.error.base : theme.text.muted} wrapMode="none" truncate>
+            {failed() ? "No preview" : (current().mention?.text ?? `Image ${index() + 1}`)}
+          </text>
+          <text fg={theme.text.muted} onMouseUp={() => move(1)}>
+            {props.images.length > 1 ? "next →" : ""}
+          </text>
+        </box>
+      }
+    >
       <image
         id="prompt-image-viewer-image"
         source={current().uri}
@@ -47,17 +62,6 @@ export function DialogImagePreview(props: { images: readonly ImagePreviewItem[];
         height={imageHeight()}
         onError={() => setFailed(true)}
       />
-      <box flexDirection="row" justifyContent="space-between">
-        <text fg={theme.text.muted} onMouseUp={() => move(-1)}>
-          {props.images.length > 1 ? "← previous" : ""}
-        </text>
-        <text fg={failed() ? theme.text.feedback.error.base : theme.text.muted} wrapMode="none" truncate>
-          {failed() ? "No preview" : (current().mention?.text ?? `Image ${index() + 1}`)}
-        </text>
-        <text fg={theme.text.muted} onMouseUp={() => move(1)}>
-          {props.images.length > 1 ? "next →" : ""}
-        </text>
-      </box>
-    </box>
+    </DialogLayout>
   )
 }

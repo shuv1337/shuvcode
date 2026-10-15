@@ -6,7 +6,7 @@ import stripAnsi from "strip-ansi"
 import { useClient } from "../context/client"
 import { Keymap } from "../context/keymap"
 import { useTheme } from "../context/theme"
-import { DIALOG_INSET, DialogHeader, useDialog } from "../ui/dialog"
+import { DialogHeader, DialogLayout, useDialog } from "../ui/dialog"
 
 const PAGE_BYTES = 64 * 1024
 
@@ -100,46 +100,53 @@ export function DialogShellOutput(props: { shell: ShellInfo; location: LocationR
   }))
 
   return (
-    <box paddingLeft={DIALOG_INSET} paddingRight={DIALOG_INSET} paddingBottom={1} gap={1}>
-      <DialogHeader
-        gap={dimensions().width < 60 ? 1 : 2}
-        titleView={
-          <text fg={theme.text.base} attributes={TextAttributes.BOLD} flexGrow={1}>
-            Shell output
-          </text>
-        }
-      >
-        <text fg={theme.text.muted}>{status()}</text>
-      </DialogHeader>
-      <text fg={theme.text.muted} maxHeight={3} wrapMode="word">
-        {props.shell.command}
-      </text>
-      <Show when={omitted()}>
-        <text fg={theme.text.muted}>Earlier output omitted · showing recent output</text>
-      </Show>
-      <scrollbox
-        id="shell-output-scroll"
-        ref={(value: ScrollBoxRenderable) => (scroll = value)}
-        height={height()}
-        stickyScroll
-        stickyStart="bottom"
-        scrollbarOptions={{ visible: false }}
-      >
-        <text fg={theme.text.base} wrapMode="word">
-          {text() ||
-            (output() === undefined
-              ? "Loading output…"
-              : "No captured output. Output redirected to files is not shown here.")}
+    <DialogLayout
+      header={
+        <DialogHeader
+          gap={dimensions().width < 60 ? 1 : 2}
+          titleView={
+            <text fg={theme.text.base} attributes={TextAttributes.BOLD} flexGrow={1}>
+              Shell output
+            </text>
+          }
+        >
+          <text fg={theme.text.muted}>{status()}</text>
+        </DialogHeader>
+      }
+      footer={
+        <box flexDirection="row" gap={2} flexWrap="wrap">
+          <text fg={theme.text.muted}>↑/↓ scroll</text>
+          <text fg={theme.text.muted}>end follow</text>
+          <text fg={theme.text.muted}>esc back</text>
+        </box>
+      }
+    >
+      <box gap={1}>
+        <text fg={theme.text.muted} maxHeight={3} wrapMode="word">
+          {props.shell.command}
         </text>
-      </scrollbox>
-      <Show when={error()}>
-        <text fg={theme.text.feedback.error.base}>{error()}</text>
-      </Show>
-      <box flexDirection="row" gap={2} flexWrap="wrap">
-        <text fg={theme.text.muted}>↑/↓ scroll</text>
-        <text fg={theme.text.muted}>end follow</text>
-        <text fg={theme.text.muted}>esc back</text>
+        <Show when={omitted()}>
+          <text fg={theme.text.muted}>Earlier output omitted · showing recent output</text>
+        </Show>
+        <scrollbox
+          id="shell-output-scroll"
+          ref={(value: ScrollBoxRenderable) => (scroll = value)}
+          height={height()}
+          stickyScroll
+          stickyStart="bottom"
+          scrollbarOptions={{ visible: false }}
+        >
+          <text fg={theme.text.base} wrapMode="word">
+            {text() ||
+              (output() === undefined
+                ? "Loading output…"
+                : "No captured output. Output redirected to files is not shown here.")}
+          </text>
+        </scrollbox>
+        <Show when={error()}>
+          <text fg={theme.text.feedback.error.base}>{error()}</text>
+        </Show>
       </box>
-    </box>
+    </DialogLayout>
   )
 }

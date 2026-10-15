@@ -9,7 +9,7 @@ import { useRoute } from "../context/route"
 import { getScrollAcceleration } from "../util/scroll"
 import { useTheme } from "../context/theme"
 import { emptyPrompt } from "../prompt/history"
-import { DIALOG_INSET, DialogFooter, DialogHeader, dialogWidth, useDialog } from "../ui/dialog"
+import { DIALOG_INSET, DialogFooter, DialogHeader, DialogLayout, dialogWidth, useDialog } from "../ui/dialog"
 import { FilePath } from "../ui/file-path"
 import { useToast } from "../ui/toast"
 import { errorDetails } from "../util/error-details"
@@ -71,59 +71,62 @@ export function DialogErrorDetails(props: {
   })
 
   return (
-    <box paddingLeft={DIALOG_INSET} paddingRight={DIALOG_INSET} paddingBottom={1} gap={1}>
-      <box>
-        <DialogHeader
-          gap={2}
-          onClose={props.onBack}
-          titleView={
-            <text
-              attributes={TextAttributes.BOLD}
-              fg={theme.text.base}
-              flexGrow={1}
-              minWidth={0}
-              wrapMode="none"
-              truncate
-            >
-              {props.title}
-            </text>
-          }
+    <DialogLayout
+      header={
+        <box>
+          <DialogHeader
+            gap={2}
+            onClose={props.onBack}
+            titleView={
+              <text
+                attributes={TextAttributes.BOLD}
+                fg={theme.text.base}
+                flexGrow={1}
+                minWidth={0}
+                wrapMode="none"
+                truncate
+              >
+                {props.title}
+              </text>
+            }
+          />
+          <Show when={props.source}>
+            {(source) => (
+              <FilePath
+                value={source()}
+                maxWidth={Math.min(dialogWidth(dialog.size), dimensions().width - 2) - DIALOG_INSET * 2}
+                fg={theme.text.muted}
+              />
+            )}
+          </Show>
+        </box>
+      }
+      footer={
+        <DialogFooter
+          actions={[
+            { title: "investigate", key: "i", onTrigger: investigate },
+            copied()
+              ? { title: "✓ copied", color: theme.text.feedback.success.base, onTrigger: copy }
+              : { title: "copy details", key: "c", onTrigger: copy },
+            { title: "scroll", key: "↑/↓", side: "right" },
+          ]}
         />
-        <Show when={props.source}>
-          {(source) => (
-            <FilePath
-              value={source()}
-              maxWidth={Math.min(dialogWidth(dialog.size), dimensions().width - 2) - DIALOG_INSET * 2}
-              fg={theme.text.muted}
-            />
-          )}
-        </Show>
-      </box>
-      <box>
-        <scrollbox
-          ref={(element: ScrollBoxRenderable) => (scroll = element)}
-          maxHeight={20}
-          contentOptions={{ minHeight: 0 }}
-          scrollbarOptions={{ visible: false }}
-          scrollAcceleration={getScrollAcceleration(config)}
-        >
-          <text fg={theme.text.base} wrapMode="word">
-            {props.error}
-          </text>
-        </scrollbox>
-        <Show when={props.diagnosticRef}>
-          <text fg={theme.text.muted}>Reference: {props.diagnosticRef}</text>
-        </Show>
-      </box>
-      <DialogFooter
-        actions={[
-          { title: "investigate", key: "i", onTrigger: investigate },
-          copied()
-            ? { title: "✓ copied", color: theme.text.feedback.success.base, onTrigger: copy }
-            : { title: "copy details", key: "c", onTrigger: copy },
-          { title: "scroll", key: "↑/↓", side: "right" },
-        ]}
-      />
-    </box>
+      }
+    >
+      <scrollbox
+        ref={(element: ScrollBoxRenderable) => (scroll = element)}
+        maxHeight={20}
+        contentOptions={{ minHeight: 0 }}
+        scrollbarOptions={{ visible: false }}
+        scrollAcceleration={getScrollAcceleration(config)}
+      >
+        <text fg={theme.text.base} wrapMode="word">
+          {props.error}
+        </text>
+      </scrollbox>
+      <Show when={props.diagnosticRef}>
+        <text fg={theme.text.muted}>Reference: {props.diagnosticRef}</text>
+      </Show>
+    </DialogLayout>
   )
 }
