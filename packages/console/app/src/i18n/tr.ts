@@ -139,12 +139,9 @@ export const dict = {
   "home.faq.a6":
     "OpenCode %100 ücretsizdir. Ayrıca ücretsiz model setiyle gelir. Başka bir sağlayıcı bağlarsanız ek maliyetler olabilir.",
   "home.faq.q7": "Veri ve gizlilik ne olacak?",
-  "home.faq.a7.p1":
-    "Verileriniz yalnızca ücretsiz modellerimizi kullandığınızda veya paylaşılabilir bağlantılar oluşturduğunuzda saklanır.",
+  "home.faq.a7.p1": "Verileriniz yalnızca ücretsiz modellerimizi kullandığınızda saklanır.",
   "home.faq.a7.p2.beforeModels": "Daha fazla bilgi:",
   "home.faq.a7.p2.modelsLink": "modellerimiz",
-  "home.faq.a7.p2.and": "ve",
-  "home.faq.a7.p2.shareLink": "paylaşım sayfaları",
   "home.faq.q8": "OpenCode açık kaynak mı?",
   "home.faq.a8.p1": "Evet, OpenCode tamamen açık kaynaktır. Kaynak kodu",
   "home.faq.a8.p2": "'da",
@@ -380,11 +377,6 @@ export const dict = {
   "download.faq.a5.p2.beforeZen":
     "Ek maliyetler, bir model sağlayıcısına olan aboneliğinizden gelir. OpenCode herhangi bir model sağlayıcısıyla çalışır, ancak",
   "download.faq.a5.p2.afterZen": " kullanmanızı öneririz.",
-
-  "download.faq.a6.p1":
-    "Verileriniz ve bilginiz yalnızca OpenCode'da paylaşılabilir bağlantılar oluşturduğunuzda saklanır.",
-  "download.faq.a6.p2.beforeShare": "Daha fazla bilgi:",
-  "download.faq.a6.shareLink": "paylaşım sayfaları",
 
   "enterprise.title": "OpenCode | Kurumunuz için kurumsal çözümler",
   "enterprise.meta.description": "Kurumsal çözümler için OpenCode ile iletişime geçin",

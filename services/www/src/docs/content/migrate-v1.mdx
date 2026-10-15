@@ -92,20 +92,6 @@ Nested mixing is intentionally bounded. OpenCode recognizes mixed V1 and V2 memb
 each of those nested entries entirely in one format. Supported V1 syntax remains quiet by itself; malformed values,
 unsupported legacy fields, and conflicting V1/V2 values produce warnings while unrelated valid settings continue to load.
 
-### Sharing
-
-The deprecated V1 `autoshare` boolean becomes the explicit `share` policy:
-
-```jsonc
-// V1
-{ "autoshare": true }
-
-// V2
-{ "share": "auto" }
-```
-
-Use `"manual"`, `"auto"`, or `"disabled"`. If the V1 file already uses `share`, no change is needed.
-
 ### Permissions and tools
 
 V1 groups permission effects by tool. V2 uses one ordered `permissions` array, making precedence and exceptions explicit:

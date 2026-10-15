@@ -1760,7 +1760,6 @@ export type TuiCommandExecute = {
     command:
       | "session.list"
       | "session.new"
-      | "session.share"
       | "session.interrupt"
       | "session.background"
       | "session.compact"

@@ -140,12 +140,9 @@ export const dict = {
   "home.faq.a6":
     "OpenCode jest w 100% darmowy. Zawiera również zestaw darmowych modeli. Mogą pojawić się dodatkowe koszty, jeśli podłączysz innego dostawcę.",
   "home.faq.q7": "A co z danymi i prywatnością?",
-  "home.faq.a7.p1":
-    "Twoje dane i informacje są przechowywane tylko wtedy, gdy używasz naszych darmowych modeli lub tworzysz linki do udostępniania.",
+  "home.faq.a7.p1": "Twoje dane i informacje są przechowywane tylko wtedy, gdy używasz naszych darmowych modeli.",
   "home.faq.a7.p2.beforeModels": "Dowiedz się więcej o",
   "home.faq.a7.p2.modelsLink": "naszych modelach",
-  "home.faq.a7.p2.and": "i",
-  "home.faq.a7.p2.shareLink": "stronach udostępniania",
   "home.faq.q8": "Czy OpenCode jest open source?",
   "home.faq.a8.p1": "Tak, OpenCode jest w pełni open source. Kod źródłowy jest publicznie dostępny na",
   "home.faq.a8.p2": "na licencji",
@@ -378,11 +375,6 @@ export const dict = {
   "download.faq.a5.p2.beforeZen":
     "Wszelkie dodatkowe koszty będą pochodzić z Twojej subskrypcji u dostawcy modelu. Chociaż OpenCode współpracuje z dowolnym dostawcą modeli, zalecamy korzystanie z",
   "download.faq.a5.p2.afterZen": ".",
-
-  "download.faq.a6.p1":
-    "Twoje dane i informacje są przechowywane tylko wtedy, gdy tworzysz linki do udostępniania w OpenCode.",
-  "download.faq.a6.p2.beforeShare": "Dowiedz się więcej o",
-  "download.faq.a6.shareLink": "stronach udostępniania",
 
   "enterprise.title": "OpenCode | Rozwiązania Enterprise dla Twojej organizacji",
   "enterprise.meta.description": "Skontaktuj się z OpenCode w sprawie rozwiązań dla przedsiębiorstw",

@@ -136,11 +136,9 @@ export const dict = {
   "home.faq.q6": "OpenCode 價格如何？",
   "home.faq.a6": "OpenCode 100% 免費使用。它也自帶一組免費模型。如果你連接其他供應商，可能會產生額外費用。",
   "home.faq.q7": "資料與隱私怎麼辦？",
-  "home.faq.a7.p1": "僅當你使用我們的免費模型或建立可分享連結時，才會儲存你的資料與資訊。",
+  "home.faq.a7.p1": "僅當你使用我們的免費模型時，才會儲存你的資料與資訊。",
   "home.faq.a7.p2.beforeModels": "了解更多關於",
   "home.faq.a7.p2.modelsLink": "我們的模型",
-  "home.faq.a7.p2.and": "與",
-  "home.faq.a7.p2.shareLink": "分享頁面",
   "home.faq.q8": "OpenCode 是開源的嗎？",
   "home.faq.a8.p1": "是的，OpenCode 完全開源。原始碼公開在",
   "home.faq.a8.p2": "並採用",
@@ -355,10 +353,6 @@ export const dict = {
   "download.faq.a5.p1": "OpenCode 100% 免費使用。",
   "download.faq.a5.p2.beforeZen": "額外費用來自你對模型供應商的訂閱。雖然 OpenCode 支援任何模型供應商，但我們建議使用",
   "download.faq.a5.p2.afterZen": "。",
-
-  "download.faq.a6.p1": "你的資料與資訊只會在你於 OpenCode 中建立可分享連結時被儲存。",
-  "download.faq.a6.p2.beforeShare": "了解更多關於",
-  "download.faq.a6.shareLink": "分享頁面",
 
   "enterprise.title": "OpenCode | 面向組織的企業解決方案",
   "enterprise.meta.description": "聯絡 OpenCode 取得企業解決方案",

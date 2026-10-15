@@ -140,11 +140,9 @@ export const dict = {
   "home.faq.a6":
     "OpenCodeは100%無料で使えます。無料モデルも含まれています。他のプロバイダーに接続する場合は追加費用が発生することがあります。",
   "home.faq.q7": "データとプライバシーは？",
-  "home.faq.a7.p1": "無料モデルを使う場合や共有リンクを作成する場合にのみ、データが保存されます。",
+  "home.faq.a7.p1": "無料モデルを使う場合にのみ、データが保存されます。",
   "home.faq.a7.p2.beforeModels": "詳しくは",
   "home.faq.a7.p2.modelsLink": "モデルのプライバシー",
-  "home.faq.a7.p2.and": "と",
-  "home.faq.a7.p2.shareLink": "共有ページのプライバシー",
   "home.faq.q8": "OpenCodeはオープンソースですか？",
   "home.faq.a8.p1": "はい、OpenCodeは完全にオープンソースです。ソースコードは",
   "home.faq.a8.p2": "の",
@@ -373,10 +371,6 @@ export const dict = {
   "download.faq.a5.p2.beforeZen":
     "追加コストはモデルプロバイダーのサブスクリプションから発生します。OpenCodeはどのモデルプロバイダーでも利用できますが、",
   "download.faq.a5.p2.afterZen": "の利用をおすすめします。",
-
-  "download.faq.a6.p1": "あなたのデータと情報は、OpenCodeで共有リンクを作成したときにのみ保存されます。",
-  "download.faq.a6.p2.beforeShare": "詳しくは",
-  "download.faq.a6.shareLink": "共有ページ",
 
   "enterprise.title": "OpenCode | 組織向けエンタープライズソリューション",
   "enterprise.meta.description": "エンタープライズソリューションについてOpenCodeに問い合わせる",

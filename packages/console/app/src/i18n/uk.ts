@@ -140,12 +140,9 @@ export const dict = {
   "home.faq.a6":
     "OpenCode є 100% безкоштовним. Він також має набір безкоштовних моделей. Додаткові витрати можливі, якщо ви підключите іншого провайдера.",
   "home.faq.q7": "А як щодо даних та конфіденційності?",
-  "home.faq.a7.p1":
-    "Ваші дані зберігаються лише тоді, коли ви використовуєте безкоштовні моделі або створюєте посилання для обміну.",
+  "home.faq.a7.p1": "Ваші дані зберігаються лише тоді, коли ви використовуєте безкоштовні моделі.",
   "home.faq.a7.p2.beforeModels": "Дізнайтеся більше про",
   "home.faq.a7.p2.modelsLink": "наші моделі",
-  "home.faq.a7.p2.and": "та",
-  "home.faq.a7.p2.shareLink": "сторінки обміну",
   "home.faq.q8": "Чи є OpenCode відкритим?",
   "home.faq.a8.p1": "Так, OpenCode повністю відкритий. Вихідний код доступний публічно на",
   "home.faq.a8.p2": "під ліцензією",
@@ -377,10 +374,6 @@ export const dict = {
     "Будь-які додаткові витрати будуть з вашої підписки у провайдера моделі. Ми рекомендуємо",
   "download.faq.a5.p2.afterZen": ".",
 
-  "download.faq.a6.p1": "Ваші дані зберігаються лише при створенні посилань для обміну в OpenCode.",
-  "download.faq.a6.p2.beforeShare": "Дізнайтеся більше про",
-  "download.faq.a6.shareLink": "сторінки обміну",
-
   "enterprise.title": "OpenCode | Enterprise-рішення для вашої організації",
   "enterprise.meta.description": "Зв'яжіться з OpenCode для Enterprise-рішень",
   "enterprise.hero.title": "Ваш код належить вам",
@@ -441,5 +434,4 @@ export const dict = {
   "changelog.hero.subtitle": "Нові оновлення та покращення OpenCode",
   "changelog.empty": "Записів у журналі змін не знайдено.",
   "changelog.viewJson": "Переглянути JSON",
-
 }

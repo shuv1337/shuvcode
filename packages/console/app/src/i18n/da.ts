@@ -141,11 +141,9 @@ export const dict = {
   "home.faq.a6":
     "OpenCode er 100% gratis at bruge. Det kommer også med et sæt gratis modeller. Der kan være ekstra omkostninger, hvis du forbinder en anden udbyder.",
   "home.faq.q7": "Hvad med data og privatliv?",
-  "home.faq.a7.p1": "Dine data gemmes kun, når du bruger vores gratis modeller eller opretter delbare links.",
+  "home.faq.a7.p1": "Dine data gemmes kun, når du bruger vores gratis modeller.",
   "home.faq.a7.p2.beforeModels": "Læs mere om",
   "home.faq.a7.p2.modelsLink": "vores modeller",
-  "home.faq.a7.p2.and": "og",
-  "home.faq.a7.p2.shareLink": "delingssider",
   "home.faq.q8": "Er OpenCode open source?",
   "home.faq.a8.p1": "Ja, OpenCode er fuldt open source. Kildekoden er offentlig på",
   "home.faq.a8.p2": "under",
@@ -375,10 +373,6 @@ export const dict = {
   "download.faq.a5.p2.beforeZen":
     "Eventuelle ekstra omkostninger kommer fra dit abonnement hos en modeludbyder. Selvom OpenCode fungerer med enhver modeludbyder, anbefaler vi at bruge",
   "download.faq.a5.p2.afterZen": ".",
-
-  "download.faq.a6.p1": "Dine data og oplysninger gemmes kun når du opretter delbare links i OpenCode.",
-  "download.faq.a6.p2.beforeShare": "Læs mere om",
-  "download.faq.a6.shareLink": "delingssider",
 
   "enterprise.title": "OpenCode | Enterprise-løsninger til din organisation",
   "enterprise.meta.description": "Kontakt OpenCode for enterprise-løsninger",

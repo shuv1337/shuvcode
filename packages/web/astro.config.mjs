@@ -232,7 +232,6 @@ export default defineConfig({
             "web",
             "ide",
             { label: "Console", link: "https://opencode.ai/v2/docs/console/" },
-            "share",
             "github",
             "gitlab",
           ],

@@ -138,11 +138,9 @@ export const dict = {
   "home.faq.a6":
     "OpenCode مجاني 100% للاستخدام. كما يأتي مع مجموعة من النماذج المجانية. قد توجد تكاليف إضافية إذا ربطت مزوّدًا آخر.",
   "home.faq.q7": "ماذا عن البيانات والخصوصية؟",
-  "home.faq.a7.p1": "لا يتم تخزين بياناتك ومعلوماتك إلا عندما تستخدم نماذجنا المجانية أو تنشئ روابط قابلة للمشاركة.",
+  "home.faq.a7.p1": "لا يتم تخزين بياناتك ومعلوماتك إلا عندما تستخدم نماذجنا المجانية.",
   "home.faq.a7.p2.beforeModels": "اعرف المزيد عن",
   "home.faq.a7.p2.modelsLink": "نماذجنا",
-  "home.faq.a7.p2.and": "و",
-  "home.faq.a7.p2.shareLink": "صفحات المشاركة",
   "home.faq.q8": "هل OpenCode مفتوح المصدر؟",
   "home.faq.a8.p1": "نعم، OpenCode مفتوح المصدر بالكامل. الكود المصدري متاح علنًا على",
   "home.faq.a8.p2": "بموجب",
@@ -368,10 +366,6 @@ export const dict = {
   "download.faq.a5.p2.beforeZen":
     "أي تكاليف إضافية ستأتي من اشتراكك لدى مزود النماذج. بينما يعمل OpenCode مع أي مزود نماذج، نوصي باستخدام",
   "download.faq.a5.p2.afterZen": ".",
-
-  "download.faq.a6.p1": "يتم حفظ بياناتك ومعلوماتك فقط عند إنشاء روابط قابلة للمشاركة في OpenCode.",
-  "download.faq.a6.p2.beforeShare": "اعرف المزيد عن",
-  "download.faq.a6.shareLink": "صفحات المشاركة",
 
   "enterprise.title": "OpenCode | حلول المؤسسات لمنظمتك",
   "enterprise.meta.description": "تواصل مع OpenCode لحلول المؤسسات",
