@@ -39,7 +39,7 @@ describe("GoogleAntigravityPlugin package", () => {
     const pkce = GoogleAntigravityOAuth.pkce()
     const url = new URL(GoogleAntigravityOAuth.authorizeURL(pkce.challenge, "state-1"))
     expect(GoogleAntigravityOAuth.userAgent()).toMatch(
-      /^antigravity\/cli\/1\.1\.13 \(aidev_client; os_type=(linux|darwin|windows); arch=(amd64|arm64); cl=964361259; auth_method=consumer\)$/,
+      /^antigravity\/cli\/1\.3\.6 \(aidev_client; os_type=(linux|darwin|windows); arch=(amd64|arm64); auth_method=consumer\)$/,
     )
     expect(url.origin + url.pathname).toBe("https://accounts.google.com/o/oauth2/v2/auth")
     expect(url.searchParams.get("client_id")).toBe(GoogleAntigravityOAuth.clientID)
@@ -122,6 +122,33 @@ describe("GoogleAntigravityWire", () => {
     const native = { candidates: [{ content: { role: "model", parts: [{ text: "hi" }] } }] }
     const text = `data: ${JSON.stringify({ response: native, traceId: "tr", metadata: {} })}\n\ndata: [DONE]\n`
     expect(GoogleAntigravityWire.unwrapSSEText(text)).toBe(`data: ${JSON.stringify(native)}\n\ndata: [DONE]\n`)
+  })
+
+  test("reads the keyed live catalog and preserves availability and enum overrides", async () => {
+    const parsed = await GoogleAntigravityOAuth.fetchAvailableModels("fixture", "project", async (_url, init) => {
+      expect(new Headers(init?.headers).get("user-agent")).toBe(GoogleAntigravityOAuth.userAgent())
+      return Response.json({
+        models: {
+          "gemini-4-argon-high": {
+            displayName: "Gemini 4 Argon (High)",
+            model: "MODEL_ARGON_CURRENT",
+            modelProvider: "MODEL_PROVIDER_GOOGLE",
+            recommended: true,
+          },
+          "gemini-4-argon-disabled": { model: "MODEL_PLACEHOLDER_M421", disabled: true },
+          chat_internal: { isInternal: true },
+          invalid: null,
+        },
+      })
+    })
+    expect(parsed.map((model) => model.id)).toEqual(["gemini-4-argon-high", "gemini-4-argon-disabled", "chat_internal"])
+    expect(GoogleAntigravityWire.filterGoogleModels(parsed)).toMatchObject([
+      { id: "gemini-4-argon-high", name: "Gemini 4 Argon (High)", recommended: true },
+    ])
+    expect(
+      GoogleAntigravityWire.modelEnumsFrom(parsed.filter((model) => !model.disabled)).get("gemini-4-argon-high"),
+    ).toBe("MODEL_ARGON_CURRENT")
+    expect([...GoogleAntigravityWire.disabledModelsFrom(parsed)]).toContain("gemini-4-argon-high")
   })
 
   test("filters Claude, GPT, tab, image, and disabled models out of the Cloud Code catalog", () => {
