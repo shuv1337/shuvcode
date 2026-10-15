@@ -22,6 +22,8 @@ import {
   revertDocument,
   streamingDocument,
   thinkingDocument,
+  voiceDocument,
+  voicePresentation,
 } from "../storybook/current-session-fixtures"
 
 export default {
@@ -445,6 +447,18 @@ export const PromptWithAttachments = {
       description="A user message combines text, two files, an agent mention, and a selected-line comment."
       document={attachmentsAndCommentsDocument}
       presentation={attachmentsAndCommentsPresentation}
+      width="480px"
+    />
+  ),
+}
+
+export const VoiceMessages = {
+  render: () => (
+    <CurrentSessionTimelineStory
+      title="Voice messages"
+      description="A voice call's agent prompts on the user's behalf: its framing, or the user's spoken words, with a Voice badge on the bubble."
+      document={voiceDocument}
+      presentation={voicePresentation}
       width="480px"
     />
   ),
