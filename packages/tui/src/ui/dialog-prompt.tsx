@@ -1,7 +1,7 @@
 import { TextareaRenderable } from "@opentui/core"
 import { Keymap } from "../context/keymap"
 import { useTheme } from "../context/theme"
-import { DIALOG_INSET, DialogFooter, DialogHeader, useDialog, type DialogSize } from "./dialog"
+import { DialogFooter, DialogHeader, DialogLayout, useDialog, type DialogSize } from "./dialog"
 import { Show, createEffect, createSignal, onMount, type JSX } from "solid-js"
 import { Spinner } from "../component/spinner"
 import { useConfig } from "../config"
@@ -118,13 +118,30 @@ export function DialogPrompt(props: DialogPromptProps) {
   })
 
   return (
-    <box paddingLeft={DIALOG_INSET} paddingRight={DIALOG_INSET} gap={1}>
-      <DialogHeader
-        title={props.title}
-        onClose={() => {
-          if (!props.busy) (props.onCancel ?? dialog.clear)()
-        }}
-      />
+    <DialogLayout
+      header={
+        <DialogHeader
+          title={props.title}
+          onClose={() => {
+            if (!props.busy) (props.onCancel ?? dialog.clear)()
+          }}
+        />
+      }
+      footer={
+        <Show when={!props.busy} fallback={<text fg={theme.text.muted}>processing…</text>}>
+          <DialogFooter
+            actions={[
+              { title: "submit", command: "dialog.prompt.submit", onTrigger: confirm },
+              ...(props.actions ?? []).map((action) => ({
+                title: action.title,
+                command: action.command,
+                onTrigger: () => action.onTrigger(handle),
+              })),
+            ]}
+          />
+        </Show>
+      }
+    >
       <box gap={1}>
         {props.description?.()}
         <textarea
@@ -146,20 +163,6 @@ export function DialogPrompt(props: DialogPromptProps) {
           <Spinner color={theme.text.muted}>{props.busyText ?? "Working…"}</Spinner>
         </Show>
       </box>
-      <box paddingBottom={1} flexDirection="row">
-        <Show when={!props.busy} fallback={<text fg={theme.text.muted}>processing…</text>}>
-          <DialogFooter
-            actions={[
-              { title: "submit", command: "dialog.prompt.submit", onTrigger: confirm },
-              ...(props.actions ?? []).map((action) => ({
-                title: action.title,
-                command: action.command,
-                onTrigger: () => action.onTrigger(handle),
-              })),
-            ]}
-          />
-        </Show>
-      </box>
-    </box>
+    </DialogLayout>
   )
 }

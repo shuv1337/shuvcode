@@ -805,26 +805,31 @@ function OAuthView(props: {
 }) {
   const theme = useTheme().surface("dialog")
   return (
-    <box paddingLeft={DIALOG_INSET} paddingRight={DIALOG_INSET} gap={1} paddingBottom={1}>
-      <DialogHeader title={props.title} />
-      <Show when={props.url}>
-        {(url) => (
-          <box gap={1}>
-            <Link href={url()} fg={theme.markdown.link} />
-            <Show when={props.instructions}>
-              {(instructions) => <text fg={theme.text.muted}>{instructions()}</text>}
-            </Show>
-          </box>
-        )}
-      </Show>
-      <text fg={theme.text.muted}>{props.message}</text>
-      <DialogFooter
-        actions={[
-          ...(props.open ? [{ title: "open", key: "o" }] : []),
-          ...(props.copy ? [{ title: "copy", key: "c" }] : []),
-        ]}
-      />
-    </box>
+    <DialogLayout
+      header={<DialogHeader title={props.title} />}
+      footer={
+        <DialogFooter
+          actions={[
+            ...(props.open ? [{ title: "open", key: "o" }] : []),
+            ...(props.copy ? [{ title: "copy", key: "c" }] : []),
+          ]}
+        />
+      }
+    >
+      <box gap={1}>
+        <Show when={props.url}>
+          {(url) => (
+            <box gap={1}>
+              <Link href={url()} fg={theme.markdown.link} />
+              <Show when={props.instructions}>
+                {(instructions) => <text fg={theme.text.muted}>{instructions()}</text>}
+              </Show>
+            </box>
+          )}
+        </Show>
+        <text fg={theme.text.muted}>{props.message}</text>
+      </box>
+    </DialogLayout>
   )
 }
 
@@ -973,91 +978,98 @@ function StringChoiceField(props: {
     ],
   }))
   return (
-    <box paddingLeft={DIALOG_INSET} paddingRight={DIALOG_INSET} paddingBottom={1} gap={1}>
-      <DialogHeader title={formLabel(props.field)} onClose={() => (store.editing ? back() : dialog.clear())} />
-      <Show when={props.field.description}>{(description) => <text fg={theme.text.muted}>{description()}</text>}</Show>
-      <scrollbox
-        gap={1}
-        height={Math.min(
-          count + rows.filter((row) => row.description).length,
-          Math.max(3, Math.floor(dimensions().height / 2) - 6),
-        )}
-        scrollbarOptions={{ visible: false }}
-        ref={(value: ScrollBoxRenderable) => {
-          scroll = value
-        }}
-      >
-        <For each={rows}>
-          {(row, index) => (
-            <box onMouseUp={() => select(index())}>
-              <text fg={fg(index())}>
-                {index() + 1}. {row.label}
-              </text>
-              <Show when={row.description}>
-                {(description) => (
-                  <box paddingLeft={3}>
-                    <text fg={theme.text.muted}>{description()}</text>
-                  </box>
-                )}
-              </Show>
-            </box>
-          )}
-        </For>
-        <box flexDirection="row" gap={1} onMouseUp={() => select(rows.length)}>
-          <text fg={fg(rows.length)}>{rows.length + 1}.</text>
-          <Show
-            when={store.editing}
-            fallback={<text fg={fg(rows.length)}>{store.text || "Type your own answer"}</text>}
-          >
-            <textarea
-              height={1}
-              flexGrow={1}
-              wrapMode="none"
-              initialValue={store.text}
-              placeholder={props.field.placeholder ?? "Type your own answer"}
-              placeholderColor={theme.text.muted}
-              textColor={theme.text.formfield.focused}
-              focusedTextColor={theme.text.formfield.focused}
-              cursorColor={theme.text.formfield.focused}
-              ref={(value: TextareaRenderable) => {
-                setTextarea(value)
-                value.traits = { status: "ANSWER" }
-                queueMicrotask(() => {
-                  if (value.isDestroyed) return
-                  value.focus()
-                  value.gotoLineEnd()
-                })
-              }}
-              onContentChange={() => {
-                const text = textarea()?.plainText ?? ""
-                setStore("text", text)
-                if (store.error && !formValidateValue(props.field, text.trim() || undefined)) setStore("error", "")
-              }}
-            />
-          </Show>
-        </box>
-        <Show when={!props.field.required}>
-          <text fg={fg(rows.length + 1)} onMouseUp={() => select(rows.length + 1)}>
-            {rows.length + 2}. Skip
-          </text>
+    <DialogLayout
+      header={<DialogHeader title={formLabel(props.field)} onClose={() => (store.editing ? back() : dialog.clear())} />}
+      footer={
+        <DialogFooter
+          actions={
+            store.editing
+              ? [
+                  { title: "submit", key: "enter", onTrigger: () => submit(textarea()?.plainText.trim() || undefined) },
+                  { title: "back", key: "esc", onTrigger: back },
+                ]
+              : [
+                  { title: "select", key: "↑/↓" },
+                  { title: "confirm", key: "enter", onTrigger: () => select(store.selected) },
+                  { title: "cancel", key: "esc", onTrigger: () => dialog.clear() },
+                ]
+          }
+        />
+      }
+    >
+      <box gap={1}>
+        <Show when={props.field.description}>
+          {(description) => <text fg={theme.text.muted}>{description()}</text>}
         </Show>
-      </scrollbox>
-      <Show when={store.error}>{(error) => <text fg={theme.text.feedback.error.base}>{error()}</text>}</Show>
-      <DialogFooter
-        actions={
-          store.editing
-            ? [
-                { title: "submit", key: "enter", onTrigger: () => submit(textarea()?.plainText.trim() || undefined) },
-                { title: "back", key: "esc", onTrigger: back },
-              ]
-            : [
-                { title: "select", key: "↑/↓" },
-                { title: "confirm", key: "enter", onTrigger: () => select(store.selected) },
-                { title: "cancel", key: "esc", onTrigger: () => dialog.clear() },
-              ]
-        }
-      />
-    </box>
+        <scrollbox
+          gap={1}
+          height={Math.min(
+            count + rows.filter((row) => row.description).length,
+            Math.max(3, Math.floor(dimensions().height / 2) - 6),
+          )}
+          scrollbarOptions={{ visible: false }}
+          ref={(value: ScrollBoxRenderable) => {
+            scroll = value
+          }}
+        >
+          <For each={rows}>
+            {(row, index) => (
+              <box onMouseUp={() => select(index())}>
+                <text fg={fg(index())}>
+                  {index() + 1}. {row.label}
+                </text>
+                <Show when={row.description}>
+                  {(description) => (
+                    <box paddingLeft={3}>
+                      <text fg={theme.text.muted}>{description()}</text>
+                    </box>
+                  )}
+                </Show>
+              </box>
+            )}
+          </For>
+          <box flexDirection="row" gap={1} onMouseUp={() => select(rows.length)}>
+            <text fg={fg(rows.length)}>{rows.length + 1}.</text>
+            <Show
+              when={store.editing}
+              fallback={<text fg={fg(rows.length)}>{store.text || "Type your own answer"}</text>}
+            >
+              <textarea
+                height={1}
+                flexGrow={1}
+                wrapMode="none"
+                initialValue={store.text}
+                placeholder={props.field.placeholder ?? "Type your own answer"}
+                placeholderColor={theme.text.muted}
+                textColor={theme.text.formfield.focused}
+                focusedTextColor={theme.text.formfield.focused}
+                cursorColor={theme.text.formfield.focused}
+                ref={(value: TextareaRenderable) => {
+                  setTextarea(value)
+                  value.traits = { status: "ANSWER" }
+                  queueMicrotask(() => {
+                    if (value.isDestroyed) return
+                    value.focus()
+                    value.gotoLineEnd()
+                  })
+                }}
+                onContentChange={() => {
+                  const text = textarea()?.plainText ?? ""
+                  setStore("text", text)
+                  if (store.error && !formValidateValue(props.field, text.trim() || undefined)) setStore("error", "")
+                }}
+              />
+            </Show>
+          </box>
+          <Show when={!props.field.required}>
+            <text fg={fg(rows.length + 1)} onMouseUp={() => select(rows.length + 1)}>
+              {rows.length + 2}. Skip
+            </text>
+          </Show>
+        </scrollbox>
+        <Show when={store.error}>{(error) => <text fg={theme.text.feedback.error.base}>{error()}</text>}</Show>
+      </box>
+    </DialogLayout>
   )
 }
 
