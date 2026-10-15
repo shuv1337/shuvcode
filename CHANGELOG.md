@@ -2,6 +2,63 @@
 
 Release notes for OpenCode V2, newest first.
 
+## v2.0.30 — 2026-10-15
+
+### Highlights
+
+- **Changed Files by Turn**: Enable **Settings → Preferences → Timeline → Changed files** to see each completed turn’s changed files, line counts, and expandable diffs. ([#55064](https://github.com/anomalyco/opencode/pull/55064))
+- **Docked TUI Diffs**: Run `/diff` inside a session to open the diff viewer beside your work. Press `f` to switch between the side panel and full screen; the layout adapts automatically to narrower terminals. ([#47152](https://github.com/anomalyco/opencode/pull/47152), [#55574](https://github.com/anomalyco/opencode/pull/55574), [#55780](https://github.com/anomalyco/opencode/pull/55780))
+- **Keyboard Tab Navigation**: Use **Option+↑/↓** to move between session tabs, or add **Shift** to jump between unread tabs. ([#54277](https://github.com/anomalyco/opencode/pull/54277))
+
+### Core
+
+#### Improvements
+
+- Load local glob patterns and remote URLs configured through `instructions`, and refresh them when configuration changes. ([#55539](https://github.com/anomalyco/opencode/pull/55539))
+- Honor `OPENCODE_DISABLE_CLAUDE_CODE` and `OPENCODE_DISABLE_CLAUDE_CODE_SKILLS` when discovering `.claude` skills. ([#55774](https://github.com/anomalyco/opencode/pull/55774))
+- Publish a configuration schema that accepts both V1 and V2 configuration shapes during migration. ([#55524](https://github.com/anomalyco/opencode/pull/55524))
+- Remove the retired session-sharing backend and unavailable `/share` command. ([#55716](https://github.com/anomalyco/opencode/pull/55716))
+
+#### Bug fixes
+
+- Use protocol-specific inference endpoints for OpenCode providers and accept `null` namespaces in Responses API function calls. ([#55680](https://github.com/anomalyco/opencode/pull/55680), [#55631](https://github.com/anomalyco/opencode/pull/55631))
+- Fit compaction output limits to the request actually sent. ([#55613](https://github.com/anomalyco/opencode/pull/55613))
+- Restore authenticated TinyFish web search by initializing its MCP session. Thanks [@terry-an-investor](https://github.com/terry-an-investor). ([#54730](https://github.com/anomalyco/opencode/pull/54730))
+- Improve MCP compatibility by skipping unsupported catalog and codemode calls, advertising spec-compliant elicitation capabilities, and accepting `*.localhost` OAuth token endpoints. Thanks [@tsehla42](https://github.com/tsehla42) and [@donbowman](https://github.com/donbowman). ([#55474](https://github.com/anomalyco/opencode/pull/55474), [#55618](https://github.com/anomalyco/opencode/pull/55618), [#53196](https://github.com/anomalyco/opencode/pull/53196), [#55627](https://github.com/anomalyco/opencode/pull/55627))
+- Treat empty provider and model names as omitted, and substitute an empty value for missing configuration-file references. ([#55465](https://github.com/anomalyco/opencode/pull/55465), [#55388](https://github.com/anomalyco/opencode/pull/55388))
+- Default the Windows background service to port `45278`. ([#55547](https://github.com/anomalyco/opencode/pull/55547))
+
+### TUI
+
+#### Improvements
+
+- Open `/diff` beside the current session by default, retain state when toggling full screen with `f`, and adapt the file tree and patch layout to terminal width. ([#47152](https://github.com/anomalyco/opencode/pull/47152), [#55574](https://github.com/anomalyco/opencode/pull/55574), [#55780](https://github.com/anomalyco/opencode/pull/55780))
+
+#### Bug fixes
+
+- Show `/fork`’s pending view reliably and keep it aligned with the file list. ([#55746](https://github.com/anomalyco/opencode/pull/55746), [#55751](https://github.com/anomalyco/opencode/pull/55751))
+- Correct spacing and inactive key-hint styling in the docked diff panel. ([#55452](https://github.com/anomalyco/opencode/pull/55452), [#55467](https://github.com/anomalyco/opencode/pull/55467))
+
+### Desktop
+
+#### Improvements
+
+- Show each completed turn’s changed files, line counts, and expandable diffs when **Settings → Preferences → Timeline → Changed files** is enabled. ([#55064](https://github.com/anomalyco/opencode/pull/55064))
+- Navigate session tabs with **Option+↑/↓**, or add **Shift** to jump to the previous or next unread tab. ([#54277](https://github.com/anomalyco/opencode/pull/54277))
+- Display delegations from the iOS app as **Voice** messages. ([#54426](https://github.com/anomalyco/opencode/pull/54426))
+
+#### Bug fixes
+
+- Open PowerShell in the selected project directory on Windows. ([#55710](https://github.com/anomalyco/opencode/pull/55710))
+- Keep project settings accessible when the project folder is missing. ([#55553](https://github.com/anomalyco/opencode/pull/55553))
+- Show the requested URL while `webfetch` is running. ([#55590](https://github.com/anomalyco/opencode/pull/55590))
+
+### Extensions
+
+#### Bug fixes
+
+- Include MCP tool input as `metadata.input` in permission requests, allowing permission hooks to inspect the proposed call. Thanks [@lu-zero](https://github.com/lu-zero). ([#51062](https://github.com/anomalyco/opencode/pull/51062))
+
 ## v2.0.29 — 2026-10-14
 
 ### Highlights
