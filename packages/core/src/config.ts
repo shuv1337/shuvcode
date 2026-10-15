@@ -50,6 +50,8 @@ export const Options = Schema.Struct({
   // wellknown, file, and content entries still load.
   global: Schema.optional(Schema.Boolean),
   system: Schema.optional(Schema.Union([Schema.Boolean, Schema.String])),
+  // false skips ~/.claude and project .claude dirs.
+  claude: Schema.optional(Schema.Boolean),
   file: Schema.optional(Schema.String),
   content: Schema.optional(Schema.String),
 })
