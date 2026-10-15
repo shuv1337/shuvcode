@@ -222,7 +222,10 @@ const layer = Layer.effect(
         const all = Array.from(byProvider.values())
           .flatMap((models) => Array.from(models.values()))
           .sort((left, right) => right.time.released - left.time.released)
-        cached = freeze({ data, all, available: all.filter((model) => model.enabled), byProvider }, true)
+        cached = freeze(
+          { data, all, available: preferBigPickle(all.filter((model) => model.enabled)), byProvider },
+          true,
+        )
         return cached
       }
     })
@@ -285,6 +288,17 @@ const layer = Layer.effect(
 )
 
 export const node = makeLocationNode({ service: Service, layer, deps: [Provider.node, Bus.node, Location.node] })
+
+// Signed out, only free OpenCode models are enabled. Clients default to the first available model, so keep
+// big-pickle ahead of each new free launch instead of letting release order pick it.
+function preferBigPickle(models: Info[]) {
+  const freeOnly = models.every(
+    (model) => model.providerID === Provider.ID.opencode && !model.cost.some((cost) => cost.input > 0),
+  )
+  const pick = freeOnly ? models.find((model) => model.id === "big-pickle") : undefined
+  if (!pick) return models
+  return [pick, ...models.filter((model) => model !== pick)]
+}
 
 export function supportsText(model: Pick<Info, "capabilities">) {
   return (
