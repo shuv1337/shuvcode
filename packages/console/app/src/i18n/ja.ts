@@ -218,7 +218,7 @@ export const dict = {
     "すべてのZenモデルは米国でホストされています。プロバイダーはゼロ保持ポリシーに従い、モデルのトレーニングにデータを使用しません（",
   "zen.privacy.exceptionsLink": "以下の例外",
 
-  "go.promo.gemini": "Gemini 4 Argon を期間限定で利用枠2倍で提供中です。",
+  "go.promo.step5": "Step 5 Preview を Go で期間限定・利用枠4倍で提供中です。",
   "go.title": "OpenCode Go | すべての人のための低価格なコーディングモデル",
   "go.meta.description":
     "Goは月額$10で、主要なコーディングモデルへのゆとりある利用上限と安定したアクセスを提供します。",

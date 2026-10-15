@@ -219,7 +219,7 @@ export const dict = {
     "Alle Zen-modeller hostes i USA. Leverandører følger en policy om null oppbevaring og bruker ikke dataene dine til modelltrening, med",
   "zen.privacy.exceptionsLink": "følgende unntak",
 
-  "go.promo.gemini": "Gemini 4 Argon er nå tilgjengelig med 2× bruk i en begrenset periode.",
+  "go.promo.step5": "Step 5 Preview er nå tilgjengelig i Go med 4× bruk i en begrenset periode.",
   "go.title": "OpenCode Go | Rimelige kodemodeller for alle",
   "go.meta.description":
     "Go koster $10/måned, med sjenerøse bruksgrenser og pålitelig tilgang til ledende kodemodeller.",

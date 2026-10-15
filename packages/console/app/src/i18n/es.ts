@@ -221,7 +221,7 @@ export const dict = {
     "Todos los modelos Zen están alojados en EE. UU. Los proveedores siguen una política de cero retención y no usan tus datos para entrenamiento de modelos, con las",
   "zen.privacy.exceptionsLink": "siguientes excepciones",
 
-  "go.promo.gemini": "Gemini 4 Argon ya está disponible con 2× de uso por tiempo limitado.",
+  "go.promo.step5": "Step 5 Preview ya está disponible en Go con 4× de uso por tiempo limitado.",
   "go.title": "OpenCode Go | Modelos de programación de bajo coste para todos",
   "go.meta.description":
     "Go cuesta 10 $/mes, con límites de uso generosos y acceso fiable a modelos de programación líderes.",

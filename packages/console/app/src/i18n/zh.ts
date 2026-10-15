@@ -208,7 +208,7 @@ export const dict = {
   "zen.privacy.beforeExceptions": "所有 Zen 模型均托管在美国。提供商遵循零留存政策，不使用您的数据进行模型训练，",
   "zen.privacy.exceptionsLink": "以下例外情况除外",
 
-  "go.promo.gemini": "Gemini 4 Argon 现已上线，限时 2 倍用量。",
+  "go.promo.step5": "Step 5 Preview 现已上线 Go，限时 4 倍用量。",
   "go.title": "OpenCode Go | 人人可用的低成本编程模型",
   "go.meta.description": "Go 每月 $10，提供充裕的使用限额，并可可靠访问领先的编程模型。",
   "go.hero.title": "人人可用的低成本编程模型",

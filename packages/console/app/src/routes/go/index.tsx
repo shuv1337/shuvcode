@@ -33,7 +33,7 @@ import { LocaleLinks } from "~/component/locale-links"
 const models = [
   { name: "Space Bunny", training: "go.faq.a5.notUsed", retention: "go.faq.a5.retention0" },
   { name: "LongCat 2.5 Preview Free", training: "go.faq.a5.notUsed", retention: "go.faq.a5.retention0" },
-  { name: "Step 5 Preview Free", training: "go.faq.a5.notUsed", retention: "go.faq.a5.retention0" },
+  { name: "Step 5 Preview", training: "go.faq.a5.notUsed", retention: "go.faq.a5.retention0" },
   { name: "Cat Jam Free", training: "go.faq.a5.notUsed", retention: "go.faq.a5.retention30" },
   { name: "Grok 4.7", training: "go.faq.a5.notUsed", retention: "go.faq.a5.retention30" },
   { name: "Grok 4.6", training: "go.faq.a5.notUsed", retention: "go.faq.a5.retention30" },
@@ -99,7 +99,7 @@ export default function Home() {
             <div data-component="desktop-app-banner">
               <span data-slot="badge">{i18n.t("home.banner.badge")}</span>
               <div data-slot="content">
-                <span data-slot="text">{i18n.t("go.promo.gemini")}</span>
+                <span data-slot="text">{i18n.t("go.promo.step5")}</span>
               </div>
             </div>
             <Show when={searchParams.ref}>

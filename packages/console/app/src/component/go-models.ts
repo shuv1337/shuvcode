@@ -71,10 +71,11 @@ export const goModels = [
     limitedTime: true,
   },
   {
-    id: "step-5-preview-free",
-    name: "Step 5 Preview Free",
-    requests: Infinity,
-    allowance: Infinity,
+    id: "step-5-preview",
+    name: "Step 5 Preview",
+    requests: 1720,
+    allowance: 60,
+    bonus: 4,
     featured: true,
     fresh: true,
     limitedTime: true,
@@ -102,6 +103,7 @@ const plusLimits: Record<string, [number, number]> = {
   "deepseek-v4-pro": [4200, 60],
   "kimi-k2.7-code": [4050, 180],
   "hy4-preview": [5400, 120],
+  "step-5-preview": [6880, 240],
   "gpt-5.6-luna": [8200, 60],
   "space-bunny": [12500, 120],
   "minimax-m3": [9600, 180],
@@ -121,7 +123,6 @@ const plusLimits: Record<string, [number, number]> = {
   "muse-spark-1.3-contributor": [90600, 120],
   "muse-spark-1.2-contributor": [90600, 120],
   "longcat-2.5-preview-free": [Infinity, Infinity],
-  "step-5-preview-free": [Infinity, Infinity],
   "cat-jam-free": [Infinity, Infinity],
 }
 
