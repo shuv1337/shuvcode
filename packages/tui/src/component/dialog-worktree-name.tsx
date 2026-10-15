@@ -3,7 +3,7 @@ import { Slug } from "@opencode/core/util/slug"
 import { createSignal, onMount } from "solid-js"
 import { Keymap } from "../context/keymap"
 import { useTheme } from "../context/theme"
-import { DialogHeader, useDialog, type DialogContext } from "../ui/dialog"
+import { DIALOG_INSET, DialogHeader, useDialog, type DialogContext } from "../ui/dialog"
 import { useConfig } from "../config"
 
 export function DialogWorktreeName(props: { onConfirm: (name: string) => void }) {
@@ -47,7 +47,7 @@ export function DialogWorktreeName(props: { onConfirm: (name: string) => void })
   })
 
   return (
-    <box paddingLeft={2} paddingRight={2} gap={1}>
+    <box paddingLeft={DIALOG_INSET} paddingRight={DIALOG_INSET} gap={1}>
       <DialogHeader title="Name worktree" />
       <input
         cursorStyle={config.cursor}

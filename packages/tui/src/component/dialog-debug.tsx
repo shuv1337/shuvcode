@@ -1,7 +1,7 @@
 import { createMemo, createSignal, For } from "solid-js"
 import { Keymap } from "../context/keymap"
 import { useTheme } from "../context/theme"
-import { DialogHeader, useDialog } from "../ui/dialog"
+import { DIALOG_INSET, DialogHeader, useDialog } from "../ui/dialog"
 import { useRoute } from "../context/route"
 import { useLocal } from "../context/local"
 import { useClipboard } from "../context/clipboard"
@@ -52,7 +52,7 @@ export function DialogDebug() {
   }))
 
   return (
-    <box paddingLeft={2} paddingRight={2} gap={1} paddingBottom={1}>
+    <box paddingLeft={DIALOG_INSET} paddingRight={DIALOG_INSET} gap={1} paddingBottom={1}>
       <DialogHeader title="Debug" />
       {/* No click-to-copy here: releasing a mouse selection must trigger the
           global copy-on-select so users can copy a single value, e.g. the session id. */}

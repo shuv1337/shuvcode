@@ -1,6 +1,6 @@
 import { Keymap } from "../context/keymap"
 import { useTheme } from "../context/theme"
-import { DialogHeader, useDialog, type DialogContext } from "./dialog"
+import { DIALOG_INSET, DialogHeader, useDialog, type DialogContext } from "./dialog"
 
 export function DialogExportResult(props: { path: string; onClose?: () => void }) {
   const dialog = useDialog()
@@ -24,7 +24,7 @@ export function DialogExportResult(props: { path: string; onClose?: () => void }
   }))
 
   return (
-    <box paddingLeft={2} paddingRight={2} gap={1}>
+    <box paddingLeft={DIALOG_INSET} paddingRight={DIALOG_INSET} gap={1}>
       <DialogHeader title="Session exported" onClose={close} />
       <box>
         <text fg={theme.text.base}>{props.path}</text>

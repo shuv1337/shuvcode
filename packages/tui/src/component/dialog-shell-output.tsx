@@ -6,7 +6,7 @@ import stripAnsi from "strip-ansi"
 import { useClient } from "../context/client"
 import { Keymap } from "../context/keymap"
 import { useTheme } from "../context/theme"
-import { DialogHeader, useDialog } from "../ui/dialog"
+import { DIALOG_INSET, DialogHeader, useDialog } from "../ui/dialog"
 
 const PAGE_BYTES = 64 * 1024
 
@@ -100,9 +100,9 @@ export function DialogShellOutput(props: { shell: ShellInfo; location: LocationR
   }))
 
   return (
-    <box paddingLeft={2} paddingRight={2} paddingBottom={1} gap={1}>
+    <box paddingLeft={DIALOG_INSET} paddingRight={DIALOG_INSET} paddingBottom={1} gap={1}>
       <DialogHeader
-        gap={2}
+        gap={dimensions().width < 60 ? 1 : 2}
         titleView={
           <text fg={theme.text.base} attributes={TextAttributes.BOLD} flexGrow={1}>
             Shell output

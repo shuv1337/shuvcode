@@ -2,7 +2,7 @@ import { createEffect, createMemo, createResource, createSignal, For, Match, onC
 import { Keymap } from "../context/keymap"
 import { useTheme } from "../context/theme"
 import type { UpdateState } from "../context/update-notification"
-import { DialogHeader, useDialog } from "../ui/dialog"
+import { DIALOG_INSET, DialogHeader, useDialog } from "../ui/dialog"
 import { errorMessage } from "../util/error"
 import { Spinner } from "./spinner"
 
@@ -85,7 +85,7 @@ export function DialogUpdate(props: {
   }))
 
   return (
-    <box paddingLeft={2} paddingRight={2} gap={1}>
+    <box paddingLeft={DIALOG_INSET} paddingRight={DIALOG_INSET} gap={1}>
       <DialogHeader
         title={
           state().type === "installing"

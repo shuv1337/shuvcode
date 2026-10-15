@@ -4,7 +4,7 @@ import { useRoute } from "../../context/route"
 import { useClient } from "../../context/client"
 import { Spinner } from "../../component/spinner"
 import { DialogSelect, type DialogSelectOption } from "../../ui/dialog-select"
-import { useDialog } from "../../ui/dialog"
+import { DIALOG_INSET, useDialog } from "../../ui/dialog"
 import { useToast } from "../../ui/toast"
 import { errorMessage } from "../../util/error"
 import { Locale } from "../../util/locale"
@@ -74,7 +74,7 @@ export function DialogFork(props: { sessionID: string; messageID?: string; onMov
     <Show
       when={!pending()}
       fallback={
-        <box paddingLeft={2} paddingRight={2} paddingBottom={1}>
+        <box paddingLeft={DIALOG_INSET} paddingRight={DIALOG_INSET} paddingBottom={1}>
           <Spinner>Forking session…</Spinner>
         </box>
       }

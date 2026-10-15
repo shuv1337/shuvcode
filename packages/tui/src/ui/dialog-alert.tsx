@@ -1,6 +1,6 @@
 import { Keymap } from "../context/keymap"
 import { useTheme } from "../context/theme"
-import { DialogHeader, useDialog } from "./dialog"
+import { DIALOG_INSET, DialogHeader, useDialog } from "./dialog"
 
 export type DialogAlertProps = {
   title: string
@@ -27,7 +27,7 @@ export function DialogAlert(props: DialogAlertProps) {
     ],
   }))
   return (
-    <box paddingLeft={2} paddingRight={2} gap={1}>
+    <box paddingLeft={DIALOG_INSET} paddingRight={DIALOG_INSET} gap={1}>
       <DialogHeader title={props.title} />
       <box paddingBottom={1}>
         <text fg={theme.text.muted}>{props.message}</text>

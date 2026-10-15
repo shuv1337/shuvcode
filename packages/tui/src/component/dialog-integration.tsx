@@ -21,7 +21,7 @@ import { useClient } from "../context/client"
 import { Keymap } from "../context/keymap"
 import { useLocation } from "../context/location"
 import { useTheme } from "../context/theme"
-import { DialogHeader, useDialog } from "../ui/dialog"
+import { DIALOG_INSET, DIALOG_LIST_INSET, DialogHeader, useDialog } from "../ui/dialog"
 import { DialogPrompt } from "../ui/dialog-prompt"
 import { DialogSelect } from "../ui/dialog-select"
 import { Link } from "../ui/link"
@@ -145,12 +145,12 @@ export function DialogIntegration(
       title="Connect an integration"
       options={options()}
       emptyView={
-        <box paddingLeft={4} paddingRight={4}>
+        <box paddingLeft={DIALOG_LIST_INSET} paddingRight={DIALOG_LIST_INSET}>
           <text fg={theme.text.muted}>No integrations available</text>
         </box>
       }
       noMatchView={
-        <box paddingLeft={4} paddingRight={4}>
+        <box paddingLeft={DIALOG_LIST_INSET} paddingRight={DIALOG_LIST_INSET}>
           <text fg={theme.text.muted}>No integrations found</text>
         </box>
       }
@@ -510,17 +510,17 @@ function CommandView(props: { title: string; output: string; message: string }) 
   onMount(() => dialog.setSize("large"))
   return (
     <box gap={1} paddingBottom={1}>
-      <DialogHeader paddingX={2} title={props.title} closeLabel="esc close" />
+      <DialogHeader newInset={DIALOG_INSET} title={props.title} closeLabel="esc close" />
       <box
         backgroundColor={overlayTheme.background.raised.high}
-        paddingLeft={2}
-        paddingRight={2}
+        paddingLeft={DIALOG_INSET}
+        paddingRight={DIALOG_INSET}
         paddingTop={1}
         paddingBottom={1}
       >
         <text fg={overlayTheme.text.base}>{props.output.trim()}</text>
       </box>
-      <box paddingLeft={2} paddingRight={2}>
+      <box paddingLeft={DIALOG_INSET} paddingRight={DIALOG_INSET}>
         <text fg={theme.text.muted}>{props.message}</text>
       </box>
     </box>
@@ -796,7 +796,7 @@ function OAuthView(props: {
 }) {
   const theme = useTheme().surface("dialog")
   return (
-    <box paddingLeft={2} paddingRight={2} gap={1} paddingBottom={1}>
+    <box paddingLeft={DIALOG_INSET} paddingRight={DIALOG_INSET} gap={1} paddingBottom={1}>
       <DialogHeader title={props.title} />
       <Show when={props.url}>
         {(url) => (
@@ -970,7 +970,7 @@ function StringChoiceField(props: {
     ],
   }))
   return (
-    <box paddingLeft={4} paddingRight={4} paddingBottom={1} gap={1}>
+    <box paddingLeft={DIALOG_INSET} paddingRight={DIALOG_INSET} paddingBottom={1} gap={1}>
       <DialogHeader title={formLabel(props.field)} onClose={() => (store.editing ? back() : dialog.clear())} />
       <Show when={props.field.description}>{(description) => <text fg={theme.text.muted}>{description()}</text>}</Show>
       <scrollbox

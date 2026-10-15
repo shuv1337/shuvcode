@@ -17,6 +17,7 @@ import { createEffect, createMemo, createResource, createSignal, For, Match, onC
 import { DiffViewerFileTree } from "./diff-viewer-file-tree"
 import { DiffFileMenu } from "./diff-viewer-file-menu"
 import { DiffViewerImage, isDiffImageFile } from "./diff-viewer-image"
+import { DIALOG_INSET, DIALOG_LIST_INSET } from "../../ui/dialog"
 import { DialogSelect } from "../../ui/dialog-select"
 import { EmptyBorder } from "../../ui/border"
 import { FilePath } from "../../ui/file-path"
@@ -262,7 +263,7 @@ function DiffBaseDialog(props: {
     props.context.client.vcs.branch.list({ location: props.location, search, limit: 100 }),
   )
   const Empty = () => (
-    <box paddingLeft={4} paddingRight={4}>
+    <box paddingLeft={DIALOG_LIST_INSET} paddingRight={DIALOG_LIST_INSET}>
       <text fg={branches.error ? theme.text.feedback.error.base : theme.text.muted}>
         {branches.loading
           ? "Loading branches…"
@@ -1226,7 +1227,7 @@ function DiffViewerHelpDialog(props: { context: Plugin.Context; single: boolean;
   ]
 
   return (
-    <box paddingLeft={2} paddingRight={2} paddingBottom={1} gap={1}>
+    <box paddingLeft={DIALOG_INSET} paddingRight={DIALOG_INSET} paddingBottom={1} gap={1}>
       <box flexDirection="row" justifyContent="space-between">
         <text attributes={TextAttributes.BOLD} fg={theme.text.base}>
           Diff shortcuts

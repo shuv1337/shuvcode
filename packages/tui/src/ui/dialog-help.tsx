@@ -1,6 +1,6 @@
 import { Keymap } from "../context/keymap"
 import { useTheme } from "../context/theme"
-import { DialogHeader, useDialog } from "./dialog"
+import { DIALOG_INSET, DialogHeader, useDialog } from "./dialog"
 
 export function DialogHelp() {
   const dialog = useDialog()
@@ -16,7 +16,7 @@ export function DialogHelp() {
   }))
 
   return (
-    <box paddingLeft={2} paddingRight={2} gap={1}>
+    <box paddingLeft={DIALOG_INSET} paddingRight={DIALOG_INSET} gap={1}>
       <DialogHeader title="Help" closeLabel="esc/enter" />
       <box paddingBottom={1}>
         <text fg={theme.text.muted}>

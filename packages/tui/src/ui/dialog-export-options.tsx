@@ -1,6 +1,6 @@
 import { Keymap } from "../context/keymap"
 import { useTheme } from "../context/theme"
-import { DialogHeader, type DialogContext } from "./dialog"
+import { DIALOG_INSET, DialogHeader, type DialogContext } from "./dialog"
 import { createStore } from "solid-js/store"
 import { For, Show } from "solid-js"
 
@@ -81,7 +81,7 @@ export function DialogExportOptions(props: DialogExportOptionsProps) {
   }
 
   return (
-    <box paddingLeft={2} paddingRight={2} gap={1}>
+    <box paddingLeft={DIALOG_INSET} paddingRight={DIALOG_INSET} gap={1}>
       <DialogHeader title="Export session" />
       <box flexDirection="row" gap={1}>
         <text fg={theme.text.base}>Export as:</text>
