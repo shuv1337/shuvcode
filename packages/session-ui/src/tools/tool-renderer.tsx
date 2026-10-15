@@ -1687,7 +1687,7 @@ ToolRegistry.register({
               <span data-slot="basic-tool-tool-title">
                 <TextShimmer text={i18n.t("ui.tool.webfetch")} active={pending()} />
               </span>
-              <Show when={!pending() && url()}>
+              <Show when={props.status !== "streaming" && url()}>
                 <a
                   data-slot="basic-tool-tool-subtitle"
                   class="webfetch-link"
