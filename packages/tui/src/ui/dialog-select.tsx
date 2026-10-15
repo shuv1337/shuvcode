@@ -703,7 +703,7 @@ export function DialogSelect<T>(props: DialogSelectProps<T>) {
         </Show>
       </box>
       <Show when={props.footer || visibleActions().length} fallback={<box flexShrink={0} />}>
-        <DialogFooter newInset={DIALOG_LIST_INSET} actions={footerActions()}>
+        <DialogFooter inset={DIALOG_LIST_INSET} actions={footerActions()}>
           {props.footer}
         </DialogFooter>
       </Show>
