@@ -11,6 +11,12 @@ import { copy, copyOnSelectRelease } from "../util/selection"
 
 export type DialogSize = "medium" | "large" | "xlarge"
 
+export const DIALOG_PADDING_X = 4
+
+export const DIALOG_INSET = 3
+// List rows reserve a 1-cell gutter for the ▌ bar / ● marker.
+export const DIALOG_LIST_INSET = DIALOG_INSET + 1
+
 export function dialogWidth(size: DialogSize) {
   if (size === "xlarge") return 116
   if (size === "large") return 88
