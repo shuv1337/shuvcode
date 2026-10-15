@@ -5,7 +5,15 @@ import { createStore } from "solid-js/store"
 import { FilePath } from "../ui/file-path"
 import { useTheme } from "../context/theme"
 import { useConfig } from "../config"
-import { DIALOG_INSET, DialogBleed, DialogHeader, DialogLayout, useDialog, type DialogContext } from "../ui/dialog"
+import {
+  DIALOG_INSET,
+  DialogBleed,
+  dialogWidth,
+  DialogHeader,
+  DialogLayout,
+  useDialog,
+  type DialogContext,
+} from "../ui/dialog"
 import { getScrollAcceleration } from "../util/scroll"
 
 const options = ["no", "yes"] as const
@@ -40,7 +48,10 @@ export function DialogWorkspaceFileChanges(props: {
   const fileNameWidth = createMemo(() =>
     Math.max(
       2,
-      Math.min(60, dimensions().width - 2) - DIALOG_INSET * 2 - 2 - Math.max(7, ...props.files.map(changeCountWidth)),
+      Math.min(dialogWidth("medium"), dimensions().width - 2) -
+        DIALOG_INSET * 2 -
+        2 -
+        Math.max(7, ...props.files.map(changeCountWidth)),
     ),
   )
 

@@ -124,10 +124,13 @@ export function DialogLayout(
     header: JSX.Element
     /** Usually a `DialogFooter` or a row of buttons. */
     footer?: JSX.Element
+    /** Side padding in cells. Defaults to DIALOG_INSET. */
+    inset?: number
   }>,
 ) {
+  const inset = () => props.inset ?? DIALOG_INSET
   return (
-    <box id={props.id} paddingLeft={DIALOG_INSET} paddingRight={DIALOG_INSET} paddingBottom={1} gap={1}>
+    <box id={props.id} paddingLeft={inset()} paddingRight={inset()} paddingBottom={1} gap={1}>
       {props.header}
       <box>{props.children}</box>
       {props.footer}
