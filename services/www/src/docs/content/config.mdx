@@ -333,8 +333,9 @@ rate limits, and disabling search.
 
 ### MCP
 
-Configure local and remote Model Context Protocol servers. Global timeouts can
-be overridden by an individual server.
+Configure local and remote Model Context Protocol servers. Global
+`mcp.timeout` values apply to servers defined in configuration files; each
+server's `timeout` overrides them.
 
 ```jsonc
 {
