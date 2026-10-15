@@ -21,7 +21,15 @@ import { useClient } from "../context/client"
 import { Keymap } from "../context/keymap"
 import { useLocation } from "../context/location"
 import { useTheme } from "../context/theme"
-import { DIALOG_INSET, DIALOG_LIST_INSET, DialogFooter, DialogHeader, useDialog } from "../ui/dialog"
+import {
+  DIALOG_INSET,
+  DIALOG_LIST_INSET,
+  DialogBleed,
+  DialogFooter,
+  DialogHeader,
+  DialogLayout,
+  useDialog,
+} from "../ui/dialog"
 import { DialogPrompt } from "../ui/dialog-prompt"
 import { DialogSelect } from "../ui/dialog-select"
 import { Link } from "../ui/link"
@@ -509,21 +517,22 @@ function CommandView(props: { title: string; output: string; message: string }) 
   const overlayTheme = useTheme()
   onMount(() => dialog.setSize("large"))
   return (
-    <box gap={1} paddingBottom={1}>
-      <DialogHeader newInset={DIALOG_INSET} title={props.title} closeLabel="esc close" />
-      <box
-        backgroundColor={overlayTheme.background.raised.high}
-        paddingLeft={DIALOG_INSET}
-        paddingRight={DIALOG_INSET}
-        paddingTop={1}
-        paddingBottom={1}
-      >
-        <text fg={overlayTheme.text.base}>{props.output.trim()}</text>
-      </box>
-      <box paddingLeft={DIALOG_INSET} paddingRight={DIALOG_INSET}>
+    <DialogLayout header={<DialogHeader title={props.title} closeLabel="esc close" />}>
+      <box gap={1}>
+        <DialogBleed>
+          <box
+            backgroundColor={overlayTheme.background.raised.high}
+            paddingLeft={DIALOG_INSET}
+            paddingRight={DIALOG_INSET}
+            paddingTop={1}
+            paddingBottom={1}
+          >
+            <text fg={overlayTheme.text.base}>{props.output.trim()}</text>
+          </box>
+        </DialogBleed>
         <text fg={theme.text.muted}>{props.message}</text>
       </box>
-    </box>
+    </DialogLayout>
   )
 }
 

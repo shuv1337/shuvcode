@@ -5,7 +5,7 @@ import { useConfig } from "../config"
 import { Keymap } from "../context/keymap"
 import type { TuiHighlight } from "../context/runtime"
 import { useTheme } from "../context/theme"
-import { DIALOG_INSET, DialogHeader, useDialog } from "../ui/dialog"
+import { DIALOG_INSET, DialogBleed, DialogHeader, DialogLayout, useDialog } from "../ui/dialog"
 import { getScrollAcceleration } from "../util/scroll"
 
 export function DialogHighlights(props: { version: string; items: ReadonlyArray<TuiHighlight> }) {
@@ -33,56 +33,55 @@ export function DialogHighlights(props: { version: string; items: ReadonlyArray<
   }))
 
   return (
-    <box gap={1} paddingBottom={1}>
-      <DialogHeader newInset={DIALOG_INSET} title={`What's new in ${props.version}`} />
-      {/* The band owns the vertical padding so it stays visible while the highlights scroll. */}
-      <box backgroundColor={overlay.background.raised.high} paddingTop={1} paddingBottom={1}>
-        <scrollbox
-          ref={(element: ScrollBoxRenderable) => (scroll = element)}
-          maxHeight={maxHeight()}
-          contentOptions={{ minHeight: 0 }}
-          backgroundColor={overlay.background.raised.high}
-          scrollbarOptions={{ visible: false }}
-          scrollAcceleration={getScrollAcceleration(config)}
-        >
-          <box gap={1} paddingLeft={DIALOG_INSET} paddingRight={DIALOG_INSET}>
-            <For each={props.items}>
-              {(item) => (
-                <box>
-                  <text attributes={TextAttributes.BOLD} fg={overlay.text.base}>
-                    {item.title}
-                  </text>
-                  {/* Backticks mark code spans, which stand out from the muted description. */}
-                  <text fg={overlay.text.muted} wrapMode="word">
-                    <For each={item.body.split("`")}>
-                      {(part, index) =>
-                        index() % 2 === 1 ? <span style={{ fg: overlay.text.base }}>{part}</span> : part
-                      }
-                    </For>
-                  </text>
-                </box>
-              )}
-            </For>
+    <DialogLayout
+      header={<DialogHeader title={`What's new in ${props.version}`} />}
+      footer={
+        <box flexDirection="row" justifyContent="space-between" alignItems="center">
+          <text fg={theme.text.muted}>↑/↓ scroll</text>
+          <box
+            paddingLeft={3}
+            paddingRight={3}
+            backgroundColor={theme.background.action.primary.focused}
+            onMouseUp={() => dialog.clear()}
+          >
+            <text fg={theme.text.action.primary.focused}>ok</text>
           </box>
-        </scrollbox>
-      </box>
-      <box
-        flexDirection="row"
-        justifyContent="space-between"
-        alignItems="center"
-        paddingLeft={DIALOG_INSET}
-        paddingRight={DIALOG_INSET}
-      >
-        <text fg={theme.text.muted}>↑/↓ scroll</text>
-        <box
-          paddingLeft={3}
-          paddingRight={3}
-          backgroundColor={theme.background.action.primary.focused}
-          onMouseUp={() => dialog.clear()}
-        >
-          <text fg={theme.text.action.primary.focused}>ok</text>
         </box>
-      </box>
-    </box>
+      }
+    >
+      {/* The band owns the vertical padding so it stays visible while the highlights scroll. */}
+      <DialogBleed>
+        <box backgroundColor={overlay.background.raised.high} paddingTop={1} paddingBottom={1}>
+          <scrollbox
+            ref={(element: ScrollBoxRenderable) => (scroll = element)}
+            maxHeight={maxHeight()}
+            contentOptions={{ minHeight: 0 }}
+            backgroundColor={overlay.background.raised.high}
+            scrollbarOptions={{ visible: false }}
+            scrollAcceleration={getScrollAcceleration(config)}
+          >
+            <box gap={1} paddingLeft={DIALOG_INSET} paddingRight={DIALOG_INSET}>
+              <For each={props.items}>
+                {(item) => (
+                  <box>
+                    <text attributes={TextAttributes.BOLD} fg={overlay.text.base}>
+                      {item.title}
+                    </text>
+                    {/* Backticks mark code spans, which stand out from the muted description. */}
+                    <text fg={overlay.text.muted} wrapMode="word">
+                      <For each={item.body.split("`")}>
+                        {(part, index) =>
+                          index() % 2 === 1 ? <span style={{ fg: overlay.text.base }}>{part}</span> : part
+                        }
+                      </For>
+                    </text>
+                  </box>
+                )}
+              </For>
+            </box>
+          </scrollbox>
+        </box>
+      </DialogBleed>
+    </DialogLayout>
   )
 }

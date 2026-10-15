@@ -17,7 +17,7 @@ import { createEffect, createMemo, createResource, createSignal, For, Match, onC
 import { DiffViewerFileTree } from "./diff-viewer-file-tree"
 import { DiffFileMenu } from "./diff-viewer-file-menu"
 import { DiffViewerImage, isDiffImageFile } from "./diff-viewer-image"
-import { DIALOG_INSET, DIALOG_LIST_INSET } from "../../ui/dialog"
+import { DIALOG_LIST_INSET, DialogHeader, DialogLayout } from "../../ui/dialog"
 import { DialogSelect } from "../../ui/dialog-select"
 import { EmptyBorder } from "../../ui/border"
 import { SESSION_PANEL_SPLIT_MIN_WIDTH } from "../../ui/layout"
@@ -1256,15 +1256,11 @@ function DiffViewerHelpDialog(props: { context: Plugin.Context; single: boolean;
   ]
 
   return (
-    <box paddingLeft={DIALOG_INSET} paddingRight={DIALOG_INSET} paddingBottom={1} gap={1}>
-      <box flexDirection="row" justifyContent="space-between">
-        <text attributes={TextAttributes.BOLD} fg={theme.text.base}>
-          Diff shortcuts
-        </text>
-        <text fg={theme.text.muted} selectable={false} onMouseUp={() => props.context.ui.dialog.clear()}>
-          esc close
-        </text>
-      </box>
+    <DialogLayout
+      header={
+        <DialogHeader title="Diff shortcuts" closeLabel="esc close" onClose={() => props.context.ui.dialog.clear()} />
+      }
+    >
       <scrollbox
         id="diff-help-scroll"
         focused
@@ -1302,7 +1298,7 @@ function DiffViewerHelpDialog(props: { context: Plugin.Context; single: boolean;
           </For>
         </box>
       </scrollbox>
-    </box>
+    </DialogLayout>
   )
 }
 

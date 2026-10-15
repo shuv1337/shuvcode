@@ -8,7 +8,7 @@ import { useClipboard } from "../../context/clipboard"
 import { Keymap } from "../../context/keymap"
 import { useTheme, useThemes } from "../../context/theme"
 import { usePlugin } from "../../plugin/context"
-import { DIALOG_INSET, DialogFooter, DialogHeader } from "../../ui/dialog"
+import { DIALOG_INSET, DialogBleed, DialogFooter, DialogHeader, DialogLayout } from "../../ui/dialog"
 import { useToast } from "../../ui/toast"
 import { getScrollAcceleration } from "../../util/scroll"
 
@@ -124,50 +124,55 @@ export function Answer(props: {
   })
 
   return (
-    <box gap={1} paddingBottom={1}>
-      <DialogHeader
-        gap={2}
-        newInset={DIALOG_INSET}
-        titleView={
-          <text attributes={TextAttributes.BOLD} fg={theme.text.base} flexShrink={0}>
-            /btw
+    <DialogLayout
+      header={
+        <DialogHeader
+          gap={2}
+          titleView={
+            <text attributes={TextAttributes.BOLD} fg={theme.text.base} flexShrink={0}>
+              /btw
+            </text>
+          }
+        >
+          <text fg={theme.text.muted} wrapMode="none" flexGrow={1} truncate>
+            {props.question.replace(/\s+/g, " ")}
           </text>
-        }
-      >
-        <text fg={theme.text.muted} wrapMode="none" flexGrow={1} truncate>
-          {props.question.replace(/\s+/g, " ")}
-        </text>
-      </DialogHeader>
-      <scrollbox
-        ref={(element: ScrollBoxRenderable) => (scroll = element)}
-        maxHeight={maxHeight()}
-        contentOptions={{ minHeight: 0 }}
-        backgroundColor={overlay.background.raised.high}
-        scrollbarOptions={{ visible: false }}
-        scrollAcceleration={getScrollAcceleration(config)}
-      >
-        <box paddingLeft={DIALOG_INSET} paddingRight={DIALOG_INSET} paddingTop={1} paddingBottom={1}>
-          <markdown
-            syntaxStyle={syntax()}
-            renderNode={props.markdown()}
-            content={props.answer}
-            conceal
-            internalBlockMode="top-level"
-            tableOptions={{ style: "grid", cellPaddingX: 1 }}
-            fg={overlay.markdown.text}
-            bg={overlay.background.raised.high}
-          />
-        </box>
-      </scrollbox>
-      <DialogFooter
-        newInset={DIALOG_INSET}
-        actions={[
-          copied()
-            ? { title: "✓ copied", color: theme.text.feedback.success.base, onTrigger: copy }
-            : { title: "copy", key: "c", onTrigger: copy },
-          { title: "scroll", key: "j/k ↑/↓" },
-        ]}
-      />
-    </box>
+        </DialogHeader>
+      }
+      footer={
+        <DialogFooter
+          actions={[
+            copied()
+              ? { title: "✓ copied", color: theme.text.feedback.success.base, onTrigger: copy }
+              : { title: "copy", key: "c", onTrigger: copy },
+            { title: "scroll", key: "j/k ↑/↓" },
+          ]}
+        />
+      }
+    >
+      <DialogBleed>
+        <scrollbox
+          ref={(element: ScrollBoxRenderable) => (scroll = element)}
+          maxHeight={maxHeight()}
+          contentOptions={{ minHeight: 0 }}
+          backgroundColor={overlay.background.raised.high}
+          scrollbarOptions={{ visible: false }}
+          scrollAcceleration={getScrollAcceleration(config)}
+        >
+          <box paddingLeft={DIALOG_INSET} paddingRight={DIALOG_INSET} paddingTop={1} paddingBottom={1}>
+            <markdown
+              syntaxStyle={syntax()}
+              renderNode={props.markdown()}
+              content={props.answer}
+              conceal
+              internalBlockMode="top-level"
+              tableOptions={{ style: "grid", cellPaddingX: 1 }}
+              fg={overlay.markdown.text}
+              bg={overlay.background.raised.high}
+            />
+          </box>
+        </scrollbox>
+      </DialogBleed>
+    </DialogLayout>
   )
 }
