@@ -7,7 +7,7 @@ import { createStore } from "solid-js/store"
 import { useRenderer, useTerminalDimensions } from "@opentui/solid"
 import * as fuzzysort from "fuzzysort"
 import { isDeepEqual } from "remeda"
-import { DIALOG_LIST_INSET, DialogFooter, DialogHeader, useDialog, type DialogContext } from "./dialog"
+import { DIALOG_LIST_INSET, DialogFooter, DialogHeader, dialogWidth, useDialog, type DialogContext } from "./dialog"
 import { Locale } from "../util/locale"
 import { getScrollAcceleration } from "../util/scroll"
 import { useConfig } from "../config"
@@ -745,6 +745,8 @@ function DialogSelectRow(props: {
   })
 
   return (
+    // A marker or gutter takes its cell plus the row gap out of the left padding,
+    // so titles line up with unmarked rows: scroll pad (1) + marker (1) + gap (1).
     <box
       flexDirection="row"
       paddingLeft={props.current || props.gutter ? DIALOG_LIST_INSET - 3 : DIALOG_LIST_INSET - 1}
@@ -759,7 +761,14 @@ function DialogSelectRow(props: {
           {props.margin}
         </box>
       </Show>
-      <DialogSelectRowGutter current={props.current} gutter={props.gutter} color={text()} />
+      <Show when={props.current && !props.gutter}>
+        <text flexShrink={0} fg={text()}>
+          ●
+        </text>
+      </Show>
+      <Show when={props.gutter}>
+        <box flexShrink={0}>{props.gutter?.(text())}</box>
+      </Show>
       <text
         flexGrow={1}
         fg={text()}
@@ -787,32 +796,17 @@ function DialogSelectRow(props: {
   )
 }
 
-function DialogSelectRowGutter(props: { current: boolean; gutter?: (color: RGBA) => JSX.Element; color: RGBA }) {
-  return (
-    <>
-      <Show when={props.current && !props.gutter}>
-        <text flexShrink={0} fg={props.color} marginRight={0}>
-          ●
-        </text>
-      </Show>
-      <Show when={props.gutter}>
-        <box flexShrink={0} marginRight={0}>
-          {props.gutter?.(props.color)}
-        </box>
-      </Show>
-    </>
-  )
-}
-
 function DialogSelectDetails(props: { details?: string[] }) {
   const theme = useTheme().surface("dialog")
+  const dialog = useDialog()
   const dimensions = useTerminalDimensions()
+  const width = createMemo(() => dialogSelectContentWidth(Math.min(dialogWidth(dialog.size), dimensions().width)))
   return (
     <For each={props.details}>
       {(detail) => (
         <box paddingLeft={DIALOG_LIST_INSET - 1} paddingRight={DIALOG_LIST_INSET - 1}>
           <text fg={theme.text.muted} wrapMode="none">
-            {Locale.truncateMiddle(detail, Math.max(1, Math.min(76, dimensions().width - 12)))}
+            {Locale.truncateMiddle(detail, Math.max(1, width()))}
           </text>
         </box>
       )}

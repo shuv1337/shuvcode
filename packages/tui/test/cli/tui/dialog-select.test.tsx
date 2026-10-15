@@ -415,8 +415,6 @@ test("footer actions run when filtering leaves no selected row", async () => {
     const frame = app.captureCharFrame().split("\n")
     const row = frame.findIndex((line) => line.includes("new ctrl+a"))
     await app.mockMouse.click(frame[row]!.indexOf("new ctrl+a") + 1, row)
-    app.mockInput.pressTab()
-    app.mockInput.pressEnter()
 
     expect(global).toBe(1)
     expect(rows).toEqual([])
