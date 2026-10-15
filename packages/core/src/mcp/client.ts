@@ -265,7 +265,8 @@ export const connect = Effect.fnUntraced(function* (
     // Servers that bundle their own Code Mode (Cloudflare and others) expose raw tools when asked
     // with ?codemode=false, which is what our Code Mode wants. The configured URL stays the OAuth identity.
     const url = new URL(config.url)
-    const addedCodemode = config.codemode !== false && !url.searchParams.has("codemode")
+    const addedCodemode =
+      config.codemode !== false && !url.searchParams.has("codemode") && !rejectsUnknownQuery(url)
     if (addedCodemode) url.searchParams.set("codemode", "false")
     const open = Effect.fnUntraced(function* (url: URL) {
       session.transport = new StreamableHTTPClientTransport(url, {
@@ -388,6 +389,17 @@ export const connect = Effect.fnUntraced(function* (
     })
   return yield* new ConnectError({ server, message: explain(error) })
 })
+
+// These servers reject any unknown query parameter and have no Code Mode of their own, so adding
+// ?codemode=false only costs a failed request before the retry at the configured URL.
+function rejectsUnknownQuery(url: URL) {
+  // Google Workspace MCP (gmailmcp, drivemcp, calendarmcp, ...) returns 404.
+  if (url.hostname.endsWith(".googleapis.com")) return true
+  // Zoho MCP gateways (zohomcp.com, zohomcp.eu, ...) return 400.
+  if (/(^|\.)zohomcp\.[a-z.]+$/.test(url.hostname)) return true
+  // Loopback servers run on this machine (Figma Desktop's Dev Mode MCP returns 404), so they are not hosted Code Mode servers.
+  return url.hostname === "localhost" || url.hostname === "[::1]" || /^127(\.\d+){3}$/.test(url.hostname)
+}
 
 // Absent config is legacy: the SDK sends the plain initialize handshake with no discover probe.
 function negotiation(protocol: ConfigMCP.Protocol | undefined): VersionNegotiationOptions | undefined {
