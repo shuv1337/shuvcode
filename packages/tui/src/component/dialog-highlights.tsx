@@ -5,7 +5,7 @@ import { useConfig } from "../config"
 import { Keymap } from "../context/keymap"
 import type { TuiHighlight } from "../context/runtime"
 import { useTheme } from "../context/theme"
-import { DIALOG_INSET, DialogBleed, DialogHeader, DialogLayout, useDialog } from "../ui/dialog"
+import { DIALOG_INSET, DialogBleed, DialogFooter, DialogHeader, DialogLayout, useDialog } from "../ui/dialog"
 import { getScrollAcceleration } from "../util/scroll"
 
 export function DialogHighlights(props: { version: string; items: ReadonlyArray<TuiHighlight> }) {
@@ -37,7 +37,7 @@ export function DialogHighlights(props: { version: string; items: ReadonlyArray<
       header={<DialogHeader title={`What's new in ${props.version}`} />}
       footer={
         <box flexDirection="row" justifyContent="space-between" alignItems="center">
-          <text fg={theme.text.muted}>↑/↓ scroll</text>
+          <DialogFooter actions={[{ title: "scroll", key: "↑/↓" }]} />
           <box
             paddingLeft={3}
             paddingRight={3}

@@ -6,7 +6,7 @@ import stripAnsi from "strip-ansi"
 import { useClient } from "../context/client"
 import { Keymap } from "../context/keymap"
 import { useTheme } from "../context/theme"
-import { DialogHeader, DialogLayout, useDialog } from "../ui/dialog"
+import { DialogFooter, DialogHeader, DialogLayout, useDialog } from "../ui/dialog"
 
 const PAGE_BYTES = 64 * 1024
 
@@ -114,11 +114,13 @@ export function DialogShellOutput(props: { shell: ShellInfo; location: LocationR
         </DialogHeader>
       }
       footer={
-        <box flexDirection="row" gap={2} flexWrap="wrap">
-          <text fg={theme.text.muted}>↑/↓ scroll</text>
-          <text fg={theme.text.muted}>end follow</text>
-          <text fg={theme.text.muted}>esc back</text>
-        </box>
+        <DialogFooter
+          actions={[
+            { title: "scroll", key: "↑/↓" },
+            { title: "follow", key: "end" },
+            { title: "back", key: "esc" },
+          ]}
+        />
       }
     >
       <box gap={1}>
