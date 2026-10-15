@@ -90,6 +90,14 @@ export const Plugin = define({
         }
         next.set(item, { providerID, models: definitions })
       }
+      for (const [item, definition] of next) {
+        for (const [id, config] of Object.entries(item.models ?? {})) {
+          if (config.limit === undefined) continue
+          providers.models.update(definition.providerID, id, (model) => {
+            model.limit = { ...model.limit, ...config.limit }
+          })
+        }
+      }
       sources.defaultModel = Config.latest(loaded.entries, "model")
       sources.models = next
     })
