@@ -24,8 +24,8 @@ export const scopes = [
   "https://www.googleapis.com/auth/experimentsandconfigs",
 ] as const
 
-const cliVersion = "1.1.13"
-const cliCL = "964361259"
+// Cloud Code gates model availability on the CLI version, including Argon.
+const cliVersion = "1.3.6"
 
 export type Tokens = {
   access: string
@@ -95,7 +95,7 @@ const archType = () => {
 }
 
 export const userAgent = () =>
-  `antigravity/cli/${cliVersion} (aidev_client; os_type=${osType()}; arch=${archType()}; cl=${cliCL}; auth_method=consumer)`
+  `antigravity/cli/${cliVersion} (aidev_client; os_type=${osType()}; arch=${archType()}; auth_method=consumer)`
 
 const base64url = (buf: Buffer) => buf.toString("base64url").replace(/=+$/, "")
 
@@ -271,12 +271,16 @@ export async function fetchUserInfo(access: string, request: Fetch = fetch, sign
 
 export function parseCatalogModels(payload: unknown): CatalogModel[] {
   const data = record(payload)
-  const list = [data?.models, data?.availableModels, data?.model].find(Array.isArray)
-  if (!list) return []
-  return list.flatMap((item) => {
+  const catalog = [data?.models, data?.availableModels, data?.model].find(
+    (value) => Array.isArray(value) || record(value),
+  )
+  const entries: [string | undefined, unknown][] = Array.isArray(catalog)
+    ? catalog.map((item) => [undefined, item])
+    : Object.entries(record(catalog) ?? {})
+  return entries.flatMap(([key, item]) => {
     const model = record(item)
     if (!model) return []
-    const id = stringField(model.id) ?? stringField(model.name) ?? stringField(model.modelId)
+    const id = stringField(key) ?? stringField(model.id) ?? stringField(model.name) ?? stringField(model.modelId)
     if (!id) return []
     return [
       {
