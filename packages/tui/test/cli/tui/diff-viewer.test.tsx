@@ -1496,6 +1496,9 @@ test.each([80, 160])(
       expect(viewer.app.renderer.root.findDescendantById("diff-file-header-2")).toBeDefined()
       expect(viewer.app.renderer.root.findDescendantById("diff-file-header-0")).toBeUndefined()
       expect(findDiffs(viewer.app.renderer.root)).toHaveLength(0)
+      viewer.app.mockInput.pressKey("m")
+      await viewer.app.flush()
+      expect(findDiffs(viewer.app.renderer.root)).toHaveLength(0)
 
       viewer.app.mockInput.pressKey("?")
       await viewer.app.waitForFrame((frame) => frame.includes("Review + next / reopen"))
