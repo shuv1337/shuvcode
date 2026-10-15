@@ -1,7 +1,7 @@
 import { TextareaRenderable } from "@opentui/core"
 import { Keymap } from "../context/keymap"
 import { useTheme } from "../context/theme"
-import { DIALOG_INSET, DialogHeader, useDialog, type DialogSize } from "./dialog"
+import { DIALOG_INSET, DialogFooter, DialogHeader, useDialog, type DialogSize } from "./dialog"
 import { Show, createEffect, createSignal, onMount, type JSX } from "solid-js"
 import { Spinner } from "../component/spinner"
 import { useConfig } from "../config"
@@ -23,7 +23,6 @@ export function DialogPrompt(props: DialogPromptProps) {
   const dialog = useDialog()
   const renderer = useRenderer()
   const theme = useTheme().surface("dialog")
-  const shortcuts = Keymap.useShortcuts()
   const config = useConfig().data
   const [textareaTarget, setTextareaTarget] = createSignal<TextareaRenderable>()
   let textarea: TextareaRenderable
@@ -124,13 +123,9 @@ export function DialogPrompt(props: DialogPromptProps) {
           <Spinner color={theme.text.muted}>{props.busyText ?? "Working…"}</Spinner>
         </Show>
       </box>
-      <box paddingBottom={1} gap={1} flexDirection="row">
+      <box paddingBottom={1} flexDirection="row">
         <Show when={!props.busy} fallback={<text fg={theme.text.muted}>processing…</text>}>
-          <Show when={shortcuts.get("dialog.prompt.submit")}>
-            <text fg={theme.text.base}>
-              {shortcuts.get("dialog.prompt.submit")} <span style={{ fg: theme.text.muted }}>submit</span>
-            </text>
-          </Show>
+          <DialogFooter actions={[{ title: "submit", command: "dialog.prompt.submit", onTrigger: confirm }]} />
         </Show>
       </box>
     </box>

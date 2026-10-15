@@ -399,7 +399,7 @@ export function DialogConfig(props: { current?: string }) {
       filterThreshold={0.7}
       onMove={(option) => setSelected(option.value)}
       onSelect={(option) => void change(1, option.value)}
-      footerHints={[{ title: "←/→", label: "change" }]}
+      footerHints={[{ title: "change", label: "←/→" }]}
       bindings={[
         {
           bind: "left",

@@ -8,7 +8,7 @@ import { useConfig } from "../../config"
 import { useClipboard } from "../../context/clipboard"
 import { Keymap } from "../../context/keymap"
 import { useTheme, useThemes } from "../../context/theme"
-import { DIALOG_INSET, DialogHeader, dialogWidth, useDialog } from "../../ui/dialog"
+import { DIALOG_INSET, DialogFooter, DialogHeader, dialogWidth, useDialog } from "../../ui/dialog"
 import { useToast } from "../../ui/toast"
 import { Locale } from "../../util/locale"
 import { getScrollAcceleration } from "../../util/scroll"
@@ -164,22 +164,19 @@ export function DialogExecute(props: { part: SessionMessageAssistantTool }) {
           </box>
         </box>
       </scrollbox>
-      <box flexDirection="row" gap={3} flexWrap="wrap" paddingLeft={DIALOG_INSET} paddingRight={DIALOG_INSET}>
-        <text fg={theme.text.muted}>↑/↓ scroll</text>
-        <text onMouseUp={() => copy("code")}>
-          <span style={{ fg: copied() === "code" ? theme.text.feedback.success.base : theme.text.base }}>
-            <b>{copied() === "code" ? "✓ copied" : "c"}</b>
-          </span>
-          <span style={{ fg: theme.text.muted }}>{copied() === "code" ? "" : " copy code"}</span>
-        </text>
-        <text onMouseUp={() => copy("output")}>
-          <span style={{ fg: copied() === "output" ? theme.text.feedback.success.base : theme.text.base }}>
-            <b>{copied() === "output" ? "✓ copied" : "o"}</b>
-          </span>
-          <span style={{ fg: theme.text.muted }}>{copied() === "output" ? "" : " copy output"}</span>
-        </text>
-        <text fg={theme.text.muted}>esc back</text>
-      </box>
+      <DialogFooter
+        newInset={DIALOG_INSET}
+        actions={[
+          { title: "scroll", key: "↑/↓" },
+          copied() === "code"
+            ? { title: "✓ copied", color: theme.text.feedback.success.base, onTrigger: () => copy("code") }
+            : { title: "copy code", key: "c", onTrigger: () => copy("code") },
+          copied() === "output"
+            ? { title: "✓ copied", color: theme.text.feedback.success.base, onTrigger: () => copy("output") }
+            : { title: "copy output", key: "o", onTrigger: () => copy("output") },
+          { title: "back", key: "esc", onTrigger: () => dialog.clear() },
+        ]}
+      />
     </box>
   )
 }

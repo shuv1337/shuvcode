@@ -1,7 +1,7 @@
 import { createMemo, createSignal, For } from "solid-js"
 import { Keymap } from "../context/keymap"
 import { useTheme } from "../context/theme"
-import { DIALOG_INSET, DialogHeader, useDialog } from "../ui/dialog"
+import { DIALOG_INSET, DialogFooter, DialogHeader, useDialog } from "../ui/dialog"
 import { useRoute } from "../context/route"
 import { useLocal } from "../context/local"
 import { useClipboard } from "../context/clipboard"
@@ -70,15 +70,19 @@ export function DialogDebug() {
           )}
         </For>
       </box>
-      <box flexDirection="row" justifyContent="space-between">
+      <DialogFooter
+        actions={[
+          {
+            title: copied() ? "✓ copied" : "copy",
+            key: "enter",
+            side: "right",
+            color: copied() ? theme.text.feedback.success.base : undefined,
+            onTrigger: copy,
+          },
+        ]}
+      >
         <text fg={theme.text.muted}>Share this when reporting an issue.</text>
-        <text onMouseUp={copy}>
-          <span style={{ fg: copied() ? theme.text.feedback.success.base : theme.text.base }}>
-            <b>{copied() ? "✓ copied" : "copy"}</b>{" "}
-          </span>
-          <span style={{ fg: theme.text.muted }}>enter</span>
-        </text>
-      </box>
+      </DialogFooter>
     </box>
   )
 }

@@ -9,7 +9,7 @@ import { useRoute } from "../context/route"
 import { getScrollAcceleration } from "../util/scroll"
 import { useTheme } from "../context/theme"
 import { emptyPrompt } from "../prompt/history"
-import { DIALOG_INSET, DialogHeader, dialogWidth, useDialog } from "../ui/dialog"
+import { DIALOG_INSET, DialogFooter, DialogHeader, dialogWidth, useDialog } from "../ui/dialog"
 import { FilePath } from "../ui/file-path"
 import { useToast } from "../ui/toast"
 import { errorDetails } from "../util/error-details"
@@ -115,21 +115,15 @@ export function DialogErrorDetails(props: {
           <text fg={theme.text.muted}>Reference: {props.diagnosticRef}</text>
         </Show>
       </box>
-      <box flexDirection="row" gap={3} flexWrap="wrap">
-        <text onMouseUp={investigate}>
-          <span style={{ fg: theme.text.base }}>
-            <b>i</b>
-          </span>
-          <span style={{ fg: theme.text.muted }}> investigate</span>
-        </text>
-        <text onMouseUp={copy}>
-          <span style={{ fg: copied() ? theme.text.feedback.success.base : theme.text.base }}>
-            <b>{copied() ? "✓ copied" : "c"}</b>
-          </span>
-          <span style={{ fg: theme.text.muted }}>{copied() ? "" : " copy details"}</span>
-        </text>
-        <text fg={theme.text.muted}>↑/↓ scroll</text>
-      </box>
+      <DialogFooter
+        actions={[
+          { title: "investigate", key: "i", onTrigger: investigate },
+          copied()
+            ? { title: "✓ copied", color: theme.text.feedback.success.base, onTrigger: copy }
+            : { title: "copy details", key: "c", onTrigger: copy },
+          { title: "scroll", key: "↑/↓", side: "right" },
+        ]}
+      />
     </box>
   )
 }

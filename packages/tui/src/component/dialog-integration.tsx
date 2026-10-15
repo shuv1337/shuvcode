@@ -21,7 +21,7 @@ import { useClient } from "../context/client"
 import { Keymap } from "../context/keymap"
 import { useLocation } from "../context/location"
 import { useTheme } from "../context/theme"
-import { DIALOG_INSET, DIALOG_LIST_INSET, DialogHeader, useDialog } from "../ui/dialog"
+import { DIALOG_INSET, DIALOG_LIST_INSET, DialogFooter, DialogHeader, useDialog } from "../ui/dialog"
 import { DialogPrompt } from "../ui/dialog-prompt"
 import { DialogSelect } from "../ui/dialog-select"
 import { Link } from "../ui/link"
@@ -809,18 +809,12 @@ function OAuthView(props: {
         )}
       </Show>
       <text fg={theme.text.muted}>{props.message}</text>
-      <box flexDirection="row" gap={2}>
-        <Show when={props.open}>
-          <text fg={theme.text.base}>
-            o <span style={{ fg: theme.text.muted }}>open</span>
-          </text>
-        </Show>
-        <Show when={props.copy}>
-          <text fg={theme.text.base}>
-            c <span style={{ fg: theme.text.muted }}>copy</span>
-          </text>
-        </Show>
-      </box>
+      <DialogFooter
+        actions={[
+          ...(props.open ? [{ title: "open", key: "o" }] : []),
+          ...(props.copy ? [{ title: "copy", key: "c" }] : []),
+        ]}
+      />
     </box>
   )
 }
@@ -1040,9 +1034,20 @@ function StringChoiceField(props: {
         </Show>
       </scrollbox>
       <Show when={store.error}>{(error) => <text fg={theme.text.feedback.error.base}>{error()}</text>}</Show>
-      <text fg={theme.text.muted}>
-        {store.editing ? "enter submit · esc back" : "↑/↓ select · enter confirm · esc cancel"}
-      </text>
+      <DialogFooter
+        actions={
+          store.editing
+            ? [
+                { title: "submit", key: "enter", onTrigger: () => submit(textarea()?.plainText.trim() || undefined) },
+                { title: "back", key: "esc", onTrigger: back },
+              ]
+            : [
+                { title: "select", key: "↑/↓" },
+                { title: "confirm", key: "enter", onTrigger: () => select(store.selected) },
+                { title: "cancel", key: "esc", onTrigger: () => dialog.clear() },
+              ]
+        }
+      />
     </box>
   )
 }

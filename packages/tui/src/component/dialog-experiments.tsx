@@ -67,7 +67,7 @@ export function DialogExperiments() {
           <text fg={theme.text.muted}>No experiments available</text>
         </box>
       }
-      footerHints={experiments.length > 0 ? [{ title: "←/→", label: "change" }] : []}
+      footerHints={experiments.length > 0 ? [{ title: "change", label: "←/→" }] : []}
       bindings={
         experiments.length > 0
           ? [

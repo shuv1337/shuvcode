@@ -1,5 +1,15 @@
 import { useRenderer, useTerminalDimensions } from "@opentui/solid"
-import { batch, createContext, createEffect, onCleanup, Show, useContext, type JSX, type ParentProps } from "solid-js"
+import {
+  batch,
+  createContext,
+  createEffect,
+  For,
+  onCleanup,
+  Show,
+  useContext,
+  type JSX,
+  type ParentProps,
+} from "solid-js"
 import { Keymap } from "../context/keymap"
 import { ThemeContextProvider, useTheme } from "../context/theme"
 import { InputRenderable, MouseButton, Renderable, RGBA, TextAttributes } from "@opentui/core"
@@ -110,6 +120,81 @@ export function DialogHeader(
         {props.closeLabel ?? "esc"}
       </text>
     </box>
+  )
+}
+
+export type DialogFooterAction = {
+  title: string
+  /** Literal key label, e.g. "enter". */
+  key?: string
+  /** Keymap command id whose first shortcut is shown when `key` is not set. The action hides when it has no shortcut. */
+  command?: string
+  onTrigger?: () => void
+  side?: "left" | "right"
+  disabled?: boolean
+  /** Overrides the title color, e.g. for a "✓ copied" confirmation. */
+  color?: RGBA
+}
+
+export function DialogFooter(
+  props: ParentProps<{
+    actions?: DialogFooterAction[]
+    inset?: boolean
+    newInset?: number
+  }>,
+) {
+  const dimensions = useTerminalDimensions()
+  const shortcuts = Keymap.useShortcuts()
+  const narrow = () => dimensions().width < 60
+  const actions = () =>
+    (props.actions ?? []).flatMap((action) => {
+      if (action.key !== undefined || action.command === undefined) return [action]
+      const key = shortcuts.get(action.command)
+      return key ? [{ ...action, key }] : []
+    })
+  const left = () => actions().filter((action) => action.side !== "right")
+  const right = () => actions().filter((action) => action.side === "right")
+  return (
+    <box
+      paddingLeft={props.newInset ?? (props.inset ? DIALOG_PADDING_X : undefined)}
+      paddingRight={props.newInset ?? (props.inset ? DIALOG_PADDING_X : undefined)}
+      flexDirection="row"
+      justifyContent="space-between"
+      flexShrink={0}
+    >
+      <box flexDirection={narrow() ? "column" : "row"} gap={narrow() ? 0 : 2}>
+        {props.children}
+        <For each={left()}>{(action) => <DialogFooterItem action={action} />}</For>
+      </box>
+      <box flexDirection="row" gap={2}>
+        <For each={right()}>{(action) => <DialogFooterItem action={action} />}</For>
+      </box>
+    </box>
+  )
+}
+
+function DialogFooterItem(props: { action: DialogFooterAction }) {
+  const theme = useTheme().surface("dialog")
+  return (
+    <text
+      onMouseUp={() => {
+        if (props.action.disabled) return
+        props.action.onTrigger?.()
+      }}
+    >
+      <span
+        style={{
+          fg: props.action.disabled ? theme.text.action.primary.disabled : (props.action.color ?? theme.text.base),
+        }}
+      >
+        {props.action.title}
+      </span>
+      <Show when={props.action.key}>
+        <span style={{ fg: props.action.disabled ? theme.text.action.primary.disabled : theme.text.muted }}>
+          {" " + props.action.key}
+        </span>
+      </Show>
+    </text>
   )
 }
 

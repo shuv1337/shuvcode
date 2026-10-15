@@ -41,7 +41,7 @@ test("opens an investigation draft for a failed MCP server at its originating lo
   try {
     await fixture.app.waitForFrame((frame) => frame.includes("Failed !"))
     fixture.app.mockInput.pressEnter()
-    await fixture.app.waitForFrame((frame) => frame.includes("i investigate"))
+    await fixture.app.waitForFrame((frame) => frame.includes("investigate i"))
     fixture.app.mockInput.pressKey("i")
     await fixture.app.waitForFrame((frame) => !frame.includes("MCP server: linear"))
 
