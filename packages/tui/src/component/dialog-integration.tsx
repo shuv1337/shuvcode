@@ -1,4 +1,4 @@
-import { ScrollBoxRenderable, TextareaRenderable, TextAttributes } from "@opentui/core"
+import { ScrollBoxRenderable, TextareaRenderable } from "@opentui/core"
 import { useTerminalDimensions } from "@opentui/solid"
 import type {
   ConnectionInfo,
@@ -21,7 +21,7 @@ import { useClient } from "../context/client"
 import { Keymap } from "../context/keymap"
 import { useLocation } from "../context/location"
 import { useTheme } from "../context/theme"
-import { useDialog } from "../ui/dialog"
+import { DialogHeader, useDialog } from "../ui/dialog"
 import { DialogPrompt } from "../ui/dialog-prompt"
 import { DialogSelect } from "../ui/dialog-select"
 import { Link } from "../ui/link"
@@ -510,14 +510,7 @@ function CommandView(props: { title: string; output: string; message: string }) 
   onMount(() => dialog.setSize("large"))
   return (
     <box gap={1} paddingBottom={1}>
-      <box flexDirection="row" justifyContent="space-between" paddingLeft={2} paddingRight={2}>
-        <text attributes={TextAttributes.BOLD} fg={theme.text.base}>
-          {props.title}
-        </text>
-        <text fg={theme.text.muted} onMouseUp={() => dialog.clear()}>
-          esc close
-        </text>
-      </box>
+      <DialogHeader paddingX={2} title={props.title} closeLabel="esc close" />
       <box
         backgroundColor={overlayTheme.background.raised.high}
         paddingLeft={2}
@@ -801,18 +794,10 @@ function OAuthView(props: {
   copy?: boolean
   open?: boolean
 }) {
-  const dialog = useDialog()
   const theme = useTheme().surface("dialog")
   return (
     <box paddingLeft={2} paddingRight={2} gap={1} paddingBottom={1}>
-      <box flexDirection="row" justifyContent="space-between">
-        <text attributes={TextAttributes.BOLD} fg={theme.text.base}>
-          {props.title}
-        </text>
-        <text fg={theme.text.muted} onMouseUp={() => dialog.clear()}>
-          esc
-        </text>
-      </box>
+      <DialogHeader title={props.title} />
       <Show when={props.url}>
         {(url) => (
           <box gap={1}>
@@ -986,14 +971,7 @@ function StringChoiceField(props: {
   }))
   return (
     <box paddingLeft={4} paddingRight={4} paddingBottom={1} gap={1}>
-      <box flexDirection="row" justifyContent="space-between">
-        <text fg={theme.text.base} attributes={TextAttributes.BOLD}>
-          {formLabel(props.field)}
-        </text>
-        <text fg={theme.text.muted} onMouseUp={() => (store.editing ? back() : dialog.clear())}>
-          esc
-        </text>
-      </box>
+      <DialogHeader title={formLabel(props.field)} onClose={() => (store.editing ? back() : dialog.clear())} />
       <Show when={props.field.description}>{(description) => <text fg={theme.text.muted}>{description()}</text>}</Show>
       <scrollbox
         gap={1}

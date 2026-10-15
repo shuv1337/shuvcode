@@ -7,7 +7,7 @@ import { createStore } from "solid-js/store"
 import { useRenderer, useTerminalDimensions } from "@opentui/solid"
 import * as fuzzysort from "fuzzysort"
 import { isDeepEqual } from "remeda"
-import { useDialog, type DialogContext } from "./dialog"
+import { DialogHeader, useDialog, type DialogContext } from "./dialog"
 import { Locale } from "../util/locale"
 import { getScrollAcceleration } from "../util/scroll"
 import { useConfig } from "../config"
@@ -672,16 +672,7 @@ export function DialogSelect<T>(props: DialogSelectProps<T>) {
   return (
     <box gap={1} paddingBottom={1} flexGrow={1}>
       <box paddingLeft={4} paddingRight={4}>
-        <box flexDirection="row" justifyContent="space-between">
-          {props.titleView ?? (
-            <text fg={theme.text.base} attributes={TextAttributes.BOLD}>
-              {props.title}
-            </text>
-          )}
-          <text fg={theme.text.muted} onMouseUp={() => (props.onCancel ?? dialog.clear)()}>
-            esc
-          </text>
-        </box>
+        <DialogHeader title={props.title} titleView={props.titleView} onClose={props.onCancel} />
         <Show when={props.renderFilter !== false}>
           <box paddingTop={1}>
             <input

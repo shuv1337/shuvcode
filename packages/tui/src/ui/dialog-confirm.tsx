@@ -1,7 +1,6 @@
-import { TextAttributes } from "@opentui/core"
 import { Keymap } from "../context/keymap"
 import { useTheme } from "../context/theme"
-import { useDialog } from "./dialog"
+import { DialogHeader, useDialog } from "./dialog"
 import { createStore } from "solid-js/store"
 import { For } from "solid-js"
 import { Locale } from "../util/locale"
@@ -57,14 +56,7 @@ export function DialogConfirm(props: DialogConfirmProps) {
   }))
   return (
     <box paddingLeft={2} paddingRight={2} gap={1}>
-      <box flexDirection="row" justifyContent="space-between">
-        <text attributes={TextAttributes.BOLD} fg={theme.text.base}>
-          {props.title}
-        </text>
-        <text fg={theme.text.muted} onMouseUp={() => dialog.clear()}>
-          esc
-        </text>
-      </box>
+      <DialogHeader title={props.title} />
       <box paddingBottom={1}>
         <text fg={theme.text.muted}>{props.message}</text>
       </box>

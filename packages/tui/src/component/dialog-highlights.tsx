@@ -5,7 +5,7 @@ import { useConfig } from "../config"
 import { Keymap } from "../context/keymap"
 import type { TuiHighlight } from "../context/runtime"
 import { useTheme } from "../context/theme"
-import { useDialog } from "../ui/dialog"
+import { DialogHeader, useDialog } from "../ui/dialog"
 import { getScrollAcceleration } from "../util/scroll"
 
 export function DialogHighlights(props: { version: string; items: ReadonlyArray<TuiHighlight> }) {
@@ -34,14 +34,7 @@ export function DialogHighlights(props: { version: string; items: ReadonlyArray<
 
   return (
     <box gap={1} paddingBottom={1}>
-      <box flexDirection="row" justifyContent="space-between" paddingLeft={2} paddingRight={2}>
-        <text attributes={TextAttributes.BOLD} fg={theme.text.base}>
-          What's new in {props.version}
-        </text>
-        <text fg={theme.text.muted} onMouseUp={() => dialog.clear()}>
-          esc
-        </text>
-      </box>
+      <DialogHeader paddingX={2} title={`What's new in ${props.version}`} />
       {/* The band owns the vertical padding so it stays visible while the highlights scroll. */}
       <box backgroundColor={overlay.background.raised.high} paddingTop={1} paddingBottom={1}>
         <scrollbox

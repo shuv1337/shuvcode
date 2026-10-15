@@ -1,7 +1,6 @@
-import { TextAttributes } from "@opentui/core"
 import { Keymap } from "../context/keymap"
 import { useTheme } from "../context/theme"
-import { useDialog, type DialogContext } from "./dialog"
+import { DialogHeader, type DialogContext } from "./dialog"
 import { createStore } from "solid-js/store"
 import { For, Show } from "solid-js"
 
@@ -22,7 +21,6 @@ export type DialogExportOptionsProps = {
 type Active = ExportFormat | "thinking" | "tools" | "sanitize" | "copy" | "export"
 
 export function DialogExportOptions(props: DialogExportOptionsProps) {
-  const dialog = useDialog()
   const theme = useTheme().surface("dialog")
   const overlayTheme = useTheme()
   const [store, setStore] = createStore({
@@ -84,14 +82,7 @@ export function DialogExportOptions(props: DialogExportOptionsProps) {
 
   return (
     <box paddingLeft={2} paddingRight={2} gap={1}>
-      <box flexDirection="row" justifyContent="space-between">
-        <text attributes={TextAttributes.BOLD} fg={theme.text.base}>
-          Export session
-        </text>
-        <text fg={theme.text.muted} onMouseUp={() => dialog.clear()}>
-          esc
-        </text>
-      </box>
+      <DialogHeader title="Export session" />
       <box flexDirection="row" gap={1}>
         <text fg={theme.text.base}>Export as:</text>
         <box flexDirection="row" gap={1}>

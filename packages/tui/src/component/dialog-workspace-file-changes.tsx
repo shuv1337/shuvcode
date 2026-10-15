@@ -1,4 +1,3 @@
-import { TextAttributes } from "@opentui/core"
 import { useKeyboard, useTerminalDimensions } from "@opentui/solid"
 import type { VcsFileStatus } from "@opencode/client"
 import { createMemo, For } from "solid-js"
@@ -6,7 +5,7 @@ import { createStore } from "solid-js/store"
 import { FilePath } from "../ui/file-path"
 import { useTheme } from "../context/theme"
 import { useConfig } from "../config"
-import { useDialog, type DialogContext } from "../ui/dialog"
+import { DialogHeader, useDialog, type DialogContext } from "../ui/dialog"
 import { getScrollAcceleration } from "../util/scroll"
 
 const options = ["no", "yes"] as const
@@ -71,14 +70,7 @@ export function DialogWorkspaceFileChanges(props: {
 
   return (
     <box gap={1}>
-      <box flexDirection="row" justifyContent="space-between" paddingLeft={2} paddingRight={2}>
-        <text attributes={TextAttributes.BOLD} fg={theme.text.base}>
-          {props.title ?? "File Changes Found"}
-        </text>
-        <text fg={theme.text.muted} onMouseUp={() => dialog.clear()}>
-          esc
-        </text>
-      </box>
+      <DialogHeader paddingX={2} title={props.title ?? "File Changes Found"} />
       <box paddingLeft={2} paddingRight={2}>
         <text fg={theme.text.muted} wrapMode="word">
           {props.message ?? "Do you want to move these changes with the session?"}

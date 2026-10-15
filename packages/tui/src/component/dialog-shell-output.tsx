@@ -6,7 +6,7 @@ import stripAnsi from "strip-ansi"
 import { useClient } from "../context/client"
 import { Keymap } from "../context/keymap"
 import { useTheme } from "../context/theme"
-import { useDialog } from "../ui/dialog"
+import { DialogHeader, useDialog } from "../ui/dialog"
 
 const PAGE_BYTES = 64 * 1024
 
@@ -101,15 +101,16 @@ export function DialogShellOutput(props: { shell: ShellInfo; location: LocationR
 
   return (
     <box paddingLeft={2} paddingRight={2} paddingBottom={1} gap={1}>
-      <box flexDirection="row" gap={2}>
-        <text fg={theme.text.base} attributes={TextAttributes.BOLD} flexGrow={1}>
-          Shell output
-        </text>
+      <DialogHeader
+        gap={2}
+        titleView={
+          <text fg={theme.text.base} attributes={TextAttributes.BOLD} flexGrow={1}>
+            Shell output
+          </text>
+        }
+      >
         <text fg={theme.text.muted}>{status()}</text>
-        <text fg={theme.text.muted} onMouseUp={() => dialog.clear()}>
-          esc
-        </text>
-      </box>
+      </DialogHeader>
       <text fg={theme.text.muted} maxHeight={3} wrapMode="word">
         {props.shell.command}
       </text>

@@ -8,7 +8,7 @@ import { useClipboard } from "../../context/clipboard"
 import { Keymap } from "../../context/keymap"
 import { useTheme, useThemes } from "../../context/theme"
 import { usePlugin } from "../../plugin/context"
-import { useDialog } from "../../ui/dialog"
+import { DialogHeader } from "../../ui/dialog"
 import { useToast } from "../../ui/toast"
 import { getScrollAcceleration } from "../../util/scroll"
 
@@ -90,7 +90,6 @@ export function Answer(props: {
   answer: string
   markdown: ReturnType<typeof usePlugin>["markdown"]
 }) {
-  const dialog = useDialog()
   const toast = useToast()
   const clipboard = useClipboard()
   const theme = useTheme().surface("dialog")
@@ -126,17 +125,19 @@ export function Answer(props: {
 
   return (
     <box gap={1} paddingBottom={1}>
-      <box flexDirection="row" gap={2} paddingLeft={2} paddingRight={2}>
-        <text attributes={TextAttributes.BOLD} fg={theme.text.base} flexShrink={0}>
-          /btw
-        </text>
+      <DialogHeader
+        gap={2}
+        paddingX={2}
+        titleView={
+          <text attributes={TextAttributes.BOLD} fg={theme.text.base} flexShrink={0}>
+            /btw
+          </text>
+        }
+      >
         <text fg={theme.text.muted} wrapMode="none" flexGrow={1} truncate>
           {props.question.replace(/\s+/g, " ")}
         </text>
-        <text fg={theme.text.muted} flexShrink={0} onMouseUp={() => dialog.clear()}>
-          esc
-        </text>
-      </box>
+      </DialogHeader>
       <scrollbox
         ref={(element: ScrollBoxRenderable) => (scroll = element)}
         maxHeight={maxHeight()}

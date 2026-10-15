@@ -8,7 +8,7 @@ import { useConfig } from "../../config"
 import { useClipboard } from "../../context/clipboard"
 import { Keymap } from "../../context/keymap"
 import { useTheme, useThemes } from "../../context/theme"
-import { dialogWidth, useDialog } from "../../ui/dialog"
+import { DialogHeader, dialogWidth, useDialog } from "../../ui/dialog"
 import { useToast } from "../../ui/toast"
 import { Locale } from "../../util/locale"
 import { getScrollAcceleration } from "../../util/scroll"
@@ -93,15 +93,17 @@ export function DialogExecute(props: { part: SessionMessageAssistantTool }) {
 
   return (
     <box gap={1} paddingBottom={1}>
-      <box flexDirection="row" gap={2} paddingLeft={2} paddingRight={2}>
-        <text fg={theme.text.base} attributes={TextAttributes.BOLD} flexGrow={1}>
-          execute
-        </text>
+      <DialogHeader
+        gap={2}
+        paddingX={2}
+        titleView={
+          <text fg={theme.text.base} attributes={TextAttributes.BOLD} flexGrow={1}>
+            execute
+          </text>
+        }
+      >
         <text fg={failed() ? theme.text.feedback.error.base : theme.text.muted}>{status()}</text>
-        <text fg={theme.text.muted} onMouseUp={() => dialog.clear()}>
-          esc
-        </text>
-      </box>
+      </DialogHeader>
       <scrollbox
         id="execute-detail-scroll"
         ref={(value: ScrollBoxRenderable) => (scroll = value)}

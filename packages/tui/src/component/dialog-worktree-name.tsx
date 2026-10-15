@@ -1,9 +1,9 @@
-import { InputRenderable, TextAttributes } from "@opentui/core"
+import { InputRenderable } from "@opentui/core"
 import { Slug } from "@opencode/core/util/slug"
 import { createSignal, onMount } from "solid-js"
 import { Keymap } from "../context/keymap"
 import { useTheme } from "../context/theme"
-import { useDialog, type DialogContext } from "../ui/dialog"
+import { DialogHeader, useDialog, type DialogContext } from "../ui/dialog"
 import { useConfig } from "../config"
 
 export function DialogWorktreeName(props: { onConfirm: (name: string) => void }) {
@@ -48,14 +48,7 @@ export function DialogWorktreeName(props: { onConfirm: (name: string) => void })
 
   return (
     <box paddingLeft={2} paddingRight={2} gap={1}>
-      <box flexDirection="row" justifyContent="space-between">
-        <text attributes={TextAttributes.BOLD} fg={theme.text.base}>
-          Name worktree
-        </text>
-        <text fg={theme.text.muted} onMouseUp={() => dialog.clear()}>
-          esc
-        </text>
-      </box>
+      <DialogHeader title="Name worktree" />
       <input
         cursorStyle={config.cursor}
         ref={(value: InputRenderable) => {

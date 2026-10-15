@@ -1,9 +1,8 @@
-import { TextAttributes } from "@opentui/core"
 import { useTerminalDimensions } from "@opentui/solid"
 import { createMemo, createSignal } from "solid-js"
 import { Keymap } from "../context/keymap"
 import { useTheme } from "../context/theme"
-import { useDialog } from "../ui/dialog"
+import { DialogHeader, useDialog } from "../ui/dialog"
 
 type ImagePreviewItem = Readonly<{
   uri: string
@@ -38,14 +37,7 @@ export function DialogImagePreview(props: { images: readonly ImagePreviewItem[];
 
   return (
     <box id="prompt-image-viewer" paddingLeft={2} paddingRight={2} paddingBottom={1} gap={1}>
-      <box flexDirection="row" justifyContent="space-between">
-        <text attributes={TextAttributes.BOLD} fg={theme.text.base}>
-          Image {index() + 1} of {props.images.length}
-        </text>
-        <text fg={theme.text.muted} onMouseUp={() => dialog.clear()}>
-          esc
-        </text>
-      </box>
+      <DialogHeader title={`Image ${index() + 1} of ${props.images.length}`} />
       <image
         id="prompt-image-viewer-image"
         source={current().uri}
