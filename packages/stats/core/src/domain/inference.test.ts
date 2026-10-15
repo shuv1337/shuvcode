@@ -144,6 +144,7 @@ describe("inference stat normalization", () => {
       "deepseek-flash",
       "DEEPSEEK-FLASH-free:global",
       "deepseek-v4.1-flash",
+      "deepseek-v4.1-flash-free",
       "deepseek-v4-1-flash-opencode-bo44an",
     ].forEach((model) => {
       expect(statModel(model, "")).toBe("deepseek-v4.1-flash")
