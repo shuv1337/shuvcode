@@ -646,11 +646,7 @@ export function DialogSelect<T>(props: DialogSelectProps<T>) {
               {([category, options], index) => (
                 <>
                   <Show when={category}>
-                    <box paddingTop={index() > 0 ? 1 : 0} paddingLeft={DIALOG_LIST_INSET - 1}>
-                      <text fg={theme.hue.accent[200]} attributes={TextAttributes.BOLD}>
-                        {category}
-                      </text>
-                    </box>
+                    <DialogSelectCategory title={category} first={index() === 0} />
                   </Show>
                   <For each={options}>
                     {(option) => {
@@ -678,47 +674,24 @@ export function DialogSelect<T>(props: DialogSelectProps<T>) {
                             moveTo(index)
                           }}
                         >
-                          <box
-                            flexDirection="row"
-                            paddingLeft={current() || option.gutter ? DIALOG_LIST_INSET - 3 : DIALOG_LIST_INSET - 1}
-                            paddingRight={DIALOG_LIST_INSET - 1}
-                            gap={1}
-                            backgroundColor={
-                              active()
-                                ? (option.bg ?? theme.background.action.primary.focused)
-                                : RGBA.fromInts(0, 0, 0, 0)
+                          <DialogSelectRow
+                            title={option.title}
+                            titleView={option.titleView}
+                            footer={
+                              flatten() ? (option.searchFooter ?? option.category ?? option.footer) : option.footer
                             }
-                          >
-                            <Show when={!current() && option.margin}>
-                              <box position="absolute" left={DIALOG_LIST_INSET - 3} flexShrink={0}>
-                                {option.margin}
-                              </box>
-                            </Show>
-                            <Option
-                              title={option.title}
-                              titleView={option.titleView}
-                              footer={
-                                flatten() ? (option.searchFooter ?? option.category ?? option.footer) : option.footer
-                              }
-                              footerColor={option.footerColor}
-                              titleWidth={option.titleWidth}
-                              truncateTitle={option.truncateTitle}
-                              description={option.description !== category ? option.description : undefined}
-                              active={active()}
-                              current={current()}
-                              activeColor={option.fg}
-                              gutter={option.gutter}
-                            />
-                          </box>
-                          <For each={option.details}>
-                            {(detail) => (
-                              <box paddingLeft={DIALOG_LIST_INSET - 1} paddingRight={DIALOG_LIST_INSET - 1}>
-                                <text fg={theme.text.muted} wrapMode="none">
-                                  {Locale.truncateMiddle(detail, Math.max(1, Math.min(76, dimensions().width - 12)))}
-                                </text>
-                              </box>
-                            )}
-                          </For>
+                            footerColor={option.footerColor}
+                            titleWidth={option.titleWidth}
+                            truncateTitle={option.truncateTitle}
+                            description={option.description !== category ? option.description : undefined}
+                            active={active()}
+                            current={current()}
+                            activeBackground={option.bg}
+                            activeColor={option.fg}
+                            gutter={option.gutter}
+                            margin={option.margin}
+                          />
+                          <DialogSelectDetails details={option.details} />
                         </box>
                       )
                     }}
@@ -738,19 +711,31 @@ export function DialogSelect<T>(props: DialogSelectProps<T>) {
   )
 }
 
-function Option(props: {
+function DialogSelectCategory(props: { title: string; first: boolean }) {
+  const theme = useTheme().surface("dialog")
+  return (
+    <box paddingTop={props.first ? 0 : 1} paddingLeft={DIALOG_LIST_INSET - 1}>
+      <text fg={theme.hue.accent[200]} attributes={TextAttributes.BOLD}>
+        {props.title}
+      </text>
+    </box>
+  )
+}
+
+function DialogSelectRow(props: {
   title: string
   titleView?: JSX.Element
   description?: string
-  active?: boolean
-  current?: boolean
+  active: boolean
+  current: boolean
   footer?: JSX.Element | string
   footerColor?: RGBA
   titleWidth?: number
   truncateTitle?: boolean | "left"
   gutter?: (color: RGBA) => JSX.Element
+  margin?: JSX.Element
+  activeBackground?: RGBA
   activeColor?: RGBA
-  onMouseOver?: () => void
 }) {
   const theme = useTheme().surface("dialog")
   const text = createMemo(() => {
@@ -760,17 +745,21 @@ function Option(props: {
   })
 
   return (
-    <>
-      <Show when={props.current && !props.gutter}>
-        <text flexShrink={0} fg={text()} marginRight={0}>
-          ●
-        </text>
-      </Show>
-      <Show when={props.gutter}>
-        <box flexShrink={0} marginRight={0}>
-          {props.gutter?.(text())}
+    <box
+      flexDirection="row"
+      paddingLeft={props.current || props.gutter ? DIALOG_LIST_INSET - 3 : DIALOG_LIST_INSET - 1}
+      paddingRight={DIALOG_LIST_INSET - 1}
+      gap={1}
+      backgroundColor={
+        props.active ? (props.activeBackground ?? theme.background.action.primary.focused) : RGBA.fromInts(0, 0, 0, 0)
+      }
+    >
+      <Show when={!props.current && props.margin}>
+        <box position="absolute" left={DIALOG_LIST_INSET - 3} flexShrink={0}>
+          {props.margin}
         </box>
       </Show>
+      <DialogSelectRowGutter current={props.current} gutter={props.gutter} color={text()} />
       <text
         flexGrow={1}
         fg={text()}
@@ -794,6 +783,39 @@ function Option(props: {
           <text fg={props.active ? text() : (props.footerColor ?? theme.text.muted)}>{props.footer}</text>
         </box>
       </Show>
+    </box>
+  )
+}
+
+function DialogSelectRowGutter(props: { current: boolean; gutter?: (color: RGBA) => JSX.Element; color: RGBA }) {
+  return (
+    <>
+      <Show when={props.current && !props.gutter}>
+        <text flexShrink={0} fg={props.color} marginRight={0}>
+          ●
+        </text>
+      </Show>
+      <Show when={props.gutter}>
+        <box flexShrink={0} marginRight={0}>
+          {props.gutter?.(props.color)}
+        </box>
+      </Show>
     </>
+  )
+}
+
+function DialogSelectDetails(props: { details?: string[] }) {
+  const theme = useTheme().surface("dialog")
+  const dimensions = useTerminalDimensions()
+  return (
+    <For each={props.details}>
+      {(detail) => (
+        <box paddingLeft={DIALOG_LIST_INSET - 1} paddingRight={DIALOG_LIST_INSET - 1}>
+          <text fg={theme.text.muted} wrapMode="none">
+            {Locale.truncateMiddle(detail, Math.max(1, Math.min(76, dimensions().width - 12)))}
+          </text>
+        </box>
+      )}
+    </For>
   )
 }
