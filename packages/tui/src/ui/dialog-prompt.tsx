@@ -7,6 +7,15 @@ import { Spinner } from "../component/spinner"
 import { useConfig } from "../config"
 import { useRenderer } from "@opentui/solid"
 
+export type DialogPromptAction = {
+  title: string
+  /** Keymap command id, bound while the prompt input is focused and shown in the footer. */
+  command: string
+  /** Keymap command title, e.g. for help listings. Defaults to `title`. */
+  commandTitle?: string
+  onTrigger: (prompt: { setValue: (value: string) => void }) => void
+}
+
 export type DialogPromptProps = {
   title: string
   size?: DialogSize
@@ -15,6 +24,7 @@ export type DialogPromptProps = {
   value?: string
   busy?: boolean
   busyText?: string
+  actions?: DialogPromptAction[]
   onConfirm?: (value: string) => void
   onCancel?: () => void
 }
@@ -32,6 +42,13 @@ export function DialogPrompt(props: DialogPromptProps) {
     props.onConfirm?.(textarea.plainText)
   }
 
+  const handle = {
+    setValue(value: string) {
+      textarea.setText(value)
+      textarea.gotoLineEnd()
+    },
+  }
+
   Keymap.createLayer(() => ({
     mode: "modal",
     target: textareaTarget,
@@ -45,6 +62,12 @@ export function DialogPrompt(props: DialogPromptProps) {
         group: "Dialog",
         run: confirm,
       },
+      ...(props.actions ?? []).map((action) => ({
+        id: action.command,
+        title: action.commandTitle ?? action.title,
+        group: "Dialog",
+        run: () => action.onTrigger(handle),
+      })),
     ],
   }))
 
@@ -125,7 +148,16 @@ export function DialogPrompt(props: DialogPromptProps) {
       </box>
       <box paddingBottom={1} flexDirection="row">
         <Show when={!props.busy} fallback={<text fg={theme.text.muted}>processing…</text>}>
-          <DialogFooter actions={[{ title: "submit", command: "dialog.prompt.submit", onTrigger: confirm }]} />
+          <DialogFooter
+            actions={[
+              { title: "submit", command: "dialog.prompt.submit", onTrigger: confirm },
+              ...(props.actions ?? []).map((action) => ({
+                title: action.title,
+                command: action.command,
+                onTrigger: () => action.onTrigger(handle),
+              })),
+            ]}
+          />
         </Show>
       </box>
     </box>
