@@ -159,12 +159,7 @@ export function SideRegion(props: {
                           props.region.select(value)
                       }}
                     >
-                      {/* Tabs and actions share the review toggle's row: the session header's 48px, or the 51px
-                          above a side dock's divider. */}
-                      <div
-                        class="session-review-v2-tabs-bar sticky top-0 shrink-0 flex items-center"
-                        style={{ "--tabs-bar-height": props.stacked ? "51px" : "48px" }}
-                      >
+                      <div class="session-review-v2-tabs-bar sticky top-0 shrink-0 flex items-center">
                         <Tabs.List
                           ref={(el: HTMLDivElement) => {
                             tabList = el
