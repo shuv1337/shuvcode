@@ -370,40 +370,40 @@ You can also access Go models through the following API endpoints.
 
 <div class="docs-table-scroll" role="region" aria-label="Go model endpoints" tabIndex={0}>
 
-| Model                        | Model ID                     | Endpoint                                                                | AI SDK Package              |
-| ---------------------------- | ---------------------------- | ----------------------------------------------------------------------- | --------------------------- |
-| Grok 4.7                     | grok-4.7                     | `https://opencode.ai/inference/go/v1/responses`                         | `@ai-sdk/openai`            |
-| Grok 4.6                     | grok-4.6                     | `https://opencode.ai/inference/go/v1/responses`                         | `@ai-sdk/openai`            |
-| GPT 6 Luna                   | gpt-6-luna                   | `https://opencode.ai/inference/go/v1/responses`                         | `@ai-sdk/openai`            |
-| GPT 5.6 Luna                 | gpt-5.6-luna                 | `https://opencode.ai/inference/go/v1/responses`                         | `@ai-sdk/openai`            |
-| Claude Haiku 5.5             | claude-haiku-5-5             | `https://opencode.ai/inference/go/v1/messages`                          | `@ai-sdk/anthropic`         |
-| Gemini 4 Argon Contributor   | gemini-4-argon-contributor   | `https://opencode.ai/inference/go/v1/models/gemini-4-argon-contributor` | `@ai-sdk/google`            |
-| GLM-5.3-Flash                | glm-5.3-flash                | `https://opencode.ai/inference/go/v1/chat/completions`                  | `@ai-sdk/openai-compatible` |
-| GLM-5.3                      | glm-5.3                      | `https://opencode.ai/inference/go/v1/chat/completions`                  | `@ai-sdk/openai-compatible` |
-| GLM-5.2                      | glm-5.2                      | `https://opencode.ai/inference/go/v1/chat/completions`                  | `@ai-sdk/openai-compatible` |
-| Kimi K3                      | kimi-k3                      | `https://opencode.ai/inference/go/v1/chat/completions`                  | `@ai-sdk/openai-compatible` |
-| Kimi K2.7 Code               | kimi-k2.7-code               | `https://opencode.ai/inference/go/v1/chat/completions`                  | `@ai-sdk/openai-compatible` |
-| Kimi K2.6                    | kimi-k2.6                    | `https://opencode.ai/inference/go/v1/chat/completions`                  | `@ai-sdk/openai-compatible` |
-| LongCat-2.0                  | longcat-2.0                  | `https://opencode.ai/inference/go/v1/chat/completions`                  | `@ai-sdk/openai-compatible` |
-| DeepSeek V4.1 Flash          | deepseek-v4.1-flash          | `https://opencode.ai/inference/go/v1/chat/completions`                  | `@ai-sdk/openai-compatible` |
-| DeepSeek V4 Pro              | deepseek-v4-pro              | `https://opencode.ai/inference/go/v1/chat/completions`                  | `@ai-sdk/openai-compatible` |
-| MiMo-V2.6-Flash              | mimo-v2.6-flash              | `https://opencode.ai/inference/go/v1/chat/completions`                  | `@ai-sdk/openai-compatible` |
-| MiMo-V2.6-Pro                | mimo-v2.6-pro                | `https://opencode.ai/inference/go/v1/chat/completions`                  | `@ai-sdk/openai-compatible` |
-| MiMo-V2.5                    | mimo-v2.5                    | `https://opencode.ai/inference/go/v1/chat/completions`                  | `@ai-sdk/openai-compatible` |
-| MiMo-V2.5-Pro                | mimo-v2.5-pro                | `https://opencode.ai/inference/go/v1/chat/completions`                  | `@ai-sdk/openai-compatible` |
-| MiniMax M3                   | minimax-m3                   | `https://opencode.ai/inference/go/v1/messages`                          | `@ai-sdk/anthropic`         |
-| MiniMax M2.7                 | minimax-m2.7                 | `https://opencode.ai/inference/go/v1/messages`                          | `@ai-sdk/anthropic`         |
-| Muse Spark 1.3 Contributor   | muse-spark-1.3-contributor   | `https://opencode.ai/inference/go/v1/responses`                         | `@ai-sdk/openai`            |
-| Muse Spark 1.2 Contributor   | muse-spark-1.2-contributor   | `https://opencode.ai/inference/go/v1/responses`                         | `@ai-sdk/openai`            |
-| Qwen3.8 Max                  | qwen3.8-max                  | `https://opencode.ai/inference/go/v1/messages`                          | `@ai-sdk/anthropic`         |
-| Qwen3.8 Flash                | qwen3.8-flash                | `https://opencode.ai/inference/go/v1/messages`                          | `@ai-sdk/anthropic`         |
-| Qwen3.7 Plus                 | qwen3.7-plus                 | `https://opencode.ai/inference/go/v1/messages`                          | `@ai-sdk/anthropic`         |
-| Hy4 preview                  | hy4-preview                  | `https://opencode.ai/inference/go/v1/chat/completions`                  | `@ai-sdk/openai-compatible` |
-| Hy3                          | hy3                          | `https://opencode.ai/inference/go/v1/chat/completions`                  | `@ai-sdk/openai-compatible` |
-| Space Bunny                  | space-bunny                  | `https://opencode.ai/inference/go/v1/chat/completions`                  | `@ai-sdk/openai-compatible` |
-| LongCat 2.5 Preview Free     | longcat-2.5-preview-free     | `https://opencode.ai/inference/go/v1/chat/completions`                  | `@ai-sdk/openai-compatible` |
-| Step 5 Preview Free          | step-5-preview-free          | `https://opencode.ai/inference/go/v1/chat/completions`                  | `@ai-sdk/openai-compatible` |
-| Cat Jam Free                 | cat-jam-free                 | `https://opencode.ai/inference/go/v1/chat/completions`                  | `@ai-sdk/openai-compatible` |
+| Model                      | Model ID                   | Endpoint                                                                           | AI SDK Package              |
+| -------------------------- | -------------------------- | ---------------------------------------------------------------------------------- | --------------------------- |
+| Grok 4.7                   | grok-4.7                   | `https://opencode.ai/inference/go/openai/v1/responses`                             | `@ai-sdk/openai`            |
+| Grok 4.6                   | grok-4.6                   | `https://opencode.ai/inference/go/openai/v1/responses`                             | `@ai-sdk/openai`            |
+| GPT 6 Luna                 | gpt-6-luna                 | `https://opencode.ai/inference/go/openai/v1/responses`                             | `@ai-sdk/openai`            |
+| GPT 5.6 Luna               | gpt-5.6-luna               | `https://opencode.ai/inference/go/openai/v1/responses`                             | `@ai-sdk/openai`            |
+| Claude Haiku 5.5           | claude-haiku-5-5           | `https://opencode.ai/inference/go/anthropic/v1/messages`                           | `@ai-sdk/anthropic`         |
+| Gemini 4 Argon Contributor | gemini-4-argon-contributor | `https://opencode.ai/inference/go/google/v1beta/models/gemini-4-argon-contributor` | `@ai-sdk/google`            |
+| GLM-5.3-Flash              | glm-5.3-flash              | `https://opencode.ai/inference/go/openai/v1/chat/completions`                      | `@ai-sdk/openai-compatible` |
+| GLM-5.3                    | glm-5.3                    | `https://opencode.ai/inference/go/openai/v1/chat/completions`                      | `@ai-sdk/openai-compatible` |
+| GLM-5.2                    | glm-5.2                    | `https://opencode.ai/inference/go/openai/v1/chat/completions`                      | `@ai-sdk/openai-compatible` |
+| Kimi K3                    | kimi-k3                    | `https://opencode.ai/inference/go/openai/v1/chat/completions`                      | `@ai-sdk/openai-compatible` |
+| Kimi K2.7 Code             | kimi-k2.7-code             | `https://opencode.ai/inference/go/openai/v1/chat/completions`                      | `@ai-sdk/openai-compatible` |
+| Kimi K2.6                  | kimi-k2.6                  | `https://opencode.ai/inference/go/openai/v1/chat/completions`                      | `@ai-sdk/openai-compatible` |
+| LongCat-2.0                | longcat-2.0                | `https://opencode.ai/inference/go/openai/v1/chat/completions`                      | `@ai-sdk/openai-compatible` |
+| DeepSeek V4.1 Flash        | deepseek-v4.1-flash        | `https://opencode.ai/inference/go/openai/v1/chat/completions`                      | `@ai-sdk/openai-compatible` |
+| DeepSeek V4 Pro            | deepseek-v4-pro            | `https://opencode.ai/inference/go/openai/v1/chat/completions`                      | `@ai-sdk/openai-compatible` |
+| MiMo-V2.6-Flash            | mimo-v2.6-flash            | `https://opencode.ai/inference/go/openai/v1/chat/completions`                      | `@ai-sdk/openai-compatible` |
+| MiMo-V2.6-Pro              | mimo-v2.6-pro              | `https://opencode.ai/inference/go/openai/v1/chat/completions`                      | `@ai-sdk/openai-compatible` |
+| MiMo-V2.5                  | mimo-v2.5                  | `https://opencode.ai/inference/go/openai/v1/chat/completions`                      | `@ai-sdk/openai-compatible` |
+| MiMo-V2.5-Pro              | mimo-v2.5-pro              | `https://opencode.ai/inference/go/openai/v1/chat/completions`                      | `@ai-sdk/openai-compatible` |
+| MiniMax M3                 | minimax-m3                 | `https://opencode.ai/inference/go/anthropic/v1/messages`                           | `@ai-sdk/anthropic`         |
+| MiniMax M2.7               | minimax-m2.7               | `https://opencode.ai/inference/go/anthropic/v1/messages`                           | `@ai-sdk/anthropic`         |
+| Muse Spark 1.3 Contributor | muse-spark-1.3-contributor | `https://opencode.ai/inference/go/openai/v1/responses`                             | `@ai-sdk/openai`            |
+| Muse Spark 1.2 Contributor | muse-spark-1.2-contributor | `https://opencode.ai/inference/go/openai/v1/responses`                             | `@ai-sdk/openai`            |
+| Qwen3.8 Max                | qwen3.8-max                | `https://opencode.ai/inference/go/anthropic/v1/messages`                           | `@ai-sdk/anthropic`         |
+| Qwen3.8 Flash              | qwen3.8-flash              | `https://opencode.ai/inference/go/anthropic/v1/messages`                           | `@ai-sdk/anthropic`         |
+| Qwen3.7 Plus               | qwen3.7-plus               | `https://opencode.ai/inference/go/anthropic/v1/messages`                           | `@ai-sdk/anthropic`         |
+| Hy4 preview                | hy4-preview                | `https://opencode.ai/inference/go/openai/v1/chat/completions`                      | `@ai-sdk/openai-compatible` |
+| Hy3                        | hy3                        | `https://opencode.ai/inference/go/openai/v1/chat/completions`                      | `@ai-sdk/openai-compatible` |
+| Space Bunny                | space-bunny                | `https://opencode.ai/inference/go/openai/v1/chat/completions`                      | `@ai-sdk/openai-compatible` |
+| LongCat 2.5 Preview Free   | longcat-2.5-preview-free   | `https://opencode.ai/inference/go/openai/v1/chat/completions`                      | `@ai-sdk/openai-compatible` |
+| Step 5 Preview Free        | step-5-preview-free        | `https://opencode.ai/inference/go/openai/v1/chat/completions`                      | `@ai-sdk/openai-compatible` |
+| Cat Jam Free               | cat-jam-free               | `https://opencode.ai/inference/go/openai/v1/chat/completions`                      | `@ai-sdk/openai-compatible` |
 
 </div>
 
