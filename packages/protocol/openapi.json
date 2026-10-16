@@ -13829,6 +13829,27 @@
           "permissions": {
             "$ref": "#/components/schemas/Permission.Ruleset"
           },
+          "policies": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "action": {
+                  "type": "string",
+                  "enum": ["provider.use", "tool.use", "integration.use"]
+                },
+                "resource": {
+                  "type": "string"
+                },
+                "effect": {
+                  "type": "string",
+                  "enum": ["allow", "deny"]
+                }
+              },
+              "required": ["action", "resource", "effect"],
+              "additionalProperties": false
+            }
+          },
           "agents": {
             "type": "object",
             "additionalProperties": {

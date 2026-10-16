@@ -16,6 +16,6 @@ export class Info extends Schema.Class<Info>("ConfigExperimental.Info")({
       "Enable the experimental Jev tools, which ask TypeSafe System One structured questions. Defaults to false.",
   }),
   policies: ConfigPolicy.Info.pipe(Schema.Array, optional).annotate({
-    description: "Ordered policies controlling access to configured resources",
+    description: "Deprecated: use top-level policies. Ordered policies controlling access to configured resources",
   }),
 }) {}

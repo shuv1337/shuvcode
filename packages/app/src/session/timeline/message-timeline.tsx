@@ -23,6 +23,7 @@ import { createTimelineVirtualizer } from "./virtualizer"
 import { containsDirectory } from "@opencode/util/path"
 import { isWorkspaceDirectory } from "@/workspaces/paths"
 import { parseCommentNote, readPromptPresentation } from "@/composer/comment-note"
+import { parseVoiceDelegation } from "./voice-delegation"
 import { useCommand } from "@/shell/commands/command"
 import { SessionAncestorTrail, SessionProjectMenu, SessionTitleHeader } from "../session-identity-header"
 import { SessionHeaderSpacer } from "@/session/header/session-header"
@@ -293,11 +294,13 @@ function MessageTimelineView(
     presentation: (message) => {
       const value = readPromptPresentation(message.metadata)
       const parsed = value ? undefined : parseCommentNote(message.text)
+      const voice = parseVoiceDelegation(value?.displayText ?? message.text)
 
       return {
-        displayText: value?.displayText,
+        displayText: voice ? (voice.framing ?? voice.instruction) : value?.displayText,
         comments: value?.comments ?? (parsed ? [parsed] : []),
         references: value?.attachments,
+        voice: !!voice,
       }
     },
     actions: props.actions,

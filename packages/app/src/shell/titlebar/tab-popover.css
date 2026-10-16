@@ -21,8 +21,7 @@
   color: var(--v2-text-text-base);
   font-variant-numeric: tabular-nums;
   user-select: none;
-  /* Kobalte's layer stack writes inline pointer-events: auto on every mounted
-     layer; the preview must never intercept clicks on what it covers. */
+  /* Kobalte's dismissable layer writes an inline pointer-events value. */
   pointer-events: none !important;
 
   transform-origin: var(--kb-hovercard-content-transform-origin);

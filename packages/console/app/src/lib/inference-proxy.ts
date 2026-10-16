@@ -37,27 +37,19 @@ export async function proxyInference(request: Request) {
   destination.hash = ""
 
   const forwarded = new Request(destination, request)
-  for (const name of [
-    "x-zen",
-    "x-zen-model",
-    "x-zen-ip",
-    "cf-access-client-id",
-    "cf-access-client-secret",
-    "host",
-    "content-length",
-  ])
-    forwarded.headers.delete(name)
+  for (const name of ["host", "content-length"]) forwarded.headers.delete(name)
   // Keyless requests must reach new inference without credentials; `public` is not an API key there.
   const anonymous = !key || key === "public"
   if (anonymous) for (const name of ["authorization", "x-api-key", "x-goog-api-key"]) forwarded.headers.delete(name)
   if (!anonymous) forwarded.headers.set("authorization", `Bearer ${key}`)
-  forwarded.headers.set("CF-Access-Client-Id", Resource.CLOUDFLARE_ACCESS_CLIENT_ID.value)
   const ip = request.headers.get("cf-connecting-ip")
-  if (ip) forwarded.headers.set("x-zen-ip", ip)
+  if (ip) forwarded.headers.set("x-real-ip", ip)
   const requestID = request.headers.get("x-opencode-request-id") ?? request.headers.get("x-opencode-request")
   if (requestID) forwarded.headers.set("x-opencode-request-id", requestID)
 
-  const response = await fetch(forwarded, { redirect: "manual" }).catch(() => undefined)
+  const response = await (Resource.INFERENCE as { fetch: typeof fetch })
+    .fetch(forwarded, { redirect: "manual" })
+    .catch(() => undefined)
   if (!response)
     return Response.json(
       { error: { type: "api_error", message: "Inference routing is unavailable. Please retry later." } },

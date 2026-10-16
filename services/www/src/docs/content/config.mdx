@@ -27,7 +27,7 @@ OpenCode supports JSON and JSONC. Use JSONC when you want comments or trailing c
 
 ## Locations
 
-Put machine-wide defaults in the system configuration directory:
+Put managed, machine-wide settings in the system configuration directory:
 
 | Platform | Directory                               |
 | -------- | --------------------------------------- |
@@ -56,9 +56,11 @@ machine-wide one:
 /Library/Managed Preferences/ai.opencode.managed.plist
 ```
 
-Managed preferences load just below the system directory, so their
-[policies](/policies#precedence) have the most authority of any file. OpenCode
-reads them at startup and whenever another config change triggers a reload.
+Managed settings have the highest precedence, so users and projects cannot
+override the values they set, and managed preferences override the system
+directory. Settings alone cannot stop users from adding providers, MCP servers,
+agents, or plugins; use [policies](/policies#precedence) in managed
+configuration to enforce restrictions.
 
 Put user settings for every project in the global configuration:
 
@@ -95,15 +97,16 @@ For example, start OpenCode from `/home/user/projects/acme/packages/web`:
 
 OpenCode applies these files from lowest to highest precedence:
 
-1. `/etc/opencode/opencode.json`
-2. `~/.config/opencode/opencode.json`
-3. `/home/user/projects/acme/opencode.json`
-4. `/home/user/projects/acme/packages/web/opencode.json`
+1. `~/.config/opencode/opencode.json`
+2. `/home/user/projects/acme/opencode.json`
+3. `/home/user/projects/acme/packages/web/opencode.json`
+4. `/etc/opencode/opencode.json`
 
 The package config overrides matching settings from the repository config,
-which overrides the global and system configs. Settings that do not conflict
-are preserved, and [policies](/policies#precedence) evaluate in the reverse
-order so system policies outrank global and project policies.
+which overrides the global config. The system config overrides all of them.
+Settings that do not conflict are preserved. [Policies](/policies#precedence)
+from global and project files evaluate in the reverse order, and system
+policies outrank all of them.
 
 ## Schema
 
@@ -173,19 +176,6 @@ Project-level values are ignored.
 }
 ```
 
-### Sharing
-
-Set the session sharing policy. OpenCode accepts this field, but session sharing
-is not supported yet.
-
-```jsonc
-{
-  "share": "manual",
-}
-```
-
-See the [sharing guide](/sharing) for more details.
-
 ### Username
 
 Set a username. OpenCode accepts this field but does not display it in
@@ -218,18 +208,17 @@ See the [permissions guide](/permissions) for rule matching and available action
 
 ### Policies
 
-Allow or deny use of a provider, or hard-deny a permission check, with ordered
-statements that broader configuration can override.
+Allow or deny use of a provider, hard-deny a permission check, or block an MCP
+server, skill, or plugin, with ordered statements that broader configuration can
+override.
 
 ```jsonc
 {
-  "experimental": {
-    "policies": [
-      { "action": "provider.use", "resource": "*", "effect": "deny" },
-      { "action": "provider.use", "resource": "anthropic", "effect": "allow" },
-      { "action": "permission", "resource": "shell:git push *", "effect": "deny" },
-    ],
-  },
+  "policies": [
+    { "action": "provider.use", "resource": "*", "effect": "deny" },
+    { "action": "provider.use", "resource": "anthropic", "effect": "allow" },
+    { "action": "tool.use", "resource": "shell:git push *", "effect": "deny" },
+  ],
 }
 ```
 
@@ -344,8 +333,9 @@ rate limits, and disabling search.
 
 ### MCP
 
-Configure local and remote Model Context Protocol servers. Global timeouts can
-be overridden by an individual server.
+Configure local and remote Model Context Protocol servers. Global
+`mcp.timeout` values apply to servers defined in configuration files; each
+server's `timeout` overrides them.
 
 ```jsonc
 {
@@ -451,8 +441,8 @@ See the [commands guide](/commands) for arguments, models, agents, and file-base
 
 ### Instructions
 
-Declare additional instruction files, globs, or URLs. OpenCode accepts this
-field but does not load its entries; use `AGENTS.md` for instructions.
+Declare additional instruction files, globs, or HTTP(S) URLs. OpenCode loads
+them alongside discovered `AGENTS.md` files.
 
 ```jsonc
 {
