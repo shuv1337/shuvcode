@@ -30,7 +30,7 @@ Preview channels use `service-<channel>.json` and `opencode-<channel>.db`.
 ## Configure and start
 
 ```sh
-shuvcode service set hostname 100.126.224.77   # tailnet address, or 0.0.0.0
+shuvcode service set hostname <tailscale-ip>   # tailnet address, or 0.0.0.0
 shuvcode service set port 4919                 # default is 0x1337 already
 shuvcode service start
 shuvcode service status
@@ -78,7 +78,7 @@ HOME/XDG/database state. To exercise a local compiled build, set
 ## Pairing remote clients
 
 ```sh
-shuvcode pair --url https://shuvdev.tail586a6d.ts.net:4919
+shuvcode pair --url https://<host>.<tailnet>.ts.net:4919
 ```
 
 `pair` prints the advertised URL, the username `opencode`, the service
@@ -103,11 +103,11 @@ rm ~/.config/systemd/user/shuvcode.service
 rm -r ~/.config/systemd/user/shuvcode.service.d
 systemctl --user daemon-reload
 rm ~/.config/opencode            # the compatibility symlink
-shuvcode service set hostname 100.126.224.77
+shuvcode service set hostname <tailscale-ip>
 shuvcode service set port 4919
 shuvcode service start
 tailscale serve --bg --https=4919 http://127.0.0.1:4919
-shuvcode pair --url https://shuvdev.tail586a6d.ts.net:4919
+shuvcode pair --url https://<host>.<tailnet>.ts.net:4919
 ```
 
 `BUN_TMPDIR` is no longer needed: bun 1.4.2 extracts one content-hashed

@@ -8,8 +8,6 @@ pii:*.stories.*
 pii:*/test/*
 pii:*/e2e/*
 pii:*fixture*
-pii:PLAN-fresh-v2-rewrite.md
-pii:docs/shared-service.md
 pii:packages/app/src/home/projects/view.tsx
 pii:packages/app/src/home/sessions/controller.tsx
 pii:packages/app/src/settings/workspaces/project-options.tsx
