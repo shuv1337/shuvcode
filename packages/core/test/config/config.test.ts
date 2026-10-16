@@ -409,7 +409,7 @@ describe("Config", () => {
               const entries = yield* config.entries()
               expect(
                 entries.flatMap((entry) => (entry.type === "document" && entry.info.shell ? [entry.info.shell] : [])),
-              ).toEqual(["shuvcode-system", "shuvcode-global"])
+              ).toEqual(["shuvcode-global", "shuvcode-system"])
               expect(Config.latest(entries, "username")).toBe("shuvcode-admin")
               expect(Config.latest(entries, "share")).toBeUndefined()
               expect(Config.latest(entries, "default_agent")).toBeUndefined()
