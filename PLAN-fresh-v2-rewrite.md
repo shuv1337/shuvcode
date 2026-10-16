@@ -310,11 +310,11 @@ Internal imports stay `@opencode/*`.
   per `PLAN-SHUVBOT-OPENCODE-V2.md`); goal-plugin entry removed from config
 - Cutover: `systemctl --user disable --now shuvcode.service`, remove the
   unit and drop-ins, then `shuvcode service set`:
-  `hostname 100.126.224.77`, `port 0x1337`. `BUN_TMPDIR` is optional
+  `hostname <tailscale-ip>`, `port 0x1337`. `BUN_TMPDIR` is optional
   under bun 1.4.2 (watchlist D1); keep `bun-compile-tmp-cleanup.timer`
   only if tmpfs pressure returns
 - Pairing across the tailnet: `shuvcode pair --url
-  https://shuvdev.tail586a6d.ts.net:<port>` after re-pointing `tailscale serve`
+  https://<host>.<tailnet>.ts.net:<port>` after re-pointing `tailscale serve`
 - Verify `shuvcode service restart` keeps detached PTY terminals with the
   upstream env-based handoff (the unit used `KillMode=process` for this)
 - Rewrite `docs/shared-service.md` for portable service + pair + XDG; drop
@@ -468,7 +468,7 @@ locked: hooks only, no Core fallback adapter.
 jj git fetch --remote upstream
 # record exact SHA
 jj workspace add --name shuvcode-v2-rewrite -r <pinned-upstream-v2> \
-  /home/shuv/repos/shuvcode-workspaces/v2-rewrite
+  ~/repos/shuvcode-workspaces/v2-rewrite
 ```
 
 Never merge `integration-v2` into this workspace. Never open an upstream PR.
