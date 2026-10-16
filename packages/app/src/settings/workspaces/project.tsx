@@ -16,6 +16,7 @@ import { useSettingsServers } from "@/settings/servers/inventory"
 import { useServerCtx } from "@/runtime/server/runtime"
 import { projectSettingsKey, useSettings } from "@/settings/model"
 import { ProjectIcon } from "@/shell/layout/project-icon"
+import { ProjectFolderMissing } from "./project-folder-missing"
 import { ProjectOptions } from "./project-options"
 import { SettingsList } from "@/settings/list"
 import { SettingsRow } from "@/settings/row"
@@ -63,6 +64,7 @@ export const SettingsProjectGeneral: Component<{
       </div>
 
       <div class="settings-tab-body project-settings-general" aria-busy={model.store.saving > 0}>
+        <ProjectFolderMissing />
         <SettingsList>
           <SettingsRow
             title={language.t("project.settings.name.title")}

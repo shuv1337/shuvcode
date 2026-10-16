@@ -50,6 +50,8 @@ export const Options = Schema.Struct({
   // wellknown, file, and content entries still load.
   global: Schema.optional(Schema.Boolean),
   system: Schema.optional(Schema.Union([Schema.Boolean, Schema.String])),
+  // false skips ~/.claude and project .claude dirs.
+  claude: Schema.optional(Schema.Boolean),
   file: Schema.optional(Schema.String),
   content: Schema.optional(Schema.String),
 })
@@ -241,16 +243,33 @@ export const layer = (options?: Options) =>
               )
             : []
 
-        // System entries sit at lowest priority so users and projects can
-        // override ordinary defaults while reversed policy evaluation gives
-        // system policies highest file-based authority. Global entries sit
-        // below explicit and direct files; project directories rank above them.
-        // MDM preferences rank below the system directory so their policies
-        // carry the most file-based authority, matching V1 where they won.
-        const systemSupplementary = [
-          ...(sources.preferences ? yield* loadPreferences(sources.preferences).pipe(Effect.orDie) : []),
+        // Managed settings load last so they override everything, and MDM
+        // preferences outrank the system directory as in V1. Policies evaluate
+        // in reverse load order, so managed policies split off and load first
+        // to keep final file-based authority.
+        const managed = [
           ...(sources.system?.present ? yield* loadDirectory(sources.system.path).pipe(Effect.orDie) : []),
+          ...(sources.preferences ? yield* loadPreferences(sources.preferences).pipe(Effect.orDie) : []),
         ]
+        const managedPolicies = managed
+          .flatMap((entry) =>
+            entry.type === "document" && entry.info.policies
+              ? [
+                  new Document({
+                    type: "document",
+                    path: entry.path,
+                    info: new Info({ policies: entry.info.policies }),
+                  }),
+                ]
+              : [],
+          )
+          .toReversed()
+        const managedSettings = managed.map((entry) =>
+          entry.type === "document" && entry.info.policies
+            ? new Document({ ...entry, info: new Info({ ...entry.info, policies: undefined }) })
+            : entry,
+        )
+        // Global entries sit below explicit and direct files; project directories rank above them.
         const globalSupplementary = sources.global ? yield* loadDirectory(sources.global).pipe(Effect.orDie) : []
         const projectSupplementary = yield* Effect.forEach(
           sources.project.filter((root) => root.present),
@@ -260,13 +279,14 @@ export const layer = (options?: Options) =>
           Effect.map((entries) => entries.flat()),
         )
         return [
-          ...systemSupplementary,
+          ...managedPolicies,
           ...(yield* loadWellknown().pipe(Effect.orDie)),
           ...globalSupplementary,
           ...explicit,
           ...direct,
           ...projectSupplementary,
           ...content,
+          ...managedSettings,
         ]
       })
 
@@ -401,7 +421,16 @@ export function configured(options?: Options) {
   return makeLocationNode({
     service: Service,
     layer: layer(options),
-    deps: [Watcher.node, Bus.node, FSUtil.node, Global.node, Location.node, Credential.node, WellKnown.node, AppProcess.node],
+    deps: [
+      Watcher.node,
+      Bus.node,
+      FSUtil.node,
+      Global.node,
+      Location.node,
+      Credential.node,
+      WellKnown.node,
+      AppProcess.node,
+    ],
   })
 }
 

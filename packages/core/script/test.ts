@@ -42,7 +42,8 @@ const environment = prependNodeBin(
 )
 
 const child = Bun.spawn({
-  cmd: [process.execPath, "test", "--only-failures", ...process.argv.slice(2)],
+  // The 30s default timeout matches cli and tui; npm.test's Git package installs ran past Bun's 5s default on Windows.
+  cmd: [process.execPath, "test", "--only-failures", "--timeout=30000", ...process.argv.slice(2)],
   env: environment,
   stdin: "inherit",
   stdout: "inherit",
