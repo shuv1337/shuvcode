@@ -180,6 +180,7 @@ export function createTimelineController(input: { session: TimelineSessionSource
     timelineDetail,
     pendingInputIDs,
     queuedCompactionIDs,
+    turnDiffs: settings.general.showTurnDiffs,
   })
 
   const [pending, setPending] = createStore({ rename: false })

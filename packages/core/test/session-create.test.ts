@@ -36,6 +36,7 @@ import { Workspace } from "@opencode/core/workspace"
 import { Expected } from "./lib/session-message"
 import { testEffect } from "./lib/effect"
 import { LocationServiceMap } from "@opencode/core/location-service-map"
+import { initGit } from "./fixture/git"
 import { offlineModels } from "./fixture/models"
 import { promptLocationNode } from "./fixture/prompt-location"
 import { globalProjectNode } from "./lib/project"
@@ -158,11 +159,7 @@ describe("Session.create", () => {
           .pipe(Effect.orDie)
         if (!before) return yield* Effect.die(new Error("created session not found"))
 
-        yield* Effect.promise(async () => {
-          await $`git init -q`.cwd(directory)
-          await $`git config user.email test@example.com`.cwd(directory)
-          await $`git config user.name Test`.cwd(directory)
-        })
+        yield* Effect.promise(() => initGit(directory))
         const unborn = yield* projects.resolve(ref.directory)
         const unbornRoot = yield* session.get(created.id)
         const unbornNested = yield* session.get(child.id)
@@ -269,9 +266,7 @@ describe("Session.create", () => {
 
         yield* Effect.promise(async () => {
           for (const root of [nested, outer]) {
-            await $`git init -q`.cwd(root)
-            await $`git config user.email test@example.com`.cwd(root)
-            await $`git config user.name Test`.cwd(root)
+            await initGit(root)
             await $`git commit --allow-empty -qm initial`.cwd(root)
           }
         })

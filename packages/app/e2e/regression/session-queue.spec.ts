@@ -224,8 +224,15 @@ test("follow-up preference controls Enter while Mod+Enter uses the alternate del
   await expect(view.input).toHaveText("")
 })
 
-test("a steer shows in the timeline as the composer clears, before its selection commits", async ({ page }) => {
-  const mock = createQueueMock([])
+test("a steer shows as pending in the timeline as the composer clears, before its selection commits", async ({
+  page,
+}) => {
+  // The running execution has delivered input, so a new steer waits behind its work.
+  const mock = createQueueMock(
+    [],
+    [{ id: "msg_queue_delivered", type: "user", text: "First prompt", time: { created: 1 } }],
+  )
+
   const view = await openQueue(page, mock, "steer")
   const commit = await holdRoute(page, (url) => url.pathname === `/api/session/${sessionID}/model`, { method: "POST" })
 
@@ -233,16 +240,21 @@ test("a steer shows in the timeline as the composer clears, before its selection
     hasText: "steer while the model commits",
   })
 
+  await expect(userRow(page, "msg_queue_delivered")).toContainText("First prompt")
   await view.input.fill("steer while the model commits")
   await view.input.press("Enter")
   await commit.arrived
   await expect(view.input).toHaveText("")
   await expect(prompt).toBeVisible()
+  await expect(prompt.locator('[data-component="user-message"]')).toHaveAttribute("data-pending", "true")
+  // It turns pending at once rather than fading from the delivered color it may have rendered with first.
+  await expect(prompt.locator('[data-slot="user-message-text"]')).toHaveCSS("transition-duration", "0s")
   expect(mock.prompts).toEqual([])
 
   commit.release()
   await expect.poll(() => mock.prompts.map((item) => item.text)).toEqual(["steer while the model commits"])
   await expect(prompt).toHaveCount(1)
+  await expect(prompt.locator('[data-component="user-message"]')).toHaveAttribute("data-pending", "true")
 })
 
 test("a steer into an idle session leaves the finished turn finished until delivery", async ({ page }) => {

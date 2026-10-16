@@ -1042,13 +1042,12 @@ to store token in opencode auth storage.
 OpenCode uses a small model for some AI tasks like generating the session title.
 It is configured to use gpt-5-nano by default, hosted by Zen. To lock OpenCode
 to only use your own GitLab-hosted instance, add the following to your
-`opencode.json` file. It is also recommended to disable session sharing.
+`opencode.json` file.
 
 ```json
 {
   "$schema": "https://opencode.ai/config.json",
-  "small_model": "gitlab/duo-chat-haiku-4-5",
-  "share": "disabled"
+  "small_model": "gitlab/duo-chat-haiku-4-5"
 }
 ```
 

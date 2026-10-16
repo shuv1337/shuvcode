@@ -251,6 +251,7 @@ describe("applyTimelineMessageHandoff", () => {
     id: "msg_image_model",
     type: "model-switched",
     model: selection.model,
+    previous: { id: "old", providerID: "provider" },
     time: { created: 1 },
   } satisfies SessionMessageInfo
 
@@ -264,7 +265,7 @@ describe("applyTimelineMessageHandoff", () => {
     {
       name: "only a variant change",
       session: { agent: "plan", model: { ...selection.model, variant: undefined } },
-      notices: [model],
+      notices: [{ ...model, previous: { ...selection.model, variant: undefined } }],
     },
     {
       name: "the agent echoed",
@@ -276,6 +277,17 @@ describe("applyTimelineMessageHandoff", () => {
     expect(applyTimelineMessageHandoff(messages.slice(0, 2), handoff, row.session)).toEqual([
       ...messages.slice(0, 2),
       ...row.notices,
+      message,
+    ])
+  })
+
+  test("projects a return to the default variant with its previous selection", () => {
+    const toDefault = { ...handoff, selection: { ...selection, model: { ...selection.model, variant: undefined } } }
+    const previous = { ...selection.model, variant: "xhigh" }
+
+    expect(applyTimelineMessageHandoff(messages.slice(0, 2), toDefault, { agent: "plan", model: previous })).toEqual([
+      ...messages.slice(0, 2),
+      { ...model, model: toDefault.selection.model, previous },
       message,
     ])
   })

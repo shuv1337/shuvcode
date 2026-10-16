@@ -255,6 +255,7 @@ it.effect(
       const event = yield* hooks.trigger("session", "http.request", { ...identity, request: original })
       expect(event.request.headers.get("authorization")).toBe("Bearer fixture-2")
       expect(event.request.headers.has("x-goog-api-key")).toBe(false)
+      expect(event.request.headers.get("user-agent")).toBe(GoogleAntigravityOAuth.userAgent())
       expect(event.request.url).toBe(GoogleAntigravityWire.generateURL)
       expect(yield* Effect.promise(() => event.request.clone().json())).toMatchObject({
         project: "fixture-project",

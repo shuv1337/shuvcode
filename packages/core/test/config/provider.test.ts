@@ -587,6 +587,21 @@ describe("ConfigProviderPlugin.Plugin", () => {
       },
     },
     {
+      name: "built-in provider routes",
+      legacy: {
+        npm: "@opencode/ai/providers/google-vertex",
+        options: { project: "my-project", location: "europe-west4" },
+        models: {
+          chat: { provider: { npm: "@opencode-ai/ai/providers/google-vertex/mistral" } },
+        },
+      },
+      native: {
+        package: "@opencode/ai/providers/google-vertex",
+        settings: { project: "my-project", location: "europe-west4" },
+        models: { chat: { package: "@opencode/ai/providers/google-vertex/mistral" } },
+      },
+    },
+    {
       name: "zero costs and omitted cache costs",
       legacy: { models: { chat: { cost: { input: 0, output: 0 } } } },
       native: { models: { chat: { cost: { input: 0, output: 0 } } } },
@@ -874,7 +889,15 @@ describe("ConfigProviderPlugin.Plugin", () => {
             model.variants = [{ id: Model.VariantID.make("fast"), settings: { effort: "high" } }]
           })
         })
+        let transformed: Model.Info["limit"] | undefined
+        yield* models.transform((editor) => {
+          const model = editor.get(providerID, modelID)
+          if (!model) return
+          transformed = { ...model.limit }
+          model.limit = { context: 10, output: 1 }
+        })
         yield* addPlugin(entries)
+        expect(transformed).toEqual({ context: 100, output: 75 })
 
         const provider = required(yield* providers.get(providerID))
         const model = required(yield* models.get(providerID, modelID))

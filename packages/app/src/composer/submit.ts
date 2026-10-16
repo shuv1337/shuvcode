@@ -508,8 +508,16 @@ async function sendPrompt(
     if (session.current()?.revert) await session.api.revert.commit({ sessionID: session.id })
   }
 
-  if (value.delivery === "steer") await applySelection(session, value.selection, track, settle)
-  else await settle()
+  const commit = () => (value.delivery === "steer" ? applySelection(session, value.selection, track, settle) : settle())
+  // The data layer admits the prompt locally before it commits the selection, so a steer shows as pending while the
+  // selection commits. A staged revert settles before admission instead: its committed echo removes every local row
+  // from its boundary on. Only an idle session stages one, and a prompt into it starts work rather than showing as
+  // pending.
+  const staged = !!session.current()?.revert
+
+  if (staged) await commit()
+  // A retried admission reuses the first commit rather than switching again.
+  let committed: Promise<void> | undefined
 
   const admission = {
     id: value.id,
@@ -531,6 +539,7 @@ async function sendPrompt(
       agent: value.selection.agent,
       model: selectionModel(value.selection),
     },
+    prepare: staged ? undefined : () => (committed ??= commit()),
   }
 
   await session.data.session.prompt(admission).catch(() => session.data.session.prompt(admission))

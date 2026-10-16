@@ -36,6 +36,10 @@ const select =
   "SELECT channel, name, distribution, version, metadata, active, minimum, time_created, time_updated FROM artifact"
 const audience = "https://update.opencode.ai"
 const githubKeys = createRemoteJWKSet(new URL("https://token.actions.githubusercontent.com/.well-known/jwks"))
+// Clients poll every lookup path, and querying D1 on each request overloaded it.
+// Cache the caller-independent reads per isolate; caller-specific selection still runs per request.
+const readTtl = 60_000
+const reads = new Map<string, { expires: number; value: Promise<unknown> }>()
 
 export default {
   async fetch(request: Request, env: Env, ctx: Pick<ExecutionContext, "waitUntil">): Promise<Response> {
@@ -91,9 +95,11 @@ async function lookup(request: Request, env: Env, url: URL, path: string[]) {
   const current = url.searchParams.get("current") ?? agent?.[2] ?? agent?.[3]
   const source = agent?.[1] ?? current?.match(/^v?0\.0\.0-(.+)-\d+(?:\.\d+)?(?:\+.*)?$/)?.[1]
   const caller = source === undefined || resolveChannel(source) === resolved ? current : undefined
-  const rollout = await env.DB.prepare("SELECT duration_hours FROM channel_rollout WHERE channel = ?")
-    .bind(resolved)
-    .first<{ duration_hours: number }>()
+  const rollout = await cachedRead(`rollout:${resolved}`, () =>
+    env.DB.prepare("SELECT duration_hours FROM channel_rollout WHERE channel = ?")
+      .bind(resolved)
+      .first<{ duration_hours: number }>(),
+  )
   const ip = request.headers.get("CF-Connecting-IP")
   const hash =
     rollout?.duration_hours && ip
@@ -111,11 +117,8 @@ async function lookup(request: Request, env: Env, url: URL, path: string[]) {
 }
 
 async function channel(db: D1Database, channel: string, current: string | undefined, cutoff: number) {
-  const result = await db
-    .prepare(`${select} WHERE channel = ? AND (active = 1 OR minimum = 1) ORDER BY name, distribution`)
-    .bind(channel)
-    .all<ArtifactRow>()
-  const artifacts = await selectArtifacts(db, result.results, current, cutoff)
+  const rows = await candidates(db, "channel = ?", [channel])
+  const artifacts = await selectArtifacts(db, rows, current, cutoff)
   if (!artifacts.length) return json({ error: "Channel not found" }, 404)
   return updateResponse({ channel, artifacts: artifacts.map(decodeArtifact) })
 }
@@ -127,11 +130,8 @@ async function artifactName(
   current: string | undefined,
   cutoff: number,
 ) {
-  const result = await db
-    .prepare(`${select} WHERE channel = ? AND name = ? AND (active = 1 OR minimum = 1) ORDER BY distribution`)
-    .bind(channel, name)
-    .all<ArtifactRow>()
-  const artifacts = await selectArtifacts(db, result.results, current, cutoff)
+  const rows = await candidates(db, "channel = ? AND name = ?", [channel, name])
+  const artifacts = await selectArtifacts(db, rows, current, cutoff)
   if (!artifacts.length) return json({ error: "Artifact not found" }, 404)
   return updateResponse({ channel, name, artifacts: artifacts.map(decodeArtifact) })
 }
@@ -145,11 +145,8 @@ async function artifactDistribution(
   cutoff: number,
   manifest?: string,
 ) {
-  const result = await db
-    .prepare(`${select} WHERE channel = ? AND name = ? AND distribution = ? AND (active = 1 OR minimum = 1)`)
-    .bind(channel, name, distribution)
-    .all<ArtifactRow>()
-  const artifact = (await selectArtifacts(db, result.results, current, cutoff))[0]
+  const rows = await candidates(db, "channel = ? AND name = ? AND distribution = ?", [channel, name, distribution])
+  const artifact = (await selectArtifacts(db, rows, current, cutoff))[0]
   if (!artifact) return json({ error: "Artifact not found" }, 404)
   if (manifest) {
     const metadata = decodeMetadata(artifact.metadata)
@@ -165,6 +162,23 @@ async function artifactDistribution(
     return new Response(null, { status: 302, headers: { Location: file.url, "Cache-Control": "no-store" } })
   }
   return updateResponse(decodeArtifact(artifact))
+}
+
+// `active = 1 OR minimum = 1` scanned every published build under the primary-key prefix.
+// Reading each partial index separately keeps the read proportional to the selected artifacts.
+function candidates(db: D1Database, filter: string, values: string[]) {
+  return cachedRead(`artifacts:${values.join("/")}`, () =>
+    db
+      .prepare(
+        `${select} INDEXED BY artifact_active WHERE ${filter} AND active = 1
+         UNION ALL
+         ${select} INDEXED BY artifact_minimum WHERE ${filter} AND minimum = 1 AND active = 0
+         ORDER BY name, distribution`,
+      )
+      .bind(...values, ...values)
+      .all<ArtifactRow>()
+      .then((result) => result.results),
+  )
 }
 
 async function selectArtifacts(db: D1Database, rows: ArtifactRow[], current: string | undefined, cutoff: number) {
@@ -535,6 +549,35 @@ export function channelsForRef(ref: string) {
 
 export function resolveChannel(channel: string) {
   return channel === "next" ? "beta" : channel
+}
+
+function cachedRead<T>(key: string, load: () => Promise<T>) {
+  const now = Date.now()
+  const hit = reads.get(key)
+  if (hit) {
+    reads.delete(key)
+    if (hit.expires > now) {
+      reads.set(key, hit)
+      return hit.value as Promise<T>
+    }
+  }
+  // Lookup paths are caller-controlled identifiers, so bound the number of retained entries.
+  if (reads.size >= 1_000) {
+    reads.forEach((entry, k) => {
+      if (entry.expires <= now) reads.delete(k)
+    })
+    if (reads.size >= 1_000) {
+      const oldest = reads.keys().next().value
+      if (oldest !== undefined) reads.delete(oldest)
+    }
+  }
+  // Concurrent callers share one in-flight read. Failed reads are dropped so the next request retries D1.
+  const value = load()
+  reads.set(key, { expires: now + readTtl, value })
+  value.catch(() => {
+    if (reads.get(key)?.value === value) reads.delete(key)
+  })
+  return value
 }
 
 function validMutation(request: Request) {
