@@ -1,4 +1,5 @@
 import { useCommand, type CommandOption } from "@/shell/commands/command"
+import { adjacentTabKey } from "@/shell/titlebar/tab-order"
 import { useDialog } from "@opencode/ui/context/dialog"
 import { previewSelectedLines } from "@opencode/session-ui/pierre/selection-bridge"
 import { useFile, selectionFromLines, type FileSelection } from "@/workspaces/files/model"
@@ -80,10 +81,21 @@ export const useSessionCommands = (actions: SessionCommandContext) => {
     return entry && !entry.tab.pinned ? entry.key : undefined
   }
 
+  const cycleSideTabs = () => actions.session.layout.view().side.opened() && actions.region.keys().length > 1
+
   // Focus inside an extension command's scope belongs to that extension, which binds its own shortcuts there.
   const extensionScoped = (target: EventTarget | null) =>
     target instanceof Element &&
     host.items(Command).some((item) => !!item.value.scope && !!target.closest(item.value.scope))
+
+  const sideFocused = (target: EventTarget | null) => {
+    const element =
+      target instanceof Element && target !== document.body && target !== document.documentElement
+        ? target
+        : document.activeElement
+
+    return element instanceof Element && !!element.closest("#review-panel") && !extensionScoped(element)
+  }
 
   const selectionPreview = (path: string, selection: FileSelection) => {
     const content = file.get(path)?.content?.content
@@ -201,6 +213,28 @@ export const useSessionCommands = (actions: SessionCommandContext) => {
     const tab = closableTab()
 
     if (tab) actions.region.close(tab)
+  }
+
+  const selectAdjacentSideTab = (offset: -1 | 1) => {
+    const key = adjacentTabKey(actions.region.keys(), actions.region.active(), offset)
+
+    if (!key) return
+
+    actions.region.select(key)
+
+    const panel = document.getElementById("review-panel")
+
+    if (!panel) return
+
+    const active = document.activeElement
+
+    if (
+      active instanceof HTMLElement &&
+      panel.contains(active) &&
+      !active.closest('[role="tab"][aria-selected="false"], [inert], .hidden')
+    )
+      return
+    ;(panel.querySelector<HTMLElement>('[role="tab"][aria-selected="true"]') ?? panel).focus({ preventScroll: true })
   }
 
   const addSelection = () => {
@@ -352,6 +386,7 @@ export const useSessionCommands = (actions: SessionCommandContext) => {
 
   const fileCmds = () => {
     const tab = closableTab()
+    const cycle = cycleSideTabs()
 
     return [
       fileCommand({
@@ -369,6 +404,24 @@ export const useSessionCommands = (actions: SessionCommandContext) => {
           keybind: settings.keybinds.get("tab.close") ?? "mod+w",
           when: (event) => !extensionScoped(event.target),
           onSelect: closeTab,
+        }),
+      cycle &&
+        fileCommand({
+          id: "file.tab.prev",
+          title: "",
+          keybind: settings.keybinds.get("tab.prev") ?? "mod+option+ArrowLeft,ctrl+shift+tab",
+          hidden: true,
+          when: (event) => sideFocused(event.target),
+          onSelect: () => selectAdjacentSideTab(-1),
+        }),
+      cycle &&
+        fileCommand({
+          id: "file.tab.next",
+          title: "",
+          keybind: settings.keybinds.get("tab.next") ?? "mod+option+ArrowRight,ctrl+tab",
+          hidden: true,
+          when: (event) => sideFocused(event.target),
+          onSelect: () => selectAdjacentSideTab(1),
         }),
     ].filter((v) => !!v)
   }

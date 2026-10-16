@@ -65,11 +65,11 @@ V2 reads these same locations. It normalizes supported V1 and native V2 fields i
 file. Existing supported V1 configuration is intended to keep working, so you do not need to convert it to try or adopt
 V2.
 
-In V2, the system configuration directory loads at the lowest precedence for ordinary settings so it provides
-machine-wide defaults, while [policies](/policies#precedence) evaluate in the reverse order so system
-`experimental.policies` (including migrated `enabled_providers` and `disabled_providers`) cannot be overridden by global
-or project files. Express admin-enforced restrictions as `experimental.policies` rather than ordinary settings such as
-`permissions`.
+As in V1, system configuration and macOS managed preferences have the highest precedence, so their settings override
+global and project files. Their [policies](/policies#precedence), including migrated `enabled_providers` and
+`disabled_providers`, also outrank global and project policies. Overriding a setting cannot stop users from adding
+providers, MCP servers, agents, or plugins, so express admin-enforced restrictions as `policies` rather
+than ordinary settings such as `permissions`.
 
 ### Ask OpenCode to migrate
 
@@ -91,20 +91,6 @@ Nested mixing is intentionally bounded. OpenCode recognizes mixed V1 and V2 memb
 `experimental`, but it does not recursively infer formats inside individual agents, providers, commands, or models. Keep
 each of those nested entries entirely in one format. Supported V1 syntax remains quiet by itself; malformed values,
 unsupported legacy fields, and conflicting V1/V2 values produce warnings while unrelated valid settings continue to load.
-
-### Sharing
-
-The deprecated V1 `autoshare` boolean becomes the explicit `share` policy:
-
-```jsonc
-// V1
-{ "autoshare": true }
-
-// V2
-{ "share": "auto" }
-```
-
-Use `"manual"`, `"auto"`, or `"disabled"`. If the V1 file already uses `share`, no change is needed.
 
 ### Permissions and tools
 
@@ -136,6 +122,11 @@ V1 groups permission effects by tool. V2 uses one ordered `permissions` array, m
 
 Permission actions also changed: `bash` is now `shell`, `task` is now `subagent`, and `write` and `patch` are now `edit`.
 See [Permissions](/permissions) for the ordered V2 rule format.
+
+<Callout type="warning">
+  V1 asks before accessing paths outside the project. V2 does not: `external_directory` is allowed by default. To keep
+  the V1 behavior, add `{ "action": "external_directory", "resource": "*", "effect": "ask" }` to `permissions`.
+</Callout>
 
 ### Agents and modes
 

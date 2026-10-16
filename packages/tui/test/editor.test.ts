@@ -22,6 +22,23 @@ test("rejects when the external editor cannot start", async () => {
   await expect(openEditor({ value: "original", renderer: renderer as never })).rejects.toThrow()
 })
 
+test("says which variable to set when no external editor is configured", async () => {
+  delete process.env.VISUAL
+  delete process.env.EDITOR
+  let suspended = false
+  const renderer = {
+    suspend() {
+      suspended = true
+    },
+    resume() {},
+    requestRender() {},
+    currentRenderBuffer: { clear() {} },
+  }
+
+  await expect(openEditor({ value: "original", renderer: renderer as never })).rejects.toThrow("$EDITOR")
+  expect(suspended).toBe(false)
+})
+
 test("normalizes a single trailing editor newline for one-line prompts", () => {
   expect(normalizePromptContent("hello\n")).toBe("hello")
   expect(normalizePromptContent("hello\r\n")).toBe("hello")

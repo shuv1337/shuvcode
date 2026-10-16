@@ -148,8 +148,11 @@ function session(input: {
       location: { command: { list: () => [] } },
       session: {
         setStatus: (_sessionID, status) => input.statuses?.push(status),
+        // Like the data layer: admit locally, prepare, then send.
         prompt: async (value) => {
-          input.calls.push("prompt")
+          input.calls.push("admit")
+          await value.prepare?.()
+          input.calls.push("send")
           await input.prompt?.(value)
 
           // The admitted inbox item, as the server returns it.
@@ -200,16 +203,21 @@ describe("Composer submission", () => {
   })
 
   test.each([
-    { current: { agent: "plan", model: { id: "old", providerID: "old" } }, calls: ["switch-agent", "switch-model"] },
+    // The prompt admits before the selection commits, so a steer shows as pending while it does.
+    {
+      current: { agent: "plan", model: { id: "old", providerID: "old" } },
+      calls: ["admit", "switch-agent", "switch-model", "send"],
+    },
     // The model still commits: cached session state may lag behind an earlier switch.
     {
       current: { agent: "build", model: { providerID: "provider-1", id: "model-1", variant: "balanced" } },
-      calls: ["switch-model"],
+      calls: ["admit", "switch-model", "send"],
     },
-    // A prompt commits a staged revert, which would delete the model switch made after its boundary.
+    // A prompt commits a staged revert, which would delete the model switch made after its boundary. The revert
+    // settles before admission, whose row it would also delete.
     {
       current: { agent: "plan", model: { id: "old", providerID: "old" }, revert: { messageID: "msg_reverted" } },
-      calls: ["switch-agent", "revert-commit", "switch-model"],
+      calls: ["switch-agent", "revert-commit", "switch-model", "admit", "send"],
     },
   ])("applies the selection before sending one captured value: $calls", async (row) => {
     const state = createMemoryComposerState({ prompt: "ship it" }).capture()
@@ -221,7 +229,7 @@ describe("Composer submission", () => {
     await submitInput(active(state, target)).submit(new Event("submit"))
     const request = await admitted.promise
 
-    expect(calls).toEqual([...row.calls, "prompt"])
+    expect(calls).toEqual([...row.calls])
     expect(request.delivery).toBe("steer")
     expect(request.text).toBe("ship it")
     expect(request.id).toMatch(/^msg_/)
@@ -389,12 +397,13 @@ describe("Composer submission", () => {
     state.set(prompt)
     state.context.add({ type: "file", path: "notes.md", description: "the failing version" })
     const attempts: string[] = []
+    const calls: string[] = []
     const statuses: ("idle" | "running")[] = []
     const first = Promise.withResolvers<void>()
     const second = Promise.withResolvers<void>()
 
     const target = session({
-      calls: [],
+      calls,
       statuses,
       prompt: async (value) => {
         attempts.push(value.id ?? "")
@@ -418,6 +427,9 @@ describe("Composer submission", () => {
 
     expect(attempts).toHaveLength(4)
     expect(new Set(attempts).size).toBe(1)
+    // A retried admission reuses its submission's selection commit.
+    const submitted = ["admit", "switch-agent", "switch-model", "send", "admit", "send"]
+    expect(calls).toEqual([...submitted, ...submitted])
     expect(statuses).toEqual(["running", "idle", "running", "idle"])
     expect(state.current()).toEqual(prompt)
     expect(state.context.items()).toMatchObject([

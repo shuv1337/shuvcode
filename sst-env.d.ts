@@ -66,14 +66,6 @@ declare module "sst" {
       "value": string
     }
     "LogProcessor": import("@cloudflare/workers-types").Service
-    "R2AccessKey": {
-      "type": "sst.sst.Secret"
-      "value": string
-    }
-    "R2SecretKey": {
-      "type": "sst.sst.Secret"
-      "value": string
-    }
     "SALESFORCE_CLIENT_ID": {
       "type": "sst.sst.Secret"
       "value": string
@@ -86,14 +78,7 @@ declare module "sst" {
       "type": "sst.sst.Secret"
       "value": string
     }
-    "SUPPORT_API_KEY": {
-      "type": "sst.sst.Secret"
-      "value": string
-    }
-    "Teams": {
-      "type": "sst.cloudflare.SolidStart"
-      "url": string
-    }
+    "Share": import("@cloudflare/workers-types").Service
     "Web": {
       "type": "sst.cloudflare.Astro"
       "url": string

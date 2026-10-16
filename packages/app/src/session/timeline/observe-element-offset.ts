@@ -7,16 +7,14 @@ export function observeElementOffsetReconnectAware<TScrollElement extends Elemen
 ) {
   let active = true
   const element = instance.scrollElement
+
+  // TanStack resets isScrolling on a timer that reports the offset of the last scroll event. A virtualizer
+  // write since then (prepend anchoring, size compensation) may not have dispatched its scroll event yet, and
+  // compensating from that stale offset would undo the write, so a settled scroll reads the live scrollTop
+  // (vertical only, like the reconnect check below).
   const deliver = (offset: number, isScrolling: boolean) => {
     if (!active) return
-    if (isScrolling || !element) return callback(offset, isScrolling)
-    // The idle debounce retains the last scroll event's offset. A prepend or
-    // resize can restore the anchor before the next event, so read its native
-    // position rather than letting that stale callback undo the adjustment.
-    callback(
-      instance.options.horizontal ? element.scrollLeft * (instance.options.isRtl ? -1 : 1) : element.scrollTop,
-      false,
-    )
+    callback(isScrolling || !element?.isConnected ? offset : element.scrollTop, isScrolling)
   }
 
   const cleanupOffset = observeElementOffset(instance, deliver)

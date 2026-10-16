@@ -7,6 +7,7 @@ import path from "node:path"
 import { createEventStream, createFetch, directory, json } from "./fixture/tui-client"
 import { tmpdir } from "./fixture/fixture"
 import { createAppFixture } from "./fixture/app"
+import { waitForHighlightedFrame } from "./fixture/frame"
 import type { PluginInfo } from "@opencode/client"
 
 test.each([100, 44])("Ctrl-O is immediate, dismissible, and prunes cached deletions at width %s", async (width) => {
@@ -622,7 +623,8 @@ test.each([80, 120])("completes custom Markdown and ordinary fences in a session
       return undefined
     },
   })
-  const streaming = await setup.waitForFrame(
+  const streaming = await waitForHighlightedFrame(
+    setup,
     (frame) =>
       frame.includes("initial") &&
       frame.includes("DiagramStart") &&
@@ -660,7 +662,8 @@ test.each([80, 120])("completes custom Markdown and ordinary fences in a session
       tokens: session.tokens,
     },
   })
-  const frame = await setup.waitForFrame(
+  const frame = await waitForHighlightedFrame(
+    setup,
     (frame) => frame.includes("MARKDOWN_END") && frame.includes("initial final") && frame.includes("2ms"),
   )
   expect(frame).toContain("DiagramStart")
@@ -754,13 +757,17 @@ test("keeps assistant footer metrics current after prepend, same-length refresh,
     },
   })
 
-  const initial = await setup.waitForFrame((frame) => frame.includes("Original answer") && frame.includes("20.0 tok/s"))
+  const initial = await waitForHighlightedFrame(
+    setup,
+    (frame) => frame.includes("Original answer") && frame.includes("20.0 tok/s"),
+  )
   expect(initial).toContain("Current input")
   expect(initial).toContain("4.0s \u00b7 20.0 tok/s")
   expect(initial).not.toContain("Prepended input")
 
   setup.mockInput.pressKey("g", { ctrl: true })
-  const prepended = await setup.waitForFrame(
+  const prepended = await waitForHighlightedFrame(
+    setup,
     (frame) =>
       frame.includes("Prepended input") &&
       frame.includes("Prepended instructions") &&
@@ -775,7 +782,8 @@ test("keeps assistant footer metrics current after prepend, same-length refresh,
   // Refresh the latest page: length stays four, but the retained assistant moves from index three to one.
   refresh = true
   setup.events.disconnect()
-  const refreshed = await setup.waitForFrame(
+  const refreshed = await waitForHighlightedFrame(
+    setup,
     (frame) =>
       frame.includes("Later input") &&
       frame.includes("Later answer") &&
@@ -795,7 +803,8 @@ test("keeps assistant footer metrics current after prepend, same-length refresh,
     durable: { aggregateID: session.id, seq: 1, version: 1 },
     data: { sessionID: session.id, to: "msg_0004" },
   })
-  const reverted = await setup.waitForFrame(
+  const reverted = await waitForHighlightedFrame(
+    setup,
     (frame) => frame.includes("Original answer") && !frame.includes("Later input") && !frame.includes("Later answer"),
   )
   expect(reverted).toContain("Current input")
@@ -1034,18 +1043,18 @@ test("error investigations repeatedly seed editable home drafts without creating
   setup.mockInput.pressKey("F6")
   await setup.waitForFrame((frame) => frame.includes("MCP servers") && frame.includes("alpha"))
   setup.mockInput.pressEnter()
-  await setup.waitForFrame((frame) => frame.includes("Alpha connection refused") && frame.includes("i investigate"))
+  await setup.waitForFrame((frame) => frame.includes("Alpha connection refused") && frame.includes("investigate i"))
   setup.mockInput.pressKey("i")
-  await setup.waitForFrame((frame) => frame.includes("Alpha connection refused") && !frame.includes("i investigate"))
+  await setup.waitForFrame((frame) => frame.includes("Alpha connection refused") && !frame.includes("investigate i"))
 
   setup.mockInput.pressKey("F6")
   await setup.waitForFrame((frame) => frame.includes("MCP servers"))
   setup.mockInput.pressArrow("down")
   setup.mockInput.pressEnter()
-  await setup.waitForFrame((frame) => frame.includes("Beta initialization failed") && frame.includes("i investigate"))
+  await setup.waitForFrame((frame) => frame.includes("Beta initialization failed") && frame.includes("investigate i"))
   setup.mockInput.pressKey("i")
   const draft = await setup.waitForFrame(
-    (frame) => frame.includes("Beta initialization failed") && !frame.includes("i investigate"),
+    (frame) => frame.includes("Beta initialization failed") && !frame.includes("investigate i"),
   )
 
   expect(draft).not.toContain("Alpha connection refused")

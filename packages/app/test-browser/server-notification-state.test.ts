@@ -23,8 +23,17 @@ const createState = (input: { sdk: object; data: object; coordinator: object }) 
   createServerNotificationState({ key: server, ...input } as never)
 
 beforeAll(async () => {
-  const { sessionIDHasOpenTab } = await import("@/shell/tabs/tabs")
+  // Fakes replace only the hooks this test controls. Spreading the real module keeps every other export, such as
+  // projectSettingsKey, for the modules the notification state imports.
+  const real = {
+    platform: await import("@/runtime/platform/platform"),
+    settings: await import("@/settings/model"),
+    language: await import("@/runtime/i18n/language"),
+    tabs: await import("@/shell/tabs/tabs"),
+  }
+
   mock.module("@/runtime/platform/platform", () => ({
+    ...real.platform,
     usePlatform: () => ({
       platform: "web",
       notify: async (title: string) => {
@@ -33,16 +42,17 @@ beforeAll(async () => {
     }),
   }))
   mock.module("@/settings/model", () => ({
+    ...real.settings,
     useSettings: () => ({
       sounds: { agentEnabled: () => false, errorsEnabled: () => false },
       notifications: { agent: () => true, errors: () => true },
     }),
   }))
-  mock.module("@/runtime/i18n/language", () => ({ useLanguage: () => ({ t: (key: string) => key }) }))
-  mock.module("@/shell/tabs/tabs", () => ({
-    useTabs: () => tabs,
-    sessionIDHasOpenTab,
+  mock.module("@/runtime/i18n/language", () => ({
+    ...real.language,
+    useLanguage: () => ({ t: (key: string) => key }),
   }))
+  mock.module("@/shell/tabs/tabs", () => ({ ...real.tabs, useTabs: () => tabs }))
   createServerNotificationState = (await import("@/shell/notifications/notification")).createServerNotificationState
 })
 

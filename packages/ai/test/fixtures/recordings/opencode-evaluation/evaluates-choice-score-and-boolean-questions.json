@@ -15,7 +15,7 @@
       "transport": "http",
       "request": {
         "method": "POST",
-        "url": "https://opencode.ai/inference/v1/systemone",
+        "url": "https://opencode.ai/inference/systemone/v1/systemone",
         "headers": {
           "content-type": "application/json"
         },

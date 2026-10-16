@@ -19,12 +19,15 @@ export function componentConfig(directory: string) {
       url: baseURL,
       reuseExistingServer: !process.env.CI,
       timeout: 120_000,
+      // Vite reports dependency re-optimization ("optimized dependencies changed. reloading") on stdout; keep it in logs.
+      stdout: "pipe",
     },
     use: {
       baseURL,
       trace: "on-first-retry",
       screenshot: "only-on-failure",
-      video: "retain-on-failure",
+      // CI retries failures, so the retry records the video; local runs have no retries.
+      video: process.env.CI ? "on-first-retry" : "retain-on-failure",
     },
     projects: [{ name: "components", use: { ...devices["Desktop Chrome"] } }],
   })

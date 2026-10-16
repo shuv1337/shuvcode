@@ -5,7 +5,8 @@
     "bunfig.toml",
     ".npmrc",
     ".github/actions/setup-bun/**",
-    ".github/workflows/test.yml"
+    ".github/workflows/test.yml",
+    "package.json"
   ],
   "globalEnv": ["CI", "OPENCODE_DISABLE_SHARE"],
   "globalPassThroughEnv": ["CI", "OPENCODE_DISABLE_SHARE"],
@@ -17,9 +18,6 @@
     "test:components": {
       "outputs": [],
       "cache": false
-    },
-    "@opencode/enterprise#typecheck": {
-      "dependsOn": ["@opencode/core#typecheck"]
     },
     "@opencode/sdk#typecheck": {
       "dependsOn": ["@opencode/core#typecheck"]
@@ -34,22 +32,29 @@
       "dependsOn": ["@opencode/core#typecheck"]
     },
     "build": {
-      "dependsOn": [],
+      "dependsOn": ["transit"],
       "outputs": ["dist/**"]
     },
+    // Workspace packages export their sources, so tests never wait for a dependency's build; the build job in
+    // test.yml checks the library builds. No package has a transit script: it runs nothing and only folds every
+    // workspace dependency into the test hash.
+    "transit": {
+      "dependsOn": ["^transit"]
+    },
     "@opencode/ai#test": {
-      "dependsOn": ["^build"],
+      "dependsOn": ["transit"],
       "outputs": []
     },
     "@opencode/codemode#test": {
-      "dependsOn": ["^build"],
+      "dependsOn": ["transit"],
       "outputs": []
     },
     "@opencode/core#test": {
-      "dependsOn": ["^build"],
+      "dependsOn": ["transit"],
       "outputs": []
     },
     "@opencode/function#test": {
+      "dependsOn": ["transit"],
       "outputs": []
     },
     "@opencode/desktop#test": {
@@ -57,34 +62,79 @@
       "cache": false
     },
     "@opencode/httpapi-codegen#test": {
+      "dependsOn": ["transit"],
       "outputs": []
     },
     "@opencode/server#test": {
-      "dependsOn": ["^build"],
+      "dependsOn": ["transit"],
       "outputs": []
     },
     "@opencode/cli#test": {
-      "dependsOn": ["^build"],
+      "dependsOn": ["transit"],
       "outputs": []
     },
     "@opencode/tui#test": {
-      "dependsOn": ["^build"],
+      "dependsOn": ["transit"],
       "outputs": []
     },
     "@opencode/latex#test": {
-      "dependsOn": ["^build"],
+      "dependsOn": ["transit"],
       "outputs": []
     },
     "@opencode/app#test": {
-      "dependsOn": ["^build"],
+      "dependsOn": ["transit"],
       "outputs": []
     },
     "@opencode/ui#test": {
-      "dependsOn": ["^build"],
+      "dependsOn": ["transit"],
       "outputs": []
     },
     "@opencode/session-ui#test": {
-      "dependsOn": ["^build"],
+      "dependsOn": ["transit"],
+      "outputs": []
+    },
+    "@opencode/client#test": {
+      "dependsOn": ["transit"],
+      "outputs": []
+    },
+    "@opencode/gui-extensions#test": {
+      "dependsOn": ["transit"],
+      "outputs": []
+    },
+    "@opencode/http-recorder#test": {
+      "dependsOn": ["transit"],
+      "outputs": []
+    },
+    "@opencode/merman#test": {
+      "dependsOn": ["transit"],
+      "outputs": []
+    },
+    "@opencode/plugin#test": {
+      "dependsOn": ["transit"],
+      "outputs": []
+    },
+    "@opencode/plugin-browser#test": {
+      "dependsOn": ["transit"],
+      "outputs": []
+    },
+    "@opencode/script#test": {
+      "dependsOn": ["transit"],
+      "outputs": []
+    },
+    "@opencode/sdk#test": {
+      "dependsOn": ["transit"],
+      "outputs": []
+    },
+    "@opencode/simulation#test": {
+      "dependsOn": ["transit"],
+      "outputs": []
+    },
+    "@opencode/theme#test": {
+      "dependsOn": ["transit"],
+      "outputs": []
+    },
+    "@opencode/util#test": {
+      "dependsOn": ["transit"],
       "outputs": []
     },
     "@opencode/sdk#verify:package": {
