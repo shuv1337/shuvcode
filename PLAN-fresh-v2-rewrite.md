@@ -468,7 +468,7 @@ locked: hooks only, no Core fallback adapter.
 jj git fetch --remote upstream
 # record exact SHA
 jj workspace add --name shuvcode-v2-rewrite -r <pinned-upstream-v2> \
-  /home/shuv/repos/shuvcode-workspaces/v2-rewrite
+  ~/repos/shuvcode-workspaces/v2-rewrite
 ```
 
 Never merge `integration-v2` into this workspace. Never open an upstream PR.
