@@ -14,4 +14,4 @@ permissions:
 
 jobs:
   hygiene:
-    uses: shuv1337/shark/.github/workflows/fleet-hygiene.yml@358bf89526bd70b0860afb30950edb1227e0e697
+    uses: shuv1337/shark/.github/workflows/fleet-hygiene.yml@638184402df49b0f731e8fb8c1f1db6eb3e3e98d
