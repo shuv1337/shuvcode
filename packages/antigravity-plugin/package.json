@@ -8,7 +8,7 @@
   "description": "Google AI Pro / Antigravity OAuth plugin for OpenCode V2. Rewrites native Gemini HTTP into Cloud Code v1internal and adds the Google AI Pro method on /connect.",
   "scripts": {
     "test": "bun test --timeout 5000",
-    "typecheck": "tsgo --noEmit",
+    "typecheck": "tsc --noEmit",
     "pack:check": "bun pm pack --dry-run"
   },
   "exports": {
@@ -27,6 +27,6 @@
     "@types/bun": "catalog:",
     "@types/node": "catalog:",
     "typescript": "catalog:",
-    "@typescript/native-preview": "catalog:"
+    "@typescript/native": "catalog:"
   }
 }

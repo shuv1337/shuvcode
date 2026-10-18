@@ -1,5 +1,5 @@
 import { createMemo, createSignal } from "solid-js"
-import { useConfig } from "../config"
+import { useConfig, useNewDesigns } from "../config"
 import { useThemes } from "../context/theme"
 import { DEFAULT_THEME_NAME } from "../theme"
 import { DialogSelect } from "../ui/dialog-select"
@@ -342,6 +342,7 @@ export function settingID(setting: Setting) {
 
 export function DialogConfig(props: { current?: string }) {
   const config = useConfig()
+  const newDesigns = useNewDesigns()
   const toast = useToast()
   const themes = useThemes()
   const current = Math.max(
@@ -404,12 +405,14 @@ export function DialogConfig(props: { current?: string }) {
   return (
     <DialogSelect
       title="Settings"
+      searchInTitle
+      titlePlaceholder="Search settings"
       options={options()}
       current={current}
       filterThreshold={0.7}
       onMove={(option) => setSelected(option.value)}
       onSelect={(option) => void change(1, option.value)}
-      footerHints={[{ title: "change", label: "←/→" }]}
+      footerHints={newDesigns() ? [] : [{ title: "change", label: "←/→" }]}
       bindings={[
         {
           bind: "left",

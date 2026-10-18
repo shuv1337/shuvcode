@@ -11,6 +11,7 @@ import { IntegrationConnection } from "../../integration/connection.js"
 import { ManagedPolicy } from "../../managed-policy.js"
 import { Model } from "../../model.js"
 import { Provider } from "../../provider.js"
+import { Variant } from "../../variant.js"
 import { WebSearch } from "../../websearch.js"
 import { ConfigPolicy } from "@opencode/schema/config/policy"
 import { ConfigProvider } from "@opencode/schema/config/provider"
@@ -287,6 +288,7 @@ export const OpencodePlugin = define<HttpClient.HttpClient | Bus.Service | Manag
             if (config.family !== undefined) model.family = config.family
             if (config.name !== undefined) model.name = config.name
             if (config.modelID !== undefined) model.modelID = config.modelID
+            if (config.releaseDate !== undefined) model.time = { released: Date.parse(config.releaseDate) }
             if (config.compatibility !== undefined)
               model.compatibility = { ...model.compatibility, ...config.compatibility }
             model.package = config.package ?? (item.package !== undefined ? undefined : model.package)
@@ -299,6 +301,15 @@ export const OpencodePlugin = define<HttpClient.HttpClient | Bus.Service | Manag
             )
             model.headers = Provider.mergeHeaders(model.headers, config.headers)
             model.body = Provider.mergeOverlay(model.body, config.body)
+            if (config.limit !== undefined) model.limit = { ...model.limit, ...config.limit }
+            // The Console's reasoning replaces the base variants; its variants still overlay them below.
+            if (config.capabilities?.reasoning !== undefined)
+              model.variants = [
+                ...Variant.resolve(
+                  { ...model, package: model.package ?? providers.get(providerID)?.provider.package },
+                  Variant.supports(config.capabilities.reasoning),
+                ),
+              ]
             for (const variant of config.variants ?? []) {
               let existing = model.variants.find((item) => item.id === variant.id)
               if (!existing) {
@@ -322,7 +333,6 @@ export const OpencodePlugin = define<HttpClient.HttpClient | Bus.Service | Manag
                 },
               }))
             model.enabled = !config.disabled
-            if (config.limit !== undefined) model.limit = { ...model.limit, ...config.limit }
           })
         }
         const configured = providers.get(providerID)

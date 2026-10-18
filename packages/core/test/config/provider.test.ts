@@ -49,7 +49,10 @@ describe("ConfigProviderPlugin.Plugin", () => {
                 settings: { compaction: { type: "native" } },
                 models: {
                   native: {},
-                  local: { settings: { compaction: { type: "summary" } }, package: "@opencode/ai/providers/openai/chat" },
+                  local: {
+                    settings: { compaction: { type: "summary" } },
+                    package: "@opencode/ai/providers/openai/chat",
+                  },
                   unsupported: { package: "@opencode/ai/providers/openai/chat" },
                 },
               },
@@ -693,6 +696,141 @@ describe("ConfigProviderPlugin.Plugin", () => {
         Model.VariantID.make("xhigh"),
         Model.VariantID.make("max"),
       ])
+    }),
+  )
+
+  it.effect("respells inherited variants when config moves a catalog model to another package", () =>
+    Effect.gen(function* () {
+      const providers = yield* Provider.Service
+      const models = yield* Model.Service
+      const providerID = Provider.ID.make("bedrock")
+      const modelID = Model.ID.make("anthropic.claude-opus-5-5")
+      yield* providers.transform((editor) => {
+        editor.models.update(providerID, modelID, (model) => {
+          model.package = "@opencode/ai/providers/amazon-bedrock"
+          model.variants = [
+            {
+              id: Model.VariantID.make("high"),
+              body: { additionalModelRequestFields: { output_config: { effort: "high" } } },
+            },
+          ]
+        })
+      })
+      yield* addPlugin([
+        new Document({
+          type: "document",
+          info: decode({
+            providers: {
+              bedrock: { models: { [modelID]: { package: "@opencode/ai/providers/amazon-bedrock/mantle" } } },
+            },
+          }),
+        }),
+      ])
+
+      const model = required(yield* models.get(providerID, modelID))
+      expect(model.package).toBe("@opencode/ai/providers/amazon-bedrock/mantle/messages")
+      expect(model.variants.find((variant) => variant.id === "high")).toEqual({
+        id: Model.VariantID.make("high"),
+        settings: { effort: "high", thinking: { type: "adaptive", display: "summarized" } },
+      })
+    }),
+  )
+
+  it.effect("keeps a moved catalog model without reasoning variants free of variants", () =>
+    Effect.gen(function* () {
+      const providers = yield* Provider.Service
+      const models = yield* Model.Service
+      const providerID = Provider.ID.make("bedrock")
+      const modelID = Model.ID.make("anthropic.claude-plain")
+      yield* providers.transform((editor) => {
+        editor.models.update(providerID, modelID, (model) => {
+          model.package = "@opencode/ai/providers/amazon-bedrock"
+        })
+      })
+      yield* addPlugin([
+        new Document({
+          type: "document",
+          info: decode({
+            providers: {
+              bedrock: { models: { [modelID]: { package: "@opencode/ai/providers/amazon-bedrock/mantle" } } },
+            },
+          }),
+        }),
+      ])
+
+      expect(required(yield* models.get(providerID, modelID)).variants).toEqual([])
+    }),
+  )
+
+  it.effect("builds variants from configured reasoning and overlays configured variants", () =>
+    Effect.gen(function* () {
+      const models = yield* Model.Service
+      const providerID = Provider.ID.make("custom")
+      yield* addPlugin([
+        new Document({
+          type: "document",
+          info: decode({
+            providers: {
+              custom: {
+                package: "aisdk:@ai-sdk/openai",
+                models: {
+                  effort: {
+                    capabilities: { reasoning: { supported: true, effort: ["default", "low", "high"] } },
+                    variants: [{ id: "high", headers: { "x-tier": "high" } }],
+                  },
+                  fixed: { capabilities: { reasoning: { supported: true } } },
+                  plain: { capabilities: { reasoning: { supported: false } } },
+                },
+              },
+            },
+          }),
+        }),
+      ])
+
+      const effort = required(yield* models.get(providerID, Model.ID.make("effort")))
+      expect(effort.variants).toEqual([
+        {
+          id: Model.VariantID.make("low"),
+          settings: { reasoningEffort: "low", reasoningSummary: "auto", include: ["reasoning.encrypted_content"] },
+        },
+        {
+          id: Model.VariantID.make("high"),
+          settings: { reasoningEffort: "high", reasoningSummary: "auto", include: ["reasoning.encrypted_content"] },
+          headers: { "x-tier": "high" },
+        },
+      ])
+      expect(required(yield* models.get(providerID, Model.ID.make("fixed"))).variants).toEqual([])
+      expect(required(yield* models.get(providerID, Model.ID.make("plain"))).variants).toEqual([])
+    }),
+  )
+
+  it.effect("applies configured release date, temperature support, and reasoning field", () =>
+    Effect.gen(function* () {
+      const models = yield* Model.Service
+      yield* addPlugin([
+        new Document({
+          type: "document",
+          info: decode({
+            providers: {
+              custom: {
+                package: "aisdk:@ai-sdk/openai-compatible",
+                models: {
+                  reasoner: {
+                    releaseDate: "2026-02-03",
+                    capabilities: { temperature: false },
+                    compatibility: { reasoningField: "reasoning_content" },
+                  },
+                },
+              },
+            },
+          }),
+        }),
+      ])
+
+      const model = required(yield* models.get(Provider.ID.make("custom"), Model.ID.make("reasoner")))
+      expect(model.time.released).toBe(Date.UTC(2026, 1, 3))
+      expect(model.capabilities.temperature).toBe(false)
+      expect(model.compatibility?.reasoningField).toBe("reasoning_content")
     }),
   )
 

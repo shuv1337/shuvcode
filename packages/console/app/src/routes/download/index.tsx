@@ -7,6 +7,7 @@ import { Header } from "~/component/header"
 import { IconCheck, IconCopy } from "~/component/icon"
 import { Legal } from "~/component/legal"
 import { LocaleLinks } from "~/component/locale-links"
+import { SocialMeta } from "~/component/social-meta"
 import { config } from "~/config"
 import { useI18n } from "~/context/i18n"
 import { useLanguage } from "~/context/language"
@@ -41,6 +42,7 @@ export default function Download() {
       <Title>{i18n.t("download.title")}</Title>
       <LocaleLinks path="/download" />
       <Meta name="description" content={i18n.t("download.meta.description")} />
+      <SocialMeta title={i18n.t("download.title")} description={i18n.t("download.meta.description")} path="/download" />
       <div data-component="container">
         <Header hideGetStarted />
 

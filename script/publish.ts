@@ -124,9 +124,10 @@ if (Script.release) {
   await $`bun ./packages/desktop/scripts/publish.ts`
 }
 
-if (Script.release && Script.channel === "latest") {
-  console.log("\n=== winget ===\n")
-  // Everything else is published by now, and WinGet validation can reject a submission for reasons unrelated to the release.
-  if ((await $`bun ./script/publish-winget.ts`.nothrow()).exitCode !== 0)
-    console.log("::warning::WinGet submission failed; see the winget step output above")
-}
+// WinGet submission is paused until our packages are accepted into microsoft/winget-pkgs.
+// if (Script.release && Script.channel === "latest") {
+//   console.log("\n=== winget ===\n")
+//   // Everything else is published by now, and WinGet validation can reject a submission for reasons unrelated to the release.
+//   if ((await $`bun ./script/publish-winget.ts`.nothrow()).exitCode !== 0)
+//     console.log("::warning::WinGet submission failed; see the winget step output above")
+// }

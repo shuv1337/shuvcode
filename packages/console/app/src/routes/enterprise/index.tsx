@@ -7,6 +7,7 @@ import { Legal } from "~/component/legal"
 import { Faq } from "~/component/faq"
 import { useI18n } from "~/context/i18n"
 import { LocaleLinks } from "~/component/locale-links"
+import { SocialMeta } from "~/component/social-meta"
 import { inferenceSpendOptions } from "~/lib/inference-spend"
 
 export default function Enterprise() {
@@ -76,6 +77,7 @@ export default function Enterprise() {
       <Title>{i18n.t("enterprise.title")}</Title>
       <LocaleLinks path="/enterprise" />
       <Meta name="description" content={i18n.t("enterprise.meta.description")} />
+      <SocialMeta title={i18n.t("enterprise.title")} description={i18n.t("enterprise.meta.description")} path="/enterprise" />
       <div data-component="container">
         <Header />
 

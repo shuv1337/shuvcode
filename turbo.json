@@ -41,101 +41,14 @@
     "transit": {
       "dependsOn": ["^transit"]
     },
-    "@opencode/ai#test": {
-      "dependsOn": ["transit"],
-      "outputs": []
-    },
-    "@opencode/codemode#test": {
-      "dependsOn": ["transit"],
-      "outputs": []
-    },
-    "@opencode/core#test": {
-      "dependsOn": ["transit"],
-      "outputs": []
-    },
-    "@opencode/function#test": {
+    // Every package with a test script runs here, so a new suite cannot be left out of CI.
+    "test": {
       "dependsOn": ["transit"],
       "outputs": []
     },
     "@opencode/desktop#test": {
       "outputs": [],
       "cache": false
-    },
-    "@opencode/httpapi-codegen#test": {
-      "dependsOn": ["transit"],
-      "outputs": []
-    },
-    "@opencode/server#test": {
-      "dependsOn": ["transit"],
-      "outputs": []
-    },
-    "@opencode/cli#test": {
-      "dependsOn": ["transit"],
-      "outputs": []
-    },
-    "@opencode/tui#test": {
-      "dependsOn": ["transit"],
-      "outputs": []
-    },
-    "@opencode/latex#test": {
-      "dependsOn": ["transit"],
-      "outputs": []
-    },
-    "@opencode/app#test": {
-      "dependsOn": ["transit"],
-      "outputs": []
-    },
-    "@opencode/ui#test": {
-      "dependsOn": ["transit"],
-      "outputs": []
-    },
-    "@opencode/session-ui#test": {
-      "dependsOn": ["transit"],
-      "outputs": []
-    },
-    "@opencode/client#test": {
-      "dependsOn": ["transit"],
-      "outputs": []
-    },
-    "@opencode/gui-extensions#test": {
-      "dependsOn": ["transit"],
-      "outputs": []
-    },
-    "@opencode/http-recorder#test": {
-      "dependsOn": ["transit"],
-      "outputs": []
-    },
-    "@opencode/merman#test": {
-      "dependsOn": ["transit"],
-      "outputs": []
-    },
-    "@opencode/plugin#test": {
-      "dependsOn": ["transit"],
-      "outputs": []
-    },
-    "@opencode/plugin-browser#test": {
-      "dependsOn": ["transit"],
-      "outputs": []
-    },
-    "@opencode/script#test": {
-      "dependsOn": ["transit"],
-      "outputs": []
-    },
-    "@opencode/sdk#test": {
-      "dependsOn": ["transit"],
-      "outputs": []
-    },
-    "@opencode/simulation#test": {
-      "dependsOn": ["transit"],
-      "outputs": []
-    },
-    "@opencode/theme#test": {
-      "dependsOn": ["transit"],
-      "outputs": []
-    },
-    "@opencode/util#test": {
-      "dependsOn": ["transit"],
-      "outputs": []
     },
     "@opencode/sdk#verify:package": {
       "outputs": []

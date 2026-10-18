@@ -3,7 +3,6 @@ export const goModels = [
   { id: "kimi-k3", name: "Kimi K3", requests: 110, allowance: 15, featured: true },
   { id: "qwen3.8-max", name: "Qwen3.8 Max", requests: 160, allowance: 15 },
   { id: "grok-4.7", name: "Grok 4.7", requests: 169, allowance: 15 },
-  { id: "grok-4.6", name: "Grok 4.6", requests: 169, allowance: 15 },
   { id: "glm-5.3", name: "GLM-5.3", requests: 220, allowance: 15 },
   {
     id: "gemini-4-argon-contributor",
@@ -24,7 +23,6 @@ export const goModels = [
   { id: "minimax-m3", name: "MiniMax M3", requests: 3200, allowance: 60, featured: true },
   { id: "mimo-v2.6-pro", name: "MiMo-V2.6-Pro", requests: 3250, allowance: 15 },
   { id: "mimo-v2.5-pro", name: "MiMo-V2.5-Pro", requests: 3250, allowance: 15 },
-  { id: "minimax-m2.7", name: "MiniMax M2.7", requests: 3400, allowance: 60 },
   { id: "claude-haiku-5-5", name: "Claude Haiku 5.5", requests: 3850, allowance: 15, featured: true, fresh: true },
   { id: "qwen3.7-plus", name: "Qwen3.7 Plus", requests: 4300, allowance: 60, featured: true },
   { id: "gpt-6-luna", name: "GPT 6 Luna", requests: 4230, allowance: 15, featured: true },
@@ -81,8 +79,8 @@ export const goModels = [
     limitedTime: true,
   },
   {
-    id: "cat-jam-free",
-    name: "Cat Jam Free",
+    id: "beam-free",
+    name: "Beam Free",
     requests: Infinity,
     allowance: Infinity,
     featured: true,
@@ -96,7 +94,6 @@ const plusLimits: Record<string, [number, number]> = {
   "kimi-k3": [440, 60],
   "qwen3.8-max": [640, 60],
   "grok-4.7": [676, 60],
-  "grok-4.6": [676, 60],
   "glm-5.3": [1760, 120],
   "gemini-4-argon-contributor": [1760, 240],
   "glm-5.2": [2640, 180],
@@ -109,7 +106,6 @@ const plusLimits: Record<string, [number, number]> = {
   "minimax-m3": [9600, 180],
   "mimo-v2.6-pro": [13000, 60],
   "mimo-v2.5-pro": [13000, 60],
-  "minimax-m2.7": [13600, 240],
   "qwen3.7-plus": [12900, 180],
   "gpt-6-luna": [16920, 60],
   "claude-haiku-5-5": [15380, 60],
@@ -123,7 +119,7 @@ const plusLimits: Record<string, [number, number]> = {
   "muse-spark-1.3-contributor": [90600, 120],
   "muse-spark-1.2-contributor": [90600, 120],
   "longcat-2.5-preview-free": [Infinity, Infinity],
-  "cat-jam-free": [Infinity, Infinity],
+  "beam-free": [Infinity, Infinity],
 }
 
 // A bonus multiplies a model's usual allowance, which is shown crossed out beside the current limits.

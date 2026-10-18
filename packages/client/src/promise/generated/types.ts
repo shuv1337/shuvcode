@@ -168,11 +168,15 @@ export type ModelMaxTokensField = "max_completion_tokens" | "max_tokens"
 
 export type ModelCacheFormat = "anthropic" | "alibaba"
 
-export type ModelCapabilities = { tools: boolean; input: Array<string>; output: Array<string> }
+export type ModelCapabilities = { tools: boolean; input: Array<string>; output: Array<string>; temperature?: boolean }
 
 export type MoneyUSDPerMillionTokens = number
 
 export type GenerateTextResponse = { data: { text: string } }
+
+export type VoiceWebRTCTransport = { type: "webrtc"; sdp: string }
+
+export type VoiceWebSocketTransport = { type: "websocket"; url: string; token: string; expiresAt: number }
 
 export type IntegrationID = string
 
@@ -298,7 +302,9 @@ export type McpProtocol = "legacy" | "auto" | "2026-07-28"
 
 export type ConfigWorktree = { directory: string }
 
-export type ConfigModelCapabilities = { tools?: boolean; input?: Array<string>; output?: Array<string> }
+export type ConfigModelReasoning =
+  | { supported: false }
+  | { supported: true; toggle?: boolean; effort?: Array<string>; budget?: { min?: number; max?: number } }
 
 export type ConfigShellOption = { path: string; name: string; acceptable: boolean }
 
@@ -656,6 +662,8 @@ export type ModelCost = {
   cache: { read: MoneyUSDPerMillionTokens; write: MoneyUSDPerMillionTokens }
 }
 
+export type VoiceTransport = VoiceWebRTCTransport | VoiceWebSocketTransport
+
 export type IntegrationCommandMethod = {
   id: IntegrationMethodID
   type: "command"
@@ -845,6 +853,14 @@ export type FormAnswer2 = { [x: string]: FormValue1 }
 export type VcsInfo = { provider?: string; branch: VcsBranch }
 
 export type WebSearchProvider = { id: WebSearchID; name: string }
+
+export type ConfigModelCapabilities = {
+  tools?: boolean
+  input?: Array<string>
+  output?: Array<string>
+  temperature?: boolean
+  reasoning?: ConfigModelReasoning
+}
 
 export type SessionMessageLocationSwitched = {
   id: SessionMessageID
@@ -1961,6 +1977,8 @@ export type ProviderInfo = {
   body?: { [x: string]: any }
 }
 
+export type VoiceSessionResponse = { data: { transport: VoiceTransport } }
+
 export type ConnectionInfo = ConnectionCredentialInfo | ConnectionEnvInfo
 
 export type PtyCreated = {
@@ -2304,6 +2322,7 @@ export type ConfigEntry =
                 modelID?: string
                 family?: string
                 name?: string
+                releaseDate?: string
                 compatibility?: ModelCompatibility
                 package?: string
                 settings?: ConfigModelSettings
@@ -5721,6 +5740,7 @@ export type MessageListInput = {
       | "shell"
       | "assistant"
       | "compaction"
+      | "idle"
       | undefined
   }["limit"]
   readonly order?: {
@@ -5738,6 +5758,7 @@ export type MessageListInput = {
       | "shell"
       | "assistant"
       | "compaction"
+      | "idle"
       | undefined
   }["order"]
   readonly cursor?: {
@@ -5755,6 +5776,7 @@ export type MessageListInput = {
       | "shell"
       | "assistant"
       | "compaction"
+      | "idle"
       | undefined
   }["cursor"]
   readonly type?: {
@@ -5772,6 +5794,7 @@ export type MessageListInput = {
       | "shell"
       | "assistant"
       | "compaction"
+      | "idle"
       | undefined
   }["type"]
 }
@@ -5802,6 +5825,32 @@ export type GenerateTextInput = {
 }
 
 export type GenerateTextOutput = GenerateTextResponse["data"]
+
+export type VoiceSessionInput = {
+  readonly model: {
+    readonly model: string
+    readonly session?: { readonly [x: string]: unknown } | undefined
+    readonly transport:
+      | { readonly type: "webrtc"; readonly sdp: string; readonly dcid?: number | undefined }
+      | { readonly type: "websocket" }
+  }["model"]
+  readonly session?: {
+    readonly model: string
+    readonly session?: { readonly [x: string]: unknown } | undefined
+    readonly transport:
+      | { readonly type: "webrtc"; readonly sdp: string; readonly dcid?: number | undefined }
+      | { readonly type: "websocket" }
+  }["session"]
+  readonly transport: {
+    readonly model: string
+    readonly session?: { readonly [x: string]: unknown } | undefined
+    readonly transport:
+      | { readonly type: "webrtc"; readonly sdp: string; readonly dcid?: number | undefined }
+      | { readonly type: "websocket" }
+  }["transport"]
+}
+
+export type VoiceSessionOutput = VoiceSessionResponse["data"]
 
 export type ProviderListInput = {
   readonly location?: { readonly location?: { readonly directory?: string | undefined } | undefined }["location"]

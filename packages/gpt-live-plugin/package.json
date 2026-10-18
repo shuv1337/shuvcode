@@ -13,7 +13,7 @@
   },
   "scripts": {
     "test": "bun test",
-    "typecheck": "tsgo --noEmit",
+    "typecheck": "tsc --noEmit",
     "build:native": "cargo build --release --manifest-path native/Cargo.toml"
   },
   "dependencies": {
@@ -26,7 +26,7 @@
     "@opentui/solid": "catalog:",
     "@tsconfig/bun": "catalog:",
     "@types/bun": "catalog:",
-    "@typescript/native-preview": "catalog:",
+    "@typescript/native": "catalog:",
     "solid-js": "catalog:",
     "typescript": "catalog:"
   }

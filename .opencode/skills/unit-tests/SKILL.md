@@ -113,7 +113,7 @@ To avoid adding more:
 
 ## Turbo test tasks
 
-- `bun turbo test` runs only packages with an `@opencode/<pkg>#test` entry in `turbo.json`; all 24 packages with a `test` script have one. A new suite copies its neighbors (`"dependsOn": ["transit"], "outputs": []`); check with `bun turbo test --dry=json`. Suites without an entry rotted: client, util, sdk, http-recorder and merman needed fixes before CI could run them.
+- `bun turbo test` runs every workspace package that has a `test` script, through the generic `test` task in `turbo.json` (`"dependsOn": ["transit"], "outputs": []`). A package with test files but no `test` script never runs in CI: give a new suite a script, and check with `bun turbo test --dry=json`. Add an `@opencode/<pkg>#test` entry only to override the generic task (desktop disables caching). Suites CI skipped rotted: client, util, sdk, http-recorder and merman needed fixes before CI could run them.
 - `transit` runs nothing and depends on `^transit`, so a test hash covers the package's whole workspace closure. The global dependencies add root `package.json` (whose `packageManager` pins Bun), `bunfig.toml`, `patches/**`, `.npmrc`, `.github/actions/setup-bun/**` and `test.yml`.
 - Tests do not wait for builds: workspace packages export their sources (`"./*": "./src/*.ts"` in `packages/core/package.json`), so a test must not read a dependency's `dist`. The build job's "Build workspace libraries" step checks the library builds on Linux.
 - A package that compiles `src` with tsc keeps colocated tests out of the build (`"exclude": ["src/**/*.test.ts"]` in `packages/util/tsconfig.build.json`). Otherwise `bun test` also runs the compiled copies, as Windows CI did with `packages/util/dist/retry.test.js`.
