@@ -47,7 +47,10 @@ export const Plugin = define({
         ConfigProvider.Info,
         {
           readonly providerID: string
-          readonly models: ReadonlyMap<string, { readonly inherit: boolean; readonly base?: Model.Info }>
+          readonly models: ReadonlyMap<
+            string,
+            { readonly inherit: boolean; readonly base?: Model.Info; readonly package?: string }
+          >
         }
       >(),
     }
@@ -57,6 +60,7 @@ export const Plugin = define({
         const providerID = id
         const current = providers.get(providerID)
         const source = providers.get(item.canonical ?? current?.provider.canonical ?? providerID)
+        const sourcePackage = source?.provider.package
         const changed = item.canonical !== undefined && item.canonical !== current?.provider.canonical
         providers.update(providerID, (provider) => {
           if (changed && source && source.provider !== provider)
@@ -74,13 +78,20 @@ export const Plugin = define({
           if (item.headers !== undefined) provider.headers = Provider.mergeHeaders(provider.headers, item.headers)
           if (item.body !== undefined) provider.body = Provider.mergeOverlay(provider.body, item.body)
         })
-        const definitions = new Map<string, { readonly inherit: boolean; readonly base?: Model.Info }>()
+        const definitions = new Map<
+          string,
+          { readonly inherit: boolean; readonly base?: Model.Info; readonly package?: string }
+        >()
         for (const [id, config] of Object.entries(item.models ?? {})) {
           const base = source?.models.get(config.modelID ?? id) ?? source?.models.get(id)
           const inherit = changed || !current?.models.has(id)
           // Bind the source at this point in the provider fold. Later source edits/removal
           // and its credential availability must not change an already-defined alias.
-          definitions.set(id, { inherit, base: base && structuredClone(base) })
+          definitions.set(id, {
+            inherit,
+            base: base && structuredClone(base),
+            package: base?.package ?? sourcePackage,
+          })
           if (!inherit) continue
           providers.models.update(providerID, id, (model) => {
             if (base) Object.assign(model, structuredClone(base))
@@ -172,8 +183,13 @@ export const Plugin = define({
           const repackaged =
             source?.base !== undefined &&
             source.base.variants.length > 0 &&
-            models.get(providerID, id)?.package !== source.base.package
-          if (config.variants === undefined && config.capabilities?.reasoning === undefined && (!source?.base || repackaged))
+            (models.get(providerID, id)?.package ?? models.provider.get(providerID)?.provider.package) !==
+              source.package
+          if (
+            config.variants === undefined &&
+            config.capabilities?.reasoning === undefined &&
+            (!source?.base || repackaged)
+          )
             models.update(providerID, id, (model) => {
               model.variants = [
                 ...Variant.resolve({

@@ -699,6 +699,48 @@ describe("ConfigProviderPlugin.Plugin", () => {
     }),
   )
 
+  for (const level of ["model", "provider", "alias"] as const) {
+    it.effect(`preserves catalog variants when the effective package is unchanged at the ${level} level`, () =>
+      Effect.gen(function* () {
+        const providers = yield* Provider.Service
+        const models = yield* Model.Service
+        const providerID = Provider.ID.make("openai")
+        const modelID = Model.ID.make("gpt-5.1")
+        yield* providers.transform((editor) => {
+          editor.update(providerID, (provider) => {
+            provider.package = "@opencode/ai/providers/openai"
+          })
+          editor.models.update(providerID, modelID, (model) => {
+            model.variants = ["none", "low", "medium", "high"].map((effort) => ({
+              id: Model.VariantID.make(effort),
+              settings: { reasoningEffort: effort },
+              headers: { "x-catalog": effort },
+            }))
+          })
+        })
+        const before = required(yield* models.get(providerID, modelID)).variants
+        yield* addPlugin([
+          new Document({
+            type: "document",
+            info: decode({
+              providers: {
+                [level === "alias" ? "alias" : providerID]: {
+                  ...(level === "alias" ? { canonical: providerID } : {}),
+                  ...(level === "model" ? {} : { package: "@opencode/ai/providers/openai" }),
+                  models: {
+                    [modelID]: level === "model" ? { package: "@opencode/ai/providers/openai" } : {},
+                  },
+                },
+              },
+            }),
+          }),
+        ])
+        const configured = Provider.ID.make(level === "alias" ? "alias" : providerID)
+        expect(required(yield* models.get(configured, modelID)).variants).toEqual(before)
+      }),
+    )
+  }
+
   it.effect("respells inherited variants when config moves a catalog model to another package", () =>
     Effect.gen(function* () {
       const providers = yield* Provider.Service
