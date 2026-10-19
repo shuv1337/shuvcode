@@ -1,4 +1,5 @@
 export const MODEL_AUTHOR_RULES = [
+  { match: "beam", author: "reflection" },
   { match: "claude", author: "anthropic" },
   { match: "gemini", author: "google" },
   { match: "deepseek", author: "deepseek" },
@@ -20,6 +21,7 @@ export const STEALTH_MODELS = new Set(["exo", "omen-alpha", "space-bunny", "unio
 export const FREE_MODELS = new Set(["gpt-5-nano", "grok-code", "big-pickle"])
 export const MODEL_NAME_MAX_LENGTH = 256
 export const MODEL_NAME_ALIASES: Record<string, string> = {
+  "cat-jam": "beam",
   "deepseek-flash": "deepseek-v4.1-flash",
   "deepseek-v4-1-flash-opencode-bo44an": "deepseek-v4.1-flash",
   "deepseek-v4-flash-0731": "deepseek-v4-flash",

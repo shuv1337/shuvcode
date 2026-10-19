@@ -47,7 +47,10 @@ export const Plugin = define({
         ConfigProvider.Info,
         {
           readonly providerID: string
-          readonly models: ReadonlyMap<string, { readonly inherit: boolean; readonly base?: Model.Info }>
+          readonly models: ReadonlyMap<
+            string,
+            { readonly inherit: boolean; readonly base?: Model.Info; readonly package?: string }
+          >
         }
       >(),
     }
@@ -57,6 +60,7 @@ export const Plugin = define({
         const providerID = id
         const current = providers.get(providerID)
         const source = providers.get(item.canonical ?? current?.provider.canonical ?? providerID)
+        const sourcePackage = source?.provider.package
         const changed = item.canonical !== undefined && item.canonical !== current?.provider.canonical
         providers.update(providerID, (provider) => {
           if (changed && source && source.provider !== provider)
@@ -74,13 +78,20 @@ export const Plugin = define({
           if (item.headers !== undefined) provider.headers = Provider.mergeHeaders(provider.headers, item.headers)
           if (item.body !== undefined) provider.body = Provider.mergeOverlay(provider.body, item.body)
         })
-        const definitions = new Map<string, { readonly inherit: boolean; readonly base?: Model.Info }>()
+        const definitions = new Map<
+          string,
+          { readonly inherit: boolean; readonly base?: Model.Info; readonly package?: string }
+        >()
         for (const [id, config] of Object.entries(item.models ?? {})) {
           const base = source?.models.get(config.modelID ?? id) ?? source?.models.get(id)
           const inherit = changed || !current?.models.has(id)
           // Bind the source at this point in the provider fold. Later source edits/removal
           // and its credential availability must not change an already-defined alias.
-          definitions.set(id, { inherit, base: base && structuredClone(base) })
+          definitions.set(id, {
+            inherit,
+            base: base && structuredClone(base),
+            package: base?.package ?? sourcePackage,
+          })
           if (!inherit) continue
           providers.models.update(providerID, id, (model) => {
             if (base) Object.assign(model, structuredClone(base))
@@ -121,6 +132,7 @@ export const Plugin = define({
             if (config.family !== undefined) model.family = config.family
             if (config.name) model.name = config.name
             if (config.modelID !== undefined) model.modelID = config.modelID
+            if (config.releaseDate !== undefined) model.time = { released: Date.parse(config.releaseDate) }
             if (config.compatibility !== undefined)
               model.compatibility = { ...model.compatibility, ...config.compatibility }
             if (config.package !== undefined) model.package = config.package
@@ -129,6 +141,15 @@ export const Plugin = define({
             if (config.body !== undefined) model.body = Provider.mergeOverlay(model.body, config.body)
             if (config.capabilities !== undefined)
               model.capabilities = Model.mergeCapabilities(config.capabilities, model.capabilities)
+            if (config.limit !== undefined) model.limit = { ...model.limit, ...config.limit }
+            // Configured reasoning replaces the base variants; configured variants still overlay them below.
+            if (config.capabilities?.reasoning !== undefined)
+              model.variants = [
+                ...Variant.resolve(
+                  { ...model, package: model.package ?? models.provider.get(providerID)?.provider.package },
+                  Variant.supports(config.capabilities.reasoning),
+                ),
+              ]
             if (config.variants !== undefined) {
               model.variants ??= []
               for (const variant of config.variants) {
@@ -156,9 +177,19 @@ export const Plugin = define({
               }))
             }
             if (config.disabled !== undefined) model.enabled = !config.disabled
-            if (config.limit !== undefined) model.limit = { ...model.limit, ...config.limit }
           })
-          if (config.variants === undefined && !source?.base)
+          // Inherited variants are spelled for the base model's package, so a package override needs fresh ones.
+          // A base without variants has no reasoning support to respell.
+          const repackaged =
+            source?.base !== undefined &&
+            source.base.variants.length > 0 &&
+            (models.get(providerID, id)?.package ?? models.provider.get(providerID)?.provider.package) !==
+              source.package
+          if (
+            config.variants === undefined &&
+            config.capabilities?.reasoning === undefined &&
+            (!source?.base || repackaged)
+          )
             models.update(providerID, id, (model) => {
               model.variants = [
                 ...Variant.resolve({

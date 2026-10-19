@@ -2,6 +2,37 @@
 
 Release notes for OpenCode V2, newest first.
 
+## v2.0.32 — 2026-10-16
+
+### Highlights
+
+- **Copy the Latest Reply**: Run `/copy` in the TUI to copy the latest assistant message or completed compaction summary instead of the full transcript. ([#56053](https://github.com/anomalyco/opencode/pull/56053), [#56055](https://github.com/anomalyco/opencode/pull/56055))
+- **Auth Login in Headless Environments**: `opencode auth login` no longer crashes in a container or other headless environment that cannot open a browser; use the URL already printed in the terminal to continue. ([#56082](https://github.com/anomalyco/opencode/pull/56082))
+
+### Core
+
+#### Bug fixes
+
+- Prevented `opencode auth login` from crashing when no browser opener such as `xdg-open` is available. ([#56082](https://github.com/anomalyco/opencode/pull/56082))
+- Gemini sessions now retry or continue after intermittent `MALFORMED_RESPONSE` finishes instead of immediately failing. ([#56232](https://github.com/anomalyco/opencode/pull/56232))
+- Made snapshot capture resilient to concurrent Git object writes on Windows. ([#56190](https://github.com/anomalyco/opencode/pull/56190))
+
+### TUI
+
+#### Improvements
+
+- Changed `/copy` to copy the latest assistant message; the full transcript remains available from the command palette or `/export`. ([#56053](https://github.com/anomalyco/opencode/pull/56053))
+
+#### Bug fixes
+
+- `/copy` now copies a completed compaction summary when it is the latest response. ([#56055](https://github.com/anomalyco/opencode/pull/56055))
+
+### SDK
+
+#### Improvements
+
+- Added the experimental `client.voice.session(...)` API for server-brokered OpenAI GPT-Live and Realtime WebRTC sessions, OpenAI Realtime WebSocket sessions, and xAI Grok Voice WebSocket sessions. It uses an API key stored on the server or `OPENAI_API_KEY`/`XAI_API_KEY`; ChatGPT sign-in credentials are not used. ([#55951](https://github.com/anomalyco/opencode/pull/55951))
+
 ## v2.0.30 — 2026-10-15
 
 ### Highlights

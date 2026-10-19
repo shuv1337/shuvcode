@@ -1,4 +1,5 @@
 import { Keymap } from "../context/keymap"
+import { useNewDesigns } from "../config"
 import { useTheme } from "../context/theme"
 import { DialogHeader, DialogLayout, type DialogContext } from "./dialog"
 import { createStore } from "solid-js/store"
@@ -23,6 +24,7 @@ type Active = ExportFormat | "thinking" | "tools" | "sanitize" | "copy" | "expor
 export function DialogExportOptions(props: DialogExportOptionsProps) {
   const theme = useTheme().surface("dialog")
   const overlayTheme = useTheme()
+  const newDesigns = useNewDesigns()
   const [store, setStore] = createStore({
     format: "markdown" as ExportFormat,
     thinking: props.defaultThinking,
@@ -59,19 +61,27 @@ export function DialogExportOptions(props: DialogExportOptionsProps) {
         title: "Next export option",
         group: "Dialog",
         run: () => {
-          const order: Active[] =
-            store.format === "markdown"
-              ? ["markdown", "json", "thinking", "tools", "copy", "export"]
-              : ["markdown", "json", "sanitize", "copy", "export"]
+          const options: Active[] =
+            store.format === "markdown" ? ["markdown", "json", "thinking", "tools"] : ["markdown", "json", "sanitize"]
+          const order: Active[] = newDesigns() ? options : [...options, "copy", "export"]
           setStore("active", order[(order.indexOf(store.active) + 1) % order.length])
         },
       },
-      {
-        bind: "return",
-        title: "Select export option",
-        group: "Dialog",
-        run: activate,
-      },
+      ...(newDesigns()
+        ? [
+            // The footer owns enter (save) and c (copy), so space toggles the focused option instead.
+            { bind: "return", title: "Save to file", group: "Dialog", run: () => confirm("export") },
+            { bind: "c", title: "Copy export", group: "Dialog", run: () => confirm("copy") },
+            { bind: "space", title: "Toggle export option", group: "Dialog", run: activate },
+          ]
+        : [
+            {
+              bind: "return",
+              title: "Select export option",
+              group: "Dialog",
+              run: activate,
+            },
+          ]),
     ],
   }))
 
@@ -83,7 +93,15 @@ export function DialogExportOptions(props: DialogExportOptionsProps) {
   return (
     <DialogLayout
       header={<DialogHeader title="Export session" />}
-      footer={
+      footer={{
+        actions: {
+          primary: [
+            { title: "copy", key: "c", onTrigger: () => confirm("copy") },
+            { title: "save to file", key: "enter", onTrigger: () => confirm("export") },
+          ],
+        },
+      }}
+      legacyFooter={
         <box flexDirection="row" justifyContent="flex-end" gap={1}>
           <box
             paddingLeft={4}

@@ -140,6 +140,7 @@ describe("public event manifest", () => {
         "session.tool.input.started.1",
         "session.tool.input.ended.1",
         "session.tool.called.1",
+        "session.tool.subagent.prepared.1",
         "session.tool.success.2",
         "session.tool.failed.2",
         "session.reasoning.started.1",

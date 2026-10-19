@@ -128,6 +128,12 @@ describe("inference stat normalization", () => {
     expect(statModel("x-preview-f", "")).toBe("glm-5.3-flash")
     expect(statModel("ox-alpha", "")).toBe("glm-5.3-flash")
     expect(statModel("ox-alpha-free", "")).toBe("glm-5.3-flash")
+    expect(statModel("cat-jam-free", "")).toBe("beam")
+    expect(statModel("beam-free", "")).toBe("beam")
+    expect(RETIRED_STAT_MODELS).toContain("cat-jam")
+    expect(statProvider("cat-jam-free", "", "unknown")).toBe("reflection")
+    expect(statProvider("beam-free", "", "unknown")).toBe("reflection")
+    expect(statModel("glm-5.3-flash-free", "")).toBe("glm-5.3-flash")
     expect(statModel("big-pickle", "zhipuai/ox-alpha-free")).toBe("glm-5.3-flash")
     expect(statModel("xiaomi/mimo-v2.5", "")).toBe("mimo-v2.5")
     expect(toModelAggregate(aggregate("x-preview-f", "unknown"))).toMatchObject([

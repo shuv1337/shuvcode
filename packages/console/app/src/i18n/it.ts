@@ -36,6 +36,7 @@ export const dict = {
   "email.placeholder": "Indirizzo email",
   "email.subscribe": "Iscriviti",
   "email.success": "Quasi fatto, controlla la posta in arrivo e conferma il tuo indirizzo email",
+  "email.error": "Iscrizione non riuscita. Riprova.",
 
   "notFound.title": "Non trovato | opencode",
   "notFound.heading": "404 - Pagina non trovata",
@@ -57,22 +58,6 @@ export const dict = {
   "app.meta.description": "OpenCode - L'agente di programmazione open source.",
 
   "home.title": "OpenCode | L'agente di coding IA open source",
-
-  "temp.title": "opencode | Agente di coding IA costruito per il terminale",
-  "temp.hero.title": "L'agente di coding IA costruito per il terminale",
-  "temp.zen": "opencode zen",
-  "temp.getStarted": "Inizia",
-  "temp.feature.native.title": "TUI Nativa",
-  "temp.feature.native.body": "Un'interfaccia terminale reattiva, nativa e personalizzabile",
-  "temp.feature.zen.beforeLink": "Una",
-  "temp.feature.zen.link": "lista curata di modelli",
-  "temp.feature.zen.afterLink": "fornita da opencode",
-  "temp.feature.models.beforeLink": "Supporta 75+ provider LLM tramite",
-  "temp.feature.models.afterLink": ", inclusi modelli locali",
-  "temp.screenshot.caption": "OpenCode TUI con il tema tokyonight",
-  "temp.screenshot.alt": "OpenCode TUI con tema tokyonight",
-  "temp.logoLightAlt": "logo chiaro di opencode",
-  "temp.logoDarkAlt": "logo scuro di opencode",
 
   "home.banner.badge": "Nuovo",
 
@@ -256,7 +241,6 @@ export const dict = {
   "go.problem.title": "Quale problema risolve Go?",
   "go.problem.body":
     "Ci concentriamo nel portare l'esperienza OpenCode a quante più persone possibile. OpenCode Go è un abbonamento a basso costo da $10/mese. Offre limiti generosi e accesso affidabile ai modelli open source più capaci.",
-  "go.problem.subtitle": " ",
   "go.problem.item1": "Prezzo di abbonamento a basso costo",
   "go.problem.item2": "Limiti generosi e accesso affidabile",
   "go.problem.item3": "Costruito per il maggior numero possibile di programmatori",
@@ -320,34 +304,6 @@ export const dict = {
   "go.faq.q10": "Posso ottenere un rimborso?",
   "go.faq.a10":
     "Potresti avere diritto a un rimborso se l'addebito è stato effettuato negli ultimi 14 giorni e non hai utilizzato la tua quota Go durante quel periodo di fatturazione. {{contact}} per richiedere un rimborso.",
-
-  "black.meta.title": "OpenCode Black | Accedi ai migliori modelli di coding al mondo",
-  "black.meta.description":
-    "Ottieni l'accesso a Claude, GPT, Gemini e altri con i piani di abbonamento OpenCode Black.",
-  "black.hero.title": "Accedi ai migliori modelli di coding al mondo",
-  "black.hero.subtitle": "Inclusi Claude, GPT, Gemini e altri",
-  "black.title": "OpenCode Black | Prezzi",
-  "black.paused": "L'iscrizione al piano Black è temporaneamente sospesa.",
-  "black.plan.icon20": "Piano Black 20",
-  "black.plan.icon100": "Piano Black 100",
-  "black.plan.icon200": "Piano Black 200",
-  "black.plan.multiplier100": "5x più utilizzo rispetto a Black 20",
-  "black.plan.multiplier200": "20x più utilizzo rispetto a Black 20",
-  "black.price.perMonth": "al mese",
-  "black.price.perPersonBilledMonthly": "per persona fatturato mensilmente",
-  "black.terms.1": "Il tuo abbonamento non inizierà immediatamente",
-  "black.terms.2": "Verrai aggiunto alla lista d'attesa e attivato presto",
-  "black.terms.3": "La tua carta verrà addebitata solo quando il tuo abbonamento sarà attivato",
-  "black.terms.4":
-    "Si applicano limiti di utilizzo, un uso fortemente automatizzato potrebbe raggiungere i limiti prima",
-  "black.terms.5": "Gli abbonamenti sono per individui, contatta Enterprise per i team",
-  "black.terms.6": "I limiti potrebbero essere modificati e i piani potrebbero essere interrotti in futuro",
-  "black.terms.7": "Annulla il tuo abbonamento in qualsiasi momento",
-  "black.finePrint.beforeTerms": "I prezzi mostrati non includono le tasse applicabili",
-  "black.finePrint.terms": "Termini di servizio",
-  "black.workspace.title": "OpenCode Black | Seleziona Workspace",
-  "black.workspace.selectPlan": "Seleziona un workspace per questo piano",
-  "black.workspace.name": "Workspace {{n}}",
 
   "download.title": "OpenCode | Download",
   "download.meta.description": "Scarica OpenCode per macOS, Windows e Linux",

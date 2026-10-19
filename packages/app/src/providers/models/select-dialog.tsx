@@ -3,6 +3,7 @@ import { Component, ComponentProps, createEffect, createMemo, For, JSX, Show, Su
 import { createStore } from "solid-js/store"
 import { createMediaQuery } from "@solid-primitives/media"
 import { useLocal, type ModelSelection } from "@/providers/models/selection"
+import { isFreeModel } from "@/providers/models/models"
 import { useDialog } from "@opencode/ui/context/dialog"
 import { popularProviders } from "@/providers/catalog/providers"
 import { Button } from "@opencode/ui/button"
@@ -39,9 +40,6 @@ const MobilePanelDrawer = lazy(async () => {
 
   return { default: MobilePanelDrawer }
 })
-
-const isFree = (provider: string, cost: { input: number } | undefined) =>
-  provider === "opencode" && (!cost || cost.input === 0)
 
 type ModelState = ModelSelection
 
@@ -158,12 +156,12 @@ const ModelList: Component<{
                     gutter={12}
                     openDelay={0}
                     value={
-                      <ModelTooltip model={item} latest={item.latest} free={isFree(item.provider.id, item.cost)} v2 />
+                      <ModelTooltip model={item} latest={item.latest} free={isFreeModel(item)} v2 />
                     }
                   >
                     <span class="min-w-0 truncate">{item.name}</span>
                   </Tooltip>
-                  <Show when={isFree(item.provider.id, item.cost)}>
+                  <Show when={isFreeModel(item)}>
                     <Badge class="shrink-0">{language.t("model.tag.free")}</Badge>
                   </Show>
                   <Show when={item.latest}>
@@ -728,7 +726,7 @@ export function ModelSelectorPopoverView(props: {
                                 <ModelTooltip
                                   model={item}
                                   latest={item.latest}
-                                  free={isFree(item.provider.id, item.cost)}
+                                  free={isFreeModel(item)}
                                   v2
                                 />
                               }
@@ -746,7 +744,7 @@ export function ModelSelectorPopoverView(props: {
                                 onSelect={() => selectModel(item)}
                               >
                                 <span class="min-w-0 truncate leading-5">{item.name}</span>
-                                <Show when={isFree(item.provider.id, item.cost)}>
+                                <Show when={isFreeModel(item)}>
                                   <Badge class="shrink-0">{language.t("model.tag.free")}</Badge>
                                 </Show>
                                 <Show when={item.latest}>

@@ -5,6 +5,8 @@ import { fileURLToPath } from "node:url"
 import tailwindcss from "@tailwindcss/vite"
 import { playgroundCss } from "./playground-css-plugin.ts"
 
+// Storybook strips string literals from this file before comments, so an apostrophe in a comment opens a string that
+// never closes and its regex backtracks for minutes on Node. Keep comments here free of apostrophes.
 const here = path.dirname(fileURLToPath(import.meta.url))
 const ui = path.resolve(here, "../../ui")
 const sessionUi = path.resolve(here, "../../session-ui")
@@ -54,7 +56,7 @@ export default defineMain({
     const merged = mergeConfig(config, {
       plugins: [tailwindcss(), playgroundCss()],
       optimizeDeps: {
-        // Without Storybook's optimizer plugin (removed below), Vite finds dependencies on first import and reloads
+        // Without the Storybook optimizer plugin (removed below), Vite finds dependencies on first import and reloads
         // every open page, aborting component tests mid-import. Crawl the stories, the workers (the scan does not
         // follow `new Worker(new URL(…))`), the modules component tests load, and the preview with the Storybook
         // runtime that its virtual entry imports, so the first browser request never discovers a new dependency.
