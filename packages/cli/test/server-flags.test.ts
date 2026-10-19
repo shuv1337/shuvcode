@@ -30,7 +30,7 @@ describe("global server flags", () => {
     try {
       for (const args of [["--help"], ["plugin", "list", "--help"], ["service", "stop", "--help"], ["acp", "--help"]]) {
         const result = await cli(root, args)
-        expect(result.exitCode).toBe(0)
+        expect(result.exitCode, result.stderr).toBe(0)
         expect(result.stdout).toContain("GLOBAL FLAGS")
         expect(result.stdout).toContain("Run client commands with a private server")
         expect(result.stdout).toContain("Connect client commands to a server URL")
@@ -162,7 +162,7 @@ describe("global server flags", () => {
     try {
       for (const args of placements(["plugin", "list"], ["--server", remote.url.toString()])) {
         const result = await cli(root, args)
-        expect(result.exitCode).toBe(0)
+        expect(result.exitCode, result.stderr).toBe(0)
         expect(result.stdout).toContain("No plugins found")
       }
       expect(requests).toEqual(Array.from({ length: 3 }, () => ["/api/info", "/api/plugin"]).flat())
@@ -195,7 +195,7 @@ describe("global server flags", () => {
       await Bun.write(registration, registered)
       for (const args of placements(["api", "GET", "/api/info"], ["--standalone"])) {
         const result = await cli(root, args)
-        expect(result.exitCode).toBe(0)
+        expect(result.exitCode, result.stderr).toBe(0)
         const info = JSON.parse(result.stdout)
         expect(info.version).toBe(OPENCODE_VERSION)
         expect(info.pid).toBeGreaterThan(0)
@@ -204,7 +204,7 @@ describe("global server flags", () => {
       }
       for (const args of placements(["plugin", "list"], ["--standalone"])) {
         const result = await cli(root, args)
-        expect(result.exitCode).toBe(0)
+        expect(result.exitCode, result.stderr).toBe(0)
         expect(result.stdout).toContain("No plugins found")
         expect(await Bun.file(registration).text()).toBe(registered)
       }
@@ -224,6 +224,11 @@ function placements(args: string[], flags: string[]) {
 }
 
 async function cli(root: string, args: string[]) {
+  // Bun loads bunfig from cwd; standalone self-spawns need the same source JSX transform too.
+  await Bun.write(
+    path.join(root, "bunfig.toml"),
+    `preload = [${JSON.stringify(Bun.resolveSync("@opentui/solid/preload", import.meta.dir))}]\n`,
+  )
   const child = Bun.spawn([process.execPath, "run", path.join(import.meta.dir, "../src/index.ts"), ...args], {
     cwd: root,
     env: {

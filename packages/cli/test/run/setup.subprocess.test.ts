@@ -155,6 +155,12 @@ describe("isolated run setup", () => {
 
 async function start(options: { stall?: string; body?: boolean; duration?: number; pendingPermission?: boolean } = {}) {
   const root = await mkdtemp(path.join(tmpdir(), "shuvcode-run-setup-"))
+  // Source subprocesses cannot inherit the package's bunfig from their isolated cwd.
+  if (!process.env.SHUV_RUN_TEST_CLI)
+    await Bun.write(
+      path.join(root, "bunfig.toml"),
+      `preload = [${JSON.stringify(Bun.resolveSync("@opentui/solid/preload", import.meta.dir))}]\n`,
+    )
   const requests: { route: string }[] = []
   const prompts: { id: string; text: string }[] = []
   const children: ReturnType<typeof Bun.spawn<"pipe", "pipe", "pipe">>[] = []
