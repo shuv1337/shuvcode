@@ -261,12 +261,12 @@ const providerMetadata = (key: string, metadata: Record<string, unknown>): Provi
 const reasoningSignature = (part: ReasoningPart, providerMetadataKey: string) => {
   const metadata = part.providerMetadata?.[providerMetadataKey]
   if (part.encrypted !== undefined) return part.encrypted
-  if (ProviderShared.isRecord(metadata) && typeof metadata.signature === "string") return metadata.signature
+  if (typeof metadata?.signature === "string") return metadata.signature
 }
 
 const reasoningRedactedData = (part: ReasoningPart, providerMetadataKey: string) => {
   const metadata = part.providerMetadata?.[providerMetadataKey]
-  if (ProviderShared.isRecord(metadata) && typeof metadata.redactedData === "string") return metadata.redactedData
+  if (typeof metadata?.redactedData === "string") return metadata.redactedData
 }
 
 const removeEmptyToolInputKeys = (input: unknown): unknown => {
@@ -344,7 +344,7 @@ const lowerMessages = Effect.fnUntraced(function* (
   const documentNames = new Set<string>()
   // Mistral can reject replay IDs even when they satisfy Converse's broader ID syntax.
   const normalizeID = request.model.id.includes("mistral.") ? MistralToolID.normalizer(request) : (id: string) => id
-  const providerMetadataKey = request.model.route.providerMetadataKey ?? String(request.model.provider)
+  const providerMetadataKey = request.model.route.providerMetadataKey ?? request.model.provider
   const hoistImages = !keepToolImagesInline(request.model.id)
   // Bedrock expects parallel tool results before any images hoisted beside them.
   const pendingImages: BedrockMedia.ImageBlock[] = []
@@ -819,6 +819,7 @@ const step = (state: ParserState, event: BedrockEvent) =>
       return yield* new AIError({
         reason: classifyProviderFailure({
           message,
+          status: event.exception.details.originalStatusCode,
           rawBody: body,
         }),
       })
@@ -872,9 +873,9 @@ export const protocol = Protocol.make({
     from: fromRequest,
   },
   stream: {
-    event: BedrockEvent,
+    event: BedrockEventStream.Frame.pipe(Schema.decodeTo(BedrockEvent)),
     initial: (request) => ({
-      providerMetadataKey: request.model.route.providerMetadataKey ?? String(request.model.provider),
+      providerMetadataKey: request.model.route.providerMetadataKey ?? request.model.provider,
       tools: ToolStream.empty<number>(),
       finishReason: undefined,
       usage: undefined,
@@ -902,7 +903,5 @@ export const route = Route.make({
   auth: BedrockAuth.auth,
   framing,
 })
-
-export const sigV4Auth = BedrockAuth.sigV4
 
 export * as BedrockConverse from "./bedrock-converse.js"

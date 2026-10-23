@@ -15,7 +15,8 @@ test.each([
   { kind: "form", owner: "ses_parent", width: 50 },
 ])("family blockers while viewing a child: %j", async (input) => {
   await using state = await tmpdir()
-  const setup = await createTestRenderer({ width: input.width, height: 30, useThread: false, kittyKeyboard: true })
+  const setup = await createTestRenderer({ width: input.width, height: 30, kittyKeyboard: true })
+  await setup.renderer.setupTerminal()
   setup.renderer.start()
   const parent = {
     id: "ses_parent",
@@ -125,7 +126,8 @@ test.each([
 
 test("a missing parent is read once while viewing its child", async () => {
   await using state = await tmpdir()
-  const setup = await createTestRenderer({ width: 100, height: 30, useThread: false, kittyKeyboard: true })
+  const setup = await createTestRenderer({ width: 100, height: 30, kittyKeyboard: true })
+  await setup.renderer.setupTerminal()
   setup.renderer.start()
   const child = {
     id: "ses_child",

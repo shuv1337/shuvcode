@@ -64,11 +64,14 @@ import { useEditorContext } from "../../context/editor"
 import { useDialog } from "../../ui/dialog"
 import { DialogSelect } from "../../ui/dialog-select"
 import { DialogSessionRename } from "../../component/dialog-session-rename"
+import { TodoItem } from "../../component/todo-item"
 import { DialogImagePreview } from "../../component/dialog-image-preview"
 import { statusLabel } from "../../component/dialog-workspace-file-changes"
 import { DialogMessage } from "./dialog-message"
 import { DialogFork } from "./dialog-fork"
 import { DialogTimeline } from "./dialog-timeline"
+import { DialogGoUpsell } from "../../component/dialog-go-upsell"
+import { useStorage } from "../../context/storage"
 import { Composer } from "./composer"
 import { filetype } from "../../util/filetype"
 import parsers from "../../parsers-config"
@@ -85,7 +88,6 @@ import { PermissionPrompt } from "./permission"
 import { FormPrompt } from "./form"
 import { DialogExportOptions } from "../../ui/dialog-export-options"
 import { DialogExportResult } from "../../ui/dialog-export-result"
-import { sessionEpilogue } from "../../util/presentation"
 import { useConfig, useNewDesigns } from "../../config"
 import { useClipboard } from "../../context/clipboard"
 import { nextThinkingMode, type ThinkingMode } from "../../context/thinking"
@@ -120,6 +122,7 @@ import { createSingleFlight } from "../../util/single-flight"
 import { createDelayedPresence } from "../../util/delayed-presence"
 import { SessionLocationMissing } from "./location-missing"
 import { isRecord } from "../../util/record"
+import { parseTodos } from "../../util/todo"
 import { createHistoryPrepend } from "./history"
 import { context, use, type PendingAction } from "./render-context"
 import { INLINE_TOOL_ICON_WIDTH, InlineToolRow, ReasoningPart, TextPart, toolDisplay } from "./message-parts"
@@ -153,7 +156,7 @@ export function Session(props: {
   onTerminalPicker?: (show: (() => void) | undefined) => void
   width?: number
 }) {
-  const setEpilogue = useEpilogue()
+  const epilogue = useEpilogue()
   const clipboard = useClipboard()
   const writeExport = async (file: string, content: string) => {
     await mkdir(path.dirname(file), { recursive: true })
@@ -192,9 +195,9 @@ export function Session(props: {
 
   createEffect(() => {
     const title = Locale.truncate(session()?.title ?? "", 50)
-    setEpilogue(sessionEpilogue({ title, sessionID: session()?.id }))
+    epilogue.session({ title, sessionID: session()?.id })
   })
-  onCleanup(() => setEpilogue())
+  onCleanup(() => epilogue.session())
   const rootSessionID = createMemo(() => data.session.root(route.sessionID))
   const familySessionIDs = createMemo(() => data.session.family(rootSessionID()))
   const otherFamilySessionIDs = createMemo(() => familySessionIDs().filter((id) => id !== route.sessionID))
@@ -236,6 +239,7 @@ export function Session(props: {
   })
   const disabled = createMemo(() => promptedPermissions().length > 0 || forms().length > 0)
 
+  const renderer = useRenderer()
   const dimensions = useTerminalDimensions()
   const thinkingMode = createMemo<ThinkingMode>(() => config.session?.thinking ?? "hide")
   const showScrollbar = createMemo(() => config.session?.scrollbar ?? false)
@@ -405,8 +409,8 @@ export function Session(props: {
 
   /** Runs after layout has settled (two frames), unless the transcript was torn down. */
   const afterLayout = (continuation: () => void) => {
-    requestAnimationFrame(() => {
-      requestAnimationFrame(() => {
+    renderer.requestAnimationFrame(() => {
+      renderer.requestAnimationFrame(() => {
         if (!scroll || scroll.isDestroyed) return
         continuation()
       })
@@ -418,7 +422,7 @@ export function Session(props: {
   // Renderable positions are still stale at that point; read the computed layout instead.
   let held: { node: Renderable; top: number } | undefined
   const layoutTop = (node: Renderable): number =>
-    node === scroll.content || !node.parent ? 0 : node.getLayoutNode().getComputedTop() + layoutTop(node.parent)
+    node === scroll.content || !node.parent ? 0 : node.getComputedLayout().top + layoutTop(node.parent)
   const holdAnchor = () => {
     if (held && !held.node.isDestroyed) scroll.scrollTo(layoutTop(held.node) - held.top)
   }
@@ -635,7 +639,123 @@ export function Session(props: {
     current.submit()
   })
   const dialog = useDialog()
-  const renderer = useRenderer()
+  const storage = useStorage()
+  const [goUpsell, updateGoUpsell] = storage.store<{ lastSeenAt?: number; dontShow?: boolean }>("go-upsell", {
+    initial: {},
+  })
+  const [goUpsellMemory, updateGoUpsellMemory] = storage.memory<{ lastSeenAt?: number; dontShow?: boolean }>(
+    "go-upsell",
+    { initial: {} },
+  )
+  const handledFreeLimits = new Set<string>()
+  let sessionDisposed = false
+  onCleanup(() => {
+    sessionDisposed = true
+  })
+  // Restore the prompt when the free allowance stops it, and offer OpenCode Go on the first hit in a day.
+  onCleanup(
+    data.on("session.step.failed", (event) => {
+      if (event.data.sessionID !== route.sessionID || event.data.error.type !== "provider.free-limit") return
+      if (handledFreeLimits.has(event.data.assistantMessageID)) return
+      handledFreeLimits.add(event.data.assistantMessageID)
+      const current = prompt()
+      const wasEmpty = Boolean(
+        current &&
+          !current.current.text.trim() &&
+          !current.current.files?.length &&
+          !current.current.agents?.length &&
+          !current.current.skills?.length &&
+          !current.current.pasted.length,
+      )
+      if (!wasEmpty || !current) return
+      const list = messages()
+      const end = list.findIndex((item) => item.id === event.data.assistantMessageID)
+      for (let i = end - 1; i >= 0; i--) {
+        const item = list[i]
+        if (!item || item.type === "shell" || item.type === "idle") break
+        if (item.type === "user" && !data.session.input.has(route.sessionID, item.id)) {
+          current.set({ ...projectedPromptInput(item), pasted: [] })
+          break
+        }
+      }
+      if (dialog.stack.length > 0) return
+      if (goUpsell.dontShow || goUpsellMemory.dontShow) return
+      const now = Date.now()
+      const seen = Math.max(goUpsell.lastSeenAt ?? 0, goUpsellMemory.lastSeenAt ?? 0)
+      if (seen > 0 && now - seen < 86_400_000) return
+      const expectedText = current.current.text
+      const expectedFiles = current.current.files?.length ?? 0
+      const expectedAgents = current.current.agents?.length ?? 0
+      const expectedSkills = current.current.skills?.length ?? 0
+      const expectedPasted = current.current.pasted.length
+      const hasRecalledPrompt = () => {
+        const active = prompt()
+        return Boolean(
+          !sessionDisposed &&
+            route.sessionID === event.data.sessionID &&
+            active &&
+            active.current.text === expectedText &&
+            (active.current.files?.length ?? 0) === expectedFiles &&
+            (active.current.agents?.length ?? 0) === expectedAgents &&
+            (active.current.skills?.length ?? 0) === expectedSkills &&
+            active.current.pasted.length === expectedPasted,
+        )
+      }
+      const canOpen = () =>
+        Boolean(hasRecalledPrompt() && dialog.stack.length === 0 && !goUpsell.dontShow && !goUpsellMemory.dontShow)
+      const previousSeen = goUpsellMemory.lastSeenAt
+      updateGoUpsellMemory((draft) => {
+        draft.lastSeenAt = now
+      })
+      let claimed = false
+      void updateGoUpsell((draft) => {
+        if (draft.dontShow) {
+          updateGoUpsellMemory((mem) => {
+            mem.dontShow = true
+            mem.lastSeenAt = draft.lastSeenAt ?? previousSeen
+          })
+          return
+        }
+        if ((draft.lastSeenAt ?? 0) > 0 && now - (draft.lastSeenAt ?? 0) < 86_400_000) {
+          updateGoUpsellMemory((mem) => {
+            mem.lastSeenAt = draft.lastSeenAt
+          })
+          return
+        }
+        if (!canOpen()) {
+          updateGoUpsellMemory((mem) => {
+            mem.lastSeenAt = previousSeen
+          })
+          return
+        }
+        draft.lastSeenAt = now
+        claimed = true
+      })
+        .catch(() => {
+          claimed = true
+        })
+        .then(() => {
+          if (!claimed || !canOpen()) return
+          dialog.replace(() => (
+            <DialogGoUpsell
+              reset={freeLimitReset(event.data.error.retryAfterMs, event.created)}
+              canContinue={hasRecalledPrompt}
+              onDontShowAgain={() => {
+                updateGoUpsellMemory((draft) => {
+                  draft.dontShow = true
+                })
+                void updateGoUpsell((draft) => {
+                  draft.dontShow = true
+                }).catch(() => undefined)
+              }}
+              onSubscribe={() => {
+                prompt()?.submit()
+              }}
+            />
+          ))
+        })
+    }),
+  )
   const runPendingAction = createSingleFlight<string>()
   const mutatePending = async (action: PendingAction, inboxID: string, failureLabel?: string) => {
     const result = await runPendingAction(inboxID, async () => {
@@ -697,7 +817,13 @@ export function Session(props: {
               void mutatePending("cancel", queued.id, "undo").then((undone) => {
                 if (!undone) return
                 target.setMode("normal")
-                target.set(appendPrompt(target.current, { ...projectedPromptInput(queued.payload), pasted: [] }))
+                target.set(
+                  appendPrompt(
+                    target.current,
+                    { ...projectedPromptInput(queued.payload), pasted: [] },
+                    renderer.widthMethod,
+                  ),
+                )
                 dialog.clear()
                 target.focus()
               })
@@ -1154,7 +1280,9 @@ export function Session(props: {
       },
       run: () => {
         const lastAssistantMessage = messagesBeforeRevert().findLast(
-          (msg) => msg.type === "assistant" || (msg.type === "compaction" && msg.status === "completed" && msg.summary.trim() !== ""),
+          (msg) =>
+            msg.type === "assistant" ||
+            (msg.type === "compaction" && msg.status === "completed" && msg.summary.trim() !== ""),
         )
         if (!lastAssistantMessage) {
           toast.show({ message: "No assistant messages found", variant: "error" })
@@ -1464,9 +1592,7 @@ export function Session(props: {
                   onMouseOut={() => setLatestHovered(false)}
                   onMouseUp={toBottom}
                 >
-                  <text
-                    fg={latestHovered() ? theme.text.action.secondary.hovered : theme.text.action.secondary.base}
-                  >
+                  <text fg={latestHovered() ? theme.text.action.secondary.hovered : theme.text.action.secondary.base}>
                     Jump to latest ↓
                   </text>
                 </box>
@@ -1517,12 +1643,7 @@ export function Session(props: {
                     }}
                   </Show>
                 </Match>
-                <Match
-                  when={
-                    session() &&
-                    currentLocation.error?.location.directory === session()!.location.directory
-                  }
-                >
+                <Match when={session() && currentLocation.error?.location.directory === session()!.location.directory}>
                   <SessionLocationMissing
                     directory={session()!.location.directory}
                     projectID={session()!.projectID}
@@ -1918,12 +2039,20 @@ function AssistantFooter(props: { message: SessionMessageAssistant }) {
     turnTokensPerSecond(props.message, messages(), ctx.messageIndex(props.message.id), ctx.legacyTurns()),
   )
   const interrupted = createMemo(() => props.message.error?.message === "Step interrupted")
+  const freeLimit = createMemo(() => props.message.error?.type === "provider.free-limit")
   return (
     <>
       <Show when={props.message.error && !interrupted() && !props.message.retry}>
-        <box paddingLeft={3}>
-          <text fg={theme.text.feedback.error.base}>Error: {errorMessage(props.message.error)}</text>
-        </box>
+        <Show
+          when={freeLimit()}
+          fallback={
+            <box paddingLeft={3}>
+              <text fg={theme.text.feedback.error.base}>Error: {errorMessage(props.message.error)}</text>
+            </box>
+          }
+        >
+          <FreeLimitNotice message={props.message} />
+        </Show>
       </Show>
       <AssistantRetry retry={props.message.retry} />
       <box paddingLeft={3} marginTop={props.message.retry || (props.message.error && !interrupted()) ? 1 : 0}>
@@ -2083,7 +2212,7 @@ function CompactionMessage(props: { message: Extract<SessionMessageInfo, { type:
             </Match>
           </Switch>
           <text fg={color()}>
-            {props.message.status === "completed" && props.message.providerContext
+            {props.message.status === "completed" && props.message.native?.messages
               ? "Provider compaction"
               : "Compaction"}
           </text>
@@ -2394,6 +2523,33 @@ function QueuedPromptDock(props: { prompts: { id: string; text: string }[]; onOp
   )
 }
 
+function freeLimitReset(delay: number | undefined, base: number) {
+  if (delay === undefined || !Number.isFinite(delay) || delay < 0 || delay > 7 * 86_400_000 || !Number.isFinite(base))
+    return
+  const at = base + delay
+  if (Number.isNaN(new Date(at).getTime())) return
+  const now = Date.now()
+  return new Date(at).toDateString() === new Date(now).toDateString() && at - now < 86_400_000
+    ? Locale.time(at)
+    : Locale.datetime(at)
+}
+
+function FreeLimitNotice(props: { message: Pick<SessionMessageAssistant, "error" | "time"> }) {
+  const theme = useTheme()
+  const reset = createMemo(() =>
+    freeLimitReset(props.message.error?.retryAfterMs, props.message.time.completed ?? props.message.time.created),
+  )
+  return (
+    <box paddingLeft={3} flexDirection="column">
+      <text fg={theme.text.muted}>You've used today's free messages.{reset() ? ` They reset at ${reset()}.` : ""}</text>
+      <text fg={theme.text.muted}>
+        Upgrade to OpenCode Go → <span style={{ fg: theme.text.base }}>/connect</span> · Switch model →{" "}
+        <span style={{ fg: theme.text.base }}>/models</span>
+      </text>
+    </box>
+  )
+}
+
 function AssistantRetry(props: { retry: SessionMessageAssistant["retry"] }) {
   const theme = useTheme()
   const [seconds, setSeconds] = createSignal(0)
@@ -2481,6 +2637,9 @@ function ToolPart(props: { part: SessionMessageAssistantTool; images?: boolean }
       </Match>
       <Match when={display() === "patch"}>
         <ApplyPatch {...toolprops} />
+      </Match>
+      <Match when={display() === "todowrite"}>
+        <TodoWrite {...toolprops} />
       </Match>
       <Match when={display() === "question"}>
         <Question {...toolprops} />
@@ -2780,9 +2939,7 @@ function BlockTool(props: BlockToolProps) {
               <Show
                 when={props.spinner}
                 fallback={
-                  <text
-                    fg={permission() ? theme.text.feedback.warning.base : (props.headerColor ?? theme.text.muted)}
-                  >
+                  <text fg={permission() ? theme.text.feedback.warning.base : (props.headerColor ?? theme.text.muted)}>
                     {title()}
                   </text>
                 }
@@ -2970,11 +3127,7 @@ function ShellDisplay(props: {
           <Show
             when={isRunning()}
             fallback={
-              <text
-                fg={theme.text.base}
-                wrapMode={expanded() ? "word" : "char"}
-                maxHeight={expanded() ? undefined : 2}
-              >
+              <text fg={theme.text.base} wrapMode={expanded() ? "word" : "char"} maxHeight={expanded() ? undefined : 2}>
                 {limitedInput()}
               </text>
             }
@@ -3075,7 +3228,9 @@ function Read(props: ToolProps) {
         Read {pathFormatter.format(stringValue(props.input.path))}
         <Show when={props.input.offset !== undefined || props.input.limit !== undefined}>
           :{finiteNumber(props.input.offset) || 1}-
-          {props.input.limit ? (finiteNumber(props.input.offset) || 1) + (finiteNumber(props.input.limit) || 0) - 1 : ""}
+          {props.input.limit
+            ? (finiteNumber(props.input.offset) || 1) + (finiteNumber(props.input.limit) || 0) - 1
+            : ""}
         </Show>
       </InlineTool>
       <For each={loaded()}>
@@ -3473,6 +3628,32 @@ function ApplyPatch(props: ToolProps) {
           headerColor={props.part.state.status === "error" ? theme.text.feedback.error.base : undefined}
           errorColor={props.part.state.status === "error" ? theme.text.muted : undefined}
         />
+      </Match>
+    </Switch>
+  )
+}
+
+function TodoWrite(props: ToolProps) {
+  const theme = useTheme()
+  const todos = createMemo(() => parseTodos(props.input.todos))
+  return (
+    <Switch>
+      <Match when={props.part.state.status === "completed" && todos().length > 0}>
+        <BlockTool title="# Todos" part={props.part}>
+          <box>
+            <For each={todos()}>{(todo) => <TodoItem theme={theme} todo={todo} />}</For>
+          </box>
+        </BlockTool>
+      </Match>
+      <Match when={true}>
+        <InlineTool
+          icon="⚙"
+          pending="Updating todos…"
+          complete={props.part.state.status === "completed" || props.part.state.status === "error"}
+          part={props.part}
+        >
+          {props.part.state.status === "error" ? "Todo update failed" : "Cleared todos"}
+        </InlineTool>
       </Match>
     </Switch>
   )

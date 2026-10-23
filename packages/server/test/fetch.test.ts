@@ -165,7 +165,7 @@ it.live("serves the HttpApi and enforces Basic auth like the Node server", () =>
     )
     expect(body.version).toBe("test-version")
     expect(body.paths.tmp).toEndWith("shuvcode")
-    expect(body.capabilities?.persistentPty).toBe(process.platform !== "win32")
+    expect(body.capabilities?.persistentPty).toBe(true)
   }),
 )
 
@@ -258,6 +258,18 @@ it.live("applies custom CORS origins to HTTP responses and PTY ticket checks", (
             ),
           )
           expect(invalidTicket.status).toBe(403)
+
+          const invalidMcpTicket = yield* Effect.promise(() =>
+            handler(
+              new Request(
+                "http://opencode.local/api/experimental/client-mcp?ticket=invalid&location[directory]=/tmp&name=tui",
+                {
+                  headers: { origin },
+                },
+              ),
+            ),
+          )
+          expect(invalidMcpTicket.status).toBe(403)
 
           const connect = yield* Effect.promise(() =>
             handler(

@@ -490,13 +490,13 @@ it.effect(
             {
               type: "reasoning",
               text: "Thinking about calling echo.",
-              state: { thoughtSignature: "sig_thought_argon" },
+              native: { thoughtSignature: "sig_thought_argon" },
             },
             {
               type: "tool",
               id: "call_argon_1",
               name: "echo",
-              providerState: { thoughtSignature: "sig_call_argon" },
+              native: { thoughtSignature: "sig_call_argon" },
               state: {
                 status: "completed",
                 input: { text: "hello" },

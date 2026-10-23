@@ -1,8 +1,180 @@
 import { expect, test, type Locator, type Page } from "@playwright/test"
-import { NO_PROVIDER, T0, provider } from "../utils/app"
+import { NO_PROVIDER, T0, expectPath, provider, sessionHref } from "../utils/app"
 import { openDraft, openSession } from "../utils/workspace"
 
 test.use({ permissions: ["clipboard-read", "clipboard-write"] })
+
+test("the free usage limit opens the Go dialog once, leaves a readable notice, and restores the prompt", async ({
+  page,
+  context,
+}) => {
+  await page.clock.setFixedTime(T0)
+  await context.route("https://**", (route) => route.fulfill({ body: "Sign in" }))
+  const sessionID = "ses_free_limit"
+  const model = { id: "big-pickle", providerID: "opencode" }
+  const state = { authorized: false }
+
+  const view = await openSession(page, {
+    name: "FreeLimit",
+    sessions: [{ id: sessionID, agent: "build", model }],
+    onFileWrite: () => undefined,
+    provider: () => ({
+      all: [
+        {
+          id: "opencode",
+          name: "OpenCode",
+          models: {
+            "big-pickle": { id: "big-pickle", name: "Big Pickle", cost: { input: 0, output: 0 }, limit: { context: 200_000 } },
+          },
+        },
+        ...(state.authorized
+          ? [
+              {
+                id: "opencode-go",
+                integrationID: "opencode-go",
+                name: "OpenCode Go",
+                models: {
+                  "glm-5-go": { id: "glm-5-go", name: "GLM-5 Go", cost: { input: 1, output: 1 }, limit: { context: 200_000 } },
+                },
+              },
+            ]
+          : []),
+      ],
+      connected: state.authorized ? ["opencode", "opencode-go"] : ["opencode"],
+      default: { build: "opencode/big-pickle" },
+    }),
+    integrations: () => [
+      {
+        id: "opencode",
+        name: "OpenCode Console",
+        methods: [{ id: "device", type: "oauth", label: "OpenCode Console account" }],
+        connections: state.authorized ? [{ type: "credential", id: "cred_console", label: "Anomaly", method: "oauth" }] : [],
+      },
+      {
+        id: "opencode-go",
+        name: "OpenCode Go",
+        methods: [{ type: "key" }],
+        connections: state.authorized ? [{ type: "credential", id: "cred_go", label: "Anomaly", method: "oauth" }] : [],
+      },
+    ],
+    onIntegrationOAuth: () => ({ url: "https://auth.example.test/device?user_code=GOGO-1234" }),
+    onIntegrationOAuthStatus: () => {
+      state.authorized = true
+
+      return "complete"
+    },
+    pageMessages: () => ({
+      items: [
+        { id: "msg_free_user", type: "user", text: "Refactor the parser", time: { created: T0 } },
+        { id: "msg_free_assistant", type: "assistant", agent: "build", model, content: [], time: { created: T0 + 1 } },
+      ],
+    }),
+  })
+
+  await expect(page.getByText("Refactor the parser", { exact: true })).toBeVisible()
+
+  const error = {
+    type: "provider.free-limit",
+    message: "Free usage limit reached.",
+    status: 429,
+    retryAfterMs: 3_600_000,
+  }
+
+  const durable = (seq: number) => ({ aggregateID: sessionID, seq, version: 1 as const })
+  const location = { directory: view.directory }
+
+  await view.push([
+    {
+      id: "evt_free_limit_1",
+      created: T0 + 2,
+      type: "session.step.failed",
+      location,
+      durable: durable(1),
+      data: { sessionID, assistantMessageID: "msg_free_assistant", error },
+    },
+  ])
+
+  const upsell = page.getByRole("dialog", { name: "Free limit reached" })
+  await expect(upsell).toContainText("Your free messages reset at")
+  await expect(page.getByText(/^You've used today's free messages\. They reset at /)).toBeVisible()
+  await expect(view.editor).toHaveText("Refactor the parser")
+  await expect(page.getByText("Free usage limit reached.")).toHaveCount(0)
+
+  // Subscribe -> Go sign-in -> Continue switches the model in the current session without opening a new draft tab.
+  await upsell.getByRole("button", { name: "Subscribe", exact: true }).click()
+  const connect = page.getByRole("dialog")
+  await connect.getByRole("button", { name: "Continue in the browser", exact: true }).click()
+  const connected = page.getByRole("dialog", { name: "Connected to OpenCode Go" })
+  await expect(connected.getByRole("radio", { name: "GLM-5 Go", exact: true })).toHaveAttribute("aria-checked", "true")
+  await connected.getByRole("button", { name: "Continue", exact: true }).click()
+  await expect(page.getByRole("dialog")).toHaveCount(0)
+  await expectPath(page, sessionHref(sessionID))
+  await expect(page.locator("[data-titlebar-tab-slot]")).toHaveCount(1)
+  await expect(page.locator('[data-action="composer-model"]')).toContainText("GLM-5 Go")
+  await expect(view.editor).toHaveText("Refactor the parser")
+
+  // After the 24-hour window, "Don't show again" permanently suppresses the dialog across reloads, and an attachment-only draft survives.
+  const day2 = T0 + 2 * 86_400_000
+  await page.clock.setFixedTime(day2)
+
+  await view.push([
+    {
+      id: "evt_free_limit_2",
+      created: day2 + 1,
+      type: "session.step.started",
+      location,
+      durable: durable(2),
+      data: { sessionID, assistantMessageID: "msg_free_assistant_2", agent: "build", model, started: day2 + 1 },
+    },
+    {
+      id: "evt_free_limit_3",
+      created: day2 + 2,
+      type: "session.step.failed",
+      location,
+      durable: durable(3),
+      data: { sessionID, assistantMessageID: "msg_free_assistant_2", error },
+    },
+  ])
+
+  await upsell.getByRole("button", { name: "Don't show again", exact: true }).click()
+  await expect(upsell).toHaveCount(0)
+
+  const later = T0 + 4 * 86_400_000
+  await page.clock.setFixedTime(later)
+  await page.reload()
+  await expect(view.editor).toBeVisible()
+  await view.editor.fill("")
+  await page.locator('input[type="file"]').setInputFiles({
+    name: "diagram.png",
+    mimeType: "image/png",
+    buffer: Buffer.from("png-bytes"),
+  })
+  await expect(page.locator('[data-component="composer-attachments"]')).toContainText("diagram.png")
+
+  await view.push([
+    {
+      id: "evt_free_limit_4",
+      created: later + 3,
+      type: "session.step.started",
+      location,
+      durable: durable(4),
+      data: { sessionID, assistantMessageID: "msg_free_assistant_3", agent: "build", model, started: later + 3 },
+    },
+    {
+      id: "evt_free_limit_5",
+      created: later + 4,
+      type: "session.step.failed",
+      location,
+      durable: durable(5),
+      data: { sessionID, assistantMessageID: "msg_free_assistant_3", error },
+    },
+  ])
+
+  await expect(page.getByRole("status").filter({ hasText: "You've used today's free messages." })).toBeVisible()
+  await expect(page.getByRole("dialog")).toHaveCount(0)
+  await expect(page.locator('[data-component="composer-attachments"]')).toContainText("diagram.png")
+  await expect(view.editor).toHaveText("")
+})
 
 test("a catalog refresh cannot replace an existing session's model", async ({ page }) => {
   const alpha = { id: "alpha", name: "Alpha", variants: { high: {} } }

@@ -8,6 +8,7 @@ import SidebarFooter from "../feature-plugins/sidebar/footer"
 import SidebarMcp from "../feature-plugins/sidebar/mcp"
 import SidebarQuota from "../feature-plugins/sidebar/quota"
 import SidebarSubagents from "../feature-plugins/sidebar/subagents"
+import SidebarTodo from "../feature-plugins/sidebar/todo"
 import DiffViewer from "../feature-plugins/system/diff-viewer"
 import Notifications from "../feature-plugins/system/notifications"
 import Plugins from "../feature-plugins/system/plugins"
@@ -28,6 +29,7 @@ export const builtins = [
   SidebarContext,
   SidebarSubagents,
   SidebarMcp,
+  SidebarTodo,
   SidebarFooter,
   Notifications,
   Plugins,

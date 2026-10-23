@@ -1,4 +1,4 @@
-import type { BoxRenderable, TextareaRenderable, ScrollBoxRenderable } from "@opentui/core"
+import { measureEditText, type BoxRenderable, type TextareaRenderable, type ScrollBoxRenderable } from "@opentui/core"
 import { pathToFileURL } from "node:url"
 import fuzzysort from "fuzzysort"
 import path from "path"
@@ -14,12 +14,12 @@ import { useConfig } from "../../config"
 import { useLocation } from "../../context/location"
 import { useTheme } from "../../context/theme"
 import { SplitBorder } from "../../ui/border"
-import { useTerminalDimensions } from "@opentui/solid"
+import { useRenderer, useTerminalDimensions } from "@opentui/solid"
 import { Locale } from "../../util/locale"
 import type { PromptInfo, PromptPartRef } from "../../prompt/history"
 import { useFrecency } from "../../prompt/frecency"
 import { Keymap, type KeymapCommand } from "../../context/keymap"
-import { displayCharAt, mentionTriggerIndex, promptTriggerIndex, slashTriggerIndex } from "../../prompt/display"
+import { mentionTriggerIndex, promptTriggerIndex, slashTriggerIndex } from "../../prompt/display"
 import type { FileSystemEntry } from "@opencode/client"
 import { Skill } from "@opencode/schema/skill"
 import { stringWidth } from "../../util/string-width"
@@ -118,6 +118,7 @@ export function Autocomplete(props: {
   promptPartTypeId: () => number
 }) {
   const editor = useEditorContext()
+  const renderer = useRenderer()
   const client = useClient()
   const data = useData()
   const keymap = Keymap.use()
@@ -208,8 +209,7 @@ export function Autocomplete(props: {
     const input = props.input()
     const currentCursorOffset = input.cursorOffset
 
-    const charAfterCursor = displayCharAt(props.value, currentCursorOffset)
-    const needsSpace = charAfterCursor !== " "
+    const needsSpace = input.getTextRange(currentCursorOffset, currentCursorOffset + 1) !== " "
     const prefix = trigger ?? "@"
     const append = prefix + text + (needsSpace ? " " : "")
 
@@ -223,7 +223,7 @@ export function Autocomplete(props: {
 
     const virtualText = prefix + text
     const extmarkStart = store.index
-    const extmarkEnd = extmarkStart + stringWidth(virtualText)
+    const extmarkEnd = extmarkStart + measureEditText(virtualText, { widthMethod: renderer.widthMethod })
 
     const styleId =
       part.type === "file" ? props.fileStyleId : part.type === "skill" ? props.skillStyleId : props.agentStyleId
@@ -291,7 +291,7 @@ export function Autocomplete(props: {
   function insertTrigger(trigger: string, value: string) {
     const input = props.input()
     const currentCursorOffset = input.cursorOffset
-    const needsSpace = displayCharAt(props.value, currentCursorOffset) !== " "
+    const needsSpace = input.getTextRange(currentCursorOffset, currentCursorOffset + 1) !== " "
 
     input.cursorOffset = store.index
     const startCursor = input.logicalCursor
@@ -311,7 +311,7 @@ export function Autocomplete(props: {
     input.cursorOffset = cursor
     const end = input.logicalCursor
     input.deleteRange(start.row, start.col, end.row, end.col)
-    input.insertText("@terminal" + (displayCharAt(props.value, cursor) === " " ? "" : " "))
+    input.insertText("@terminal" + (input.getTextRange(cursor, cursor + 1) === " " ? "" : " "))
     const mention = { start: store.index, end: store.index + stringWidth("@terminal"), text: "@terminal" }
     const extmark = input.extmarks.create({
       start: mention.start,
@@ -553,7 +553,7 @@ export function Autocomplete(props: {
     const cursor = props.input().logicalCursor
     props.input().deleteRange(0, 0, cursor.row, cursor.col)
     props.input().insertText(newText)
-    props.input().cursorOffset = stringWidth(newText)
+    props.input().cursorOffset = measureEditText(newText, { widthMethod: renderer.widthMethod })
   }
 
   const commands = createMemo((): AutocompleteOption[] => {
@@ -899,8 +899,15 @@ export function Autocomplete(props: {
       onInput(value) {
         if (dismissedValue() === value) return
         setDismissedValue(undefined)
-        const offset = props.input().cursorOffset
-        const argument = slashArgumentAutocomplete(value, offset, keymapCommands(), props.argumentAutocomplete)
+        const input = props.input()
+        const offset = input.cursorOffset
+        const beforeCursor = input.getTextRange(0, offset)
+        const argument = slashArgumentAutocomplete(
+          beforeCursor,
+          renderer.widthMethod,
+          keymapCommands(),
+          props.argumentAutocomplete,
+        )
         if (argument?.type === "directory") {
           show("directory", argument.index)
           return
@@ -921,7 +928,7 @@ export function Autocomplete(props: {
         // Check if autocomplete should reopen (e.g., after backspace deleted a space)
         if (offset === 0) return
 
-        const slash = slashTriggerIndex(value, offset)
+        const slash = slashTriggerIndex(beforeCursor, renderer.widthMethod)
         if (slash === 0) {
           show("command")
           setStore("index", slash)
@@ -929,7 +936,7 @@ export function Autocomplete(props: {
         }
 
         // Check for "@" trigger - find the nearest "@" before cursor with no whitespace between
-        const idx = mentionTriggerIndex(value, offset)
+        const idx = mentionTriggerIndex(beforeCursor, renderer.widthMethod)
         if (idx !== undefined) {
           show("reference")
           setStore("index", idx)
@@ -937,7 +944,7 @@ export function Autocomplete(props: {
         }
 
         for (const item of plugins.autocomplete()) {
-          const index = promptTriggerIndex(value, item.provider.trigger, offset)
+          const index = promptTriggerIndex(beforeCursor, item.provider.trigger, renderer.widthMethod)
           if (index === undefined) continue
           show(item.provider.trigger)
           setStore("index", index)

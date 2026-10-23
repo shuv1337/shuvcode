@@ -20,6 +20,7 @@ const ListInputBase = {
   limit: PositiveInt.pipe(Schema.optional),
   order: Schema.Literals(["asc", "desc"]).pipe(Schema.optional),
   parentID: Schema.NullOr(Session.ID).pipe(Schema.optional),
+  archived: Schema.Boolean.pipe(Schema.optional),
   anchor: Session.ListAnchor.pipe(Schema.optional),
 }
 
@@ -111,6 +112,8 @@ const layer = Layer.effect(
           conditions.push(
             input.parentID === null ? isNull(SessionTable.parent_id) : eq(SessionTable.parent_id, input.parentID),
           )
+        if (input.archived !== undefined)
+          conditions.push(input.archived ? isNotNull(SessionTable.time_archived) : isNull(SessionTable.time_archived))
         if (input.anchor) {
           conditions.push(
             order === "asc"
@@ -186,7 +189,7 @@ const layer = Layer.effect(
           .pipe(Effect.orDie)
         return row
           ? {
-              sessionID: Session.ID.make(row.session_id),
+              sessionID: row.session_id,
               message: yield* SessionHistory.decodeMessageRow(row).pipe(Effect.orDie),
             }
           : undefined

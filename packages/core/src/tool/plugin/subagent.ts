@@ -258,7 +258,7 @@ export const Plugin = {
                     ...(operation ? { id: operation.childSessionID } : {}),
                     parentID: context.sessionID,
                     title: input.description,
-                    agent: operation?.agent ?? Agent.ID.make(input.agent),
+                    agent: operation?.agent ?? agent.id,
                     model: operation?.model ?? model ?? (yield* agents.select(parent.agent)).info?.model,
                   })
                   .pipe(

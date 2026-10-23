@@ -40,3 +40,5 @@ pii:services/www/src/docs/content/build/plugins/cli.mdx
 pii:services/www/src/docs/content/build/plugins/index.mdx
 pii:services/www/src/docs/content/cli/config.mdx
 pii:services/www/src/docs/content/plugins.mdx
+# Synthetic home directory in upstream documentation examples.
+text:/home/me

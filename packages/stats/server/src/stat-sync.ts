@@ -33,9 +33,13 @@ const daemon = Effect.gen(function* () {
     }
     yield* syncStats({ full: false })
   }).pipe(
-    Effect.catchCause((cause) =>
+    Effect.tapCause((cause) =>
       Effect.logWarning(`stats sync failed ${JSON.stringify({ cause: Cause.pretty(cause) })}`),
     ),
+    // Without a retry, one transient R2 SQL failure leaves the site stale until the
+    // next hourly pass. Two retries cap the extra query spend per interval.
+    Effect.retry({ times: 2, schedule: Schedule.spaced("10 minutes") }),
+    Effect.ignoreCause,
   )
   yield* pass.pipe(Effect.repeat(Schedule.fixed(SYNC_INTERVAL)))
 }).pipe(Effect.forkScoped)

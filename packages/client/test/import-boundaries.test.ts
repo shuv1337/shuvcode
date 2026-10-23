@@ -42,6 +42,11 @@ describe("public import boundaries", () => {
     expect(within(effectService.all, protocol)).toEqual([])
     expect(within(effectService.all, core)).toEqual([])
     expect(within(effectService.all, server)).toEqual([])
+
+    const mcp = await bundleInputs("@opencode/client/mcp", "browser")
+
+    // The MCP entrypoint is dependency-free: only the generated entry and mcp.ts itself.
+    expect(mcp.all.filter((file) => !file.endsWith("index.ts"))).toEqual([resolve(directory, "src/mcp.ts")])
   })
 })
 

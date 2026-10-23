@@ -1,5 +1,6 @@
 import path from "node:path"
 import fs from "node:fs/promises"
+import os from "node:os"
 import { describe, expect, test } from "bun:test"
 import { Client, InMemoryTransport, StreamableHTTPClientTransport } from "@modelcontextprotocol/client"
 import {
@@ -44,6 +45,7 @@ import {
   Exit,
   Fiber,
   Layer,
+  Option,
   PubSub,
   Ref,
   Schedule,
@@ -56,6 +58,7 @@ import { TestClock } from "effect/testing"
 import { ChildProcess, ChildProcessSpawner } from "effect/process"
 import { ExitCode, makeHandle, ProcessId } from "effect/process/ChildProcessSpawner"
 import { Image } from "@opencode/core/image"
+import { Global } from "@opencode/util/global"
 import { advance, drain } from "./lib/clock"
 import { testEffect } from "./lib/effect"
 import { registerIntegrationPolicy } from "./fixture/policy"
@@ -95,6 +98,8 @@ function resourceServer(
     listChanged?: boolean
     emptyElicitation?: boolean
     urlElicitation?: boolean
+    /** Legacy servers give up on the URL elicitation after this many milliseconds. */
+    elicitationTimeout?: number
     respond?: (request: Request) => Response | undefined | Promise<Response | undefined>
   } = {},
 ) {
@@ -172,12 +177,15 @@ function resourceServer(
             const response = inputResponse(responses, "auth")
             const result = input.modern
               ? { action: response.kind === "elicit" ? response.action : "cancel" }
-              : await protocol.elicitInput({
-                  mode: "url",
-                  message: "Authorize access",
-                  url,
-                  elicitationId: "elicitation-test",
-                })
+              : await protocol.elicitInput(
+                  {
+                    mode: "url",
+                    message: "Authorize access",
+                    url,
+                    elicitationId: "elicitation-test",
+                  },
+                  input.elicitationTimeout === undefined ? undefined : { timeout: input.elicitationTimeout },
+                )
             return {
               content: [{ type: "text", text: JSON.stringify(result) }],
               structuredContent: result,
@@ -446,6 +454,13 @@ const mcp = Layer.mock(Mcp.Service, {
         description: "Returns text and an image",
         inputSchema: { type: "object", properties: {} },
       } satisfies Mcp.Tool,
+      {
+        server: Mcp.ServerName.make("direct"),
+        name: "attachments",
+        codemode: false,
+        description: "Returns resource blobs that cannot be sent inline",
+        inputSchema: { type: "object", properties: {} },
+      } satisfies Mcp.Tool,
     ]),
   callTool: (input) =>
     Effect.sync(() => {
@@ -466,6 +481,26 @@ const mcp = Layer.mock(Mcp.Service, {
           content: [
             { type: "text", text: "rendered chart" },
             { type: "media", data: "aGVsbG8=", mimeType: "image/png" },
+          ],
+        } satisfies Mcp.ToolResult
+      if (input.name === "attachments")
+        return {
+          server: Mcp.ServerName.make(input.server),
+          tool: input.name,
+          isError: false,
+          content: [
+            {
+              type: "media",
+              data: Buffer.from("# Notes").toString("base64"),
+              mimeType: "text/markdown",
+              uri: "file:///README.md",
+            },
+            {
+              type: "media",
+              data: "UEFSMQ==",
+              mimeType: "application/vnd.apache.parquet",
+              uri: "file:///data.parquet",
+            },
           ],
         } satisfies Mcp.ToolResult
       if (input.name === "status")
@@ -507,12 +542,14 @@ const permissions = Layer.mock(Permission.Service, {
     }),
 })
 const events = Layer.mock(Bus.Service, { subscribe: () => Stream.never })
+const outputData = await fs.mkdtemp(path.join(os.tmpdir(), "opencode-mcp-output-"))
 const it = testEffect(
   AppNodeBuilder.build(LayerNode.group([Tool.node, McpTool.node]), [
     Mcp.node.replace(mcp),
     Permission.node.replace(permissions),
     Bus.node.replace(events),
     Image.node.replace(imagePassthrough),
+    Global.node.replace(Global.layerWith({ data: outputData })),
   ]),
 )
 
@@ -665,6 +702,31 @@ test("retains output schemas across paginated MCP discovery", async () => {
       },
     },
   ])
+})
+
+test("accepts legacy MCP tools whose output schema is not a root object", async () => {
+  const result = await Effect.runPromise(
+    Effect.scoped(
+      Effect.gen(function* () {
+        const connection = yield* connect(
+          "union",
+          new ConfigMCP.Local({
+            type: "local",
+            command: [process.execPath, path.join(import.meta.dir, "fixture/mcp-union-output-schema.ts")],
+          }),
+          import.meta.dir,
+        )
+        return {
+          tools: yield* connection.tools(),
+          call: yield* connection.callTool({ name: "union" }),
+        }
+      }),
+    ),
+  )
+
+  expect(result.tools.map((tool) => tool.name)).toEqual(["union"])
+  expect(result.tools[0]?.outputSchema).toHaveProperty("anyOf")
+  expect(result.call.structured).toEqual({ kind: "struct" })
 })
 
 test("lists paginated prompts and invokes them through the MCP client", async () => {
@@ -1229,6 +1291,17 @@ test("skips MCP resource requests when the capability is absent", async () => {
   )
 })
 
+type CreatedForm = { readonly form: Form.Info; readonly directory: string | undefined }
+
+// Clients drop `form.created` events without a Location, so the form must be published inside the server's Location.
+const recordForm = (created: Deferred.Deferred<CreatedForm>, form: Form.Info) =>
+  Effect.serviceOption(Location.Service).pipe(
+    Effect.flatMap((location) =>
+      Deferred.succeed(created, { form, directory: Option.getOrUndefined(location)?.directory }),
+    ),
+    Effect.asVoid,
+  )
+
 test("accepts empty MCP elicitations without creating forms", async () => {
   await Effect.runPromise(
     Effect.scoped(
@@ -1253,13 +1326,14 @@ test("acknowledges completed MCP URL elicitations without returning internal con
     Effect.scoped(
       Effect.gen(function* () {
         const server = yield* resourceServer({ resources: false, urlElicitation: true })
-        const created = yield* Deferred.make<Form.Info>()
+        const created = yield* Deferred.make<CreatedForm>()
         const result = yield* Effect.gen(function* () {
           const service = yield* Mcp.Service
           const forms = yield* Form.Service
           const call = yield* service.callTool({ server: "resources", name: "url-elicitation" }).pipe(Effect.forkScoped)
 
-          const form = yield* Deferred.await(created)
+          const { form, directory } = yield* Deferred.await(created)
+          expect(directory).toBe(import.meta.dir)
           expect(form.fields).toEqual([{ key: "elicitation", type: "external", url: "https://example.com/authorize" }])
 
           yield* Effect.promise(server.completeElicitation)
@@ -1267,10 +1341,34 @@ test("acknowledges completed MCP URL elicitations without returning internal con
           expect(yield* forms.state(form.id)).toEqual({ status: "answered", answer: { elicitation: true } })
           return result
         }).pipe(
-          Effect.provide(resourceMcpLayer(server.url, (form) => Deferred.succeed(created, form).pipe(Effect.asVoid))),
+          Effect.provide(resourceMcpLayer(server.url, (form) => recordForm(created, form))),
         )
 
         expect(result.structured).toEqual({ action: "accept" })
+      }),
+    ),
+  )
+})
+
+test("cancels MCP elicitation forms when the server gives up on them", async () => {
+  await Effect.runPromise(
+    Effect.scoped(
+      Effect.gen(function* () {
+        const server = yield* resourceServer({ resources: false, urlElicitation: true, elicitationTimeout: 200 })
+        const created = yield* Deferred.make<CreatedForm>()
+        yield* Effect.gen(function* () {
+          const service = yield* Mcp.Service
+          const forms = yield* Form.Service
+          const call = yield* service.callTool({ server: "resources", name: "url-elicitation" }).pipe(Effect.forkScoped)
+          const { form } = yield* Deferred.await(created)
+          yield* Fiber.await(call)
+          // The server's cancellation and its tool error race; the form settles shortly after either.
+          const state = yield* forms.state(form.id).pipe(
+            Effect.repeat({ until: (state) => state.status !== "pending", schedule: Schedule.spaced("10 millis") }),
+            Effect.timeout("2 seconds"),
+          )
+          expect(state.status).toBe("cancelled")
+        }).pipe(Effect.provide(resourceMcpLayer(server.url, (form) => recordForm(created, form))))
       }),
     ),
   )
@@ -1281,13 +1379,14 @@ test("settles modern MCP URL elicitations when the user confirms", async () => {
     Effect.scoped(
       Effect.gen(function* () {
         const server = yield* resourceServer({ modern: true, resources: false, urlElicitation: true })
-        const created = yield* Deferred.make<Form.Info>()
+        const created = yield* Deferred.make<CreatedForm>()
         const result = yield* Effect.gen(function* () {
           const service = yield* Mcp.Service
           const forms = yield* Form.Service
           const call = yield* service.callTool({ server: "resources", name: "url-elicitation" }).pipe(Effect.forkScoped)
 
-          const form = yield* Deferred.await(created)
+          const { form, directory } = yield* Deferred.await(created)
+          expect(directory).toBe(import.meta.dir)
           expect(form.metadata).not.toHaveProperty("elicitationID")
           yield* forms.reply({ id: form.id, answer: { elicitation: true } })
           return yield* Fiber.join(call)
@@ -1295,7 +1394,7 @@ test("settles modern MCP URL elicitations when the user confirms", async () => {
           Effect.provide(
             resourceMcpLayer(
               new ConfigMCP.Remote({ type: "remote", url: server.url, oauth: false, protocol: "2026-07-28" }),
-              (form) => Deferred.succeed(created, form).pipe(Effect.asVoid),
+              (form) => recordForm(created, form),
             ),
           ),
         )
@@ -2000,6 +2099,53 @@ shutdownIt.effect("discards in-flight and queued MCP notifications after its lay
   }),
 )
 
+describe.each(["connect", "disconnect"] as const)("%s during initial MCP startup", (operation) => {
+  shutdownIt.live("is not undone by the queued startup", () =>
+    Effect.gen(function* () {
+      const bus = yield* Bus.Service
+      const server = yield* resourceServer()
+      const entered = yield* Deferred.make<void>()
+      const release = yield* Deferred.make<void>()
+      const root = yield* Scope.make()
+      yield* Effect.addFinalizer(() =>
+        Deferred.succeed(release, undefined).pipe(Effect.andThen(State.shutdown(Scope.close(root, Exit.void)))),
+      )
+      const service = Context.get(yield* Layer.buildWithScope(Mcp.layer(), root), Mcp.Service)
+      // Pausing the disabled server's status event holds initial reconciliation after every entry exists
+      // but before the enabled server's startup is scheduled.
+      yield* Effect.acquireRelease(
+        bus.listen((event) =>
+          Effect.gen(function* () {
+            if (event.type !== McpEvent.StatusChanged.type) return
+            if (Schema.decodeUnknownSync(McpEvent.StatusChanged.data)(event.data).server !== "gate") return
+            yield* Deferred.succeed(entered, undefined)
+            yield* Deferred.await(release)
+          }),
+        ),
+        (unsubscribe) => unsubscribe,
+      )
+      const reconciling = yield* service
+        .transform((editor) => {
+          editor.set("gate", { type: "local", command: ["unused"], disabled: true })
+          editor.set("resources", { type: "remote", url: server.url, oauth: false })
+        })
+        .pipe(Scope.provide(root), Effect.forkChild({ startImmediately: true }))
+      yield* Deferred.await(entered)
+
+      yield* service[operation]("resources")
+      yield* Deferred.succeed(release, undefined)
+      yield* Fiber.join(reconciling)
+      // The queued startup already holds or awaits the server lock, so this waits for it to finish.
+      yield* service.disconnect("resources")
+
+      expect(server.state.initializations).toBe(operation === "connect" ? 1 : 0)
+      expect((yield* service.servers()).find((item) => item.name === "resources")?.status).toEqual({
+        status: "disabled",
+      })
+    }),
+  )
+})
+
 test("serializes concurrent MCP lifecycle operations", async () => {
   await Effect.runPromise(
     Effect.scoped(
@@ -2245,6 +2391,7 @@ it.effect("advertises MCP output schemas to Code Mode", () =>
     const execute = toolSet.definitions.find((tool) => tool.name === "execute")
 
     expect(toolSet.definitions.map((tool) => tool.name)).toEqual([
+      "direct_attachments",
       "direct_fail",
       "direct_issues",
       "direct_lookup",
@@ -2423,6 +2570,31 @@ it.effect("preserves MCP text and media content for the model", () =>
       { type: "text", text: "rendered chart" },
       { type: "file", mime: "image/png" },
     ])
+  }),
+)
+
+it.effect("decodes text blobs and saves other MCP blobs instead of attaching them", () =>
+  Effect.gen(function* () {
+    assertion = yield* Deferred.make<Permission.AssertInput>()
+    decision = Effect.void
+    const registry = yield* Tool.Service
+    const registration = yield* McpTool.Service
+    yield* registration.flush
+
+    const execution = yield* executeTool(registry, {
+      sessionID: Session.ID.make("ses_mcp_attachments"),
+      ...toolIdentity,
+      call: { type: "tool-call", id: "call_mcp_attachments", name: "direct_attachments", input: {} },
+    })
+
+    const text = execution.content?.map((part) => (part.type === "text" ? part.text : part.mime)) ?? []
+    const saved =
+      /^\[Binary resource file:\/\/\/data\.parquet \(application\/vnd\.apache\.parquet, 4 bytes\) saved to (.+)\]$/.exec(
+        text[1] ?? "",
+      )?.[1]
+    expect(text[0]).toBe("[Resource file:///README.md (text/markdown)]\n# Notes")
+    expect(saved?.startsWith(path.join(outputData, ToolOutput.DIRECTORY, "tool_"))).toBe(true)
+    expect(yield* Effect.promise(() => fs.readFile(saved ?? "", "utf8"))).toBe("PAR1")
   }),
 )
 

@@ -616,7 +616,7 @@ export function SessionCompactionMessage(props: { message: SessionMessageCompact
 
   const outcome = () => {
     if (props.message.status !== "failed")
-      return props.message.status === "completed" && props.message.providerContext
+      return props.message.status === "completed" && props.message.native?.messages
         ? "ui.messagePart.providerCompaction"
         : "ui.messagePart.compaction"
 
