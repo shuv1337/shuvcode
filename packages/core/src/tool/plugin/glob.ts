@@ -2,7 +2,7 @@ export * as GlobTool from "./glob.js"
 
 import { ToolFailure } from "@opencode/ai"
 import type { Context } from "@opencode/plugin/effect/plugin"
-import { Effect, Schema } from "effect"
+import { Effect, Record, Schema } from "effect"
 import path from "path"
 import { Environment } from "../../environment/index.js"
 import { FileSystem } from "../../filesystem.js"
@@ -69,12 +69,15 @@ export const Plugin = {
                 action: name,
                 resources: [input.pattern],
                 save: ["*"],
-                metadata: {
-                  root: searchPath ?? ".",
-                  path: searchPath,
-                  hidden: input.hidden,
-                  limit: input.limit,
-                },
+                metadata: Record.filter(
+                  {
+                    root: searchPath ?? ".",
+                    path: searchPath,
+                    hidden: input.hidden,
+                    limit: input.limit,
+                  },
+                  (value) => value !== undefined,
+                ),
                 sessionID: context.sessionID,
                 agent: context.agent,
                 source,

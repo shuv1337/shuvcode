@@ -2,7 +2,7 @@ export * as GrepTool from "./grep.js"
 
 import type { Context } from "@opencode/plugin/effect/plugin"
 import { ToolFailure } from "@opencode/ai"
-import { Effect, Schema } from "effect"
+import { Effect, Record, Schema } from "effect"
 import path from "path"
 import { Environment } from "../../environment/index.js"
 import { FileSystem } from "../../filesystem.js"
@@ -88,14 +88,17 @@ export const Plugin = {
                 action: name,
                 resources: [input.pattern],
                 save: ["*"],
-                metadata: {
-                  root: ".",
-                  path: input.path,
-                  include: input.include,
-                  literal: input.literal,
-                  caseSensitive: input.caseSensitive,
-                  limit: input.limit,
-                },
+                metadata: Record.filter(
+                  {
+                    root: ".",
+                    path: input.path,
+                    include: input.include,
+                    literal: input.literal,
+                    caseSensitive: input.caseSensitive,
+                    limit: input.limit,
+                  },
+                  (value) => value !== undefined,
+                ),
                 sessionID: context.sessionID,
                 agent: context.agent,
                 source,
