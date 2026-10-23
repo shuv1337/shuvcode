@@ -225,7 +225,10 @@ function SessionScreenContent(props: {
   })
 
   props.bindBackground(composer.requests.background.tasks)
-  useUsageExceededDialogs()
+  useUsageExceededDialogs({
+    selection: () => composer.active()?.composer.model.selection,
+    onDone: () => composer.active()?.composer.restoreFocus(),
+  })
 
   const sessionErrorFallback = (cause: unknown, reset: () => void) => {
     createEffect(on(session.identity.sessionKey, reset, { defer: true }))

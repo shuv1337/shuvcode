@@ -564,7 +564,11 @@ export namespace Timeline {
       if (isActive && lastAssistant?.retry) rows.push(new TimelineRow.Retry({ userMessageID: turnID }))
       else if (lastAssistant?.error && !isInterrupted(lastAssistant.error))
         rows.push(
-          new TimelineRow.Error({ userMessageID: turnID, text: unwrapErrorMessage(lastAssistant.error.message) }),
+          new TimelineRow.Error({
+            userMessageID: turnID,
+            text: unwrapErrorMessage(lastAssistant.error.message),
+            ...freeLimit(lastAssistant),
+          }),
         )
     }
 
@@ -584,6 +588,7 @@ export namespace Timeline {
               new TimelineRow.Error({
                 userMessageID: turnID,
                 text: unwrapErrorMessage(entry.message.error.message),
+                ...freeLimit(entry.message),
               }),
             )
 
@@ -631,6 +636,31 @@ export namespace Timeline {
       id: content.type === "tool" ? content.id : `${message.id}:${content.type}:${ordinals[content.type]++}`,
       content,
     }))
+  }
+}
+
+const MAX_RETRY_AFTER_MS = 7 * 86_400_000
+
+function freeLimit(
+  message: Pick<SessionMessageAssistant, "error"> & { time: { created: number; completed?: number } },
+) {
+  if (message.error?.type !== "provider.free-limit") return {}
+  const delay = message.error.retryAfterMs
+  const base = message.time.completed ?? message.time.created
+
+  if (
+    delay === undefined ||
+    !Number.isFinite(delay) ||
+    delay < 0 ||
+    delay > MAX_RETRY_AFTER_MS ||
+    !Number.isFinite(base) ||
+    Number.isNaN(new Date(base + delay).getTime())
+  )
+    return { kind: "free-limit" as const }
+
+  return {
+    kind: "free-limit" as const,
+    resetAt: base + delay,
   }
 }
 

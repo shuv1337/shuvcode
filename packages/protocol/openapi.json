@@ -872,6 +872,22 @@
             "required": false
           },
           {
+            "name": "archived",
+            "in": "query",
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "enum": ["true", "false"]
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "required": false
+          },
+          {
             "name": "directory",
             "in": "query",
             "schema": {
@@ -1317,7 +1333,7 @@
             }
           }
         },
-        "description": "Import a projected session transcript at the requested location. If parentID is supplied, the parent session must already exist; import parents before children.",
+        "description": "Import a projected session transcript at the requested location. Accepts transcripts exported by earlier releases. If parentID is supplied, the parent session must already exist; import parents before children.",
         "summary": "Import session",
         "requestBody": {
           "content": {
@@ -1329,10 +1345,7 @@
                     "$ref": "#/components/schemas/Session.Info"
                   },
                   "messages": {
-                    "type": "array",
-                    "items": {
-                      "$ref": "#/components/schemas/Session.Message.Info"
-                    }
+                    "type": "array"
                   },
                   "location": {
                     "anyOf": [
@@ -1715,6 +1728,17 @@
                         "type": "null"
                       }
                     ]
+                  },
+                  "archived": {
+                    "anyOf": [
+                      {
+                        "type": "boolean"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "description": "Archive the session with true or restore it with false. Repeating the current state is a no-op."
                   }
                 },
                 "additionalProperties": false
@@ -5370,6 +5394,68 @@
         }
       }
     },
+    "/api/experimental/voice/models": {
+      "get": {
+        "tags": ["voice"],
+        "operationId": "experimental.voice.models",
+        "parameters": [],
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "VoiceModelsResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VoiceModelsResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "InvalidRequestError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvalidRequestErrorEncoded"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UnauthorizedError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "LocationNotFoundError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LocationNotFoundErrorEncoded"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "ServiceUnavailableError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ServiceUnavailableErrorEncoded"
+                }
+              }
+            }
+          }
+        },
+        "description": "List supported voice models, their transports, whether the server has a usable API key for each provider or the connected OpenCode Console hosts the model, and the Console workspace a hosted model bills to.",
+        "summary": "List voice models"
+      }
+    },
     "/api/experimental/voice/session": {
       "post": {
         "tags": ["voice"],
@@ -5428,7 +5514,7 @@
             }
           }
         },
-        "description": "Create a server-brokered voice session using the server's configured provider credentials and return the WebRTC SDP answer or WebSocket ephemeral token.",
+        "description": "Create a server-brokered voice session using the server's configured provider credentials, or the connected OpenCode Console when it hosts the model, and return the WebRTC SDP answer or WebSocket ephemeral token.",
         "summary": "Create voice session",
         "requestBody": {
           "content": {
@@ -5454,6 +5540,87 @@
                   }
                 },
                 "required": ["model", "transport"],
+                "additionalProperties": false
+              }
+            }
+          },
+          "required": true
+        }
+      }
+    },
+    "/api/experimental/voice/session/{sessionID}/instructions": {
+      "post": {
+        "tags": ["voice"],
+        "operationId": "experimental.voice.instructions",
+        "parameters": [
+          {
+            "name": "sessionID",
+            "in": "path",
+            "schema": {
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "security": [],
+        "responses": {
+          "204": {
+            "description": "<No Content>"
+          },
+          "400": {
+            "description": "InvalidRequestError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvalidRequestErrorEncoded"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UnauthorizedError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "LocationNotFoundError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LocationNotFoundErrorEncoded"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "ServiceUnavailableError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ServiceUnavailableErrorEncoded"
+                }
+              }
+            }
+          }
+        },
+        "description": "Replace the backend instructions of a running session the connected OpenCode Console hosts, whose data channel can't change them.",
+        "summary": "Replace voice session instructions",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "instructions": {
+                    "type": "string"
+                  }
+                },
+                "required": ["instructions"],
                 "additionalProperties": false
               }
             }
@@ -7626,6 +7793,247 @@
         "summary": "List MCP resources"
       }
     },
+    "/api/experimental/client-mcp/token": {
+      "post": {
+        "tags": ["mcp"],
+        "operationId": "experimental.mcp.client.token",
+        "parameters": [
+          {
+            "name": "x-opencode-ticket",
+            "in": "header",
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "required": false
+          },
+          {
+            "name": "location",
+            "in": "query",
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "directory": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    }
+                  },
+                  "additionalProperties": false
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "required": false,
+            "style": "deepObject",
+            "explode": true
+          },
+          {
+            "name": "name",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "location": {
+                      "$ref": "#/components/schemas/Location.PublicRef"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/PtyTicket.ConnectToken"
+                    }
+                  },
+                  "required": ["location", "data"],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "InvalidRequestError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvalidRequestErrorEncoded"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UnauthorizedError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "ForbiddenError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForbiddenErrorEncoded"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "LocationNotFoundError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LocationNotFoundErrorEncoded"
+                }
+              }
+            }
+          }
+        },
+        "description": "Create a short-lived single-use ticket for opening a client MCP WebSocket connection from a browser.",
+        "summary": "Create client MCP WebSocket token"
+      }
+    },
+    "/api/experimental/client-mcp": {
+      "get": {
+        "tags": ["mcp"],
+        "operationId": "experimental.mcp.client",
+        "parameters": [
+          {
+            "name": "location",
+            "in": "query",
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "directory": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    }
+                  },
+                  "additionalProperties": false
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "required": false
+          },
+          {
+            "name": "name",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "required": true
+          },
+          {
+            "name": "ticket",
+            "in": "query",
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "required": false
+          }
+        ],
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "boolean"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "InvalidRequestError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvalidRequestErrorEncoded"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UnauthorizedError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "ForbiddenError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForbiddenErrorEncoded"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "LocationNotFoundError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LocationNotFoundErrorEncoded"
+                }
+              }
+            }
+          }
+        },
+        "description": "Upgrade to a WebSocket over which the client hosts an MCP server named after `name`; its tools stay available while the socket is open. One JSON-RPC message per text frame. Experimental: may change without compatibility guarantees.",
+        "summary": "Attach client MCP server",
+        "x-websocket": true
+      }
+    },
     "/api/credential": {
       "get": {
         "tags": ["credential"],
@@ -8328,6 +8736,122 @@
       }
     },
     "/api/permission/saved/{id}": {
+      "patch": {
+        "tags": ["permission"],
+        "operationId": "permission.saved.update",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "schema": {
+              "$ref": "#/components/schemas/PermissionSaved.ID"
+            },
+            "required": true
+          }
+        ],
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/PermissionSaved.Info"
+                    }
+                  },
+                  "required": ["data"],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "InvalidRequestError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvalidRequestErrorEncoded"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UnauthorizedError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "PermissionSavedNotFoundError | LocationNotFoundError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/PermissionSavedNotFoundErrorEncoded"
+                    },
+                    {
+                      "$ref": "#/components/schemas/LocationNotFoundErrorEncoded"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "ConflictError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConflictErrorEncoded"
+                }
+              }
+            }
+          }
+        },
+        "description": "Change the action or resource of a saved permission. Fails with a conflict when the project already has a saved permission with the same action and resource.",
+        "summary": "Update saved permission",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "action": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "resource": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          },
+          "required": true
+        }
+      },
       "delete": {
         "tags": ["permission"],
         "operationId": "permission.saved.remove",
@@ -12904,6 +13428,148 @@
         "summary": "VCS diff"
       }
     },
+    "/api/debug/heap-dump": {
+      "post": {
+        "tags": ["debug"],
+        "operationId": "debug.heapDump",
+        "parameters": [
+          {
+            "name": "directory",
+            "in": "query",
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Absolute server-local directory to write the snapshot into, created when missing. Defaults to the server's log directory."
+            },
+            "required": false
+          }
+        ],
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "path": {
+                      "type": "string"
+                    },
+                    "pid": {
+                      "type": "integer"
+                    },
+                    "memory": {
+                      "type": "object",
+                      "properties": {
+                        "rss": {
+                          "anyOf": [
+                            {
+                              "type": "number"
+                            },
+                            {
+                              "type": "string",
+                              "enum": ["Infinity", "-Infinity", "NaN"]
+                            }
+                          ]
+                        },
+                        "heapTotal": {
+                          "anyOf": [
+                            {
+                              "type": "number"
+                            },
+                            {
+                              "type": "string",
+                              "enum": ["Infinity", "-Infinity", "NaN"]
+                            }
+                          ]
+                        },
+                        "heapUsed": {
+                          "anyOf": [
+                            {
+                              "type": "number"
+                            },
+                            {
+                              "type": "string",
+                              "enum": ["Infinity", "-Infinity", "NaN"]
+                            }
+                          ]
+                        },
+                        "external": {
+                          "anyOf": [
+                            {
+                              "type": "number"
+                            },
+                            {
+                              "type": "string",
+                              "enum": ["Infinity", "-Infinity", "NaN"]
+                            }
+                          ]
+                        },
+                        "arrayBuffers": {
+                          "anyOf": [
+                            {
+                              "type": "number"
+                            },
+                            {
+                              "type": "string",
+                              "enum": ["Infinity", "-Infinity", "NaN"]
+                            }
+                          ]
+                        }
+                      },
+                      "required": ["rss", "heapTotal", "heapUsed", "external", "arrayBuffers"],
+                      "additionalProperties": false,
+                      "description": "The server process's memory in bytes, read just before the snapshot (Node's process.memoryUsage()). rss covers native memory the snapshot cannot show."
+                    }
+                  },
+                  "required": ["path", "pid", "memory"],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "InvalidRequestError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvalidRequestErrorEncoded"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UnauthorizedError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedErrorEncoded"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "UnknownError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnknownErrorEncoded"
+                }
+              }
+            }
+          }
+        },
+        "description": "Write a JavaScript heap snapshot of the server process into its log directory, or the requested directory, and return the server-local path once the file is complete. Pauses the server while the heap serializes and can temporarily increase its memory use. The snapshot can contain credentials, prompts, and file contents.",
+        "summary": "Write a heap snapshot"
+      }
+    },
     "/api/debug/location": {
       "get": {
         "tags": ["debug"],
@@ -14189,12 +14855,29 @@
               "portable_shell_scanner": {
                 "type": "boolean"
               },
+              "todo": {
+                "type": "boolean"
+              },
+              "background_compaction": {
+                "type": "boolean"
+              },
               "subagent_depth": {
                 "type": "integer",
                 "minimum": 0
               },
               "jev": {
                 "type": "boolean"
+              },
+              "location_idle_timeout": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "boolean",
+                    "enum": [false]
+                  }
+                ]
               },
               "policies": {
                 "type": "array",
@@ -14887,9 +15570,6 @@
           },
           "metadata": {
             "type": "object"
-          },
-          "configuration": {
-            "$ref": "#/components/schemas/Form.Answer_1"
           }
         },
         "required": ["type", "key"],
@@ -15019,12 +15699,6 @@
         "additionalProperties": false
       },
       "Form.Answer": {
-        "type": "object",
-        "additionalProperties": {
-          "$ref": "#/components/schemas/Form.Value"
-        }
-      },
-      "Form.Answer_1": {
         "type": "object",
         "additionalProperties": {
           "$ref": "#/components/schemas/Form.Value"
@@ -16843,6 +17517,9 @@
           "supportsPromptCacheKey": {
             "type": "boolean"
           },
+          "streamUsage": {
+            "type": "boolean"
+          },
           "cacheFormat": {
             "$ref": "#/components/schemas/Model.CacheFormat"
           },
@@ -17239,6 +17916,23 @@
           }
         },
         "required": ["id", "projectID", "action", "resource", "time"],
+        "additionalProperties": false
+      },
+      "PermissionSavedNotFoundErrorEncoded": {
+        "type": "object",
+        "properties": {
+          "_tag": {
+            "type": "string",
+            "enum": ["PermissionSavedNotFoundError"]
+          },
+          "id": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          }
+        },
+        "required": ["_tag", "id", "message"],
         "additionalProperties": false
       },
       "PersistentPty.CreateInput": {
@@ -17946,6 +18640,9 @@
             "type": "boolean"
           },
           "supportsPromptCacheKey": {
+            "type": "boolean"
+          },
+          "streamUsage": {
             "type": "boolean"
           },
           "cacheFormat": {
@@ -18825,8 +19522,8 @@
           "rawFinish": {
             "type": "string"
           },
-          "providerState": {
-            "$ref": "#/components/schemas/Session.Message.ProviderState_4"
+          "native": {
+            "$ref": "#/components/schemas/Session.Message.Native_3"
           },
           "cost": {
             "$ref": "#/components/schemas/Money.USD"
@@ -18854,8 +19551,8 @@
           "text": {
             "type": "string"
           },
-          "state": {
-            "$ref": "#/components/schemas/Session.Message.ProviderState_1"
+          "native": {
+            "$ref": "#/components/schemas/Session.Message.Native_1"
           },
           "time": {
             "type": "object",
@@ -18901,8 +19598,8 @@
           "text": {
             "type": "string"
           },
-          "state": {
-            "$ref": "#/components/schemas/Session.Message.ProviderState"
+          "native": {
+            "$ref": "#/components/schemas/Session.Message.Native"
           }
         },
         "required": ["type", "text"],
@@ -18924,11 +19621,8 @@
           "executed": {
             "type": "boolean"
           },
-          "providerState": {
-            "$ref": "#/components/schemas/Session.Message.ProviderState_2"
-          },
-          "providerResultState": {
-            "$ref": "#/components/schemas/Session.Message.ProviderState_3"
+          "native": {
+            "$ref": "#/components/schemas/Session.Message.Native_2"
           },
           "state": {
             "anyOf": [
@@ -19013,17 +19707,11 @@
           "model": {
             "$ref": "#/components/schemas/Model.Ref"
           },
-          "providerState": {
-            "$ref": "#/components/schemas/Session.Message.ProviderState_5"
+          "native": {
+            "$ref": "#/components/schemas/Session.Message.Native_4"
           },
           "summary": {
             "type": "string"
-          },
-          "recent": {
-            "type": "string"
-          },
-          "providerContext": {
-            "$ref": "#/components/schemas/Session.ProviderContext"
           },
           "cost": {
             "$ref": "#/components/schemas/Money.USD"
@@ -19032,7 +19720,7 @@
             "$ref": "#/components/schemas/TokenUsage.Info"
           }
         },
-        "required": ["type", "id", "time", "status", "reason", "summary", "recent"],
+        "required": ["type", "id", "time", "status", "reason", "summary"],
         "additionalProperties": false
       },
       "Session.Message.Compaction.Failed": {
@@ -19112,12 +19800,9 @@
           },
           "summary": {
             "type": "string"
-          },
-          "recent": {
-            "type": "string"
           }
         },
-        "required": ["type", "id", "time", "status", "reason", "summary", "recent"],
+        "required": ["type", "id", "time", "status", "reason", "summary"],
         "additionalProperties": false
       },
       "Session.Message.ID": {
@@ -19287,22 +19972,19 @@
         "required": ["id", "time", "type", "model"],
         "additionalProperties": false
       },
-      "Session.Message.ProviderState": {
+      "Session.Message.Native": {
         "type": "object"
       },
-      "Session.Message.ProviderState_1": {
+      "Session.Message.Native_1": {
         "type": "object"
       },
-      "Session.Message.ProviderState_2": {
+      "Session.Message.Native_2": {
         "type": "object"
       },
-      "Session.Message.ProviderState_3": {
+      "Session.Message.Native_3": {
         "type": "object"
       },
-      "Session.Message.ProviderState_4": {
-        "type": "object"
-      },
-      "Session.Message.ProviderState_5": {
+      "Session.Message.Native_4": {
         "type": "object"
       },
       "Session.Message.Shell": {
@@ -19622,46 +20304,6 @@
       "Session.Metadata": {
         "type": "object"
       },
-      "Session.ProviderContext": {
-        "type": "object",
-        "properties": {
-          "version": {
-            "type": "number",
-            "enum": [1]
-          },
-          "provenance": {
-            "$ref": "#/components/schemas/Session.ProviderContext.Provenance"
-          },
-          "messages": {}
-        },
-        "required": ["version", "provenance", "messages"],
-        "additionalProperties": false
-      },
-      "Session.ProviderContext.Provenance": {
-        "type": "object",
-        "properties": {
-          "providerID": {
-            "$ref": "#/components/schemas/Provider.ID"
-          },
-          "provider": {
-            "type": "string"
-          },
-          "modelID": {
-            "type": "string"
-          },
-          "route": {
-            "type": "string"
-          },
-          "protocol": {
-            "type": "string"
-          },
-          "endpoint": {
-            "type": "string"
-          }
-        },
-        "required": ["providerID", "provider", "modelID", "route", "protocol", "endpoint"],
-        "additionalProperties": false
-      },
       "Session.Revert": {
         "type": "object",
         "properties": {
@@ -19707,6 +20349,10 @@
             },
             "required": ["body"],
             "additionalProperties": false
+          },
+          "retryAfterMs": {
+            "type": "integer",
+            "minimum": 0
           }
         },
         "required": ["type", "message"],
@@ -20438,6 +21084,78 @@
         "required": ["_tag", "providerID", "message"],
         "additionalProperties": false
       },
+      "VoiceModel": {
+        "type": "object",
+        "properties": {
+          "model": {
+            "type": "string"
+          },
+          "provider": {
+            "type": "string"
+          },
+          "transports": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/VoiceTransportType"
+            }
+          },
+          "available": {
+            "type": "boolean"
+          },
+          "integration": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "workspace": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": ["model", "provider", "transports", "available"],
+        "additionalProperties": false
+      },
+      "VoiceModelsResponse": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "object",
+            "properties": {
+              "models": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/VoiceModel"
+                }
+              },
+              "default": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            },
+            "required": ["models"],
+            "additionalProperties": false
+          }
+        },
+        "required": ["data"],
+        "additionalProperties": false
+      },
       "VoiceSessionResponse": {
         "type": "object",
         "properties": {
@@ -20446,6 +21164,23 @@
             "properties": {
               "transport": {
                 "$ref": "#/components/schemas/VoiceTransport"
+              },
+              "session": {
+                "anyOf": [
+                  {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string"
+                      }
+                    },
+                    "required": ["id"],
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
               }
             },
             "required": ["transport"],
@@ -20474,6 +21209,10 @@
             "$ref": "#/components/schemas/VoiceWebSocketTransportInput"
           }
         ]
+      },
+      "VoiceTransportType": {
+        "type": "string",
+        "enum": ["webrtc", "websocket"]
       },
       "VoiceWebRTCTransport": {
         "type": "object",

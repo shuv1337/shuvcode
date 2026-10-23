@@ -23,6 +23,7 @@ import { SessionEvent } from "./event.js"
 import { SessionMessage } from "./message.js"
 import { SessionSchema } from "./schema.js"
 import { SessionInboxTable, SessionMessageTable } from "./sql.js"
+import { SessionHistory } from "./history.js"
 
 type DatabaseService = Database.Interface["db"]
 
@@ -55,7 +56,6 @@ const decodeCompaction = Schema.decodeUnknownSync(CompactionPayload)
 const encodeCompaction = Schema.encodeSync(CompactionPayload)
 const decodeMove = Schema.decodeUnknownSync(MovePayload)
 const encodeMove = Schema.encodeSync(MovePayload)
-const decodeMessage = Schema.decodeUnknownSync(SessionMessage.Info)
 const inboxLocks = KeyedMutex.makeUnsafe<SessionSchema.ID>()
 type PendingRef = { readonly id: SessionMessage.ID; readonly sessionID: SessionSchema.ID }
 
@@ -75,8 +75,8 @@ function matches<Type extends Item["type"]>(
 
 const fromRow = (row: typeof SessionInboxTable.$inferSelect): Info => {
   const base = {
-    id: SessionMessage.ID.make(row.id),
-    sessionID: SessionSchema.ID.make(row.session_id),
+    id: row.id,
+    sessionID: row.session_id,
     time: { created: DateTime.makeUnsafe(row.time_created) },
   }
   if (row.type === "compaction")
@@ -125,21 +125,30 @@ const promotedFromMessage = Effect.fn("SessionInbox.promotedFromMessage")(functi
   if (row === undefined) return undefined
   if (row.session_id !== sessionID || (row.type !== "user" && row.type !== "synthetic"))
     return yield* new LifecycleConflict({ id })
-  const message = decodeMessage({ ...row.data, id: row.id, type: row.type })
+  const message = SessionHistory.decodeMessageRowSync(row)
   const base = { id, sessionID, time: { created: message.time.created }, delivery }
   if (message.type === "user")
     return User.make({
       ...base,
       type: "user",
-      payload: decodeUser(message),
+      payload: UserPayload.make({
+        text: message.text,
+        files: message.files,
+        agents: message.agents,
+        skills: message.skills,
+        metadata: message.metadata,
+      }),
     })
   if (message.type === "synthetic")
     return Synthetic.make({
       ...base,
       type: "synthetic",
-      payload: decodeSynthetic(message),
+      payload: SyntheticPayload.make({
+        text: message.text,
+        description: message.description,
+        metadata: message.metadata,
+      }),
     })
-  return yield* new LifecycleConflict({ id })
 })
 
 export type Interface = Effect.Success<ReturnType<typeof make>>
@@ -221,7 +230,7 @@ export const make = Effect.fn("SessionInbox.make")(function* () {
         return yield* admit({
           id: input.id,
           sessionID: input.sessionID,
-          item: { type: "compaction", payload: {}, delivery: Delivery.make(input.delivery) },
+          item: { type: "compaction", payload: {}, delivery: input.delivery },
         })
       }),
     )
@@ -464,17 +473,17 @@ const publish = Effect.fn("SessionInbox.publish")(function* (
   yield* Effect.forEach(
     rows,
     (row) => {
-      const entry = fromRow(row)
-      if (entry.type === "compaction") return Effect.die(new LifecycleConflict({ id: entry.id }))
+      if (row.type !== "move" && row.type !== "user" && row.type !== "synthetic")
+        return Effect.die(new LifecycleConflict({ id: row.id }))
       return bus
         .publish(SessionEvent.InboxDelivered, {
           sessionID,
-          inboxID: entry.id,
+          inboxID: row.id,
         })
         .pipe(
           Effect.catchDefect((defect) =>
             defect instanceof LifecycleConflict
-              ? promotedFromMessage(db, sessionID, entry.id, entry.delivery).pipe(
+              ? promotedFromMessage(db, sessionID, row.id, row.delivery).pipe(
                   Effect.flatMap((stored) => (stored !== undefined ? Effect.void : Effect.die(defect))),
                   Effect.orDie,
                 )

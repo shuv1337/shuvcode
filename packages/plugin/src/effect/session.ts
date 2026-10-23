@@ -37,7 +37,8 @@ export interface SessionContext extends SessionRequest {
 
 export interface SessionCompactionResult {
   summary: string
-  providerState?: SessionMessage.ProviderState
+  /** `native.messages`, when set, must be a provider replacement window; it replays instead of `summary`. */
+  native?: SessionMessage.Native
   metadata?: Record<string, unknown>
   tokens?: TokenUsage.Info
 }

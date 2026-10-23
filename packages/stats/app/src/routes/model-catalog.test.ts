@@ -2,7 +2,7 @@ import { describe, expect, mock, test } from "bun:test"
 
 mock.module("@solidjs/router", () => ({ query: (load: () => unknown) => load }))
 
-const { buildModelCatalog, findModelCatalogEntry } = await import("./model-catalog")
+const { buildModelCatalog, findModelCatalogEntry, isKnownCatalogLab } = await import("./model-catalog")
 
 describe("model catalog pricing", () => {
   test("prefers OpenCode Go pricing over a zero-cost coding plan with the same model id", () => {
@@ -43,5 +43,13 @@ describe("model catalog pricing", () => {
       cacheRead: 0.26,
       cacheWrite: undefined,
     })
+  })
+})
+
+describe("known catalog labs", () => {
+  test("resolves stats author aliases to their catalog lab", () => {
+    expect(isKnownCatalogLab("qwen", ["alibaba"])).toBe(true)
+    expect(isKnownCatalogLab("zhipu", ["zhipuai"])).toBe(true)
+    expect(isKnownCatalogLab("meta", ["alibaba"])).toBe(false)
   })
 })

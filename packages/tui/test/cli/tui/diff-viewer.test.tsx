@@ -2340,25 +2340,30 @@ test("highlights virtual chunks with whole-file syntax context", async () => {
     ],
     { width: 120, height: 40 },
   )
-  const color = (text: string) =>
+  const attributes = (text: string) =>
     viewer.app
       .captureSpans()
       .lines.flatMap((line) => line.spans)
-      .find((span) => span.text.includes(text))?.fg
+      .find((span) => span.text.includes(text))?.attributes
   try {
     findScrollBox(viewer.app.renderer.root)!.scrollTo(360)
     await viewer.app.flush()
     // The comment starts in the first chunk and ends in the second; wait until it is highlighted.
-    for (let attempt = 0; attempt < 100 && `${color("comment 375")}` === `${color("value365")}`; attempt++) {
+    // Nightowl can share foregrounds for comments and identifiers; syntax italics still distinguish them.
+    for (let attempt = 0; attempt < 100 && `${attributes("comment 375")}` === `${attributes("value365")}`; attempt++) {
       await Bun.sleep(20)
       await viewer.app.flush()
     }
-    expect(`${color("comment 375")}`).not.toBe(`${color("value365")}`)
-    for (let attempt = 0; attempt < 100 && `${color("comment 390")}` !== `${color("comment 375")}`; attempt++) {
+    expect(`${attributes("comment 375")}`).not.toBe(`${attributes("value365")}`)
+    for (
+      let attempt = 0;
+      attempt < 100 && `${attributes("comment 390")}` !== `${attributes("comment 375")}`;
+      attempt++
+    ) {
       await Bun.sleep(20)
       await viewer.app.flush()
     }
-    expect(`${color("comment 390")}`).toBe(`${color("comment 375")}`)
+    expect(`${attributes("comment 390")}`).toBe(`${attributes("comment 375")}`)
   } finally {
     viewer.app.renderer.destroy()
   }
@@ -2490,14 +2495,18 @@ test.each([100, 160])("the sidebar source picker switches VCS sources at %i colu
     viewer.app.mockInput.pressArrow("down")
     await viewer.app.flush()
     viewer.app.mockInput.pressEnter()
-    await viewer.app.waitForFrame((frame) => frame.includes("Uncommitted") && frame.includes("const first"))
+    await viewer.app.waitForFrame(
+      (frame) => !frame.includes("Diff source") && frame.includes("Uncommitted") && frame.includes("const first"),
+    )
     expect(viewer.vcsDiffInput()).toEqual({ location: { directory: "/repo/session" }, mode: "working", context: "12" })
     await viewer.app.mockMouse.click(source().x, source().y)
     await viewer.app.waitForFrame((frame) => frame.includes("Diff source"))
     viewer.app.mockInput.pressKey("HOME")
     await viewer.app.flush()
     viewer.app.mockInput.pressEnter()
-    await viewer.app.waitForFrame((frame) => frame.includes("All") && frame.includes("const first"))
+    await viewer.app.waitForFrame(
+      (frame) => !frame.includes("Diff source") && frame.includes("All") && frame.includes("const first"),
+    )
     expect(viewer.vcsDiffInput()).toEqual({
       location: { directory: "/repo/session" },
       mode: "branch",

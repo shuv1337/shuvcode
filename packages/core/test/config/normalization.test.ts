@@ -524,13 +524,23 @@ describe("ConfigNormalize", () => {
         policies: [{ action: "provider.use", resource: "native", effect: "deny" }],
         experimental: {
           portable_shell_scanner: true,
+          todo: true,
+          background_compaction: true,
           subagent_depth: 0,
           jev: true,
+          location_idle_timeout: "2 hours",
           policies: [{ action: "provider.use", resource: "custom", effect: "allow" }],
         },
       }).encoded,
     ).toMatchObject({
-      experimental: { portable_shell_scanner: true, subagent_depth: 0, jev: true },
+      experimental: {
+        portable_shell_scanner: true,
+        todo: true,
+        background_compaction: true,
+        subagent_depth: 0,
+        location_idle_timeout: "7200000 millis",
+        jev: true,
+      },
       policies: [
         { action: "provider.use", resource: "*", effect: "deny" },
         { action: "provider.use", resource: "anthropic", effect: "allow" },
@@ -701,7 +711,7 @@ describe("ConfigNormalize", () => {
       agents: {},
       providers: {},
       instructions: [],
-      experimental: { subagent_depth: 0 },
+      experimental: { subagent_depth: 0, location_idle_timeout: false },
     })
     expect(result.encoded).toMatchObject({
       snapshots: false,
@@ -710,7 +720,7 @@ describe("ConfigNormalize", () => {
       agents: {},
       providers: {},
       instructions: [],
-      experimental: { subagent_depth: 0 },
+      experimental: { subagent_depth: 0, location_idle_timeout: false },
     })
     expect(result.encoded.share).toBeUndefined()
   })

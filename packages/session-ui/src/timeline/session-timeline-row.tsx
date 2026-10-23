@@ -1010,10 +1010,37 @@ export function createSessionTimelineRowRenderer(input: {
       return value
     }
 
+    const freeLimit = createMemo(() => {
+      if (current().kind !== "free-limit") return
+      const at = current().resetAt
+
+      if (at === undefined || !Number.isFinite(at) || Number.isNaN(new Date(at).getTime()))
+        return i18n.t("ui.sessionTurn.freeLimit.title")
+
+      const now = Date.now()
+      const sameDay = new Date(at).toDateString() === new Date(now).toDateString() && at - now < 86_400_000
+
+      const time = new Intl.DateTimeFormat(
+        i18n.locale(),
+        sameDay ? { timeStyle: "short" } : { dateStyle: "medium", timeStyle: "short" },
+      ).format(at)
+
+      return i18n.t("ui.sessionTurn.freeLimit.lineReset", { time })
+    })
+
     return (
       <Frame row={current()}>
         <div data-slot="session-turn-message-container" class={`w-full ${padding()}`}>
-          <SessionError message={current().text} />
+          <Show when={freeLimit()} fallback={<SessionError message={current().text} />}>
+            {(text) => (
+              <div
+                role="status"
+                class="text-[13px] font-[440] leading-text-compact tracking-[-0.04px] text-v2-text-text-muted"
+              >
+                {text()}
+              </div>
+            )}
+          </Show>
         </div>
       </Frame>
     )

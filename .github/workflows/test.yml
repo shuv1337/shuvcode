@@ -38,7 +38,7 @@ jobs:
       - name: Setup Bun
         uses: ./.github/actions/setup-bun
         with:
-          bun-version: "1.4.2"
+          bun-version: "1.4.4"
           install-flags: --frozen-lockfile
 
       - name: Test Effect simplification rules
@@ -132,7 +132,7 @@ jobs:
       - name: Setup Bun
         uses: ./.github/actions/setup-bun
         with:
-          bun-version: "1.4.2"
+          bun-version: "1.4.4"
           install-flags: --frozen-lockfile
 
       - name: Read Playwright version
@@ -196,4 +196,3 @@ jobs:
             packages/session-ui/component-tests/playwright-report
             packages/app/component-tests/test-results
             packages/app/component-tests/playwright-report
-

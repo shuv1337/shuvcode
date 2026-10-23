@@ -109,8 +109,11 @@ import type {
   ModelDefaultOutput,
   GenerateTextInput,
   GenerateTextOutput,
+  VoiceModelsOutput,
   VoiceSessionInput,
   VoiceSessionOutput,
+  VoiceInstructionsInput,
+  VoiceInstructionsOutput,
   ProviderListInput,
   ProviderListOutput,
   ProviderGetInput,
@@ -151,6 +154,8 @@ import type {
   McpDisconnectOutput,
   McpResourceCatalogInput,
   McpResourceCatalogOutput,
+  McpClientTokenInput,
+  McpClientTokenOutput,
   CredentialListOutput,
   CredentialCreateInput,
   CredentialCreateOutput,
@@ -170,6 +175,8 @@ import type {
   PermissionRequestListOutput,
   PermissionSavedListInput,
   PermissionSavedListOutput,
+  PermissionSavedUpdateInput,
+  PermissionSavedUpdateOutput,
   PermissionSavedRemoveInput,
   PermissionSavedRemoveOutput,
   PermissionCreateInput,
@@ -257,6 +264,8 @@ import type {
   VcsBranchListOutput,
   VcsDiffInput,
   VcsDiffOutput,
+  DebugHeapDumpInput,
+  DebugHeapDumpOutput,
   DebugLocationListOutput,
   DebugLocationEvictInput,
   DebugLocationEvictOutput,
@@ -548,6 +557,7 @@ export function make(options: ClientOptions) {
               order: input?.["order"],
               search: input?.["search"],
               parentID: input?.["parentID"],
+              archived: input?.["archived"],
               directory: input?.["directory"],
               project: input?.["project"],
               subpath: input?.["subpath"],
@@ -696,7 +706,12 @@ export function make(options: ClientOptions) {
           {
             method: "PATCH",
             path: `/api/session/${encodeURIComponent(input.sessionID)}`,
-            body: { title: input["title"], metadata: input["metadata"], permissions: input["permissions"] },
+            body: {
+              title: input["title"],
+              metadata: input["metadata"],
+              permissions: input["permissions"],
+              archived: input["archived"],
+            },
             successStatus: 204,
             declaredStatuses: [400, 401, 404],
             empty: true,
@@ -1154,6 +1169,17 @@ export function make(options: ClientOptions) {
         ).then((value) => value.data),
     },
     voice: {
+      models: (requestOptions?: RequestOptions) =>
+        request<{ readonly data: VoiceModelsOutput }>(
+          {
+            method: "GET",
+            path: `/api/experimental/voice/models`,
+            successStatus: 200,
+            declaredStatuses: [400, 401, 404, 503],
+            empty: false,
+          },
+          requestOptions,
+        ).then((value) => value.data),
       session: (input: VoiceSessionInput, requestOptions?: RequestOptions) =>
         request<{ readonly data: VoiceSessionOutput }>(
           {
@@ -1166,6 +1192,18 @@ export function make(options: ClientOptions) {
           },
           requestOptions,
         ).then((value) => value.data),
+      instructions: (input: VoiceInstructionsInput, requestOptions?: RequestOptions) =>
+        request<VoiceInstructionsOutput>(
+          {
+            method: "POST",
+            path: `/api/experimental/voice/session/${encodeURIComponent(input.sessionID)}/instructions`,
+            body: { instructions: input["instructions"] },
+            successStatus: 204,
+            declaredStatuses: [400, 401, 404, 503],
+            empty: true,
+          },
+          requestOptions,
+        ),
     },
     provider: {
       list: (input?: ProviderListInput, requestOptions?: RequestOptions) =>
@@ -1429,6 +1467,21 @@ export function make(options: ClientOptions) {
             requestOptions,
           ),
       },
+      client: {
+        token: (input: McpClientTokenInput, requestOptions?: RequestOptions) =>
+          request<McpClientTokenOutput>(
+            {
+              method: "POST",
+              path: `/api/experimental/client-mcp/token`,
+              query: { location: input["location"], name: input["name"] },
+              headers: { "x-opencode-ticket": input["x-opencode-ticket"] },
+              successStatus: 200,
+              declaredStatuses: [400, 401, 403, 404],
+              empty: false,
+            },
+            requestOptions,
+          ),
+      },
     },
     credential: {
       list: (requestOptions?: RequestOptions) =>
@@ -1558,6 +1611,18 @@ export function make(options: ClientOptions) {
               query: { projectID: input?.["projectID"] },
               successStatus: 200,
               declaredStatuses: [400, 401, 404],
+              empty: false,
+            },
+            requestOptions,
+          ).then((value) => value.data),
+        update: (input: PermissionSavedUpdateInput, requestOptions?: RequestOptions) =>
+          request<{ readonly data: PermissionSavedUpdateOutput }>(
+            {
+              method: "PATCH",
+              path: `/api/permission/saved/${encodeURIComponent(input.id)}`,
+              body: { action: input["action"], resource: input["resource"] },
+              successStatus: 200,
+              declaredStatuses: [400, 401, 404, 409],
               empty: false,
             },
             requestOptions,
@@ -2157,6 +2222,18 @@ export function make(options: ClientOptions) {
         ),
     },
     debug: {
+      heapDump: (input?: DebugHeapDumpInput, requestOptions?: RequestOptions) =>
+        request<DebugHeapDumpOutput>(
+          {
+            method: "POST",
+            path: `/api/debug/heap-dump`,
+            query: { directory: input?.["directory"] },
+            successStatus: 200,
+            declaredStatuses: [400, 401, 500],
+            empty: false,
+          },
+          requestOptions,
+        ),
       location: {
         list: (requestOptions?: RequestOptions) =>
           request<DebugLocationListOutput>(

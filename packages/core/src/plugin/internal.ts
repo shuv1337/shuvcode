@@ -58,6 +58,7 @@ import { Npm } from "@opencode/util/npm"
 import { Permission } from "../permission.js"
 import { Reference } from "../reference.js"
 import { WebSearch } from "../websearch.js"
+import { Voice } from "../voice.js"
 import { Ripgrep } from "../ripgrep.js"
 import { Session } from "../session.js"
 import { SessionCompaction } from "../session/compaction.js"
@@ -82,6 +83,7 @@ import { ReadTool } from "../tool/plugin/read.js"
 import { ShellTool } from "../tool/plugin/shell.js"
 import { SkillTool } from "../tool/plugin/skill.js"
 import { SubagentTool } from "../tool/plugin/subagent.js"
+import { TodoTool } from "../tool/plugin/todo.js"
 import { Tool } from "../tool.js"
 import { ToolOutput } from "../tool-output.js"
 import { WebFetchTool } from "../tool/plugin/webfetch.js"
@@ -156,6 +158,7 @@ const services = [
   SkillDiscovery.Service,
   Tool.Service,
   ToolOutput.Service,
+  Voice.Service,
   Watcher.Service,
   WellKnown.Service,
   Worktree.Service,
@@ -211,6 +214,7 @@ export const requirements = LayerNode.group([
   SkillDiscovery.node,
   Tool.node,
   ToolOutput.node,
+  Voice.node,
   Watcher.node,
   WellKnown.node,
   Worktree.node,
@@ -250,6 +254,7 @@ const pre = [
   ShellTool.Plugin,
   SkillTool.Plugin,
   SubagentTool.Plugin,
+  TodoTool.Plugin,
   WebFetchTool.Plugin,
   WebSearchTool.Plugin,
   WriteTool.Plugin,

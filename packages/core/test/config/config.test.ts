@@ -1317,6 +1317,7 @@ describe("Config", () => {
           task: "ask",
           bash: { "git status": "allow", "*": "deny" },
           write: "deny",
+          apply_patch: "deny",
           read: "allow",
         },
       }).permissions,
@@ -1324,6 +1325,7 @@ describe("Config", () => {
       { action: "subagent", resource: "*", effect: "ask" },
       { action: "shell", resource: "git status", effect: "allow" },
       { action: "shell", resource: "*", effect: "deny" },
+      { action: "edit", resource: "*", effect: "deny" },
       { action: "edit", resource: "*", effect: "deny" },
       { action: "read", resource: "*", effect: "allow" },
     ])

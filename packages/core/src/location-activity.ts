@@ -1,7 +1,10 @@
 export * as LocationActivity from "./location-activity.js"
 
-import { Clock, Context, Duration, Effect, Layer, RcMap, Schema } from "effect"
+import { Clock, Context, Duration, Effect, Layer, Option, RcMap, Schema } from "effect"
+import type { Document } from "@opencode/schema/config"
 import { Bus } from "./bus.js"
+import { Config } from "./config.js"
+import { Job } from "./job.js"
 import { Location } from "./location.js"
 import { LocationServiceMap } from "./location-service-map.js"
 import { SessionEvent } from "./session/event.js"
@@ -29,15 +32,32 @@ export function layer(
       const bus = yield* Bus.Service
       const locations = yield* LocationServiceMap.Service
       const execution = yield* SessionExecution.Service
+      const jobs = yield* Job.Service
       const sessions = yield* SessionStore.Service
       const activity = yield* ToolActivity.Service
-      const timeToLive = Duration.toMillis(options.timeToLive ?? "60 minutes")
-      const entries = new Map<string, { readonly ref: Location.Ref; expiresAt: number }>()
+      const timeToLive = Duration.fromInputUnsafe(options.timeToLive ?? "60 minutes")
+      const entries = new Map<string, { readonly ref: Location.Ref; touchedAt: number }>()
       const key = (ref: Location.Ref) => `${LocationServiceMap.canonical(ref).directory}\0${ref.workspaceID ?? ""}`
       const touch = (ref: Location.Ref) =>
         Effect.sync(() => {
-          entries.set(key(ref), { ref, expiresAt: clock.currentTimeMillisUnsafe() + timeToLive })
+          entries.set(key(ref), { ref, touchedAt: clock.currentTimeMillisUnsafe() })
         })
+
+      // Read per location so project config can override the global value.
+      const idleTimeout = (ref: Location.Ref) =>
+        Effect.gen(function* () {
+          const context = yield* locations.contextEffectOption(ref)
+          if (Option.isNone(context)) return timeToLive
+          const entries = yield* Context.get(context.value, Config.Service).entries()
+          const configured = entries.findLast(
+            (entry): entry is Document =>
+              entry.type === "document" && entry.info.experimental?.location_idle_timeout !== undefined,
+          )
+          return configured?.info.experimental?.location_idle_timeout ?? timeToLive
+        }).pipe(
+          Effect.scoped,
+          Effect.orElseSucceed(() => timeToLive),
+        )
 
       const unsubscribe = yield* bus.listen((event) => {
         if (!isSessionEvent(event)) return Effect.void
@@ -74,7 +94,11 @@ export function layer(
           if (!cached.has(id)) entries.delete(id)
         }
         const now = clock.currentTimeMillisUnsafe()
-        const expired = Array.from(entries.values()).filter((entry) => entry.expiresAt <= now)
+        const expired = yield* Effect.filter(Array.from(entries.values()), (entry) =>
+          idleTimeout(entry.ref).pipe(
+            Effect.map((timeout) => timeout !== false && entry.touchedAt + Duration.toMillis(timeout) <= now),
+          ),
+        )
         if (expired.length === 0) return
         if (options.beforeDecision) yield* options.beforeDecision
         yield* Effect.forEach(
@@ -86,16 +110,28 @@ export function layer(
                   const id = key(entry.ref)
                   const active = yield* Effect.forEach(yield* execution.active, (sessionID) => sessions.get(sessionID))
                   const holding = yield* activity.holding
-                  if (active.some((session) => session && holding.has(session.id) && key(session.location) === id)) {
+                  const background = (yield* jobs.runningBackground).flatMap((recovery) =>
+                    recovery.kind === "shell"
+                      ? [recovery.sessionID]
+                      : [recovery.childSessionID, recovery.parentSessionID],
+                  )
+                  const backgroundSessions = yield* Effect.forEach(background, (sessionID) => sessions.get(sessionID))
+                  if (
+                    active.some((session) => session && holding.has(session.id) && key(session.location) === id) ||
+                    backgroundSessions.some((session) => session && key(session.location) === id)
+                  ) {
                     yield* touch(entry.ref)
                     return { action: "keep" as const }
                   }
                   const current = entries.get(id)
-                  if (!current || current.expiresAt > clock.currentTimeMillisUnsafe())
-                    return { action: "keep" as const }
-                  const owners = active.flatMap((session) =>
-                    session && key(session.location) === id ? [session] : [],
+                  if (!current) return { action: "keep" as const }
+                  const timeout = yield* idleTimeout(current.ref)
+                  if (
+                    timeout === false ||
+                    current.touchedAt + Duration.toMillis(timeout) > clock.currentTimeMillisUnsafe()
                   )
+                    return { action: "keep" as const }
+                  const owners = active.flatMap((session) => (session && key(session.location) === id ? [session] : []))
                   yield* Effect.forEach(
                     owners,
                     (session) => execution.interrupt(session.id, { reason: "inactivity" }),
@@ -135,5 +171,5 @@ export function layer(
 export const node = makeGlobalNode({
   service: Service,
   layer: layer(),
-  deps: [Bus.node, LocationServiceMap.node, SessionExecution.node, SessionStore.node, ToolActivity.node],
+  deps: [Bus.node, Job.node, LocationServiceMap.node, SessionExecution.node, SessionStore.node, ToolActivity.node],
 })

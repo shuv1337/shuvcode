@@ -38,9 +38,9 @@ test("managed service ports on Windows stay below the range Windows reserves", (
     windows: ServiceConfig.defaultPort(`preview-${index}`, "win32"),
     linux: ServiceConfig.defaultPort(`preview-${index}`, "linux"),
   }))
-  expect(ports.some((port) => port.linux >= 0xc000)).toBe(true)
-  expect(ports.every((port) => port.windows >= 10_000 && port.windows < 0xc000)).toBe(true)
-  expect(ports.filter((port) => port.linux < 0xc000 && port.windows !== port.linux)).toEqual([])
+  expect(ports.some((port) => port.linux >= 0x8000)).toBe(true)
+  expect(ports.every((port) => port.windows >= 10_000 && port.windows < 0x8000)).toBe(true)
+  expect(ports.filter((port) => port.linux < 0x8000 && port.windows !== port.linux)).toEqual([])
 })
 
 test("service disabled accepts only booleans without changing configuration on invalid input", async () => {
@@ -367,7 +367,7 @@ test("concurrent service processes elect one server", async () => {
       urls: [info.url],
       // The server reports the canonical tmp directory; Windows os.tmpdir() can be an 8.3 short name.
       paths: { tmp: await fs.realpath(path.join(os.tmpdir(), "shuvcode")) },
-      capabilities: { persistentPty: process.platform !== "win32" },
+      capabilities: { persistentPty: true },
     })
     const contender = Bun.spawn(command, { env, stderr: "pipe", stdout: "ignore" })
     try {

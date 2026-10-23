@@ -12,10 +12,14 @@ import {
   type HttpContext,
   type HttpRateLimitDetails,
 } from "./schema/index.js"
+import { Json } from "./utils/json.js"
+import { isRecord } from "./utils/record.js"
 
 const patterns = [
   /prompt is too long/i,
-  /input is too long for requested model/i,
+  /input is too long for (?:the )?(?:requested|selected) model/i,
+  // OpenCode Go
+  /too large for the model'?s configured input limit/i,
   // Cloudflare Workers AI reports this as HTTP 413.
   /exceeded this model context window limit/i,
   /exceeds the context window/i,
@@ -42,8 +46,8 @@ const patterns = [
   /context[_ ]length[_ ]exceeded/i,
   /context length is only \d+ tokens/i,
   /input length.*exceeds.*context length/i,
-  // Z.ai code 1261 arrives as `Prompt too long` or `Prompt 超长`.
-  /prompt (?:too long|超长)/i,
+  // Z.ai code 1261 arrives as `Prompt too long`, `Prompt exceeds max length` or `Prompt 超长`.
+  /prompt (?:too long|exceeds max length|超长)/i,
   /too large for model with \d+ maximum context length/i,
   /prompt has [\d,]+ tokens?, but the configured context size is [\d,]+ tokens?/i,
   /model_context_window_exceeded/i,
@@ -115,7 +119,7 @@ export const isRetryable = (error: AIError) => {
   }
 }
 
-const decodeJson = Schema.decodeUnknownOption(Schema.fromJsonString(Schema.Unknown))
+const decodeJson = Schema.decodeUnknownOption(Json)
 // OpenCode Zen reports account caps as typed 429/402 errors that are not throttles.
 const QUOTA_CODES = new Set([
   "insufficient_quota",
@@ -265,7 +269,7 @@ export function classifyProviderFailure(input: ProviderFailure): AIError["reason
     codes.some((code) => QUOTA_CODES.has(code)) ||
     (input.status === 429 && QUOTA_TEXT.test(text))
   )
-    return new QuotaExceededError(details)
+    return new QuotaExceededError({ ...details, retryAfterMs: input.retryAfterMs })
   if (
     input.status === 401 ||
     input.status === 403 ||
@@ -334,8 +338,4 @@ function providerCodes(value: unknown) {
     response?.error_type,
     exception?.type,
   ].filter((value): value is string => typeof value === "string")
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null
 }
