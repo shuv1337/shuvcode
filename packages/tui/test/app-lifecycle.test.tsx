@@ -2780,6 +2780,7 @@ test("restarting after an update tells the user to start Shuvcode again", async 
   await using state = await tmpdir()
   const setup = await createTestRenderer({ width: 80, height: 24 })
   await setup.renderer.setupTerminal()
+  setup.renderer.start()
   const started = Promise.withResolvers<void>()
   const setTitle = setup.renderer.setTerminalTitle.bind(setup.renderer)
   setup.renderer.setTerminalTitle = (title) => {
@@ -2837,6 +2838,7 @@ test("quitting after a background update tells the user to start Shuvcode again"
   await using state = await tmpdir()
   const setup = await createTestRenderer({ width: 80, height: 24 })
   await setup.renderer.setupTerminal()
+  setup.renderer.start()
   const started = Promise.withResolvers<void>()
   const setTitle = setup.renderer.setTerminalTitle.bind(setup.renderer)
   setup.renderer.setTerminalTitle = (title) => {
