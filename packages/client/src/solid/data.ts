@@ -283,6 +283,7 @@ export function createData(config: CreateDataInput) {
   let activeUpdates: Map<string, DataSessionStatus | undefined> | undefined
   const pendingUpdates = new Map<string, Map<string, SessionInboxInfo | SessionInbox.Delivery | undefined>>()
   const permissionUpdates = new Map<string, Map<string, PermissionRequest | undefined>>()
+  const formUpdates = new Map<string, Map<string, FormInfo | undefined>>()
   const ancestorLoads = new Map<string, number>()
 
   function setSessionActive(sessionID: string, status: DataSessionStatus) {
@@ -315,6 +316,7 @@ export function createData(config: CreateDataInput) {
   }
 
   function removeForm(sessionID: string, formID: string, ref?: LocationRef) {
+    formUpdates.get(sessionID)?.set(formID, undefined)
     const forms = store.session.form[sessionID]
     if (!forms) return false
     const location = ref && locationKey(ref)
@@ -1288,6 +1290,7 @@ export function createData(config: CreateDataInput) {
         }))
         break
       case "form.created":
+        formUpdates.get(event.data.form.sessionID)?.set(event.data.form.id, event.data.form)
         if (store.session.form[event.data.form.sessionID]?.some((form) => form.id === event.data.form.id)) break
         setStore("session", "form", event.data.form.sessionID, [
           ...(store.session.form[event.data.form.sessionID] ?? []),
@@ -1889,7 +1892,22 @@ export function createData(config: CreateDataInput) {
               ])
               return
             }
-            setStore("session", "form", sessionID, await api().session.form.list({ sessionID }))
+            const updates = new Map<string, FormInfo | undefined>()
+            formUpdates.set(sessionID, updates)
+            try {
+              const current = new Map((await api().session.form.list({ sessionID })).map((form) => [form.id, form]))
+              // Live creates and settlements can overtake this HTTP snapshot.
+              updates.forEach((form, id) => {
+                if (form === undefined) {
+                  current.delete(id)
+                  return
+                }
+                current.set(id, form)
+              })
+              setStore("session", "form", sessionID, [...current.values()])
+            } finally {
+              if (formUpdates.get(sessionID) === updates) formUpdates.delete(sessionID)
+            }
           })
         },
         invalidate(sessionID: string, ref?: LocationRef) {
