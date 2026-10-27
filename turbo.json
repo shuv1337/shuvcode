@@ -5,7 +5,7 @@
     "bunfig.toml",
     ".npmrc",
     ".github/actions/setup-bun/**",
-    ".github/workflows/check-test.yml",
+    ".github/workflows/test.yml",
     "package.json"
   ],
   "globalEnv": ["CI", "OPENCODE_DISABLE_SHARE"],
@@ -47,7 +47,7 @@
       "outputs": ["dist/**"]
     },
     // Workspace packages export their sources, so tests never wait for a dependency's build; the build job in
-    // check-test.yml checks the library builds. No package has a transit script: it runs nothing and only folds every
+    // test.yml checks the library builds. No package has a transit script: it runs nothing and only folds every
     // workspace dependency into the test hash.
     "transit": {
       "dependsOn": ["^transit"]
