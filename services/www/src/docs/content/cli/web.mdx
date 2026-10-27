@@ -139,8 +139,9 @@ $ OPENCODE_PASSWORD="a-long-secret" opencode --server http://127.0.0.1:4096
 ```
 
 Other HTTP clients use Basic auth. The username is always `opencode`, and only
-the password can be changed.
+the password can be changed. Set `OPENCODE_PASSWORD` in the HTTP client's shell
+to the same password used by the server.
 
 ```bash
-$ curl -u opencode:a-long-secret http://127.0.0.1:4096/api/info
+$ curl -u "opencode:${OPENCODE_PASSWORD}" http://127.0.0.1:4096/api/info
 ```

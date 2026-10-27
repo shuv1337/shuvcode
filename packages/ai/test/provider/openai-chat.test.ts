@@ -658,11 +658,11 @@ describe("OpenAI Chat route", () => {
   it.effect("lowers remote failure images through the same attachment as success", () =>
     Effect.gen(function* () {
       const https = "https://example.com/shot.png"
-      const file = "file:///tmp/shot.png"
+      const image = "data:image/png;base64,AAECAw=="
       const blocks = [
         { type: "text" as const, text: "remote" },
         { type: "file" as const, uri: https, mime: "image/png", name: "shot.png" },
-        { type: "file" as const, uri: file, mime: "image/png", name: "local.png" },
+        { type: "file" as const, uri: image, mime: "image/png", name: "local.png" },
       ]
       const success = yield* compileRequest(
         LLM.request({
@@ -695,7 +695,7 @@ describe("OpenAI Chat route", () => {
       expect(attachments(failure.body)).toEqual(attachments(success.body))
       expect(attachments(success.body)).toEqual([
         { type: "image_url", image_url: { url: https } },
-        { type: "image_url", image_url: { url: `data:image/png;base64,${file}` } },
+        { type: "image_url", image_url: { url: image } },
       ])
     }),
   )

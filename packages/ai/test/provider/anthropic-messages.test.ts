@@ -874,11 +874,11 @@ describe("Anthropic Messages route", () => {
   it.effect("lowers remote failure images through the same blocks as success", () =>
     Effect.gen(function* () {
       const https = "https://example.com/shot.png"
-      const file = "file:///tmp/shot.png"
+      const image = "data:image/png;base64,AAECAw=="
       const blocks = [
         { type: "text" as const, text: "remote" },
         { type: "file" as const, uri: https, mime: "image/png", name: "shot.png" },
-        { type: "file" as const, uri: file, mime: "image/png", name: "local.png" },
+        { type: "file" as const, uri: image, mime: "image/png", name: "local.png" },
       ]
       const media = (body: AnthropicMessages.AnthropicMessagesBody) => {
         const content = expectToolResult(body).content
@@ -915,7 +915,7 @@ describe("Anthropic Messages route", () => {
       expect(media(failure.body)).toEqual(media(success.body))
       expect(media(success.body)).toEqual([
         { type: "image", source: { type: "url", url: https } },
-        { type: "image", source: { type: "base64", media_type: "image/png", data: file } },
+        { type: "image", source: { type: "base64", media_type: "image/png", data: "AAECAw==" } },
       ])
     }),
   )

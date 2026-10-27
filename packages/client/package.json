@@ -28,6 +28,7 @@
   },
   "scripts": {
     "build": "bun run script/build.ts",
+    "build:promise": "rm -rf dist-promise && bun tsc -p tsconfig.promise.json",
     "pack": "bun run script/pack.ts",
     "generate": "bun run script/generate.ts",
     "check:generated": "bun run generate && git diff --exit-code -- src/promise/generated src/effect/generated src/effect/api",

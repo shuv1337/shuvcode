@@ -134,7 +134,7 @@ describe("OAuth refresh safety", () => {
     }),
   )
 
-  single.effect("releases the refresh lock when its owner is interrupted", () =>
+  single.effect("releases a timed-out refresh lock after its first caller is interrupted", () =>
     Effect.gen(function* () {
       const integration = yield* Integration.Service
       const credentials = yield* Credential.Service
@@ -155,6 +155,11 @@ describe("OAuth refresh safety", () => {
       const pending = yield* integration.connection.resolve(connection(credential)).pipe(Effect.forkScoped)
       yield* Deferred.await(entered)
       yield* Fiber.interrupt(pending)
+      const waiting = yield* integration.connection.resolve(connection(credential)).pipe(Effect.flip, Effect.forkScoped)
+      yield* Effect.yieldNow
+      // Credential owns refresh independently of the caller; its timeout must still release the lock.
+      yield* TestClock.adjust("30 seconds")
+      expect(yield* Fiber.join(waiting)).toBeInstanceOf(Integration.AuthorizationError)
       expect((yield* credentials.get(credential.id))?.value).toEqual(credential.value)
       expect(yield* integration.connection.resolve(connection(credential))).toMatchObject({ expires: now + 3_600_000 })
       expect(yield* Ref.get(calls)).toBe(2)

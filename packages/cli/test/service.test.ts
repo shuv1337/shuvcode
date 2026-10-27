@@ -546,7 +546,8 @@ test("unrelated managed port occupancy reports an actionable conflict", async ()
   try {
     expect(await contender.exited).not.toBe(0)
     const output = (await new Response(contender.stdout).text()) + (await new Response(contender.stderr).text())
-    expect(output).toContain(`Managed service port ${port} on 127.0.0.1 is already in use by another process`)
+    expect(output).toContain(`Managed service port ${port} on 127.0.0.1 is already in use by `)
+    expect(output).toMatch(/already in use by (?:PID \d+(?: \([^\r\n]*\))?|another process)\./)
     expect(output).toContain("shuvcode service set port <port>")
     expect(await Bun.file(registration).exists()).toBe(false)
   } finally {

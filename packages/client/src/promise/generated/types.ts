@@ -3300,175 +3300,32 @@ export type SessionMoveInput = {
 export type SessionMoveOutput = void
 
 export type SessionPromptInput = {
-  readonly sessionID: { readonly sessionID: string }["sessionID"]
-  readonly id?: ({
-    readonly id?: string | null
-    readonly text: string
-    readonly files?: ReadonlyArray<{
-      readonly uri: string
-      readonly name?: string
-      readonly description?: string
-      readonly mention?: { readonly start: number; readonly end: number; readonly text: string }
-    }>
-    readonly agents?: ReadonlyArray<{
-      readonly name: string
-      readonly mention?: { readonly start: number; readonly end: number; readonly text: string }
-    }>
-    readonly skills?: ReadonlyArray<{
-      readonly id: string
-      readonly mention?: { readonly start: number; readonly end: number; readonly text: string }
-    }>
-    readonly metadata?: { readonly [x: string]: JsonValue }
-    readonly delivery?: ("steer" | "queue") | null
-    readonly resume?: boolean | null
-  } & { readonly [x: string]: JsonValue | null })["id"]
-  readonly text: ({
-    readonly id?: string | null
-    readonly text: string
-    readonly files?: ReadonlyArray<{
-      readonly uri: string
-      readonly name?: string
-      readonly description?: string
-      readonly mention?: { readonly start: number; readonly end: number; readonly text: string }
-    }>
-    readonly agents?: ReadonlyArray<{
-      readonly name: string
-      readonly mention?: { readonly start: number; readonly end: number; readonly text: string }
-    }>
-    readonly skills?: ReadonlyArray<{
-      readonly id: string
-      readonly mention?: { readonly start: number; readonly end: number; readonly text: string }
-    }>
-    readonly metadata?: { readonly [x: string]: JsonValue }
-    readonly delivery?: ("steer" | "queue") | null
-    readonly resume?: boolean | null
-  } & { readonly [x: string]: JsonValue | null })["text"]
-  readonly files?: ({
-    readonly id?: string | null
-    readonly text: string
-    readonly files?: ReadonlyArray<{
-      readonly uri: string
-      readonly name?: string
-      readonly description?: string
-      readonly mention?: { readonly start: number; readonly end: number; readonly text: string }
-    }>
-    readonly agents?: ReadonlyArray<{
-      readonly name: string
-      readonly mention?: { readonly start: number; readonly end: number; readonly text: string }
-    }>
-    readonly skills?: ReadonlyArray<{
-      readonly id: string
-      readonly mention?: { readonly start: number; readonly end: number; readonly text: string }
-    }>
-    readonly metadata?: { readonly [x: string]: JsonValue }
-    readonly delivery?: ("steer" | "queue") | null
-    readonly resume?: boolean | null
-  } & { readonly [x: string]: JsonValue | null })["files"]
-  readonly agents?: ({
-    readonly id?: string | null
-    readonly text: string
-    readonly files?: ReadonlyArray<{
-      readonly uri: string
-      readonly name?: string
-      readonly description?: string
-      readonly mention?: { readonly start: number; readonly end: number; readonly text: string }
-    }>
-    readonly agents?: ReadonlyArray<{
-      readonly name: string
-      readonly mention?: { readonly start: number; readonly end: number; readonly text: string }
-    }>
-    readonly skills?: ReadonlyArray<{
-      readonly id: string
-      readonly mention?: { readonly start: number; readonly end: number; readonly text: string }
-    }>
-    readonly metadata?: { readonly [x: string]: JsonValue }
-    readonly delivery?: ("steer" | "queue") | null
-    readonly resume?: boolean | null
-  } & { readonly [x: string]: JsonValue | null })["agents"]
-  readonly skills?: ({
-    readonly id?: string | null
-    readonly text: string
-    readonly files?: ReadonlyArray<{
-      readonly uri: string
-      readonly name?: string
-      readonly description?: string
-      readonly mention?: { readonly start: number; readonly end: number; readonly text: string }
-    }>
-    readonly agents?: ReadonlyArray<{
-      readonly name: string
-      readonly mention?: { readonly start: number; readonly end: number; readonly text: string }
-    }>
-    readonly skills?: ReadonlyArray<{
-      readonly id: string
-      readonly mention?: { readonly start: number; readonly end: number; readonly text: string }
-    }>
-    readonly metadata?: { readonly [x: string]: JsonValue }
-    readonly delivery?: ("steer" | "queue") | null
-    readonly resume?: boolean | null
-  } & { readonly [x: string]: JsonValue | null })["skills"]
-  readonly metadata?: ({
-    readonly id?: string | null
-    readonly text: string
-    readonly files?: ReadonlyArray<{
-      readonly uri: string
-      readonly name?: string
-      readonly description?: string
-      readonly mention?: { readonly start: number; readonly end: number; readonly text: string }
-    }>
-    readonly agents?: ReadonlyArray<{
-      readonly name: string
-      readonly mention?: { readonly start: number; readonly end: number; readonly text: string }
-    }>
-    readonly skills?: ReadonlyArray<{
-      readonly id: string
-      readonly mention?: { readonly start: number; readonly end: number; readonly text: string }
-    }>
-    readonly metadata?: { readonly [x: string]: JsonValue }
-    readonly delivery?: ("steer" | "queue") | null
-    readonly resume?: boolean | null
-  } & { readonly [x: string]: JsonValue | null })["metadata"]
-  readonly delivery?: ({
-    readonly id?: string | null
-    readonly text: string
-    readonly files?: ReadonlyArray<{
-      readonly uri: string
-      readonly name?: string
-      readonly description?: string
-      readonly mention?: { readonly start: number; readonly end: number; readonly text: string }
-    }>
-    readonly agents?: ReadonlyArray<{
-      readonly name: string
-      readonly mention?: { readonly start: number; readonly end: number; readonly text: string }
-    }>
-    readonly skills?: ReadonlyArray<{
-      readonly id: string
-      readonly mention?: { readonly start: number; readonly end: number; readonly text: string }
-    }>
-    readonly metadata?: { readonly [x: string]: JsonValue }
-    readonly delivery?: ("steer" | "queue") | null
-    readonly resume?: boolean | null
-  } & { readonly [x: string]: JsonValue | null })["delivery"]
-  readonly resume?: ({
-    readonly id?: string | null
-    readonly text: string
-    readonly files?: ReadonlyArray<{
-      readonly uri: string
-      readonly name?: string
-      readonly description?: string
-      readonly mention?: { readonly start: number; readonly end: number; readonly text: string }
-    }>
-    readonly agents?: ReadonlyArray<{
-      readonly name: string
-      readonly mention?: { readonly start: number; readonly end: number; readonly text: string }
-    }>
-    readonly skills?: ReadonlyArray<{
-      readonly id: string
-      readonly mention?: { readonly start: number; readonly end: number; readonly text: string }
-    }>
-    readonly metadata?: { readonly [x: string]: JsonValue }
-    readonly delivery?: ("steer" | "queue") | null
-    readonly resume?: boolean | null
-  } & { readonly [x: string]: JsonValue | null })["resume"]
+  readonly sessionID: string
+  readonly id?: string | null | undefined
+  readonly text: string
+  readonly files?:
+    | ReadonlyArray<{
+        readonly uri: string
+        readonly name?: string
+        readonly description?: string
+        readonly mention?: { readonly start: number; readonly end: number; readonly text: string }
+      }>
+    | undefined
+  readonly agents?:
+    | ReadonlyArray<{
+        readonly name: string
+        readonly mention?: { readonly start: number; readonly end: number; readonly text: string }
+      }>
+    | undefined
+  readonly skills?:
+    | ReadonlyArray<{
+        readonly id: string
+        readonly mention?: { readonly start: number; readonly end: number; readonly text: string }
+      }>
+    | undefined
+  readonly metadata?: { readonly [x: string]: JsonValue } | undefined
+  readonly delivery?: ("steer" | "queue") | null | undefined
+  readonly resume?: boolean | null | undefined
 }
 
 export type SessionPromptOutput = { data: SessionInboxUser }["data"]
@@ -4364,6 +4221,7 @@ export type EventSubscribeInput = {
         | "session.tool.input.delta"
         | "session.tool.input.ended"
         | "session.tool.called"
+        | "session.tool.subagent.prepared"
         | "session.tool.progress"
         | "session.tool.success"
         | "session.tool.failed"
@@ -4379,6 +4237,7 @@ export type EventSubscribeInput = {
         | "reference.updated"
         | "permission.asked"
         | "permission.replied"
+        | "permission.cancelled"
         | "plugin.updated"
         | "project.updated"
         | "worktree.updated"
