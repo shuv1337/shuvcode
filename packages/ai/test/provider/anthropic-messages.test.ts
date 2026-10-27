@@ -959,6 +959,9 @@ describe("Anthropic Messages route", () => {
         ? result.content.flatMap((item) => (item.type === "text" ? [item.text] : [])).join("\n")
         : result.content
       expect(text).not.toContain("data:")
+    }),
+  )
+
   const video = { type: "video", source: { type: "base64", media_type: "video/mp4", data: "AAECAw==" } }
   const videoFile = { type: "file" as const, uri: "data:video/mp4;base64,AAECAw==", mime: "video/mp4" }
   const customModel = AnthropicMessages.route.with({ provider: "custom" }).model({ id: "video-model" })
