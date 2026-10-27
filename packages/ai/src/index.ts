@@ -265,4 +265,9 @@ export const tool = <Parameters extends ToolSchema<any>>(config: {
 /** Default client over `RequestExecutor.fetchLayer` for scripts; the runtime builds its layer on first use. */
 export const ai = make()
 
+// Fork callers still import the Effect surface from the package root. The promise entry above uses these internally.
+export { LLM, isRetryable } from "./effect.js"
+export { AIError, LanguageModel, LLMEvent, Message, ToolDefinition } from "./schema/index.js"
+export { ToolFailure }
+
 export * as AI from "./index.js"
