@@ -8,6 +8,7 @@ import os from "node:os"
 import path from "node:path"
 import { ServerConnection } from "../src/services/server-connection"
 import { ServiceConfig } from "../src/services/service-config"
+import { isolatedEnv } from "./fixture/environment"
 
 test("resolution groups Effect-native lifecycle operations only for the managed service", async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "opencode-server-resolution-"))

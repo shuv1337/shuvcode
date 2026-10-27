@@ -112,10 +112,6 @@ const Root = Spec.make(typeof OPENCODE_CLI_NAME === "string" ? OPENCODE_CLI_NAME
               Flag.withDescription("Directory to write the snapshot into instead of the server's log directory"),
               Flag.optional,
             ),
-            server: Flag.String("server").pipe(
-              Flag.withDescription("Connect to a server URL instead of the background service"),
-              Flag.optional,
-            ),
           },
         }),
         Spec.make("paths", {
@@ -217,7 +213,9 @@ const Root = Spec.make(typeof OPENCODE_CLI_NAME === "string" ? OPENCODE_CLI_NAME
     Spec.make("mcp", {
       description: "Manage MCP (Model Context Protocol) servers",
       commands: [
-        Spec.make("list", { description: "List configured MCP servers and their status" }),
+        Spec.make("list", {
+          description: "List configured MCP servers and their status",
+        }),
         Spec.make("add", {
           description: "Add an MCP server to your configuration",
           connectionFlags: "unsupported",

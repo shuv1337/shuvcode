@@ -20,9 +20,7 @@ if (!semver.satisfies(process.versions.bun, expectedBunVersionRange)) {
 
 const env = {
   OPENCODE_CHANNEL: process.env["OPENCODE_CHANNEL"],
-  OPENCODE_BUMP: process.env["OPENCODE_BUMP"],
   OPENCODE_VERSION: process.env["OPENCODE_VERSION"],
-  OPENCODE_RELEASE: process.env["OPENCODE_RELEASE"],
 }
 const CHANNEL = await resolveChannel({
   channel: env.OPENCODE_CHANNEL,
@@ -89,9 +87,6 @@ export const Script = {
   },
   get preview() {
     return IS_PREVIEW
-  },
-  get release(): boolean {
-    return !!env.OPENCODE_RELEASE
   },
   get team() {
     return team
