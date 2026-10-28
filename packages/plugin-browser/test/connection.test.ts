@@ -481,7 +481,7 @@ for (const type of ["session.deleted", "session.moved"] as const) {
           yield* app.end(type)
           yield* Effect.yieldNow
           expect(app.connection.waiting(sessionID)).toBe(0)
-          expect(app.connection.retired(sessionID)).toBe(false)
+          expect(app.connection.retired(sessionID)).toBe(true)
           const failure = message(yield* Effect.exit(Fiber.join(pending)))
           expect(failure).toContain("did not run")
         }),
@@ -489,6 +489,66 @@ for (const type of ["session.deleted", "session.moved"] as const) {
     )
   })
 }
+
+for (const type of ["session.deleted", "session.moved"] as const) {
+  test(`${type} fails a taken command while the desktop is still attached`, async () => {
+    await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const app = yield* open
+          yield* app.connect("desktop-a")
+          const pending = yield* app.invoke("browser.tabs.list", {}).pipe(Effect.forkScoped({ startImmediately: true }))
+          const settled = yield* Deferred.make<Exit.Exit<unknown, unknown>>()
+          yield* Effect.exit(Fiber.join(pending)).pipe(
+            Effect.flatMap((exit) => Deferred.succeed(settled, exit)),
+            Effect.forkScoped({ startImmediately: true }),
+          )
+          const event = yield* app.take("command", "desktop-a")
+          if (event.type !== "command") return yield* Effect.die(new Error("expected a browser command"))
+          yield* app.methods.command({ sessionID, connectionID: "desktop-a", requestID: event.requestID }, call)
+          yield* app.end(type)
+          yield* Effect.yieldNow
+          const ready = yield* Deferred.poll(settled)
+          if (Option.isNone(ready)) return yield* Effect.die(new Error("command waited after the session ended"))
+          expect(message(yield* ready.value)).toContain("may already have run")
+          expect(app.connection.waiting(sessionID)).toBe(0)
+        }),
+      ).pipe(Effect.provide(TestClock.layer())),
+    )
+  })
+}
+
+test("overlapping move and delete fail a taken command and then release the session", async () => {
+  await Effect.runPromise(
+    Effect.scoped(
+      Effect.gen(function* () {
+        const app = yield* open
+        yield* app.connect("desktop-a")
+        const pending = yield* app.invoke("browser.tabs.list", {}).pipe(Effect.forkScoped({ startImmediately: true }))
+        const settled = yield* Deferred.make<Exit.Exit<unknown, unknown>>()
+        yield* Effect.exit(Fiber.join(pending)).pipe(
+          Effect.flatMap((exit) => Deferred.succeed(settled, exit)),
+          Effect.forkScoped({ startImmediately: true }),
+        )
+        const event = yield* app.take("command", "desktop-a")
+        if (event.type !== "command") return yield* Effect.die(new Error("expected a browser command"))
+        yield* app.methods.command({ sessionID, connectionID: "desktop-a", requestID: event.requestID }, call)
+        yield* app.end("session.moved")
+        yield* app.end("session.deleted")
+        yield* Effect.yieldNow
+        yield* Effect.yieldNow
+        const ready = yield* Deferred.poll(settled)
+        if (Option.isNone(ready)) return yield* Effect.die(new Error("command waited after overlapping session events"))
+        expect(message(yield* ready.value)).toContain("may already have run")
+        expect(app.connection.waiting(sessionID)).toBe(0)
+        expect(app.connection.retired(sessionID)).toBe(true)
+        yield* TestClock.adjust(BrowserConnection.replayGrace)
+        yield* Effect.yieldNow
+        expect(app.connection.retired(sessionID)).toBe(false)
+      }),
+    ).pipe(Effect.provide(TestClock.layer())),
+  )
+})
 
 test("a close that already has the result keeps that result", async () => {
   await Effect.runPromise(

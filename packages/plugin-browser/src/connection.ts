@@ -4,7 +4,7 @@ import type { Context } from "@opencode/plugin/effect/plugin"
 import type { RpcRegistration } from "@opencode/plugin/effect/rpc"
 import type { Session } from "@opencode/schema/session"
 import { Tool } from "@opencode/schema/tool"
-import { Deferred, Effect, Option, Schema, Stream } from "effect"
+import { Clock, Deferred, Duration, Effect, Option, Schema, Stream } from "effect"
 import { Browser } from "./rpc.js"
 import { BrowserTunnel } from "./tunnel.js"
 
@@ -30,6 +30,8 @@ export const attached =
 export const replayGrace = "2 seconds"
 export const inventoryGrace = "2 seconds"
 
+type CloseReason = "closed" | "replaced" | "retired"
+
 type Pending = {
   command: Browser.Command
   result: Deferred.Deferred<Browser.Result, Tool.Error>
@@ -40,7 +42,7 @@ type Pending = {
 type Attachment = {
   connectionID: string
   state: Browser.State
-  closed: Deferred.Deferred<"closed" | "replaced">
+  closed: Deferred.Deferred<CloseReason>
   /** Completed by the first `state` publication, which is the first real tab list. */
   inventory: Deferred.Deferred<void>
   inventoryReady: boolean
@@ -65,8 +67,9 @@ export const make = Effect.fn("BrowserConnection.make")(function* (
   const browsers = new Map<Session.ID, Attachment>()
   // In-flight commands waiting for an ordinary reconnect, not a replacement that is already installed.
   const subscribers = new Map<Session.ID, Array<Deferred.Deferred<Attachment, Tool.Error>>>()
-  // Set while a delete or move is settling, so that close cannot park a new waiter.
-  const retired = new Set<Session.ID>()
+  // Session ids that must not replay, and the time that ban lifts. A move or delete
+  // extends the deadline instead of clearing another event's entry.
+  const retiredUntil = new Map<Session.ID, number>()
   // Appended after config, so every agent hides the browser until an attachment allows it.
   yield* ctx.agent.transform((editor) =>
     editor.list().forEach((agent) => agent.permissions.push({ action: "browser", resource: "*", effect: "deny" })),
@@ -123,7 +126,7 @@ export const make = Effect.fn("BrowserConnection.make")(function* (
       { discard: true },
     )
   }
-  const close = (sessionID: Session.ID, reason: "closed" | "replaced" = "closed") =>
+  const close = (sessionID: Session.ID, reason: CloseReason = "closed") =>
     Effect.gen(function* () {
       // Drop anyone still parked from an earlier grace window before this close wakes them.
       yield* forget(sessionID)
@@ -141,16 +144,42 @@ export const make = Effect.fn("BrowserConnection.make")(function* (
   // give the desktop one reconnect attempt before reporting that the action did not run.
   // Attach carries sessionID, connectionID, and version. connectionID is new on every
   // registration, and the desktop does not send a stable id, so replay follows the session.
-  const adopt = (sessionID: Session.ID, previous: Attachment, reason: "closed" | "replaced") =>
+  const isRetired = (sessionID: Session.ID) =>
     Effect.gen(function* () {
-      if (retired.has(sessionID)) return undefined
+      const deadline = retiredUntil.get(sessionID)
+      if (deadline === undefined) return false
+      if ((yield* Clock.currentTimeMillis) < deadline) return true
+      retiredUntil.delete(sessionID)
+      return false
+    })
+  // Holds the ban for one reconnect grace. A later move or delete only lengthens it.
+  const markRetired = (sessionID: Session.ID) =>
+    Effect.gen(function* () {
+      const until = (yield* Clock.currentTimeMillis) + Duration.toMillis(replayGrace)
+      const current = retiredUntil.get(sessionID)
+      if (current === undefined || until > current) retiredUntil.set(sessionID, until)
+      yield* Effect.sleep(replayGrace).pipe(
+        Effect.andThen(
+          Effect.gen(function* () {
+            const deadline = retiredUntil.get(sessionID)
+            if (deadline !== undefined && (yield* Clock.currentTimeMillis) >= deadline) retiredUntil.delete(sessionID)
+          }),
+        ),
+        Effect.forkScoped({ startImmediately: true }),
+      )
+    })
+  const adopt = (sessionID: Session.ID, previous: Attachment, reason: CloseReason) =>
+    Effect.gen(function* () {
+      // The reason travels with the wake. close only schedules this command, so a
+      // flag cleared by the handler would already be gone by the time we run.
+      if (reason === "retired" || (yield* isRetired(sessionID))) return undefined
       const installed = browsers.get(sessionID)
       if (installed && installed !== previous) return installed
       if (reason === "replaced") return undefined
       const waiter = yield* Deferred.make<Attachment, Tool.Error>()
       subscribers.set(sessionID, [...(subscribers.get(sessionID) ?? []), waiter])
       const raced = browsers.get(sessionID)
-      if (retired.has(sessionID)) {
+      if (yield* isRetired(sessionID)) {
         drop(sessionID, waiter)
         return undefined
       }
@@ -196,14 +225,14 @@ export const make = Effect.fn("BrowserConnection.make")(function* (
               const browser: Attachment = {
                 connectionID: input.connectionID,
                 state: { tabs: [], focusedTabID: null },
-                closed: yield* Deferred.make<"closed" | "replaced">(),
+                closed: yield* Deferred.make<CloseReason>(),
                 inventory: yield* Deferred.make<void>(),
                 inventoryReady: false,
                 pending: new Map(),
                 tunnels: BrowserTunnel.make(),
               }
               browsers.set(input.sessionID, browser)
-              retired.delete(input.sessionID)
+              // A new attachment does not lift a delete or move ban early. The deadline does.
               // Wake reconnect waiters before the previous command observes `replaced` or `closed`.
               yield* announce(input.sessionID, browser)
               if (previous) yield* Deferred.succeed(previous.closed, "replaced")
@@ -215,7 +244,9 @@ export const make = Effect.fn("BrowserConnection.make")(function* (
           yield* rpc.events
             .emit("control", { type: "attached", connectionID: input.connectionID, version: 4 })
             .pipe(Effect.orDie)
-          return yield* Deferred.await(browser.closed)
+          // In-flight commands see "retired". The desktop protocol only has closed and replaced.
+          const outcome = yield* Deferred.await(browser.closed)
+          return outcome === "retired" ? "closed" : outcome
         }).pipe(Effect.scoped),
       state: (input, call) =>
         Effect.gen(function* () {
@@ -276,18 +307,13 @@ export const make = Effect.fn("BrowserConnection.make")(function* (
   yield* ctx.event.subscribe().pipe(
     Stream.filter((event) => event.type === "session.deleted" || event.type === "session.moved"),
     Stream.runForEach((event) =>
-      Effect.sync(() => {
-        retired.add(event.data.sessionID)
-      }).pipe(
-        Effect.andThen(close(event.data.sessionID)),
-        // close wakes an in-flight command, which may park a waiter before this line.
+      markRetired(event.data.sessionID).pipe(
+        Effect.andThen(close(event.data.sessionID, "retired")),
+        // close only schedules the command it wakes. That command reads the retired
+        // reason, so it does not park a reconnect after this handler returns.
         Effect.andThen(forget(event.data.sessionID)),
-        // Both forgets have run, and adopt already observed the flag, so the id can leave the set.
-        Effect.andThen(
-          Effect.sync(() => {
-            retired.delete(event.data.sessionID)
-          }),
-        ),
+        // The id stays retired for replayGrace. Another move or delete extends that
+        // deadline; clearing it here would let a late adopt replay onto a session that came back.
       ),
     ),
     Effect.forkScoped({ startImmediately: true }),
@@ -309,7 +335,7 @@ export const make = Effect.fn("BrowserConnection.make")(function* (
   return {
     status,
     waiting: (sessionID: Session.ID) => subscribers.get(sessionID)?.length ?? 0,
-    retired: (sessionID: Session.ID) => retired.has(sessionID),
+    retired: (sessionID: Session.ID) => retiredUntil.has(sessionID),
     // Fails before a browser tool reads files or dispatches. Status stays available either way.
     require: Effect.fn("BrowserConnection.require")(function* (sessionID: Session.ID) {
       if (browsers.has(sessionID)) return
@@ -369,7 +395,7 @@ export const make = Effect.fn("BrowserConnection.make")(function* (
 
 const request = Effect.fn("BrowserConnection.request")(function* (
   rpc: RpcRegistration<typeof Browser.Definition>,
-  adopt: (previous: Attachment, reason: "closed" | "replaced") => Effect.Effect<Attachment | undefined, Tool.Error>,
+  adopt: (previous: Attachment, reason: CloseReason) => Effect.Effect<Attachment | undefined, Tool.Error>,
   browser: Attachment,
   action: Browser.Action,
   tab: Browser.Tab | undefined,
