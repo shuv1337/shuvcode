@@ -1,0 +1,40 @@
+name: plugin-browser
+
+# Pull requests otherwise get typecheck only. This package's suite is the
+# disconnected-desktop contract, so it runs on every pull request.
+on:
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: plugin-browser-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: plugin-browser
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      - name: Setup Bun
+        uses: ./.github/actions/setup-bun
+        with:
+          bun-version: "1.4.4"
+          install-flags: --frozen-lockfile
+
+      - name: Test browser plugin
+        working-directory: packages/plugin-browser
+        timeout-minutes: 5
+        run: bun test
+
+      - name: Typecheck browser plugin
+        working-directory: packages/plugin-browser
+        run: bun run typecheck
