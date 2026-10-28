@@ -139,8 +139,8 @@ export const make = Effect.fn("BrowserConnection.make")(function* (
   }
   // `replaced` already installed the next attachment. `closed` is an ordinary drop:
   // give the desktop one reconnect attempt before reporting that the action did not run.
-  // Attach carries a fresh connection id, not a stable desktop id, so this replay can
-  // land on a different desktop that attaches to the same session.
+  // Attach carries sessionID, connectionID, and version. connectionID is new on every
+  // registration, and the desktop does not send a stable id, so replay follows the session.
   const adopt = (sessionID: Session.ID, previous: Attachment, reason: "closed" | "replaced") =>
     Effect.gen(function* () {
       if (retired.has(sessionID)) return undefined
@@ -282,6 +282,12 @@ export const make = Effect.fn("BrowserConnection.make")(function* (
         Effect.andThen(close(event.data.sessionID)),
         // close wakes an in-flight command, which may park a waiter before this line.
         Effect.andThen(forget(event.data.sessionID)),
+        // Both forgets have run, and adopt already observed the flag, so the id can leave the set.
+        Effect.andThen(
+          Effect.sync(() => {
+            retired.delete(event.data.sessionID)
+          }),
+        ),
       ),
     ),
     Effect.forkScoped({ startImmediately: true }),
@@ -303,6 +309,7 @@ export const make = Effect.fn("BrowserConnection.make")(function* (
   return {
     status,
     waiting: (sessionID: Session.ID) => subscribers.get(sessionID)?.length ?? 0,
+    retired: (sessionID: Session.ID) => retired.has(sessionID),
     // Fails before a browser tool reads files or dispatches. Status stays available either way.
     require: Effect.fn("BrowserConnection.require")(function* (sessionID: Session.ID) {
       if (browsers.has(sessionID)) return
@@ -362,10 +369,7 @@ export const make = Effect.fn("BrowserConnection.make")(function* (
 
 const request = Effect.fn("BrowserConnection.request")(function* (
   rpc: RpcRegistration<typeof Browser.Definition>,
-  adopt: (
-    previous: Attachment,
-    reason: "closed" | "replaced",
-  ) => Effect.Effect<Attachment | undefined, Tool.Error>,
+  adopt: (previous: Attachment, reason: "closed" | "replaced") => Effect.Effect<Attachment | undefined, Tool.Error>,
   browser: Attachment,
   action: Browser.Action,
   tab: Browser.Tab | undefined,
@@ -449,7 +453,11 @@ const tabAfterInventory = Effect.fn("BrowserConnection.tabAfterInventory")(funct
   action: Browser.Action,
 ) {
   if (!("tabID" in action)) return undefined
-  yield* Deferred.await(next.inventory).pipe(
+  // A desktop that closes while we wait must not hold the command for the whole grace.
+  yield* Effect.raceFirst(
+    Deferred.await(next.inventory),
+    Deferred.await(next.closed).pipe(Effect.andThen(Effect.fail(new Tool.Error({ message: closedBefore })))),
+  ).pipe(
     Effect.timeoutOrElse({
       duration: inventoryGrace,
       orElse: () => Effect.fail(new Tool.Error({ message: closedBefore })),

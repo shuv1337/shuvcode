@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test"
-import { Cause, Effect, Exit, Fiber, Queue, Stream } from "effect"
+import { Cause, Deferred, Effect, Exit, Fiber, Option, Queue, Stream } from "effect"
 import { TestClock } from "effect/testing"
 import type { Context } from "@opencode/plugin/effect/plugin"
 import { AbsolutePath } from "@opencode/schema/schema"
@@ -370,7 +370,34 @@ test("a replacement replays a tab command after the new desktop publishes its ta
   )
 })
 
-test("an ordinary reconnect replays a command the desktop never took", async () => {
+test("closing the new desktop ends the tab-list wait", async () => {
+  await Effect.runPromise(
+    Effect.scoped(
+      Effect.gen(function* () {
+        const app = yield* open
+        yield* app.connect("desktop-a")
+        yield* app.methods.state({ sessionID, connectionID: "desktop-a", state }, call)
+        const pending = yield* app
+          .invoke("browser.snapshot", { tabID })
+          .pipe(Effect.forkScoped({ startImmediately: true }))
+        const settled = yield* Deferred.make<Exit.Exit<unknown, unknown>>()
+        yield* Effect.exit(Fiber.join(pending)).pipe(
+          Effect.flatMap((exit) => Deferred.succeed(settled, exit)),
+          Effect.forkScoped({ startImmediately: true }),
+        )
+        yield* app.take("command", "desktop-a")
+        const next = yield* app.connect("desktop-b")
+        yield* Fiber.interrupt(next)
+        yield* Effect.yieldNow
+        const ready = yield* Deferred.poll(settled)
+        if (Option.isNone(ready)) return yield* Effect.die(new Error("tab-list wait ignored the desktop closing"))
+        expect(message(yield* ready.value)).toContain("did not run")
+      }),
+    ).pipe(Effect.provide(TestClock.layer())),
+  )
+})
+
+test("an ordinary reconnect replays onto the new connection id", async () => {
   await Effect.runPromise(
     Effect.scoped(
       Effect.gen(function* () {
@@ -382,6 +409,7 @@ test("an ordinary reconnect replays a command the desktop never took", async () 
         yield* app.connect("desktop-b")
         const replayed = yield* app.take("command", "desktop-b")
         if (replayed.type !== "command") return yield* Effect.die(new Error("expected the reconnected command"))
+        expect(replayed.connectionID).toBe("desktop-b")
         yield* app.methods.command({ sessionID, connectionID: "desktop-b", requestID: replayed.requestID }, call)
         yield* app.methods.result(
           {
@@ -453,6 +481,7 @@ for (const type of ["session.deleted", "session.moved"] as const) {
           yield* app.end(type)
           yield* Effect.yieldNow
           expect(app.connection.waiting(sessionID)).toBe(0)
+          expect(app.connection.retired(sessionID)).toBe(false)
           const failure = message(yield* Effect.exit(Fiber.join(pending)))
           expect(failure).toContain("did not run")
         }),
