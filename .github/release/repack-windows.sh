@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 # repack-windows.sh <work dir> <out dir>: checks every signature in <work dir>, then writes the signed CLI back
 # into npm tarballs and opencode-<target>.zip archives in <out dir>.
+# shellcheck source-path=SCRIPTDIR
+# shellcheck source=lib.sh
 . "$(dirname "$0")/lib.sh"
 
 work=$(posix "$1") out=$(posix "$2")

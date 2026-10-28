@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 # verify-signatures-windows.sh <dir>: fails unless every .exe and .node under <dir> has a valid Authenticode signature.
+# shellcheck source-path=SCRIPTDIR
+# shellcheck source=lib.sh
 . "$(dirname "$0")/lib.sh"
 
 if dry_run; then

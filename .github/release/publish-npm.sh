@@ -2,6 +2,8 @@
 # publish-npm.sh <build-npm dir> <signed dir>...: publishes every release tarball to npm with OPENCODE_NPM_TAG.
 # Names, the version and the package set come from this script, never from the tarballs: each tarball's
 # package.json is read as data and must match. macOS and Windows CLI packages must come from a signed dir.
+# shellcheck source-path=SCRIPTDIR
+# shellcheck source=lib.sh
 . "$(dirname "$0")/lib.sh"
 
 npm_dir=$1
@@ -52,7 +54,7 @@ cat "$order"
 # A clean directory and config, so nothing from an artifact can redirect the registry.
 printf 'registry=https://registry.npmjs.org/\n' > "$RUNNER_TEMP/npmrc"
 export NPM_CONFIG_USERCONFIG="$RUNNER_TEMP/npmrc"
-cd "$(mktemp -d)"
+cd "$(mktemp -d)" || die "cannot create a clean publish directory"
 flags=(--tag "$OPENCODE_NPM_TAG" --access public --ignore-scripts)
 if dry_run; then flags+=(--dry-run); else flags+=(--provenance); fi
 while IFS=$'\t' read -r name file; do

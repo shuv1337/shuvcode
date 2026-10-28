@@ -8,6 +8,8 @@
 #   pull_request                      -> pr       0.0.0-pr-<run>      everything, dry run
 #
 # Releasers are actors with the admin or maintain role on the repository (the releasers team has maintain).
+# shellcheck source-path=SCRIPTDIR
+# shellcheck source=lib.sh
 . "$(dirname "$0")/lib.sh"
 
 versioned=false

@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 # publish-version-pr.sh <sha>: opens the pull request that brings the release commit (versions and changelog) back to dev.
 # Pushing to dev is blocked by rulesets, so this never merges.
+# shellcheck source-path=SCRIPTDIR
+# shellcheck source=lib.sh
 . "$(dirname "$0")/lib.sh"
 
 branch="release-v$OPENCODE_VERSION"

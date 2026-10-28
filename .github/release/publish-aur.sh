@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 # publish-aur.sh <build-npm dir>: updates opencode-beta on the AUR over SSH (AUR_KEY, pinned host key) and
 # registers the aur update artifact.
+# shellcheck source-path=SCRIPTDIR
+# shellcheck source=lib.sh
 . "$(dirname "$0")/lib.sh"
 
 if ! dry_run; then

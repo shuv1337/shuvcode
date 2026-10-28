@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 # unpack-windows.sh <download dir> <work dir>: lays out what the signing action signs in <work dir>:
 # cli/<target>/package from the Windows CLI npm tarballs, and desktop-<target>/ from the unpacked desktop apps.
+# shellcheck source-path=SCRIPTDIR
+# shellcheck source=lib.sh
 . "$(dirname "$0")/lib.sh"
 
 in=$(posix "$1") work=$(posix "$2")

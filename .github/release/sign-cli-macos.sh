@@ -2,6 +2,8 @@
 # sign-cli-macos.sh <build-npm dir> <out dir>: signs the three macOS CLI binaries inside their npm tarballs with
 # the Developer ID in build.keychain, then writes the re-packed tarballs and the opencode-<target>.zip archives.
 # Dry runs sign ad-hoc.
+# shellcheck source-path=SCRIPTDIR
+# shellcheck source=lib.sh
 . "$(dirname "$0")/lib.sh"
 
 in=$1 out=$2

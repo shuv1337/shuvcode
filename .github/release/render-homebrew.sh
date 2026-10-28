@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 # render-homebrew.sh <sign-macos dir> <build-archives dir> <tap dir>: writes Formula opencode-v2.rb with the
 # hashes of the signed macOS and the Linux archives.
+# shellcheck source-path=SCRIPTDIR
+# shellcheck source=lib.sh
 . "$(dirname "$0")/lib.sh"
 
 macos=$1 archives=$2 tap=$3

@@ -2,6 +2,8 @@
 # publish-desktop.sh <sign-macos dir> <sign-desktop-windows-installer dir> <build-desktop-linux-x64 dir>
 # <build-desktop-linux-arm64 dir>: uploads the desktop builds to opencode.ai/files and registers the desktop update
 # artifact. The electron-updater feeds (latest*.yml) are computed here from the final signed files.
+# shellcheck source-path=SCRIPTDIR
+# shellcheck source=lib.sh
 . "$(dirname "$0")/lib.sh"
 
 macos=$1 windows=$2 linux_x64=$3 linux_arm64=$4

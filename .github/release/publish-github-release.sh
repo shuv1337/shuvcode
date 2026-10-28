@@ -2,6 +2,8 @@
 # publish-github-release.sh <dir>...: attaches the CLI archives and desktop builds in the given artifact dirs, plus
 # a SHA256SUMS, to the v<version> GitHub release with OPENCODE_RELEASE_NOTES. Immutable releases lock assets once
 # published, so they go to a draft first.
+# shellcheck source-path=SCRIPTDIR
+# shellcheck source=lib.sh
 . "$(dirname "$0")/lib.sh"
 
 assets=$(mktemp -d)

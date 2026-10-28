@@ -1,3 +1,4 @@
+# shellcheck shell=bash
 # Shared helpers for the release scripts. Sourced, never executed.
 #
 # These scripts run in sign and publish jobs that hold secrets. They must never execute repository code

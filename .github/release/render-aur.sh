@@ -2,6 +2,8 @@
 # render-aur.sh <build-npm dir> <aur dir>: writes PKGBUILD, .SRCINFO and the opencode2 shim for opencode-beta.
 # The package installs the published npm tarballs, so their hashes come from the build-npm artifact.
 # LICENSE comes from the AUR repository itself.
+# shellcheck source-path=SCRIPTDIR
+# shellcheck source=lib.sh
 . "$(dirname "$0")/lib.sh"
 
 npm=$1 aur=$2

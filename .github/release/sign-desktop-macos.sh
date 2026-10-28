@@ -4,6 +4,8 @@
 # from the stapled apps. Dry runs sign ad-hoc and skip notarization. Dev and beta trade larger files for faster
 # packaging (zip and dmg at zlib level 1) and skip the .app.tar.gz, which only the retired Tauri updater feed read.
 # Notarization reads APPLE_API_KEY_CONTENT, APPLE_API_KEY_ID and APPLE_API_ISSUER.
+# shellcheck source-path=SCRIPTDIR
+# shellcheck source=lib.sh
 . "$(dirname "$0")/lib.sh"
 
 out=$1

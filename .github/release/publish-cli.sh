@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 # publish-cli.sh <build-archives dir> <sign-macos dir> <sign-windows dir>: uploads the standalone CLI
 # archives to opencode.ai/files and registers the cli (and, off latest, cli-node) update artifacts.
+# shellcheck source-path=SCRIPTDIR
+# shellcheck source=lib.sh
 . "$(dirname "$0")/lib.sh"
 
 archives=$1 macos=$2 windows=$3

@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 # publish-docker.sh <build-docker dir>: pushes the multi-arch OCI image to ghcr.io/anomalyco/opencode:<version>
 # without building anything (GH_TOKEN with packages: write).
+# shellcheck source-path=SCRIPTDIR
+# shellcheck source=lib.sh
 . "$(dirname "$0")/lib.sh"
 
 image="$1/opencode-image.tar"
