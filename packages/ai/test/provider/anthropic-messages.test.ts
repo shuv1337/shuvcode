@@ -871,7 +871,7 @@ describe("Anthropic Messages route", () => {
     }),
   )
 
-  it.effect("lowers remote failure images through the same blocks as success", () =>
+  it.effect("keeps success images and sends only text for the same files on an error", () =>
     Effect.gen(function* () {
       const https = "https://example.com/shot.png"
       const image = "data:image/png;base64,AAECAw=="
@@ -912,17 +912,26 @@ describe("Anthropic Messages route", () => {
           ],
         }),
       )
-      expect(media(failure.body)).toEqual(media(success.body))
       expect(media(success.body)).toEqual([
         { type: "image", source: { type: "url", url: https } },
         { type: "image", source: { type: "base64", media_type: "image/png", data: "AAECAw==" } },
       ])
+      const errorContent = expectToolResult(failure.body).content
+      expect(Array.isArray(errorContent) && errorContent.every((block) => block.type === "text")).toBe(true)
+      expect(errorContent).toEqual([
+        {
+          type: "text",
+          text: JSON.stringify({ error: { type: "tool.execution", message: "snapshot failed" }, content: [] }),
+        },
+        { type: "text", text: "remote" },
+        { type: "text", text: "[image omitted]" },
+        { type: "text", text: "[image omitted]" },
+      ])
     }),
   )
 
-  it.effect("lowers rich tool failures with is_error and image content", () =>
+  it.effect("sends only text blocks in an error tool_result", () =>
     Effect.gen(function* () {
-      const uri = "data:image/png;base64,AAECAw=="
       const prepared = yield* compileRequest(
         LLM.request({
           model,
@@ -937,7 +946,14 @@ describe("Anthropic Messages route", () => {
                 value: { error: { type: "tool.execution", message: "snapshot failed" }, content: [] },
                 content: [
                   { type: "text", text: "could not capture" },
-                  { type: "file", uri, mime: "image/png", name: "shot.png" },
+                  { type: "file", uri: "data:image/png;base64,AAECAw==", mime: "image/png", name: "shot.png" },
+                  { type: "file", uri: "file:///tmp/shot.png", mime: "image/png", name: "local.png" },
+                  {
+                    type: "file",
+                    uri: "data:application/pdf;base64,JVBERi0=",
+                    mime: "application/pdf",
+                    name: "page.pdf",
+                  },
                 ],
               },
             }),
@@ -953,12 +969,11 @@ describe("Anthropic Messages route", () => {
           text: JSON.stringify({ error: { type: "tool.execution", message: "snapshot failed" }, content: [] }),
         },
         { type: "text", text: "could not capture" },
-        { type: "image", source: { type: "base64", media_type: "image/png", data: "AAECAw==" } },
+        { type: "text", text: "[image omitted]" },
+        { type: "text", text: "[image omitted]" },
+        { type: "text", text: "[document omitted]" },
       ])
-      const text = Array.isArray(result.content)
-        ? result.content.flatMap((item) => (item.type === "text" ? [item.text] : [])).join("\n")
-        : result.content
-      expect(text).not.toContain("data:")
+      expect(Array.isArray(result.content) && result.content.every((block) => block.type === "text")).toBe(true)
     }),
   )
 

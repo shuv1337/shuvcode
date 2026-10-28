@@ -825,10 +825,26 @@ const lowerToolResultContent = Effect.fnUntraced(function* (part: ToolResultPart
   if (part.result.type !== "content" && rich === undefined) return ProviderShared.toolResultText(part)
   // Preserve the narrowed array element type when compiled through a consumer package.
   const content: ReadonlyArray<Tool.Content> = part.result.type === "content" ? part.result.value : rich!
-  const blocks = yield* Effect.forEach(content, (item) => lowerToolResultContentItem(item, request))
-  if (part.result.type !== "error") return blocks
-  return [{ type: "text" as const, text: ProviderShared.toolResultText(part) }, ...blocks]
+  // An is_error tool_result may contain only text. Image and document blocks in that content are
+  // rejected, so replace them with a note instead of lowering media.
+  if (part.result.type === "error") return lowerToolErrorContent(part, content)
+  return yield* Effect.forEach(content, (item) => lowerToolResultContentItem(item, request))
 })
+
+const lowerToolErrorContent = (part: ToolResultPart, content: ReadonlyArray<Tool.Content>) => [
+  { type: "text" as const, text: ProviderShared.toolResultText(part) },
+  ...content.map((item) =>
+    item.type === "text"
+      ? { type: "text" as const, text: item.text }
+      : { type: "text" as const, text: omittedToolErrorNote(item) },
+  ),
+]
+
+const omittedToolErrorNote = (item: Tool.FileContent) => {
+  if (item.mime.startsWith("image/")) return "[image omitted]"
+  if (item.mime === "application/pdf") return "[document omitted]"
+  return "[file omitted]"
+}
 
 const requireThinkingSignature = (request: LLMRequest) => {
   if (request.model.compatibility?.requireSignature !== undefined) return request.model.compatibility.requireSignature
@@ -1418,10 +1434,7 @@ const onContentBlockDelta = Effect.fnUntraced(function* (
   return [state, NO_EVENTS] satisfies StepResult
 })
 
-const onContentBlockStop = Effect.fnUntraced(function* (
-  state: ParserState,
-  event: AnthropicEvent,
-) {
+const onContentBlockStop = Effect.fnUntraced(function* (state: ParserState, event: AnthropicEvent) {
   if (event.index === undefined) return [state, NO_EVENTS] satisfies StepResult
   if (event.index in state.compactions) {
     const { [event.index]: content, ...compactions } = state.compactions
