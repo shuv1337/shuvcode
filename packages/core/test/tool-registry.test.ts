@@ -707,6 +707,45 @@ describe("Tool", () => {
     }),
   )
 
+  it.effect("does not call a disabled direct tool through a cached code-mode runtime", () =>
+    Effect.gen(function* () {
+      const service = yield* Tool.Service
+      const calls: string[] = []
+      yield* transform(
+        service,
+        {
+          secret: {
+            ...make(),
+            execute: ({ text }) => {
+              calls.push(text)
+              return Effect.succeed({ output: { text }, content: text })
+            },
+          },
+        },
+        { codemode: false },
+      )
+      const enabled = yield* service.snapshot()
+      const run = (snapshot: Tool.Snapshot, id: string) =>
+        snapshot.execute({
+          ...call("execute", id),
+          call: {
+            type: "tool-call",
+            id,
+            name: "execute",
+            input: { code: 'return await tools.secret({ text: "hidden" })' },
+          },
+        })
+
+      expect((yield* run(enabled, "call-enabled")).content[0]).toMatchObject({ type: "text" })
+      expect(calls).toEqual(["hidden"])
+
+      const denied = yield* service.snapshot([{ action: "secret", resource: "*", effect: "deny" }])
+      const blocked = yield* run(denied, "call-denied")
+      expect(calls).toEqual(["hidden"])
+      expect(blocked.metadata).toMatchObject({ error: true })
+    }),
+  )
+
   it.effect("exposes Code Mode tools directly when execute is denied", () =>
     Effect.gen(function* () {
       const service = yield* Tool.Service

@@ -277,7 +277,10 @@ const layer = Layer.effect(
             ? new Map(Array.from(active).filter(([, tool]) => tool.options?.codemode === false))
             : active
           const codeModeTools = new Map(Array.from(active).filter(([, tool]) => tool.options?.codemode !== false))
-          const names = Array.from(codeModeTools.keys()).join("\0")
+          // The runtime can call every active tool, including direct tools that are not in the
+          // code-mode catalog. Key the cache on that whole set so a later permission denial
+          // cannot reuse a runtime that still contains the disabled tool.
+          const names = Array.from(active.keys()).join("\0")
           // Discovery is immutable for a registry revision and visible tool set. Keep executors
           // fresh, but share the inventory, whose prepared runtime and much larger rendered catalog
           // are cached by identity, and the execute tool's definition across steps.
