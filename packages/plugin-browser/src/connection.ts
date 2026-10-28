@@ -64,7 +64,9 @@ export const make = Effect.fn("BrowserConnection.make")(function* (
 ) {
   const browsers = new Map<Session.ID, Attachment>()
   // In-flight commands waiting for an ordinary reconnect, not a replacement that is already installed.
-  const subscribers = new Map<Session.ID, Array<Deferred.Deferred<Attachment>>>()
+  const subscribers = new Map<Session.ID, Array<Deferred.Deferred<Attachment, Tool.Error>>>()
+  // Set while a delete or move is settling, so that close cannot park a new waiter.
+  const retired = new Set<Session.ID>()
   // Appended after config, so every agent hides the browser until an attachment allows it.
   yield* ctx.agent.transform((editor) =>
     editor.list().forEach((agent) => agent.permissions.push({ action: "browser", resource: "*", effect: "deny" })),
@@ -104,8 +106,27 @@ export const make = Effect.fn("BrowserConnection.make")(function* (
     browser.tunnels.dispose()
     return browser
   }
+  const drop = (sessionID: Session.ID, waiter: Deferred.Deferred<Attachment, Tool.Error>) => {
+    const queued = subscribers.get(sessionID)
+    if (!queued) return
+    const rest = queued.filter((item) => item !== waiter)
+    if (rest.length === 0) subscribers.delete(sessionID)
+    else subscribers.set(sessionID, rest)
+  }
+  const forget = (sessionID: Session.ID) => {
+    const queued = subscribers.get(sessionID)
+    if (!queued) return Effect.void
+    subscribers.delete(sessionID)
+    return Effect.forEach(
+      queued,
+      (waiter) => Deferred.fail(waiter, new Tool.Error({ message: closedBefore })).pipe(Effect.ignore),
+      { discard: true },
+    )
+  }
   const close = (sessionID: Session.ID, reason: "closed" | "replaced" = "closed") =>
     Effect.gen(function* () {
+      // Drop anyone still parked from an earlier grace window before this close wakes them.
+      yield* forget(sessionID)
       const browser = detach(sessionID)
       if (!browser) return
       yield* Deferred.succeed(browser.closed, reason)
@@ -118,21 +139,27 @@ export const make = Effect.fn("BrowserConnection.make")(function* (
   }
   // `replaced` already installed the next attachment. `closed` is an ordinary drop:
   // give the desktop one reconnect attempt before reporting that the action did not run.
+  // Attach carries a fresh connection id, not a stable desktop id, so this replay can
+  // land on a different desktop that attaches to the same session.
   const adopt = (sessionID: Session.ID, previous: Attachment, reason: "closed" | "replaced") =>
     Effect.gen(function* () {
+      if (retired.has(sessionID)) return undefined
       const installed = browsers.get(sessionID)
       if (installed && installed !== previous) return installed
       if (reason === "replaced") return undefined
-      const waiter = yield* Deferred.make<Attachment>()
+      const waiter = yield* Deferred.make<Attachment, Tool.Error>()
       subscribers.set(sessionID, [...(subscribers.get(sessionID) ?? []), waiter])
       const raced = browsers.get(sessionID)
+      if (retired.has(sessionID)) {
+        drop(sessionID, waiter)
+        return undefined
+      }
       if (raced && raced !== previous) {
-        const rest = (subscribers.get(sessionID) ?? []).filter((item) => item !== waiter)
-        if (rest.length === 0) subscribers.delete(sessionID)
-        else subscribers.set(sessionID, rest)
+        drop(sessionID, waiter)
         return raced
       }
       return yield* Deferred.await(waiter).pipe(
+        Effect.ensuring(Effect.sync(() => drop(sessionID, waiter))),
         Effect.timeoutOrElse({
           duration: replayGrace,
           orElse: () => Effect.succeed(undefined),
@@ -141,7 +168,8 @@ export const make = Effect.fn("BrowserConnection.make")(function* (
     })
   yield* Effect.addFinalizer(() => {
     active = false
-    return Effect.forEach(browsers.keys(), (id) => close(id), { discard: true })
+    const ids = new Set([...browsers.keys(), ...subscribers.keys()])
+    return Effect.forEach(ids, (id) => close(id), { discard: true })
   })
   const tunnels = (input: {
     sessionID: Session.ID
@@ -175,6 +203,7 @@ export const make = Effect.fn("BrowserConnection.make")(function* (
                 tunnels: BrowserTunnel.make(),
               }
               browsers.set(input.sessionID, browser)
+              retired.delete(input.sessionID)
               // Wake reconnect waiters before the previous command observes `replaced` or `closed`.
               yield* announce(input.sessionID, browser)
               if (previous) yield* Deferred.succeed(previous.closed, "replaced")
@@ -246,7 +275,15 @@ export const make = Effect.fn("BrowserConnection.make")(function* (
     .pipe(Effect.orDie)
   yield* ctx.event.subscribe().pipe(
     Stream.filter((event) => event.type === "session.deleted" || event.type === "session.moved"),
-    Stream.runForEach((event) => close(event.data.sessionID)),
+    Stream.runForEach((event) =>
+      Effect.sync(() => {
+        retired.add(event.data.sessionID)
+      }).pipe(
+        Effect.andThen(close(event.data.sessionID)),
+        // close wakes an in-flight command, which may park a waiter before this line.
+        Effect.andThen(forget(event.data.sessionID)),
+      ),
+    ),
     Effect.forkScoped({ startImmediately: true }),
   )
 
@@ -265,6 +302,7 @@ export const make = Effect.fn("BrowserConnection.make")(function* (
 
   return {
     status,
+    waiting: (sessionID: Session.ID) => subscribers.get(sessionID)?.length ?? 0,
     // Fails before a browser tool reads files or dispatches. Status stays available either way.
     require: Effect.fn("BrowserConnection.require")(function* (sessionID: Session.ID) {
       if (browsers.has(sessionID)) return
@@ -324,7 +362,10 @@ export const make = Effect.fn("BrowserConnection.make")(function* (
 
 const request = Effect.fn("BrowserConnection.request")(function* (
   rpc: RpcRegistration<typeof Browser.Definition>,
-  adopt: (previous: Attachment, reason: "closed" | "replaced") => Effect.Effect<Attachment | undefined>,
+  adopt: (
+    previous: Attachment,
+    reason: "closed" | "replaced",
+  ) => Effect.Effect<Attachment | undefined, Tool.Error>,
   browser: Attachment,
   action: Browser.Action,
   tab: Browser.Tab | undefined,
@@ -369,7 +410,11 @@ const request = Effect.fn("BrowserConnection.request")(function* (
             if (inspection.inspect)
               return yield* request(rpc, adopt, next, action, nextTab, files, { inspect: true }, true)
             if (!inspection.target) return yield* request(rpc, adopt, next, action, nextTab, files, {}, true)
-            const inspected = yield* request(rpc, adopt, next, action, nextTab, [], { inspect: true }, true)
+            // The original action has not run. A failed re-inspect is that same miss, not a
+            // desktop error the caller should retry unchanged.
+            const inspected = yield* request(rpc, adopt, next, action, nextTab, [], { inspect: true }, true).pipe(
+              Effect.mapError(() => new Tool.Error({ message: closedBefore })),
+            )
             const fresh = yield* Schema.decodeUnknownEffect(Browser.Target)(inspected.value).pipe(
               Effect.mapError(() => new Tool.Error({ message: closedBefore })),
             )

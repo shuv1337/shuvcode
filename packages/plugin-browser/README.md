@@ -33,9 +33,12 @@ tab before repeating it.
 If the desktop never retrieved the command, it is replayed once. A desktop that
 replaces the connection is used immediately. An ordinary reconnect is used when
 it attaches within 2 seconds; otherwise the call fails and the next one starts
-fresh. Commands that name a tab wait up to 2 seconds for that desktop's first
-tab list and run only when the tab is in it. A command approved against a
-specific target is re-inspected first, and a changed target is not executed.
+fresh. The attach protocol has a new connection id each time and no stable
+desktop id, so that replay can reach a different desktop that attaches to the
+same session. Commands that name a tab wait up to 2 seconds for that desktop's
+first tab list and run only when the tab is in it. A command approved against a
+specific target is re-inspected first. A changed target, or a re-inspect that
+fails, is not executed.
 
 ## Tools
 
