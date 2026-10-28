@@ -8,12 +8,44 @@ import { Deferred, Effect, Schema, Stream } from "effect"
 import { Browser } from "./rpc.js"
 import { BrowserTunnel } from "./tunnel.js"
 
+const recover =
+  "Open this session in the desktop app and wait for it to connect, then call browser.status({}) and browser.tabs.list({}). If the desktop app is not available, use Shuvgeist for rendered browser checks. HTTP or curl success only proves reachability or content, not a rendered UI, and must not be reported as UI verification."
+
+/** No desktop has attached. Rendered UI checks are unavailable until one does. */
+export const disconnected = `[browser.disconnected] No desktop browser is connected to this session, so rendered UI verification is unavailable. An advertised browser tool is not an attached desktop. ${recover} Repeating browser actions while disconnected will not help.`
+
+/** The desktop never retrieved the command, so the action did not run. */
+export const closedBefore = `[browser.disconnected] Browser connection closed before the desktop ran this action, so it did not run. ${recover}`
+
+/** The desktop already took the command. It may have run; do not replay it. */
+export const closedAfter = `[browser.disconnected] Browser connection closed; the action may already have run. Reconnect this session in the desktop app, call browser.status({}) and browser.tabs.list({}), and inspect the target tab with browser.snapshot({tabID}). Do not repeat clicks, submissions, uploads, or evaluations until their outcome is known. If the desktop app is not available, use Shuvgeist for rendered browser checks. HTTP or curl success only proves reachability or content, not a rendered UI, and must not be reported as UI verification.`
+
+/** A desktop is attached. HTTP success is still not rendered UI verification. */
+export const attached =
+  "A desktop browser is attached. Use an exact tabID from this status or browser.tabs.list({}) for page operations. HTTP or curl success is not rendered UI verification; use browser.snapshot or browser.screenshot for that."
+
+type Pending = {
+  command: Browser.Command
+  result: Deferred.Deferred<Browser.Result, Tool.Error>
+  /** Set once the desktop has retrieved the command. A later disconnect must not replay it. */
+  retrieved: boolean
+}
+
 type Attachment = {
   connectionID: string
   state: Browser.State
   closed: Deferred.Deferred<"closed" | "replaced">
-  pending: Map<string, { command: Browser.Command; result: Deferred.Deferred<Browser.Result, Tool.Error> }>
+  pending: Map<string, Pending>
   tunnels: BrowserTunnel.Tunnels
+}
+
+export interface Status {
+  readonly attached: boolean
+  readonly connectionID?: string
+  readonly tabs: readonly Browser.Tab[]
+  readonly focusedTabID: Browser.TabID | null
+  readonly rendered: boolean
+  readonly recovery: string
 }
 
 export type Connection = Effect.Success<ReturnType<typeof make>>
@@ -52,12 +84,19 @@ export const make = Effect.fn("BrowserConnection.make")(function* (
         ),
     )
   let active = true
+  // Drop the attachment without waking waiters. Replacement installs the next
+  // attachment first, then signals, so an in-flight request can see it.
+  const detach = (sessionID: Session.ID) => {
+    const browser = browsers.get(sessionID)
+    if (!browser) return
+    browsers.delete(sessionID)
+    browser.tunnels.dispose()
+    return browser
+  }
   const close = (sessionID: Session.ID, reason: "closed" | "replaced" = "closed") =>
     Effect.gen(function* () {
-      const browser = browsers.get(sessionID)
+      const browser = detach(sessionID)
       if (!browser) return
-      browsers.delete(sessionID)
-      browser.tunnels.dispose()
       yield* Deferred.succeed(browser.closed, reason)
     })
   yield* Effect.addFinalizer(() => {
@@ -85,7 +124,7 @@ export const make = Effect.fn("BrowserConnection.make")(function* (
           const browser = yield* Effect.acquireRelease(
             Effect.gen(function* () {
               if (!active) return yield* Effect.fail(call.error("unavailable", "Browser is unavailable.", {}))
-              yield* close(input.sessionID, "replaced")
+              const previous = detach(input.sessionID)
               const browser: Attachment = {
                 connectionID: input.connectionID,
                 state: { tabs: [], focusedTabID: null },
@@ -94,6 +133,7 @@ export const make = Effect.fn("BrowserConnection.make")(function* (
                 tunnels: BrowserTunnel.make(),
               }
               browsers.set(input.sessionID, browser)
+              if (previous) yield* Deferred.succeed(previous.closed, "replaced")
               return browser
             }),
             (browser) => (browsers.get(input.sessionID) === browser ? close(input.sessionID) : Effect.void),
@@ -118,6 +158,7 @@ export const make = Effect.fn("BrowserConnection.make")(function* (
             browser?.connectionID === input.connectionID ? browser.pending.get(input.requestID) : undefined
           if (!pending)
             return yield* Effect.fail(call.error("unavailable", "Browser request is no longer available.", {}))
+          pending.retrieved = true
           return pending.command
         }),
       result: (input, call) =>
@@ -162,14 +203,29 @@ export const make = Effect.fn("BrowserConnection.make")(function* (
     Effect.forkScoped({ startImmediately: true }),
   )
 
+  const status = (sessionID: Session.ID): Status => {
+    const browser = browsers.get(sessionID)
+    if (!browser) return { attached: false, tabs: [], focusedTabID: null, rendered: false, recovery: disconnected }
+    return {
+      attached: true,
+      connectionID: browser.connectionID,
+      tabs: [...browser.state.tabs],
+      focusedTabID: browser.state.focusedTabID,
+      rendered: true,
+      recovery: attached,
+    }
+  }
+
   return {
+    status,
+    // Fails before a browser tool reads files or dispatches. Status stays available either way.
+    require: Effect.fn("BrowserConnection.require")(function* (sessionID: Session.ID) {
+      if (browsers.has(sessionID)) return
+      return yield* new Tool.Error({ message: disconnected })
+    }),
     target: Effect.fn("BrowserConnection.target")(function* (sessionID: Session.ID, action: Browser.Action) {
       const browser = browsers.get(sessionID)
-      if (!browser)
-        return yield* new Tool.Error({
-          message:
-            "[browser.disconnected] No desktop browser is connected to this session. Open this session in the desktop app and wait for it to connect. Then call browser.tabs.list({}). Repeating browser actions while disconnected will not help.",
-        })
+      if (!browser) return yield* new Tool.Error({ message: disconnected })
       const tab = "tabID" in action ? browser.state.tabs.find((tab) => tab.id === action.tabID) : undefined
       if ("tabID" in action && !tab)
         return yield* new Tool.Error({
@@ -180,7 +236,7 @@ export const make = Effect.fn("BrowserConnection.make")(function* (
       return {
         tab,
         inspect: () =>
-          request(rpc, browser, action, tab, [], { inspect: true }).pipe(
+          request(rpc, sessionID, browsers, browser, action, tab, [], { inspect: true }, false).pipe(
             Effect.flatMap((result) => Schema.decodeUnknownEffect(Browser.Target)(result.value)),
             Effect.mapError(
               (error) =>
@@ -194,7 +250,7 @@ export const make = Effect.fn("BrowserConnection.make")(function* (
             ),
           ),
         request: (files: readonly Browser.File[], target?: Browser.Target) =>
-          request(rpc, browser, action, tab, files, { target }),
+          request(rpc, sessionID, browsers, browser, action, tab, files, { target }, false),
       }
     }),
   }
@@ -202,22 +258,27 @@ export const make = Effect.fn("BrowserConnection.make")(function* (
 
 const request = Effect.fn("BrowserConnection.request")(function* (
   rpc: RpcRegistration<typeof Browser.Definition>,
+  sessionID: Session.ID,
+  browsers: Map<Session.ID, Attachment>,
   browser: Attachment,
   action: Browser.Action,
   tab: Browser.Tab | undefined,
   files: readonly Browser.File[],
   inspection: Pick<Browser.Command, "inspect" | "target">,
-) {
+  recovered: boolean,
+): Effect.fn.Return<Browser.Result, Tool.Error> {
   const requestID = crypto.randomUUID()
   const pending = yield* Deferred.make<Browser.Result, Tool.Error>()
   const command =
     (action.type === "files.upload" || action.type === "files.drop") && !inspection.inspect
       ? { ...action, paths: files.map((file) => file.name) }
       : action
-  browser.pending.set(requestID, {
+  const entry: Pending = {
     command: { action: command, ...(tab ? { generation: tab.generation } : {}), files, ...inspection },
     result: pending,
-  })
+    retrieved: false,
+  }
+  browser.pending.set(requestID, entry)
   return yield* rpc.events.emit("control", { type: "command", connectionID: browser.connectionID, requestID }).pipe(
     Effect.mapError(
       (error) =>
@@ -229,12 +290,16 @@ const request = Effect.fn("BrowserConnection.request")(function* (
     Effect.andThen(Deferred.await(pending)),
     Effect.raceFirst(
       Deferred.await(browser.closed).pipe(
-        Effect.andThen(
-          new Tool.Error({
-            message:
-              "[browser.disconnected] Browser connection closed; the action may already have run. Reconnect this session in the desktop app, call browser.tabs.list({}), and inspect the target tab with browser.snapshot({tabID}). Do not repeat clicks, submissions, uploads, or evaluations until their outcome is known.",
-          }),
-        ),
+        Effect.flatMap((reason) => {
+          // A replacement is already installed. Replay only a command the previous desktop never took.
+          if (reason === "replaced" && !recovered && !entry.retrieved) {
+            const next = browsers.get(sessionID)
+            const nextTab = "tabID" in action ? next?.state.tabs.find((item) => item.id === action.tabID) : undefined
+            if (next && next !== browser && (!("tabID" in action) || nextTab))
+              return request(rpc, sessionID, browsers, next, action, nextTab, files, inspection, true)
+          }
+          return Effect.fail(new Tool.Error({ message: entry.retrieved ? closedAfter : closedBefore }))
+        }),
       ),
     ),
     Effect.onInterrupt(() =>
