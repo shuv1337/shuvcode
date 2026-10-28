@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test"
 import { Cause, Effect, Exit, Fiber, Queue, Stream } from "effect"
+import { TestClock } from "effect/testing"
 import type { Context } from "@opencode/plugin/effect/plugin"
 import { AbsolutePath } from "@opencode/schema/schema"
 import { Agent } from "@opencode/schema/agent"
@@ -146,7 +147,7 @@ const open = Effect.gen(function* () {
     return tool.execute(input, toolContext)
   }
 
-  return { events, methods, connect, invoke, take }
+  return { events, methods, connect, invoke, take, connection }
 })
 
 const recovery = (message: string) => {
@@ -188,6 +189,10 @@ test("preflight fails a disconnected browser tool with a recovery path", async (
         const failure = message(exit)
         recovery(failure)
         expect(failure).toContain("Repeating browser actions while disconnected will not help")
+        const pathExit = yield* Effect.exit(app.invoke("browser.tabs.open", { url: "/tmp/page.html" }))
+        const pathFailure = message(pathExit)
+        recovery(pathFailure)
+        expect(pathFailure).not.toContain("Invalid browser URL")
         expect(yield* Queue.size(app.events)).toBe(0)
       }),
     ),
@@ -205,12 +210,14 @@ test("a disconnect before the desktop takes the command says the action did not 
           .pipe(Effect.forkScoped({ startImmediately: true }))
         yield* app.take("command", "desktop-a")
         yield* Fiber.interrupt(attachment)
+        yield* Effect.yieldNow
+        yield* TestClock.adjust(BrowserConnection.replayGrace)
         const failure = message(yield* Effect.exit(Fiber.join(pending)))
         recovery(failure)
         expect(failure).toContain("did not run")
         expect(failure).not.toContain("may already have run")
       }),
-    ),
+    ).pipe(Effect.provide(TestClock.layer())),
   )
 })
 
@@ -230,6 +237,7 @@ test("a dropped connection reports that the action may have run and how to recov
         expect(failure).toContain("may already have run")
         expect(failure).toContain("browser.snapshot")
         expect(failure).toContain("Do not repeat clicks")
+        expect(yield* Queue.size(app.events)).toBe(0)
       }),
     ),
   )
@@ -302,6 +310,263 @@ test("a replacement runs an unretrieved command, and a later attachment can read
           call,
         )
         expect((yield* Fiber.join(shot)).output).toEqual({ tab, content: "Example heading", truncated: false })
+      }),
+    ),
+  )
+})
+
+const restored = { ...tab, generation: 7 }
+
+test("a replacement replays a tab command after the new desktop publishes its tabs", async () => {
+  await Effect.runPromise(
+    Effect.scoped(
+      Effect.gen(function* () {
+        const app = yield* open
+        yield* app.connect("desktop-a")
+        yield* app.methods.state({ sessionID, connectionID: "desktop-a", state }, call)
+        const pending = yield* app
+          .invoke("browser.snapshot", { tabID })
+          .pipe(Effect.forkScoped({ startImmediately: true }))
+        yield* app.take("command", "desktop-a")
+        yield* app.connect("desktop-b")
+        yield* app.methods.state(
+          { sessionID, connectionID: "desktop-b", state: { tabs: [restored], focusedTabID: tabID } },
+          call,
+        )
+        const replayed = yield* app.take("command", "desktop-b")
+        if (replayed.type !== "command") return yield* Effect.die(new Error("expected the replayed snapshot"))
+        const command = yield* app.methods.command(
+          { sessionID, connectionID: "desktop-b", requestID: replayed.requestID },
+          call,
+        )
+        expect(command.action).toMatchObject({ type: "snapshot", tabID })
+        expect(command.generation).toBe(restored.generation)
+        expect(command.target).toBeUndefined()
+        yield* app.methods.result(
+          {
+            sessionID,
+            connectionID: "desktop-b",
+            requestID: replayed.requestID,
+            outcome: {
+              type: "success",
+              result: { value: { tab: restored, content: "Restored heading", truncated: false }, files: [] },
+            },
+          },
+          call,
+        )
+        expect((yield* Fiber.join(pending)).output).toEqual({
+          tab: restored,
+          content: "Restored heading",
+          truncated: false,
+        })
+      }),
+    ),
+  )
+})
+
+test("an ordinary reconnect replays a command the desktop never took", async () => {
+  await Effect.runPromise(
+    Effect.scoped(
+      Effect.gen(function* () {
+        const app = yield* open
+        const first = yield* app.connect("desktop-a")
+        const pending = yield* app.invoke("browser.tabs.list", {}).pipe(Effect.forkScoped({ startImmediately: true }))
+        yield* app.take("command", "desktop-a")
+        yield* Fiber.interrupt(first)
+        yield* app.connect("desktop-b")
+        const replayed = yield* app.take("command", "desktop-b")
+        if (replayed.type !== "command") return yield* Effect.die(new Error("expected the reconnected command"))
+        yield* app.methods.command({ sessionID, connectionID: "desktop-b", requestID: replayed.requestID }, call)
+        yield* app.methods.result(
+          {
+            sessionID,
+            connectionID: "desktop-b",
+            requestID: replayed.requestID,
+            outcome: { type: "success", result: { value: { tabs: [], focusedTabID: null }, files: [] } },
+          },
+          call,
+        )
+        expect((yield* Fiber.join(pending)).output).toEqual({ tabs: [], focusedTabID: null })
+      }),
+    ),
+  )
+})
+
+test("a close that already has the result keeps that result", async () => {
+  await Effect.runPromise(
+    Effect.scoped(
+      Effect.gen(function* () {
+        const app = yield* open
+        const attachment = yield* app.connect("desktop-a")
+        const pending = yield* app.invoke("browser.tabs.list", {}).pipe(Effect.forkScoped({ startImmediately: true }))
+        const event = yield* app.take("command", "desktop-a")
+        if (event.type !== "command") return yield* Effect.die(new Error("expected a browser command"))
+        yield* app.methods.command({ sessionID, connectionID: "desktop-a", requestID: event.requestID }, call)
+        yield* app.methods.result(
+          {
+            sessionID,
+            connectionID: "desktop-a",
+            requestID: event.requestID,
+            outcome: { type: "success", result: { value: { tabs: [tab], focusedTabID: tabID }, files: [] } },
+          },
+          call,
+        )
+        yield* Fiber.interrupt(attachment)
+        expect((yield* Fiber.join(pending)).output).toEqual({ tabs: [tab], focusedTabID: tabID })
+      }),
+    ),
+  )
+})
+
+test("cancelling a replay cancels the command on the new desktop", async () => {
+  await Effect.runPromise(
+    Effect.scoped(
+      Effect.gen(function* () {
+        const app = yield* open
+        yield* app.connect("desktop-a")
+        yield* app.methods.state({ sessionID, connectionID: "desktop-a", state }, call)
+        const pending = yield* app
+          .invoke("browser.snapshot", { tabID })
+          .pipe(Effect.forkScoped({ startImmediately: true }))
+        yield* app.take("command", "desktop-a")
+        yield* app.connect("desktop-b")
+        yield* app.methods.state(
+          { sessionID, connectionID: "desktop-b", state: { tabs: [restored], focusedTabID: tabID } },
+          call,
+        )
+        const replayed = yield* app.take("command", "desktop-b")
+        if (replayed.type !== "command") return yield* Effect.die(new Error("expected the replayed snapshot"))
+        yield* Fiber.interrupt(pending)
+        const cancel = yield* app.take("cancel", "desktop-b")
+        if (cancel.type !== "cancel") return yield* Effect.die(new Error("expected a cancel"))
+        expect(cancel.requestID).toBe(replayed.requestID)
+      }),
+    ),
+  )
+})
+
+test("a replay that never finishes times out and cancels the new command", async () => {
+  await Effect.runPromise(
+    Effect.scoped(
+      Effect.gen(function* () {
+        const app = yield* open
+        yield* app.connect("desktop-a")
+        yield* app.methods.state({ sessionID, connectionID: "desktop-a", state }, call)
+        const pending = yield* app
+          .invoke("browser.snapshot", { tabID })
+          .pipe(Effect.forkScoped({ startImmediately: true }))
+        yield* app.take("command", "desktop-a")
+        yield* app.connect("desktop-b")
+        yield* app.methods.state(
+          { sessionID, connectionID: "desktop-b", state: { tabs: [restored], focusedTabID: tabID } },
+          call,
+        )
+        const replayed = yield* app.take("command", "desktop-b")
+        if (replayed.type !== "command") return yield* Effect.die(new Error("expected the replayed snapshot"))
+        yield* TestClock.adjust("60 seconds")
+        const failure = message(yield* Effect.exit(Fiber.join(pending)))
+        expect(failure).toContain("[browser.timeout]")
+        expect(failure).toContain("browser.snapshot")
+        const cancel = yield* app.take("cancel", "desktop-b")
+        if (cancel.type !== "cancel") return yield* Effect.die(new Error("expected a cancel"))
+        expect(cancel.requestID).toBe(replayed.requestID)
+      }),
+    ).pipe(Effect.provide(TestClock.layer())),
+  )
+})
+
+const approved = { resources: ["https://example.com/"], key: "tab-1" }
+const changed = { resources: ["https://example.com/"], key: "tab-2" }
+const click = { type: "click" as const, tabID, ref: Browser.Ref.make("e1") }
+
+test("a replay re-inspects an approved target and drops the action when it changed", async () => {
+  await Effect.runPromise(
+    Effect.scoped(
+      Effect.gen(function* () {
+        const app = yield* open
+        yield* app.connect("desktop-a")
+        yield* app.methods.state({ sessionID, connectionID: "desktop-a", state }, call)
+        const aimed = yield* app.connection.target(sessionID, click)
+        const pending = yield* aimed.request([], approved).pipe(Effect.forkScoped({ startImmediately: true }))
+        yield* app.take("command", "desktop-a")
+        yield* app.connect("desktop-b")
+        yield* app.methods.state(
+          { sessionID, connectionID: "desktop-b", state: { tabs: [restored], focusedTabID: tabID } },
+          call,
+        )
+        const replayed = yield* app.take("command", "desktop-b")
+        if (replayed.type !== "command") return yield* Effect.die(new Error("expected a re-inspect"))
+        const command = yield* app.methods.command(
+          { sessionID, connectionID: "desktop-b", requestID: replayed.requestID },
+          call,
+        )
+        expect(command.inspect).toBe(true)
+        expect(command.target).toBeUndefined()
+        expect(command.generation).toBe(restored.generation)
+        yield* app.methods.result(
+          {
+            sessionID,
+            connectionID: "desktop-b",
+            requestID: replayed.requestID,
+            outcome: { type: "success", result: { value: changed, files: [] } },
+          },
+          call,
+        )
+        const failure = message(yield* Effect.exit(Fiber.join(pending)))
+        expect(failure).toContain("did not run")
+        expect(yield* Queue.size(app.events)).toBe(0)
+      }),
+    ),
+  )
+})
+
+test("a replay runs an approved action when re-inspection still matches", async () => {
+  await Effect.runPromise(
+    Effect.scoped(
+      Effect.gen(function* () {
+        const app = yield* open
+        yield* app.connect("desktop-a")
+        yield* app.methods.state({ sessionID, connectionID: "desktop-a", state }, call)
+        const aimed = yield* app.connection.target(sessionID, click)
+        const pending = yield* aimed.request([], approved).pipe(Effect.forkScoped({ startImmediately: true }))
+        yield* app.take("command", "desktop-a")
+        yield* app.connect("desktop-b")
+        yield* app.methods.state(
+          { sessionID, connectionID: "desktop-b", state: { tabs: [restored], focusedTabID: tabID } },
+          call,
+        )
+        const inspect = yield* app.take("command", "desktop-b")
+        if (inspect.type !== "command") return yield* Effect.die(new Error("expected a re-inspect"))
+        yield* app.methods.command({ sessionID, connectionID: "desktop-b", requestID: inspect.requestID }, call)
+        yield* app.methods.result(
+          {
+            sessionID,
+            connectionID: "desktop-b",
+            requestID: inspect.requestID,
+            outcome: { type: "success", result: { value: approved, files: [] } },
+          },
+          call,
+        )
+        const replayed = yield* app.take("command", "desktop-b")
+        if (replayed.type !== "command") return yield* Effect.die(new Error("expected the approved click"))
+        const command = yield* app.methods.command(
+          { sessionID, connectionID: "desktop-b", requestID: replayed.requestID },
+          call,
+        )
+        expect(command.inspect).toBeUndefined()
+        expect(command.target).toEqual(approved)
+        expect(command.generation).toBe(restored.generation)
+        expect(command.action).toMatchObject(click)
+        yield* app.methods.result(
+          {
+            sessionID,
+            connectionID: "desktop-b",
+            requestID: replayed.requestID,
+            outcome: { type: "success", result: { value: restored, files: [] } },
+          },
+          call,
+        )
+        expect((yield* Fiber.join(pending)).value).toEqual(restored)
       }),
     ),
   )

@@ -25,10 +25,17 @@ false, open this session in the desktop app and wait for it to connect, then cal
 rendered browser checks. HTTP or curl success only proves reachability or content,
 not a rendered UI, and is not UI verification.
 
-A disconnect fails the in-flight action instead of waiting. If the desktop never
-retrieved the command, a replacement attachment runs it once. A command the desktop
-already took is not replayed, because it may have run. Reconnect, then use
-`browser.status` and `browser.tabs.list` before continuing.
+A disconnect does not wait out the 60 second command timeout. If the desktop
+already retrieved the command, it is not replayed: the action may have run.
+Reconnect, then call `browser.status` and `browser.tabs.list`, and inspect the
+tab before repeating it.
+
+If the desktop never retrieved the command, it is replayed once. A desktop that
+replaces the connection is used immediately. An ordinary reconnect is used when
+it attaches within 2 seconds; otherwise the call fails and the next one starts
+fresh. Commands that name a tab wait up to 2 seconds for that desktop's first
+tab list and run only when the tab is in it. A command approved against a
+specific target is re-inspected first, and a changed target is not executed.
 
 ## Tools
 

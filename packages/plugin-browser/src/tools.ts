@@ -18,12 +18,12 @@ export const register = Effect.fn("BrowserTools.register")(function* (
     input: Browser.Action,
     tool: Tool.Context,
   ) {
+    // Capability before URL parsing, file reads, or a desktop round trip.
+    yield* connection.require(tool.sessionID)
     const action = yield* Effect.try({
       try: () => normalizeAction(input),
       catch: (error) => new Tool.Error({ message: invalidURL, error }),
     })
-    // Capability before URL parsing, file reads, or a desktop round trip.
-    yield* connection.require(tool.sessionID)
     const target = yield* connection.target(tool.sessionID, action)
     const uploads =
       action.type === "files.upload" || action.type === "files.drop"
