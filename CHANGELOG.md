@@ -19,6 +19,22 @@ Release notes for OpenCode V2, newest first.
 
 `@opencode/ai` now works like `@opencode/sdk` and `@opencode/client`: the package root exports the Promise API, and the Effect API moved to `@opencode/ai/effect`. `@opencode/ai/promise` is removed, and the wildcard subpath export is replaced with an explicit list of provider and protocol entry points. ([#58847](https://github.com/anomalyco/opencode/pull/58847), [#59183](https://github.com/anomalyco/opencode/pull/59183))
 
+[#59183](https://github.com/anomalyco/opencode/pull/59183) deleted the `./*` wildcard (`./src/*.ts`). These subpaths no longer resolve. Import the supported surface from `@opencode/ai`, `@opencode/ai/effect`, `@opencode/ai/experimental`, `@opencode/ai/providers`, `@opencode/ai/protocols`, `@opencode/ai/route`, or `@opencode/ai/testing` instead.
+
+Root modules: `ai-client`, `cache-policy`, `decision`, `decision-client`, `effort-updates`, `generation`, `image`, `image-client`, `llm`, `media`, `media-client`, `media-model`, `provider-error`, `provider-package`, `speech`, `speech-client`, `tool`, `tool-history`, `tool-runtime`, `transcription`, `transcription-client`, `video`, `video-client`.
+
+`experimental/`: `cloudflare-run-extraction`, `evaluation`, `evaluation-client`, `extraction`, `realtime`, `system-one`.
+
+`protocols/`: `alibaba-chat`, `alibaba-messages`, `alibaba-responses`, `anthropic-messages`, `assemblyai-transcription`, `bedrock-converse`, `bedrock-event-stream`, `bfl-images`, `cartesia-speech`, `cohere-chat`, `deepgram-speech`, `elevenlabs-speech`, `elevenlabs-transcription`, `fal-images`, `fal-video`, `gemini`, `google-interactions`, `google-video`, `index`, `meta-images`, `meta-messages`, `meta-responses`, `mistral-chat`, `open-responses`, `open-responses-channel`, `open-responses-continuation`, `openai-compatible-chat`, `openai-compatible-responses`, `replicate-images`, `runway-video`, `shared`, `stability-images`, `venice-chat`, `xai-responses`, `zai-chat`, `zai-messages`, plus `protocols/utils/` (`bedrock-auth`, `bedrock-cache`, `bedrock-media`, `cache`, `claude-model`, `fal-queue`, `gateway-protocol`, `gemini-generate-content`, `gemini-json-schema`, `image-sizing`, `lifecycle`, `media-input`, `mistral-tool-id`, `open-responses-options`, `partial-json`, `partial-json-options`, `responses-checkpoint`, `responses-compaction`, `responses-hosted-tools`, `speaker-turns`, `speech-stream`, `tool-schema`, `tool-stream`).
+
+`providers/`: `google-vertex-shared`, `index`, `open-responses-options`, `openai-options`, `typesafe-evaluation`.
+
+`route/`: `auth`, `auth-options`, `client`, `decision`, `endpoint`, `executor`, `executor-service`, `framing`, `index`, `media`, `media-protocol`, `protocol`, `transport/http`, `transport/index`, `transport/websocket`, `transport/websocket-channel`.
+
+`schema/`: `errors`, `events`, `ids`, `index`, `messages`, `options`.
+
+`utils/`: `bytes`, `json`, `media-type`, `record`, `sanitize`.
+
 ```diff
 -import { AI } from "@opencode/ai/promise"
 -import { LLM } from "@opencode/ai"
