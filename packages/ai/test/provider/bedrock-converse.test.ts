@@ -912,6 +912,51 @@ describe("Bedrock Converse route", () => {
     }),
   )
 
+  it.effect("drops blank rich text from an error and keeps the image", () =>
+    Effect.gen(function* () {
+      const prepared = yield* compileRequest(
+        LLM.request({
+          model,
+          cache: "none",
+          messages: [
+            Message.assistant([ToolCallPart.make({ id: "tool_1", name: "snapshot", input: {} })]),
+            Message.tool({
+              id: "tool_1",
+              name: "snapshot",
+              result: {
+                type: "error",
+                value: "\n",
+                content: [
+                  { type: "text", text: "\n" },
+                  { type: "file", uri: "data:image/png;base64,AAAA", mime: "image/png" },
+                ],
+              },
+            }),
+          ],
+        }),
+      )
+
+      expect(prepared.body.messages).toEqual([
+        {
+          role: "assistant",
+          content: [{ toolUse: { toolUseId: "tool_1", name: "snapshot", input: {} } }],
+        },
+        {
+          role: "user",
+          content: [
+            {
+              toolResult: {
+                toolUseId: "tool_1",
+                status: "error",
+                content: [{ image: { format: "png", source: { bytes: "AAAA" } } }],
+              },
+            },
+          ],
+        },
+      ])
+    }),
+  )
+
   it.effect("decodes text-delta + messageStop + metadata usage from binary event stream", () =>
     Effect.gen(function* () {
       const body = eventStreamBody(

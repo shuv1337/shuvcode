@@ -326,14 +326,18 @@ const lowerToolResultContent = Effect.fnUntraced(function* (
     const rich = ProviderShared.toolErrorContent(part)
     const text = { text: ProviderShared.toolResultText(part) }
     if (rich === undefined) return [text]
-    const blocks: Array<Schema.Schema.Type<typeof BedrockToolResultContentItem>> = [text]
+    const blocks: Array<Schema.Schema.Type<typeof BedrockToolResultContentItem>> = []
     for (const item of rich) {
       if (item.type === "text") {
+        if (item.text.trim() === "") continue
         blocks.push({ text: item.text })
         continue
       }
       blocks.push(...(yield* BedrockMedia.lower(ProviderShared.toolFileMedia(item), documentNames)))
     }
+    // History rewrites a blank error value to "(no tool output)". Keep that note only when
+    // nothing else remains, so a blank text item beside an image lowers to the image.
+    if (blocks.length === 0 || text.text !== "(no tool output)") blocks.unshift(text)
     return blocks
   }
   if (part.result.type === "json") return [{ json: part.result.value }]
