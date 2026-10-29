@@ -1018,6 +1018,70 @@ describe("Anthropic Messages route", () => {
     }),
   )
 
+  const compileErrorToolResult = (
+    value: unknown,
+    content?: ReadonlyArray<{ type: "text"; text: string } | { type: "file"; uri: string; mime: string }>,
+  ) =>
+    compileRequest(
+      LLM.request({
+        model,
+        cache: "none",
+        messages: [
+          Message.assistant([ToolCallPart.make({ id: "call_1", name: "snapshot", input: {} })]),
+          Message.tool({
+            id: "call_1",
+            name: "snapshot",
+            result: { type: "error", value, ...(content === undefined ? {} : { content }) },
+          }),
+        ],
+      }),
+    )
+
+  const expectNoEmptyText = (content: AnthropicToolResult["content"]) => {
+    expect(Array.isArray(content)).toBe(true)
+    if (!Array.isArray(content)) return
+    expect(content.length).toBeGreaterThan(0)
+    for (const block of content) {
+      expect(block.type).toBe("text")
+      if (block.type === "text") expect(block.text.trim().length).toBeGreaterThan(0)
+    }
+  }
+
+  it.effect("drops an empty text block from an empty-string error", () =>
+    Effect.gen(function* () {
+      const prepared = yield* compileErrorToolResult("", [{ type: "text", text: "" }])
+      const result = expectToolResult(prepared.body)
+      expect(result.is_error).toBe(true)
+      expect(result.content).toEqual([{ type: "text", text: "(no tool output)" }])
+      expectNoEmptyText(result.content)
+    }),
+  )
+
+  it.effect("keeps an omission note when an error has only media", () =>
+    Effect.gen(function* () {
+      const prepared = yield* compileErrorToolResult("", [
+        { type: "file", uri: "data:image/png;base64,AAECAw==", mime: "image/png" },
+      ])
+      const result = expectToolResult(prepared.body)
+      expect(result.is_error).toBe(true)
+      expect(result.content).toEqual([
+        { type: "text", text: "(no tool output)" },
+        { type: "text", text: "[image omitted]" },
+      ])
+      expectNoEmptyText(result.content)
+    }),
+  )
+
+  it.effect("drops whitespace-only error text", () =>
+    Effect.gen(function* () {
+      const prepared = yield* compileErrorToolResult("  \n", [{ type: "text", text: "\t " }])
+      const result = expectToolResult(prepared.body)
+      expect(result.is_error).toBe(true)
+      expect(result.content).toEqual([{ type: "text", text: "(no tool output)" }])
+      expectNoEmptyText(result.content)
+    }),
+  )
+
   const video = { type: "video", source: { type: "base64", media_type: "video/mp4", data: "AAECAw==" } }
   const videoFile = { type: "file" as const, uri: "data:video/mp4;base64,AAECAw==", mime: "video/mp4" }
   const customModel = AnthropicMessages.route.with({ provider: "custom" }).model({ id: "video-model" })
