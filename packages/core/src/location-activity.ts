@@ -110,9 +110,9 @@ export function layer(
                   const active = yield* Effect.forEach(yield* execution.active, (sessionID) => sessions.get(sessionID))
                   const holding = yield* activity.holding
                   const background = (yield* jobs.runningBackground).flatMap((recovery) =>
-                    recovery.kind === "shell"
-                      ? [recovery.sessionID]
-                      : [recovery.childSessionID, recovery.parentSessionID],
+                    recovery.kind === "subagent"
+                      ? [recovery.childSessionID, recovery.parentSessionID]
+                      : [recovery.sessionID],
                   )
                   const backgroundSessions = yield* Effect.forEach(background, (sessionID) => sessions.get(sessionID))
                   if (

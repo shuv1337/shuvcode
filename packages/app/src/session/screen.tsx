@@ -40,6 +40,7 @@ import { createSessionTimelineInteraction } from "./timeline/interaction"
 import { createTimelineSearchController } from "./timeline/search-controller"
 import { TimelineSearchBar } from "./timeline/search-bar"
 import { createTimelineQuote, TimelineQuote } from "./timeline/quote"
+import { createTimelineQuoteHighlight } from "./timeline/quote-highlight"
 import { ActiveSessionComposerRegion, createActiveSessionRegion } from "./composer/region"
 import { SessionIdentityHeader, SessionLocation } from "./session-identity-header"
 import { SessionHeaderDrag, windowDragEnabled } from "./header/drag-area"
@@ -162,8 +163,13 @@ function SessionScreenContent(props: {
   let sideGlyph: SVGPathElement | undefined
   let sideClosed = 0
   // While the left sidebar moves the side panel's edge, its contents keep the width they land at, and centred content,
-  // like a Markdown preview, keeps its place rather than jumping by half the change.
-  holdLandingWidth(() => sideContent, "blocks")
+  // like a Markdown preview, keeps its place rather than jumping by half the change. The side region's content box is
+  // the one element whose own width reads the hold.
+  holdLandingWidth(
+    () => sideContent,
+    "blocks",
+    () => sideContent?.querySelector<HTMLElement>('[data-slot="session-review-content"]'),
+  )
   // The toggle's pane fills from the panel's edge as far as the panel is open.
   const paintSideGlyph = () => sideGlyph?.setAttribute("transform", reviewGlyphFill(1 - sideClosed))
 
@@ -246,6 +252,17 @@ function SessionScreenContent(props: {
     sessionKey: session.identity.sessionKey,
     enabled: () => conversationVisible() && composer.quote.available(),
     add: composer.quote.add,
+  })
+
+  createTimelineQuoteHighlight({
+    root: timeline.scroller,
+    visible: timeline.visible,
+    source: composer.quote.source,
+    enabled: () => conversationVisible() && composer.quote.available(),
+    reveal: (id, partID) => {
+      if (!timeline.actions.revealPart(partID)) timeline.actions.revealMessage(id, partID)
+    },
+    unpin: timeline.view.unpin,
   })
 
   const sessionErrorFallback = (cause: unknown, reset: () => void) => {
@@ -473,21 +490,21 @@ function SessionScreenContent(props: {
               <SessionHeaderDrag pane={chat} gap={headerGap()} />
             </Show>
 
-            <Show when={screen.panel.resizable()}>
-              <div onPointerDown={() => screen.size.start()}>
-                <ResizeHandle
-                  class="-end-1"
-                  direction="horizontal"
-                  size={screen.panel.resizedWidth()}
-                  min={SESSION_PANEL_WIDTH_MIN}
-                  max={screen.panel.max()}
-                  onResize={(width) => {
-                    screen.size.touch()
-                    session.layout.view().session.resize(width)
-                  }}
-                />
-              </div>
-            </Show>
+            {/* Hidden rather than unmounted: removing it makes the transcript frame the last child, and structural
+                selectors in the transcript then restyle every element in it as the side panel starts to close. */}
+            <div classList={{ hidden: !screen.panel.resizable() }} onPointerDown={() => screen.size.start()}>
+              <ResizeHandle
+                class="-end-1"
+                direction="horizontal"
+                size={screen.panel.resizedWidth()}
+                min={SESSION_PANEL_WIDTH_MIN}
+                max={screen.panel.max()}
+                onResize={(width) => {
+                  screen.size.touch()
+                  session.layout.view().session.resize(width)
+                }}
+              />
+            </div>
           </div>
 
           <Show when={sideMotion.present() || store.sideMounted}>

@@ -633,24 +633,7 @@ test("shows a background subagent's outcome as its own row where it finished", a
   ])
   await expect(notice).toHaveAttribute("data-outcome", "completed")
 
-  // The outcome icon starts at the column edge like the subagent card, in a 16px box centered on the text line and
-  // clear of the label; the exact gap is styling.
-  await expect
-    .poll(async () => {
-      const [card, icon, label] = await Promise.all([
-        page.locator('[data-component="task-tool-card"]').boundingBox(),
-        notice.locator('[data-slot="icon-svg"]').boundingBox(),
-        notice.locator(":scope > bdi").boundingBox(),
-      ])
-
-      return {
-        inset: icon!.x - card!.x,
-        size: [icon!.width, icon!.height],
-        separated: label!.x - icon!.x - icon!.width > 0,
-        centered: Math.abs(icon!.y + icon!.height / 2 - (label!.y + label!.height / 2)) <= 0.5,
-      }
-    })
-    .toEqual({ inset: 0, size: [16, 16], separated: true, centered: true })
+  await expect(notice.locator('[data-slot="icon-svg"]')).toHaveCount(0)
   await notice.click()
   await expect(page).toHaveURL(new RegExp(`/session/${childID}$`))
 })
@@ -1369,14 +1352,11 @@ test.describe("background shortcut", () => {
       /^Explore\s*Background task\d+h \d{2}m$/,
       /^sleep 120\d+h \d{2}m$/,
     ])
+    // A shell opens its output in the menu rather than revealing its call in the timeline.
     await list.getByRole("menuitem", { name: /sleep 120/ }).click()
-    await expect(list).toHaveCount(0)
-    await expect(used).toHaveAttribute("aria-expanded", "true")
-    const shellCall = page.locator('[data-timeline-part-id="call_shell_backgrounded"]')
-    await expect(shellCall.locator('[data-slot="collapsible-trigger"]')).toHaveAttribute("aria-expanded", "true")
-    await expect(shellCall).toBeInViewport()
-
-    await activity.click()
+    await expect(list).toHaveAttribute("data-view", "shell")
+    await expect(used).toHaveAttribute("aria-expanded", "false")
+    await list.getByRole("menuitem", { name: "Back to background work", exact: true }).click()
 
     const interrupt = page.waitForRequest(
       (request) =>
@@ -1401,6 +1381,7 @@ test.describe("background shortcut", () => {
     await expect(list).toHaveCount(0)
     await expect(backgroundCard).toContainText("Background task (background)")
     await expect(backgroundCard.locator('[data-component="session-progress-indicator-v2"]')).toBeVisible()
+    await used.click()
     await expect(
       page.locator('[data-timeline-part-id="call_shell_backgrounded"] [data-component="text-shimmer"]'),
     ).toHaveAttribute("data-active", "true")
@@ -1424,9 +1405,10 @@ test.describe("background shortcut", () => {
     // Reaching the shell lands on the end of the timeline, which would otherwise follow new content again.
     { name: "at the end of the timeline", before: 40, searches: 0, after: 0 },
   ]) {
-    test(`holds a revealed shell ${fixture.name} just under its stuck group header`, async ({ page }) => {
+    // A starting subagent call is the pill's row that reveals its call; grouping subagents puts it inside the group.
+    test(`holds a revealed call ${fixture.name} just under its stuck group header`, async ({ page }) => {
       const timeline = await setupTimeline(page, {
-        settings: { timelineDetail: detailed },
+        settings: { timelineDetail: { ...detailed, subagents: { placement: "grouped" } } },
         sessionStatus: { [sessionID]: { type: "busy" } },
         messages: [
           userMessage(),
@@ -1434,14 +1416,8 @@ test.describe("background shortcut", () => {
             [
               ...(fixture.before ? [textPart("prt_earlier", notes("Earlier", fixture.before))] : []),
               ...searches(0, 42 - fixture.searches),
-              toolPart(
-                "prt_far_shell",
-                "shell",
-                "completed",
-                { command: "sleep 120" },
-                { output: "working", metadata: { shellID: "shell_far", status: "running" } },
-              ),
-              // The open group outgrows the viewport, so aligning the group instead of the shell misses it.
+              toolPart("prt_far_call", "subagent", "running", { description: "Map the far code", agent: "explore" }),
+              // The open group outgrows the viewport, so aligning the group instead of the call misses it.
               ...searches(42 - fixture.searches, fixture.searches),
               ...(fixture.after ? [textPart("prt_follow_up", notes("Follow-up", fixture.after))] : []),
             ],
@@ -1450,60 +1426,40 @@ test.describe("background shortcut", () => {
         ],
       })
 
-      await timeline.transport.send({
-        id: "evt_far_shell_created",
-        created: 3,
-        type: "shell.created",
-        location: { directory },
-        data: {
-          info: {
-            id: "shell_far",
-            status: "running",
-            command: "sleep 120",
-            cwd: directory,
-            shell: "bash",
-            file: "/tmp/far.out",
-            metadata: { sessionID },
-            time: { started: 2 },
-          },
-        },
-      })
-
       const group = page
         .locator('[data-component="collapsed-tool-group"]')
         .locator(':scope > [data-component="collapsible"] > [data-slot="collapsible-trigger"]')
 
-      const shellTrigger = page.locator('[data-timeline-part-id="prt_far_shell"] [data-slot="collapsible-trigger"]')
+      const call = page.locator('[data-timeline-part-id="prt_far_call"]')
 
       const aligned = () =>
         expect
           .poll(async () => {
-            const [header, shell] = await Promise.all([group.boundingBox(), shellTrigger.boundingBox()])
+            const [header, row] = await Promise.all([group.boundingBox(), call.boundingBox()])
 
-            return header && shell ? Math.round(shell.y - (header.y + header.height)) : undefined
+            return header && row ? Math.round(row.y - (header.y + header.height)) : undefined
           })
           .toBe(0)
 
       await expect(
         fixture.after ? page.getByText(`Follow-up note ${fixture.after}.`, { exact: true }) : group,
       ).toBeInViewport()
-      await expect(shellTrigger).toHaveCount(0)
-      await page.getByRole("button", { name: "1 shell", exact: true }).click()
+      await expect(call).toHaveCount(0)
+      await page.getByRole("button", { name: "1 subagent", exact: true }).click()
       await page
-        .getByRole("menu", { name: "1 shell", exact: true })
-        .getByRole("menuitem", { name: /sleep 120/ })
+        .getByRole("menu", { name: "1 subagent", exact: true })
+        .getByRole("menuitem", { name: /Map the far code/ })
         .click()
 
       await expect(group).toHaveAttribute("aria-expanded", "true")
-      await expect(shellTrigger).toHaveAttribute("aria-expanded", "true")
-      await expect(shellTrigger).toBeInViewport()
+      await expect(call).toBeInViewport()
 
-      // A shell at the very end cannot rise under the header until more content arrives below it.
+      // A call at the very end cannot rise under the header until more content arrives below it.
       if (fixture.searches) await aligned()
       // Nothing covers the row, so it takes the next click.
-      await shellTrigger.click({ trial: true })
+      await call.click({ trial: true })
 
-      // The agent keeps writing below the shell; the shell stays where it was revealed.
+      // The agent keeps writing below the call; the call stays where it was revealed.
       await timeline.send(partUpdated(textPart("prt_late", notes("Late", 30))))
       await expect(page.getByText("Late note 30.", { exact: true })).toBeAttached()
       await aligned()
@@ -2095,6 +2051,255 @@ test("quotes plain timeline text into the composer, with or without a comment", 
   await expect(chips).toHaveCount(0)
 })
 
+test("highlights a quote's source only while its first comment is written", async ({ page }) => {
+  let reject = true
+  await setupTimeline(page, {
+    messages: [
+      userMessage(),
+      assistantMessage([
+        textPart("prt_highlight_first", "The same **quoted** **words**."),
+        textPart("prt_highlight_second", "The same **quoted** **words**."),
+      ]),
+    ],
+    onPrompt: () => {
+      if (reject) throw new Error("Quote send failed")
+    },
+  })
+  const firstID = renderedPartID("prt_highlight_first")
+  const secondID = renderedPartID("prt_highlight_second")
+  const first = page.locator(`[data-timeline-part-id="${firstID}"] [data-slot="text-part-body"]`)
+  const second = page.locator(`[data-timeline-part-id="${secondID}"] [data-slot="text-part-body"]`)
+  await expect(second).toHaveText("The same quoted words.")
+
+  const highlights = () =>
+    page.evaluate(() =>
+      ["timeline-quote-source"].map((name) =>
+        [...(CSS.highlights.get(name) ?? [])].map((range) => ({
+          part: range.startContainer.parentElement
+            ?.closest("[data-timeline-part-id]")
+            ?.getAttribute("data-timeline-part-id"),
+          text: range.toString(),
+        })),
+      ),
+    )
+
+  const selectionCollapsed = () => page.evaluate(() => window.getSelection()?.isCollapsed ?? true)
+
+  const select = (target: Locator) =>
+    target.evaluate((element) => {
+      const range = document.createRange()
+      range.selectNodeContents(element)
+      window.getSelection()?.removeAllRanges()
+      window.getSelection()?.addRange(range)
+    })
+
+  const toolbar = page.getByRole("toolbar", { name: "Quote selection" })
+  const chips = page.locator('[data-component="composer-attachments"] [data-component="attachment-card"]')
+  const editor = page.locator('[data-component="composer-editor"]')
+  const comment = page.locator('[data-component="composer-quote-comment"] textarea')
+  const firstRange = { part: firstID, text: "The same quoted words." }
+  const scroll = page.locator('[data-slot="session-timeline-scroll"] > [data-scrollable]')
+
+  await scroll.focus()
+  await select(first)
+  await toolbar.getByRole("button", { name: "Quote", exact: true }).click({ modifiers: ["Alt"] })
+  await expect(comment).toBeFocused()
+  await comment.fill("Keep this passage visible while I write.")
+  await expect.poll(highlights).toEqual([[firstRange]])
+
+  for (const palette of [
+    { colorScheme: "dark" as const, background: "color(srgb 0.635294 0.737255 1 / 0.25)" },
+    { colorScheme: "light" as const, background: "color(srgb 0.133333 0.219608 0.560784 / 0.1)" },
+  ]) {
+    await page.emulateMedia({ colorScheme: palette.colorScheme })
+    await expect
+      .poll(() =>
+        first.evaluate((element) =>
+          ["::selection", "::highlight(timeline-quote-source)"].map((pseudo) => {
+            const style = getComputedStyle(element, pseudo)
+
+            return {
+              background: style.backgroundColor,
+              preservesText: style.color === getComputedStyle(element).color,
+            }
+          }),
+        ),
+      )
+      .toEqual([
+        { background: palette.background, preservesText: true },
+        { background: palette.background, preservesText: true },
+      ])
+  }
+
+  await comment.press("Enter")
+  await expect(comment).toHaveCount(0)
+  await expect.poll(highlights).toEqual([[]])
+
+  await select(second)
+  await toolbar.getByRole("button", { name: "Quote", exact: true }).click()
+  await expect(chips).toHaveCount(2)
+  await expect(editor).toBeFocused()
+  await expect.poll(selectionCollapsed).toBe(true)
+  await expect.poll(highlights).toEqual([[]])
+
+  const before = await scroll.evaluate((element) => element.scrollTop)
+  await chips.nth(0).hover()
+  await expect(editor).toBeFocused()
+  expect(await scroll.evaluate((element) => element.scrollTop)).toBe(before)
+  await expect.poll(highlights).toEqual([[]])
+
+  // Editing an existing quote's comment shows no source highlight.
+  await chips.nth(0).click()
+  await expect(comment).toBeFocused()
+  await expect(comment).toHaveValue("Keep this passage visible while I write.")
+  await expect.poll(highlights).toEqual([[]])
+  await comment.press("Escape")
+  await expect(comment).toHaveCount(0)
+
+  await page
+    .locator('[data-component="composer-attachments"]')
+    .getByRole("button", { name: "Remove attachment" })
+    .nth(0)
+    .click()
+  await expect(chips).toHaveCount(1)
+
+  const rejected = page.waitForResponse(
+    (response) =>
+      response.request().method() === "POST" && response.url().includes("/prompt") && response.status() === 500,
+  )
+
+  await editor.press("Enter")
+  await rejected
+  await expect(chips).toHaveCount(1)
+  await expect(editor).toBeFocused()
+  reject = false
+  await editor.press("Enter")
+  await expect(chips).toHaveCount(0)
+  await expect.poll(highlights).toEqual([[]])
+  await expect(page.locator('[data-component="timeline-quote-background"]')).toHaveCount(0)
+})
+
+test("keeps the native selection height after quoting wrapped and formatted text", async ({ page }) => {
+  await setupTimeline(page, {
+    messages: [
+      userMessage(),
+      assistantMessage([
+        textPart(
+          "prt_quote_height",
+          "A selected passage with **bold text** and `inline code` that continues onto another line. ".repeat(4),
+        ),
+      ]),
+    ],
+  })
+
+  const source = page.locator(
+    `[data-timeline-part-id="${renderedPartID("prt_quote_height")}"] [data-slot="text-part-body"]`,
+  )
+
+  await expect(source).toContainText("A selected passage with bold text and inline code")
+  await source.evaluate((element) => {
+    const paragraph = element.querySelector("p")!
+    const range = document.createRange()
+    range.setStart(paragraph.firstChild!, 2)
+    range.setEnd(paragraph, paragraph.childNodes.length - 2)
+    window.getSelection()?.removeAllRanges()
+    window.getSelection()?.addRange(range)
+  })
+  await page
+    .getByRole("toolbar", { name: "Quote selection" })
+    .getByRole("button", { name: "Quote", exact: true })
+    .click({ modifiers: ["Alt"] })
+  await expect(page.locator('[data-component="composer-quote-comment"] textarea')).toBeFocused()
+
+  await page.setViewportSize({ width: 700, height: 900 })
+  const height = await source.locator("p").evaluate((element) => parseFloat(getComputedStyle(element).lineHeight))
+  await expect
+    .poll(() =>
+      source
+        .locator('[data-component="timeline-quote-background"] > span')
+        .evaluateAll(
+          (lines, height) =>
+            lines.length > 0 && lines.every((line) => Math.abs(line.getBoundingClientRect().height - height) < 0.1),
+          height,
+        ),
+    )
+    .toBe(true)
+})
+
+test("reveals a pending quote's source and restores its retained draft after its row remounts", async ({ page }) => {
+  await setupTimeline(page, {
+    seedHistory: true,
+    messages: [
+      userMessage(),
+      assistantMessage([textPart("prt_quote_remount", "Keep this exact source highlighted.")]),
+      userMessage([userText("Continue with the next step.")], { id: "msg_quote_following_user" }),
+      assistantMessage([textPart("prt_quote_following_answer", "The next step is ready.")], {
+        id: "msg_quote_following_answer",
+        parentID: "msg_quote_following_user",
+      }),
+    ],
+  })
+  const partID = renderedPartID("prt_quote_remount")
+  const source = page.locator(`[data-timeline-part-id="${partID}"] [data-slot="text-part-body"]`)
+  await expect(source).toHaveText("Keep this exact source highlighted.")
+  await source.evaluate((element) => {
+    const range = document.createRange()
+    range.selectNodeContents(element)
+    window.getSelection()?.removeAllRanges()
+    window.getSelection()?.addRange(range)
+  })
+  await page
+    .getByRole("toolbar", { name: "Quote selection" })
+    .getByRole("button", { name: "Quote", exact: true })
+    .click({ modifiers: ["Alt"] })
+  const chip = page.locator('[data-component="composer-attachments"] [data-component="attachment-card"]')
+  const comment = page.locator('[data-component="composer-quote-comment"] textarea')
+  await expect(comment).toBeFocused()
+  await expect(chip).toContainText("Keep this exact source highlighted.")
+
+  const highlighted = () =>
+    page.evaluate(() =>
+      [...(CSS.highlights.get("timeline-quote-source") ?? [])].flatMap((range) =>
+        range.startContainer.isConnected ? [range.toString()] : [],
+      ),
+    )
+
+  await expect.poll(highlighted).toEqual(["Keep this exact source highlighted."])
+
+  const scroll = page.locator('[data-slot="session-timeline-scroll"] > [data-scrollable]')
+  await scroll.hover({ position: { x: 20, y: 100 } })
+  await page.mouse.wheel(0, -10000)
+  await expect(source).toHaveCount(0)
+  const top = await scroll.evaluate((element) => element.scrollTop)
+  await chip.hover()
+  expect(await scroll.evaluate((element) => element.scrollTop)).toBe(top)
+
+  // Clicking the pending card closes its open comment, and reveals the source before it does.
+  await chip.click()
+  await expect(comment).toHaveCount(0)
+  await expect(source).toBeInViewport()
+  await expect.poll(highlighted).toEqual([])
+
+  // An existing quote's card edits its comment without moving the timeline to its source.
+  await scroll.hover({ position: { x: 20, y: 100 } })
+  await page.mouse.wheel(0, -10000)
+  await expect(source).toHaveCount(0)
+  await chip.click()
+  await expect(comment).toBeFocused()
+  await expect(source).toHaveCount(0)
+  await expect.poll(highlighted).toEqual([])
+  await comment.press("Escape")
+
+  const href = new URL(page.url()).pathname
+  await page.getByRole("button", { name: "Home", exact: true }).click()
+  await expect(chip).toHaveCount(0)
+  await expect.poll(highlighted).toEqual([])
+  await page.locator(`[data-titlebar-tab-link][href="${href}"]`).click()
+  await expect(chip).toContainText("Keep this exact source highlighted.")
+  await expect.poll(highlighted).toEqual([])
+  await expect(comment).toHaveCount(0)
+})
+
 test("quotes table rows and diff lines selected across a diff viewer", async ({ page }) => {
   const prompts: string[] = []
   await setupTimeline(page, {
@@ -2137,6 +2342,9 @@ test("quotes table rows and diff lines selected across a diff viewer", async ({ 
   const removed = page.locator('[data-line-type="change-deletion"][data-line]')
   const added = page.locator('[data-line-type="change-addition"][data-line]')
   await expect(added).toHaveText("export const value = 'after'")
+  await expect
+    .poll(() => added.evaluate((element) => getComputedStyle(element, "::selection").backgroundColor))
+    .toBe("color(srgb 0.133333 0.219608 0.560784 / 0.1)")
 
   const drag = async (from: Locator, to: Locator) => {
     const start = await from.boundingBox()
@@ -2152,10 +2360,27 @@ test("quotes table rows and diff lines selected across a diff viewer", async ({ 
   const toolbar = page.getByRole("toolbar", { name: "Quote selection" })
   const chips = page.locator('[data-component="composer-attachments"] [data-component="attachment-card"]')
 
-  // A drag from the table into the diff viewer quotes both, table cells by tabs and diff lines with their markers.
-  await drag(page.locator("th").getByText("File", { exact: true }), added)
-  await toolbar.getByRole("button", { name: "Quote", exact: true }).click()
+  // Headers are unselectable chrome; body cells quote with tabs, followed by the diff lines and their markers.
+  await drag(page.locator("td").getByText("a.ts", { exact: true }), added)
+  await toolbar.getByRole("button", { name: "Quote", exact: true }).click({ modifiers: ["Alt"] })
   await expect(chips).toHaveCount(1)
+  await expect(page.locator('[data-component="composer-quote-comment"] textarea')).toBeFocused()
+
+  const diffHighlights = (name: string) =>
+    page.evaluate(
+      (name) =>
+        [...(CSS.highlights.get(name) ?? [])].flatMap((range) =>
+          range.startContainer.getRootNode() instanceof ShadowRoot ? [range.toString()] : [],
+        ),
+      name,
+    )
+
+  await expect
+    .poll(() => diffHighlights("timeline-quote-source"))
+    .toEqual(["export const value = 'before'", "export const value = 'after'"])
+  // Only the first comment keeps the source highlighted; saving it clears the highlight.
+  await page.locator('[data-component="composer-quote-comment"] textarea').press("Enter")
+  await expect.poll(() => diffHighlights("timeline-quote-source")).toEqual([])
 
   // The quote stops where a selection inside the diff viewer ends.
   await drag(page.locator("td").getByText("a.ts", { exact: true }), removed)
@@ -2168,7 +2393,6 @@ test("quotes table rows and diff lines selected across a diff viewer", async ({ 
     .toEqual([
       [
         "The user quoted the following from earlier in the conversation:",
-        "> File\tChange",
         "> a.ts\trename",
         "> ",
         "> -export const value = 'before'",

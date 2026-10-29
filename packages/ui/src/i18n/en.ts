@@ -1,4 +1,8 @@
 const source = {
+  "ui.preview.controls": "Preview controls",
+  "ui.preview.zoomIn": "Zoom in",
+  "ui.preview.zoomOut": "Zoom out",
+  "ui.preview.fit": "Fit",
   "ui.sessionReview.title": "Session changes",
   "ui.sessionReview.title.git": "Git changes",
   "ui.sessionReview.title.branch": "Branch changes",
@@ -164,7 +168,6 @@ const source = {
   "ui.promptInput.commands": "Commands",
   "ui.promptInput.history": "Prompt history",
   "ui.promptInput.history.search": "Search prompt history…",
-  "ui.promptInput.history.searchAction": "Search",
   "ui.promptInput.history.contextOnly": "Prompt with context",
   "ui.promptInput.dropFiles": "Drop files to add",
   "ui.promptInput.dropFiles.image": "Drop images or files to add",
@@ -274,6 +277,8 @@ const source = {
 
   "ui.message.expand": "Expand message",
   "ui.message.collapse": "Collapse message",
+  "ui.message.readMore": "Read more",
+  "ui.message.showLess": "Show less",
   "ui.message.copy": "Copy",
   "ui.message.copyMessage": "Copy message",
   "ui.message.copyFullMessage": "Copy full message",
