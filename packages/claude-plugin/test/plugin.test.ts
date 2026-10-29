@@ -80,7 +80,7 @@ test("public plugin registers filtered hooks, OAuth/env methods, zero cost and a
                   data: { integrationID: IntegrationID.make("anthropic"), credentialID: null },
                 })),
               ),
-          } satisfies Context["event"],
+          },
         }
         yield* createPlugin({
           fetch: async () => {

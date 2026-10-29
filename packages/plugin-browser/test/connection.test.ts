@@ -109,7 +109,13 @@ const open = Effect.gen(function* () {
         return Effect.succeed({ dispose: Effect.void })
       },
     },
-  } as unknown as Pick<Context, "agent" | "rpc" | "session" | "location" | "event" | "tool">
+    skill: {
+      transform: (apply: (editor: { add(info: unknown): void }) => void) => {
+        apply({ add: () => undefined })
+        return Effect.succeed({ dispose: Effect.void })
+      },
+    },
+  } as unknown as Pick<Context, "agent" | "rpc" | "session" | "location" | "event" | "tool" | "skill">
   const connection = yield* BrowserConnection.make(ctx)
   yield* BrowserTools.register(ctx, connection)
   const methods = desktop

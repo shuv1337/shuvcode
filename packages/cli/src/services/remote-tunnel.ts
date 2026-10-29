@@ -24,7 +24,8 @@ function profile() {
 }
 
 // Holds the route for the life of the service. The SDK reconnects through network failures itself, so only
-// setup failures reach the retry here; a rejected token or failed certificate stops it for good.
+// setup failures reach the retry here; a rejected token, failed certificate or unusable proxy (such as a
+// socks5:// `HTTPS_PROXY`, which the bridge cannot connect through) stops it for good.
 export const run = Effect.fnUntraced(function* (input: {
   readonly route: string
   readonly target: string
@@ -33,7 +34,9 @@ export const run = Effect.fnUntraced(function* (input: {
   const { OpenTunnelClient, OpenTunnelAttachError } = yield* Effect.promise(() => import("@opentunnel/client/effect"))
   const fatal = (error: OpenTunnelError) =>
     error._tag === "OpenTunnelClientError" &&
-    (error.cause instanceof OpenTunnelAttachError || error.message.startsWith("Certificate issuance failed"))
+    (error.cause instanceof OpenTunnelAttachError ||
+      error.message.startsWith("Certificate issuance failed") ||
+      /unsupported proxy scheme|not a valid proxy URL/.test(error.message))
   yield* Effect.gen(function* () {
     const client = yield* OpenTunnelClient
     const connection = yield* client.tunnel.connect({

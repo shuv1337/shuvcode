@@ -1,4 +1,6 @@
 import { describe, expect, test } from "bun:test"
+import { fileURLToPath } from "node:url"
+import { cleanProcessEnv } from "./fixture/clean-env"
 import {
   expectedNpmMaintainer,
   forkNpmPackages,
@@ -18,6 +20,22 @@ const owned = () =>
   }))
 
 describe("fork npm publish ownership", () => {
+  test("the release workflow entrypoint reaches the fork guard", async () => {
+    const child = Bun.spawn([process.execPath, fileURLToPath(new URL("../script/publish.ts", import.meta.url))], {
+      env: {
+        ...cleanProcessEnv(),
+        GITHUB_REPOSITORY: "example/not-shuvcode",
+        OPENCODE_CHANNEL: "latest",
+        OPENCODE_VERSION: "1.0.0-shuv.1",
+      },
+      stdout: "pipe",
+      stderr: "pipe",
+    })
+    const stderr = await new Response(child.stderr).text()
+    expect(await child.exited).not.toBe(0)
+    expect(stderr).toContain("Publishing is not configured for repository: example/not-shuvcode")
+  })
+
   test("defines the complete 19-package publication", () => {
     expect(forkNpmPackages).toHaveLength(19)
     expect(new Set(forkNpmPackages).size).toBe(19)

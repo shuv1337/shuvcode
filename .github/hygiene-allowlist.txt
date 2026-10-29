@@ -8,14 +8,7 @@ pii:*.stories.*
 pii:*/test/*
 pii:*/e2e/*
 pii:*fixture*
-pii:packages/app/src/home/projects/view.tsx
-pii:packages/app/src/home/sessions/controller.tsx
-pii:packages/app/src/settings/workspaces/project-options.tsx
-pii:packages/app/src/settings/workspaces/projects.tsx
-pii:packages/app/src/shell/routes/routes.tsx
 pii:packages/core/drizzle.config.ts
-pii:packages/desktop/scripts/profile-by-source.ts
-pii:packages/storybook/.storybook/mocks/gui-extensions/ssh.tsx
 pii:packages/tui/src/feature-plugins/system/storybook/session-location-missing.tsx
 pii:packages/web/src/content/docs/ar/permissions.mdx
 pii:packages/web/src/content/docs/bs/permissions.mdx
@@ -42,3 +35,14 @@ pii:services/www/src/docs/content/cli/config.mdx
 pii:services/www/src/docs/content/plugins.mdx
 # Synthetic home directory in upstream documentation examples.
 text:/home/me
+# `@/home/<segment>` module aliases. Scoped to the files that import them.
+pii:packages/app/src/home/projects/view.tsx
+pii:packages/app/src/home/sessions/controller.tsx
+pii:packages/app/src/session/session-identity-header.tsx
+pii:packages/app/src/settings/workspaces/project-options.tsx
+pii:packages/app/src/settings/workspaces/projects.tsx
+pii:packages/app/src/shell/routes/routes.tsx
+pii:packages/app/src/shell/shell.tsx
+pii:packages/app/src/shell/titlebar/inbox-model.ts
+pii:packages/app/src/shell/titlebar/recently-closed-tabs-menu.tsx
+pii:packages/stories/mocks/gui-plugins/ssh.tsx

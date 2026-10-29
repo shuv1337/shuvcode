@@ -1526,7 +1526,11 @@ test.skipIf(process.platform === "win32").each(["manual", "select"] as const)(
       expect(setup.renderer.currentFocusedEditor?.plainText).toBe("")
       setup.mockInput.pressKey("x", { ctrl: true })
       setup.mockInput.pressKey("t")
-      await setup.waitForFrame((frame) => frame.includes("alpha beta gamma"))
+      await setup.waitForFrame(
+        (frame) =>
+          frame.includes("alpha beta gamma") &&
+          setup.renderer.currentFocusedRenderable instanceof EmbeddedTerminalRenderable,
+      )
       expect(setup.renderer.currentFocusedRenderable).toBeInstanceOf(EmbeddedTerminalRenderable)
       setup.mockInput.pressKey("x", { ctrl: true })
       setup.mockInput.pressArrow("down")

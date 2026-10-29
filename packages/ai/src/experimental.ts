@@ -1,4 +1,4 @@
-export { EvaluationClient } from "./experimental/evaluation-client.js"
+export { EvaluationClient, Service } from "./experimental/evaluation-client.js"
 export {
   BooleanAnswer,
   BooleanQuestion,
@@ -27,6 +27,19 @@ export type {
   EvaluationResponseFor,
   EvaluationRoute,
 } from "./experimental/evaluation.js"
+export { Extraction, ExtractionModel, ExtractionRequest, ExtractionResponse } from "./experimental/extraction.js"
+export type {
+  ExtractionAnswerFor,
+  ExtractionAnswersFor,
+  ExtractionField,
+  ExtractionFields,
+  ExtractionModelOptions,
+  ExtractionOptions,
+  ExtractionRequestFor,
+  ExtractionRequestInput,
+  ExtractionResponseFor,
+  ExtractionRoute,
+} from "./experimental/extraction.js"
 export { Realtime } from "./experimental/realtime.js"
 export type {
   RealtimeConnectInput,
