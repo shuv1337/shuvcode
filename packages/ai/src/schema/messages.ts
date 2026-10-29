@@ -70,6 +70,9 @@ const toolResultValueSchema = Schema.Union([
     type: Schema.Literal("error"),
     value: Schema.Unknown,
     content: Schema.optional(Schema.Array(Tool.Content)),
+    // Set when history replaced a blank error value. Providers can tell that apart from a real
+    // error whose text is the same placeholder.
+    empty: Schema.optional(Schema.Boolean),
   }),
   Schema.Struct({
     type: Schema.Literal("content"),

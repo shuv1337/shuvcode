@@ -78,7 +78,12 @@ describe("tool history normalization", () => {
     expect(normalized.slice(1).map((message) => message.content[0])).toEqual([
       { type: "tool-result", id: "text", name: "text", result: { type: "text", value: "(no tool output)" } },
       { type: "tool-result", id: "content", name: "content", result: { type: "text", value: "(no tool output)" } },
-      { type: "tool-result", id: "error", name: "error", result: { type: "error", value: "(no tool output)" } },
+      {
+        type: "tool-result",
+        id: "error",
+        name: "error",
+        result: { type: "error", value: "(no tool output)", empty: true },
+      },
       { type: "tool-result", id: "mixed", name: "mixed", result: { type: "content", value: [media] } },
       {
         type: "tool-result",
@@ -117,7 +122,12 @@ describe("tool history normalization", () => {
 
     expect(normalized.slice(1).map((message) => message.content[0])).toEqual([
       { type: "tool-result", id: "text", name: "text", result: { type: "text", value: "(no tool output)" } },
-      { type: "tool-result", id: "error", name: "error", result: { type: "error", value: "(no tool output)" } },
+      {
+        type: "tool-result",
+        id: "error",
+        name: "error",
+        result: { type: "error", value: "(no tool output)", empty: true },
+      },
       { type: "tool-result", id: "content", name: "content", result: { type: "text", value: "(no tool output)" } },
       { type: "tool-result", id: "spaced", name: "spaced", result: { type: "text", value: spaced } },
       { type: "tool-result", id: "separated", name: "separated", result: { type: "content", value: separated } },

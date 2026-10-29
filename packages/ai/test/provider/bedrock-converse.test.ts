@@ -866,7 +866,7 @@ describe("Bedrock Converse route", () => {
     }),
   )
 
-  it.effect("lowers rich tool failures with status error and an image", () =>
+  it.effect("lowers rich Claude tool failures as text notes", () =>
     Effect.gen(function* () {
       const prepared = yield* compileRequest(
         LLM.request({
@@ -900,7 +900,7 @@ describe("Bedrock Converse route", () => {
                 text: JSON.stringify({ error: { type: "tool.execution", message: "snapshot failed" }, content: [] }),
               },
               { text: "could not capture" },
-              { image: { format: "png", source: { bytes: "AAAA" } } },
+              { text: "[image omitted]" },
             ],
           },
         },
@@ -909,6 +909,132 @@ describe("Bedrock Converse route", () => {
         prepared.body.messages[1]?.content?.[0]?.toolResult?.content?.filter((item) => "text" in item),
       )
       expect(text).not.toContain("data:")
+    }),
+  )
+
+  it.effect("drops blank rich text from a Claude or Nova error and sends an omission note", () =>
+    Effect.gen(function* () {
+      for (const id of [model.id, "us.amazon.nova-pro-v1:0"]) {
+        const prepared = yield* compileRequest(
+          LLM.request({
+            model: AmazonBedrock.configure({ baseURL: "https://bedrock-runtime.test", apiKey: "test-bearer" }).model(
+              id,
+            ),
+            cache: "none",
+            messages: [
+              Message.assistant([ToolCallPart.make({ id: "tool_1", name: "snapshot", input: {} })]),
+              Message.tool({
+                id: "tool_1",
+                name: "snapshot",
+                result: {
+                  type: "error",
+                  value: "\n",
+                  content: [
+                    { type: "text", text: "\n" },
+                    { type: "file", uri: "data:image/png;base64,AAAA", mime: "image/png" },
+                    { type: "file", uri: "data:application/pdf;base64,QkI=", mime: "application/pdf" },
+                    { type: "file", uri: "data:text/plain;base64,Zg==", mime: "text/plain" },
+                  ],
+                },
+              }),
+            ],
+          }),
+        )
+
+        expect(prepared.body.messages).toEqual([
+          {
+            role: "assistant",
+            content: [{ toolUse: { toolUseId: "tool_1", name: "snapshot", input: {} } }],
+          },
+          {
+            role: "user",
+            content: [
+              {
+                toolResult: {
+                  toolUseId: "tool_1",
+                  status: "error",
+                  content: [{ text: "[image omitted]" }, { text: "[document omitted]" }, { text: "[file omitted]" }],
+                },
+              },
+            ],
+          },
+        ])
+      }
+    }),
+  )
+
+  it.effect("keeps an error whose text is the empty-output placeholder when media is present", () =>
+    Effect.gen(function* () {
+      const prepared = yield* compileRequest(
+        LLM.request({
+          model,
+          cache: "none",
+          messages: [
+            Message.assistant([ToolCallPart.make({ id: "tool_1", name: "snapshot", input: {} })]),
+            Message.tool({
+              id: "tool_1",
+              name: "snapshot",
+              result: {
+                type: "error",
+                value: "(no tool output)",
+                content: [{ type: "file", uri: "data:image/png;base64,AAAA", mime: "image/png" }],
+              },
+            }),
+          ],
+        }),
+      )
+
+      expect(prepared.body.messages[1]?.content).toEqual([
+        {
+          toolResult: {
+            toolUseId: "tool_1",
+            status: "error",
+            content: [{ text: "(no tool output)" }, { text: "[image omitted]" }],
+          },
+        },
+      ])
+    }),
+  )
+
+  it.effect("hoists an image from a blank error for models that do not keep tool images inline", () =>
+    Effect.gen(function* () {
+      const prepared = yield* compileRequest(
+        LLM.request({
+          model: AmazonBedrock.configure({ baseURL: "https://bedrock-runtime.test", apiKey: "test-bearer" }).model(
+            "global.openai.gpt-6-sol",
+          ),
+          cache: "none",
+          messages: [
+            Message.assistant([ToolCallPart.make({ id: "tool_1", name: "snapshot", input: {} })]),
+            Message.tool({
+              id: "tool_1",
+              name: "snapshot",
+              result: {
+                type: "error",
+                value: "\n",
+                content: [
+                  { type: "text", text: "\n" },
+                  { type: "file", uri: "data:image/png;base64,AAAA", mime: "image/png" },
+                ],
+              },
+            }),
+          ],
+        }),
+      )
+
+      expect(prepared.body.messages[1]).toEqual({
+        role: "user",
+        content: [
+          {
+            toolResult: {
+              toolUseId: "tool_1",
+              status: "error",
+              content: [{ text: "See attached image." }],
+            },
+          },
+          { image: { format: "png", source: { bytes: "AAAA" } } },
+        ],
+      })
     }),
   )
 
