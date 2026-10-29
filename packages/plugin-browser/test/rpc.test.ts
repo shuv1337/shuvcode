@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test"
-import { Browser } from "../src/rpc.js"
 import { Schema } from "effect"
+import { Session } from "@opencode/schema/session"
+import { Browser } from "../src/rpc.js"
 
 const tabID = Browser.TabID.make(`tab_${crypto.randomUUID()}`)
 
@@ -57,6 +58,20 @@ test("network lifecycle and RPC version are explicit", () => {
     Schema.decodeUnknownSync(Browser.Control)({ type: "attached", connectionID: "old-client", version: 2 }),
   ).toThrow()
   expect(Schema.decodeUnknownSync(Browser.Definition.methods.attach.output)("replaced")).toBe("replaced")
+})
+
+test("attach keeps session, connection, and version, and drops a desktop id", () => {
+  const decoded = Schema.decodeUnknownSync(Browser.Definition.methods.attach.input)({
+    sessionID: Session.ID.make("ses_browser"),
+    connectionID: "connection-1",
+    version: 4,
+    desktopID: "desk-1",
+  })
+  expect(decoded.sessionID).toBe(Session.ID.make("ses_browser"))
+  expect(decoded.connectionID).toBe("connection-1")
+  expect(decoded.version).toBe(4)
+  expect("desktopID" in decoded).toBe(false)
+  expect(Object.keys(decoded).sort()).toEqual(["connectionID", "sessionID", "version"])
 })
 
 // Tool search matches query words as substrings of the description, folding a trailing "s"/"es".
