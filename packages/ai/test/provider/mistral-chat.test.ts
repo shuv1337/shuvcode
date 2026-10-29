@@ -353,6 +353,31 @@ describe("Mistral Chat", () => {
     }),
   )
 
+  it.effect("keeps a whitespace separator when joining text-only tool results", () =>
+    Effect.gen(function* () {
+      const prepared = yield* compileRequest(
+        LLM.request({
+          model,
+          messages: [
+            Message.tool({
+              id: "Ab12Cd34E",
+              name: "lookup",
+              resultType: "content",
+              result: [
+                { type: "text", text: "foo" },
+                { type: "text", text: "\n" },
+                { type: "text", text: "bar" },
+              ],
+            }),
+          ],
+        }),
+      )
+      expect(prepared.body.messages).toEqual([
+        { role: "tool", tool_call_id: "Ab12Cd34E", name: "lookup", content: "foo\nbar" },
+      ])
+    }),
+  )
+
   it.effect("streams ordered thinking and text and replays native thinking metadata", () =>
     Effect.gen(function* () {
       const response = yield* LLMClient.generate(request).pipe(
