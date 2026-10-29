@@ -341,6 +341,7 @@ const lowerToolResultContent = Effect.fnUntraced(function* (
   const content: Array<Schema.Schema.Type<typeof BedrockToolResultContentItem>> = []
   for (const item of part.result.value) {
     if (item.type === "text") {
+      if (item.text.trim() === "") continue
       content.push({ text: item.text })
       continue
     }

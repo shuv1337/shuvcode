@@ -79,12 +79,7 @@ describe("tool history normalization", () => {
       { type: "tool-result", id: "text", name: "text", result: { type: "text", value: "(no tool output)" } },
       { type: "tool-result", id: "content", name: "content", result: { type: "text", value: "(no tool output)" } },
       { type: "tool-result", id: "error", name: "error", result: { type: "error", value: "(no tool output)" } },
-      {
-        type: "tool-result",
-        id: "mixed",
-        name: "mixed",
-        result: { type: "content", value: [{ type: "text", text: "" }, media] },
-      },
+      { type: "tool-result", id: "mixed", name: "mixed", result: { type: "content", value: [media] } },
       {
         type: "tool-result",
         id: "whitespace",

@@ -92,10 +92,12 @@ function normalizeToolResult(part: ToolResultPart, call: ToolCallPart | undefine
   if (named.result.type === "error" && blankText(named.result.value))
     return { ...named, result: { ...named.result, value: EMPTY_TOOL_OUTPUT } }
   if (named.result.type !== "content") return named
-  // A whitespace text item can separate the others. Mistral joins text with "", so dropping "\n"
-  // from ["foo", "\n", "bar"] yields "foobar". Replace the array only when every item is blank
-  // and there is no media. Protocol lowering filters its own blanks.
-  if (named.result.value.every((item) => item.type === "text" && blankText(item.text)))
+  // Exact "" is not a separator. Drop it, then replace the array only when every remaining
+  // item is blank and there is no media. Whitespace such as "\n" stays: Mistral joins text
+  // with "", so ["foo", "\n", "bar"] must remain "foo\nbar".
+  const value = named.result.value.filter((item) => item.type !== "text" || item.text !== "")
+  if (value.every((item) => item.type === "text" && blankText(item.text)))
     return { ...named, result: { type: "text", value: EMPTY_TOOL_OUTPUT } }
-  return named
+  if (value.length === named.result.value.length) return named
+  return { ...named, result: { type: "content", value } }
 }
