@@ -814,7 +814,10 @@ const lowerMedia = Effect.fnUntraced(function* (part: MediaPart, request: LLMReq
 // Tool results may carry structured text, images, and documents. Keep media as provider-native
 // content instead of JSON-stringifying base64 into a prompt string.
 const lowerToolResultContentItem = Effect.fnUntraced(function* (item: Tool.Content, request: LLMRequest) {
-  if (item.type === "text") return { type: "text" as const, text: item.text } satisfies AnthropicTextBlock
+  if (item.type === "text") {
+    if (item.text.trim() === "") return
+    return { type: "text" as const, text: item.text } satisfies AnthropicTextBlock
+  }
   return yield* lowerMedia(ProviderShared.toolFileMedia(item), request)
 })
 
@@ -828,7 +831,8 @@ const lowerToolResultContent = Effect.fnUntraced(function* (part: ToolResultPart
   // An is_error tool_result may contain only text. Image and document blocks in that content are
   // rejected, so replace them with a note instead of lowering media.
   if (part.result.type === "error") return lowerToolErrorContent(part, content)
-  return yield* Effect.forEach(content, (item) => lowerToolResultContentItem(item, request))
+  const blocks = yield* Effect.forEach(content, (item) => lowerToolResultContentItem(item, request))
+  return blocks.flatMap((block) => (block === undefined ? [] : [block]))
 })
 
 const lowerToolErrorContent = (part: ToolResultPart, content: ReadonlyArray<Tool.Content>) => [

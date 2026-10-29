@@ -58,7 +58,7 @@ describe("tool history normalization", () => {
     expect(normalizeToolHistory([Message.assistant(hosted)])).toEqual([Message.assistant(hosted)])
   })
 
-  test("normalizes empty results without changing whitespace or media", () => {
+  test("normalizes empty and whitespace-only results without changing media", () => {
     const media = { type: "file" as const, uri: "data:image/png;base64,AQID", mime: "image/png" }
     const normalized = normalizeToolHistory([
       Message.assistant([
@@ -80,7 +80,44 @@ describe("tool history normalization", () => {
       { type: "tool-result", id: "content", name: "content", result: { type: "text", value: "(no tool output)" } },
       { type: "tool-result", id: "error", name: "error", result: { type: "error", value: "(no tool output)" } },
       { type: "tool-result", id: "mixed", name: "mixed", result: { type: "content", value: [media] } },
-      { type: "tool-result", id: "whitespace", name: "whitespace", result: { type: "text", value: "   " } },
+      {
+        type: "tool-result",
+        id: "whitespace",
+        name: "whitespace",
+        result: { type: "text", value: "(no tool output)" },
+      },
+    ])
+  })
+
+  test("treats whitespace-only text and content as empty and keeps non-blank text", () => {
+    const media = { type: "file" as const, uri: "data:image/png;base64,AQID", mime: "image/png" }
+    const spaced = "  Keep this spacing.  "
+    const normalized = normalizeToolHistory([
+      Message.assistant([
+        toolCall("text"),
+        toolCall("error"),
+        toolCall("content"),
+        toolCall("spaced"),
+        toolCall("mixed"),
+      ]),
+      toolResult("text", " \n\t", "text", "text"),
+      toolResult("error", " \n\t", "error", "error"),
+      toolResult("content", [{ type: "text", text: " \n\t" }], "content", "content"),
+      toolResult("spaced", spaced, "spaced", "text"),
+      toolResult("mixed", [{ type: "text", text: " \n\t" }, { type: "text", text: spaced }, media], "mixed", "content"),
+    ])
+
+    expect(normalized.slice(1).map((message) => message.content[0])).toEqual([
+      { type: "tool-result", id: "text", name: "text", result: { type: "text", value: "(no tool output)" } },
+      { type: "tool-result", id: "error", name: "error", result: { type: "error", value: "(no tool output)" } },
+      { type: "tool-result", id: "content", name: "content", result: { type: "text", value: "(no tool output)" } },
+      { type: "tool-result", id: "spaced", name: "spaced", result: { type: "text", value: spaced } },
+      {
+        type: "tool-result",
+        id: "mixed",
+        name: "mixed",
+        result: { type: "content", value: [{ type: "text", text: spaced }, media] },
+      },
     ])
   })
 
