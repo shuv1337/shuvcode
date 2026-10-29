@@ -491,7 +491,7 @@ for (const type of ["session.deleted", "session.moved"] as const) {
 }
 
 for (const type of ["session.deleted", "session.moved"] as const) {
-  test(`${type} fails a taken command while the desktop is still attached`, async () => {
+  test(`${type} fails an untaken command while the desktop is still attached`, async () => {
     await Effect.runPromise(
       Effect.scoped(
         Effect.gen(function* () {
@@ -503,14 +503,39 @@ for (const type of ["session.deleted", "session.moved"] as const) {
             Effect.flatMap((exit) => Deferred.succeed(settled, exit)),
             Effect.forkScoped({ startImmediately: true }),
           )
-          const event = yield* app.take("command", "desktop-a")
-          if (event.type !== "command") return yield* Effect.die(new Error("expected a browser command"))
-          yield* app.methods.command({ sessionID, connectionID: "desktop-a", requestID: event.requestID }, call)
+          // Seen by the desktop, but not retrieved, so the close reaches adopt.
+          yield* app.take("command", "desktop-a")
           yield* app.end(type)
           yield* Effect.yieldNow
           const ready = yield* Deferred.poll(settled)
           if (Option.isNone(ready)) return yield* Effect.die(new Error("command waited after the session ended"))
-          expect(message(yield* ready.value)).toContain("may already have run")
+          const failure = message(yield* ready.value)
+          expect(failure).toContain("did not run")
+          expect(failure).not.toContain("may already have run")
+          expect(app.connection.waiting(sessionID)).toBe(0)
+          // The ban outlives the handler, so this command cannot be replayed onto a later attach.
+          expect(app.connection.retired(sessionID)).toBe(true)
+          const again = yield* app.connect("desktop-b")
+          yield* Effect.yieldNow
+          const replayed: string[] = []
+          let queued = yield* Queue.poll(app.events)
+          while (Option.isSome(queued)) {
+            if (queued.value.type === "command") replayed.push(queued.value.connectionID)
+            queued = yield* Queue.poll(app.events)
+          }
+          expect(replayed).toEqual([])
+          const next = yield* app.invoke("browser.tabs.list", {}).pipe(Effect.forkScoped({ startImmediately: true }))
+          const nextSettled = yield* Deferred.make<Exit.Exit<unknown, unknown>>()
+          yield* Effect.exit(Fiber.join(next)).pipe(
+            Effect.flatMap((exit) => Deferred.succeed(nextSettled, exit)),
+            Effect.forkScoped({ startImmediately: true }),
+          )
+          yield* app.take("command", "desktop-b")
+          yield* Fiber.interrupt(again)
+          yield* Effect.yieldNow
+          const dropped = yield* Deferred.poll(nextSettled)
+          if (Option.isNone(dropped)) return yield* Effect.die(new Error("re-attach drop waited out the ban"))
+          expect(message(yield* dropped.value)).toContain("did not run")
           expect(app.connection.waiting(sessionID)).toBe(0)
         }),
       ).pipe(Effect.provide(TestClock.layer())),
@@ -518,31 +543,25 @@ for (const type of ["session.deleted", "session.moved"] as const) {
   })
 }
 
-test("overlapping move and delete fail a taken command and then release the session", async () => {
+test("a later delete extends the ban started by a move", async () => {
   await Effect.runPromise(
     Effect.scoped(
       Effect.gen(function* () {
         const app = yield* open
         yield* app.connect("desktop-a")
         const pending = yield* app.invoke("browser.tabs.list", {}).pipe(Effect.forkScoped({ startImmediately: true }))
-        const settled = yield* Deferred.make<Exit.Exit<unknown, unknown>>()
-        yield* Effect.exit(Fiber.join(pending)).pipe(
-          Effect.flatMap((exit) => Deferred.succeed(settled, exit)),
-          Effect.forkScoped({ startImmediately: true }),
-        )
-        const event = yield* app.take("command", "desktop-a")
-        if (event.type !== "command") return yield* Effect.die(new Error("expected a browser command"))
-        yield* app.methods.command({ sessionID, connectionID: "desktop-a", requestID: event.requestID }, call)
+        yield* app.take("command", "desktop-a")
         yield* app.end("session.moved")
+        yield* Effect.yieldNow
+        expect(message(yield* Effect.exit(Fiber.join(pending)))).toContain("did not run")
+        expect(app.connection.waiting(sessionID)).toBe(0)
+        yield* TestClock.adjust("1 second")
         yield* app.end("session.deleted")
         yield* Effect.yieldNow
+        yield* TestClock.adjust("1 second")
         yield* Effect.yieldNow
-        const ready = yield* Deferred.poll(settled)
-        if (Option.isNone(ready)) return yield* Effect.die(new Error("command waited after overlapping session events"))
-        expect(message(yield* ready.value)).toContain("may already have run")
-        expect(app.connection.waiting(sessionID)).toBe(0)
         expect(app.connection.retired(sessionID)).toBe(true)
-        yield* TestClock.adjust(BrowserConnection.replayGrace)
+        yield* TestClock.adjust("1 second")
         yield* Effect.yieldNow
         expect(app.connection.retired(sessionID)).toBe(false)
       }),
