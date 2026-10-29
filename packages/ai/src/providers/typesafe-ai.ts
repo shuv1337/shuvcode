@@ -7,7 +7,7 @@ import { typesafeEvaluation } from "./typesafe-evaluation.js"
 export const id = ProviderID.make("typesafe-ai")
 const baseURL = "https://api.typesafe.ai/v1"
 
-export type Options = ProviderAuthOption<"optional"> & {
+export type Config = ProviderAuthOption<"optional"> & {
   readonly baseURL?: string
   readonly headers?: Record<string, string>
   readonly http?: HttpOptions.Input
@@ -15,7 +15,7 @@ export type Options = ProviderAuthOption<"optional"> & {
 
 export type Settings = ProviderPackage.Settings & { readonly apiKey?: string }
 
-export const configure = (input: Options = {}) => {
+export const configure = (input: Config = {}) => {
   const route = SystemOne.route.with({
     provider: id,
     providerMetadataKey: "typesafe",
@@ -42,7 +42,7 @@ export const configure = (input: Options = {}) => {
 export const provider = configure()
 export const decision = provider.decision
 
-export const decisionModel = (modelID: string, { apiKey, baseURL, body, headers, ...providerOptions }: Settings) =>
+export const decisionModel = (modelID: string, { apiKey, baseURL, body, headers, ...providerOptions }: Settings = {}) =>
   configure({ apiKey, baseURL, headers, http: body === undefined ? undefined : { body } }).decision(
     modelID,
     providerOptions,

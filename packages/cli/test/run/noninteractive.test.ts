@@ -253,7 +253,7 @@ async function run(input: {
   )
   spyOn(sdk.session.form, "cancel").mockImplementation((request) => (input.cancel?.(request) ?? ok(undefined)) as never)
   let promptID = "msg_prompt"
-  spyOn(sdk.session, "wait").mockImplementation(() => input.wait?.() ?? wait.promise)
+  spyOn(sdk.experimental.session, "wait").mockImplementation(() => input.wait?.() ?? wait.promise)
   spyOn(sdk.message, "list").mockImplementation(() =>
     ok({
       data: input.messages?.(promptID) ?? [{ id: promptID, type: "user", text: "hello", time: { created: 1 } }],
@@ -487,7 +487,7 @@ describe("runNonInteractivePrompt", () => {
       /^Connecting event stream\.\.\.\nAdmitting prompt \(session ses_1, request msg_[^)]+\)\.\.\.\n$/,
     )
     const sdk = await run({ compatibility: "v1", turn: (messageID) => [prompted(messageID), settled()] })
-    expect(sdk.session.wait).not.toHaveBeenCalled()
+    expect(sdk.experimental.session.wait).not.toHaveBeenCalled()
     expect(sdk.message.list).not.toHaveBeenCalled()
   })
 

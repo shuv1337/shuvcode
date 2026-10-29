@@ -33,7 +33,7 @@ test("managed service ports are stable per installation channel", () => {
   expect(ServiceConfig.defaultPort("preview-a", "linux")).not.toBe(ServiceConfig.defaultPort("preview-b", "linux"))
 })
 
-test("managed service ports on Windows stay below the range Windows reserves", () => {
+test("managed service ports on Windows stay below the ranges Windows and WSL reserve", () => {
   expect(ServiceConfig.defaultPort("latest", "win32")).toBe(0x1337)
   expect(ServiceConfig.defaultPort("dev", "win32")).toBe(0x1337)
   expect(ServiceConfig.defaultPort("local", "win32")).toBe(0x1338)
@@ -263,9 +263,9 @@ test.skipIf(process.platform === "win32")("port owner is unknown for a free port
   ).toBeUndefined()
 })
 
-test("service filenames share release channels and identify dev and preview channels", () => {
+test("service filenames share release channels and identify preview channels", () => {
   expect(ServiceConfig.filename("latest")).toBe("service.json")
-  expect(ServiceConfig.filename("dev")).toBe("service-dev.json")
+  expect(ServiceConfig.filename("dev")).toBe("service.json")
   expect(ServiceConfig.filename("beta")).toBe("service.json")
   expect(ServiceConfig.filename("next")).toBe("service.json")
   expect(ServiceConfig.filename("local")).toBe("service-local.json")
