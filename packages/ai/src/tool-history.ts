@@ -90,7 +90,7 @@ function normalizeToolResult(part: ToolResultPart, call: ToolCallPart | undefine
   if (named.result.type === "text" && blankText(named.result.value))
     return { ...named, result: { type: "text", value: EMPTY_TOOL_OUTPUT } }
   if (named.result.type === "error" && blankText(named.result.value))
-    return { ...named, result: { ...named.result, value: EMPTY_TOOL_OUTPUT } }
+    return { ...named, result: { ...named.result, value: EMPTY_TOOL_OUTPUT, empty: true } }
   if (named.result.type !== "content") return named
   // Exact "" is not a separator. Drop it, then replace the array only when every remaining
   // item is blank and there is no media. Whitespace such as "\n" stays: Mistral joins text

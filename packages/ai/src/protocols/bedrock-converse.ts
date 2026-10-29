@@ -317,9 +317,16 @@ const lowerToolCall = (part: ToolCallPart, normalizeID: (id: string) => string):
   },
 })
 
+const omittedToolErrorNote = (mime: string) => {
+  if (mime.startsWith("image/")) return "[image omitted]"
+  if (mime === "application/pdf") return "[document omitted]"
+  return "[file omitted]"
+}
+
 const lowerToolResultContent = Effect.fnUntraced(function* (
   part: ToolResultPart,
   documentNames: Set<string>,
+  omitErrorMedia: boolean,
 ) {
   if (part.result.type === "text") return [{ text: ProviderShared.toolResultText(part) }]
   if (part.result.type === "error") {
@@ -333,11 +340,14 @@ const lowerToolResultContent = Effect.fnUntraced(function* (
         blocks.push({ text: item.text })
         continue
       }
+      // Claude and Nova reject image and document blocks inside an error tool result.
+      if (omitErrorMedia) {
+        blocks.push({ text: omittedToolErrorNote(item.mime) })
+        continue
+      }
       blocks.push(...(yield* BedrockMedia.lower(ProviderShared.toolFileMedia(item), documentNames)))
     }
-    // History rewrites a blank error value to "(no tool output)". Keep that note only when
-    // nothing else remains, so a blank text item beside an image lowers to the image.
-    if (blocks.length === 0 || text.text !== "(no tool output)") blocks.unshift(text)
+    if (blocks.length === 0 || part.result.empty !== true) blocks.unshift(text)
     return blocks
   }
   if (part.result.type === "json") return [{ json: part.result.value }]
@@ -359,11 +369,12 @@ const lowerToolResult = Effect.fnUntraced(function* (
   part: ToolResultPart,
   documentNames: Set<string>,
   normalizeID: (id: string) => string,
+  omitErrorMedia: boolean,
 ) {
   return {
     toolResult: {
       toolUseId: normalizeID(part.id),
-      content: yield* lowerToolResultContent(part, documentNames),
+      content: yield* lowerToolResultContent(part, documentNames, omitErrorMedia),
       status: part.result.type === "error" ? "error" : "success",
     },
   } satisfies BedrockToolResultBlock
@@ -467,7 +478,7 @@ const lowerMessages = Effect.fnUntraced(function* (
     for (const part of message.content) {
       if (!ProviderShared.supportsContent(part, ["tool-result"]))
         return yield* ProviderShared.unsupportedContent("Bedrock Converse", "tool", ["tool-result"])
-      const result = yield* lowerToolResult(part, documentNames, normalizeID)
+      const result = yield* lowerToolResult(part, documentNames, normalizeID, keepToolImagesInline(request.model.id))
       const images: BedrockMedia.ImageBlock[] = hoistImages
         ? result.toolResult.content.filter((item) => "image" in item)
         : []
