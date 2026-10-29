@@ -1,6 +1,6 @@
 {
   "name": "@opencode/pty",
-  "version": "2.2.1",
+  "version": "0.3.2",
   "description": "Persistent PTY service for OpenCode",
   "type": "module",
   "license": "MIT",
