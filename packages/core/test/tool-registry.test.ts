@@ -182,6 +182,36 @@ describe("Tool", () => {
     }),
   )
 
+  it.effect("converts schemas at registration and reuses them in every snapshot", () =>
+    Effect.gen(function* () {
+      const service = yield* Tool.Service
+      let builds = 0
+      const portable = {
+        "~standard": {
+          version: 1,
+          vendor: "test",
+          validate: (value: unknown) => ({ value }),
+          jsonSchema: {
+            input: () => {
+              builds++
+              return { type: "object", properties: { text: { type: "string" } } }
+            },
+            output: () => ({ type: "string" }),
+          },
+        },
+      } as const
+      yield* transform(service, { portable: { ...make(), input: portable } }, { codemode: false })
+      const registered = builds
+
+      const first = yield* service.snapshot()
+      const second = yield* service.snapshot()
+
+      expect(builds).toBe(registered)
+      expect(second.definitions).toHaveLength(2)
+      second.definitions.forEach((item, index) => expect(item).toBe(first.definitions[index]))
+    }),
+  )
+
   it.effect("skips invalid updates without dropping the existing definition", () =>
     Effect.gen(function* () {
       const service = yield* Tool.Service
@@ -674,6 +704,66 @@ describe("Tool", () => {
       const denied = yield* service.snapshot([{ action: "execute", resource: "*", effect: "deny" }])
       expect(denied.definitions).toEqual([])
       expect(denied.codeModeCatalog).toBeUndefined()
+    }),
+  )
+
+  it.effect("does not call a disabled direct tool through a cached code-mode runtime", () =>
+    Effect.gen(function* () {
+      const service = yield* Tool.Service
+      const calls: string[] = []
+      yield* transform(
+        service,
+        {
+          secret: {
+            ...make(),
+            execute: ({ text }) => {
+              calls.push(text)
+              return Effect.succeed({ output: { text }, content: text })
+            },
+          },
+        },
+        { codemode: false },
+      )
+      const enabled = yield* service.snapshot()
+      const run = (snapshot: Tool.Snapshot, id: string) =>
+        snapshot.execute({
+          ...call("execute", id),
+          call: {
+            type: "tool-call",
+            id,
+            name: "execute",
+            input: { code: 'return await tools.secret({ text: "hidden" })' },
+          },
+        })
+
+      expect((yield* run(enabled, "call-enabled")).content[0]).toMatchObject({ type: "text" })
+      expect(calls).toEqual(["hidden"])
+
+      const denied = yield* service.snapshot([{ action: "secret", resource: "*", effect: "deny" }])
+      const blocked = yield* run(denied, "call-denied")
+      expect(calls).toEqual(["hidden"])
+      expect(blocked.metadata).toMatchObject({ error: true })
+    }),
+  )
+
+  it.effect("exposes Code Mode tools directly when execute is denied", () =>
+    Effect.gen(function* () {
+      const service = yield* Tool.Service
+      yield* transform(service, { lookup: make() }, { namespace: "mcp" })
+      yield* transform(service, { bash: make() }, { codemode: false })
+      const denyExecute: Permission.Ruleset = [{ action: "execute", resource: "*", effect: "deny" }]
+
+      const snapshot = yield* service.snapshot(denyExecute)
+      expect(snapshot.definitions.map((tool) => tool.name)).toEqual(["bash", "mcp_lookup"])
+      expect(snapshot.codeModeCatalog).toBeUndefined()
+      expect((yield* snapshot.execute(call("mcp_lookup"))).output).toEqual({ text: "mcp_lookup" })
+
+      const hidden = yield* service.snapshot([
+        ...denyExecute,
+        { action: "mcp_lookup", resource: "*", effect: "deny" },
+      ])
+      expect(hidden.definitions.map((tool) => tool.name)).toEqual(["bash"])
+      expect(yield* hidden.execute(call("mcp_lookup")).pipe(Effect.flip)).toBeInstanceOf(Tool.Error)
     }),
   )
 

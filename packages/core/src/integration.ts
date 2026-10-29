@@ -26,10 +26,7 @@ import { IntegrationConnection } from "./integration/connection.js"
 import { AppProcess } from "@opencode/util/process"
 import { ChildProcess } from "effect/process"
 import { Form } from "./form.js"
-import { KeyedMutex } from "./effect/keyed-mutex.js"
-
 // Credentials are global; different Locations must not rotate the same token concurrently.
-const refreshLocks = KeyedMutex.makeUnsafe<Credential.ID>()
 
 export const ID = Integration.ID
 export type ID = Integration.ID
@@ -380,8 +377,24 @@ const layer = Layer.effect(
           },
         },
       }),
-      notify: () => bus.publish(Integration.Event.Updated, {}).pipe(Effect.asVoid),
+      notify: State.changes(
+        (data) =>
+          Array.from(data.integrations.values(), (entry) => project(entry, resolveConnections(entry, []))).toSorted(
+            (a, b) => a.name.localeCompare(b.name),
+          ),
+        () => bus.publish(Integration.Event.Updated, {}).pipe(Effect.asVoid),
+      ),
     })
+
+    const sorted = new WeakMap<Map<ID, Entry>, Entry[]>()
+    const sortedEntries = () => {
+      const integrations = state.get().integrations
+      const cached = sorted.get(integrations)
+      if (cached) return cached
+      const entries = Array.from(integrations.values()).toSorted((a, b) => a.ref.name.localeCompare(b.ref.name))
+      sorted.set(integrations, entries)
+      return entries
+    }
 
     const createCredential = Effect.fnUntraced(function* (input: Parameters<Credential.Interface["create"]>[0]) {
       if (input.label !== undefined) return yield* credentials.create(input)
@@ -712,9 +725,7 @@ const layer = Layer.effect(
       }),
       list: Effect.fn("Integration.list")(function* () {
         const saved = Map.groupBy(yield* credentials.all(), (credential) => credential.integrationID)
-        return Array.from(state.get().integrations.values(), (entry) =>
-          project(entry, resolveConnections(entry, saved.get(entry.ref.id) ?? [])),
-        ).toSorted((a, b) => a.name.localeCompare(b.name))
+        return sortedEntries().map((entry) => project(entry, resolveConnections(entry, saved.get(entry.ref.id) ?? [])))
       }),
       connection: {
         active: Effect.fn("Integration.connection.active")(function* (id) {
@@ -726,30 +737,49 @@ const layer = Layer.effect(
             const key = process.env[connection.name]
             return key ? Credential.Key.make({ type: "key", key }) : undefined
           }
-          return yield* refreshLocks.withLock(connection.id)(
-            Effect.gen(function* () {
-              // Read under the lock so waiters use the replacement persisted by its owner.
-              const credential = yield* credentials.get(connection.id)
-              if (!credential || credential.value.type !== "oauth") return credential?.value
-              const now = yield* Clock.currentTimeMillis
-              const fresh = credential.value.expires > now + Duration.toMillis(Duration.minutes(5))
-              if (credential.value.metadata?.shuvcodeAuthImport === "access-only") {
-                if (fresh) return credential.value
-                return yield* new AuthorizationError({
-                  cause: new Error(
-                    "Imported access token is near expiry; refresh is disabled. Import valid auth before continuing.",
-                  ),
-                })
-              }
-              const implementation = state
-                .get()
-                .integrations.get(credential.integrationID)
-                ?.implementations.get(credential.value.methodID)
-              if (!implementation?.refresh || fresh) return credential.value
-              const value = yield* authorize(implementation.refresh(credential.value))
-              yield* credentials.update(credential.id, { value })
-              return value
-            }),
+          const credential = yield* credentials.get(connection.id)
+          if (!credential) return undefined
+          if (credential.value.type !== "oauth") return credential.value
+          const imported = (value: { readonly metadata?: { readonly shuvcodeAuthImport?: string } }) =>
+            value.metadata?.shuvcodeAuthImport === "access-only"
+          const refresh = state
+            .get()
+            .integrations.get(credential.integrationID)
+            ?.implementations.get(credential.value.methodID)?.refresh
+          const expiring = (value: Credential.OAuth) =>
+            Clock.currentTimeMillis.pipe(
+              Effect.map((now) => value.expires <= now + Duration.toMillis(Duration.minutes(5))),
+            )
+          if (imported(credential.value)) {
+            if (!(yield* expiring(credential.value))) return credential.value
+            return yield* new AuthorizationError({
+              cause: new Error(
+                "Imported access token is near expiry; refresh is disabled. Import valid auth before continuing.",
+              ),
+            })
+          }
+          if (!refresh || !(yield* expiring(credential.value))) return credential.value
+          return yield* authorize(
+            credentials.lock(
+              credential.id,
+              Effect.gen(function* () {
+                // Another Location may have refreshed while this caller waited.
+                const current = yield* credentials.get(credential.id)
+                if (!current || current.value.type !== "oauth") return undefined
+                if (imported(current.value)) {
+                  if (!(yield* expiring(current.value))) return current.value
+                  return yield* new AuthorizationError({
+                    cause: new Error(
+                      "Imported access token is near expiry; refresh is disabled. Import valid auth before continuing.",
+                    ),
+                  })
+                }
+                if (!(yield* expiring(current.value))) return current.value
+                const value = yield* refresh(current.value).pipe(Effect.timeout("30 seconds"))
+                yield* credentials.update(current.id, { value })
+                return value
+              }),
+            ),
           )
         }),
         key: Effect.fn("Integration.connection.key")(function* (input) {

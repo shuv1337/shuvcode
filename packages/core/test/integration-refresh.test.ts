@@ -1,13 +1,15 @@
 import { describe, expect } from "bun:test"
-import { Clock, Deferred, Duration, Effect, Fiber, Ref } from "effect"
+import { Clock, Context, Deferred, Duration, Effect, Fiber, Layer, Ref } from "effect"
 import { TestClock } from "effect/testing"
+import { Node } from "@opencode/util/effect/app-node"
 import { Credential } from "@opencode/core/credential"
 import { Integration } from "@opencode/core/integration"
 import { AppNodeBuilder } from "@opencode/core/effect/app-node-builder"
 import { LayerNode } from "@opencode/util/effect/layer-node"
 import { testEffect } from "./lib/effect"
 
-const it = testEffect(AppNodeBuilder.build(LayerNode.group([Integration.node, Credential.node])))
+const single = testEffect(AppNodeBuilder.build(LayerNode.group([Integration.node, Credential.node])))
+const located = testEffect(Layer.empty)
 const integrationID = Integration.ID.make("anthropic")
 const methodID = Integration.MethodID.make("claude-pro-max")
 
@@ -48,7 +50,7 @@ const connection = (credential: Credential.Info) => ({
 })
 
 describe("OAuth refresh safety", () => {
-  it.effect("uses an imported access token only outside the refresh window", () =>
+  single.effect("uses an imported access token only outside the refresh window", () =>
     Effect.gen(function* () {
       const integration = yield* Integration.Service
       const refreshes = yield* Ref.make(0)
@@ -63,7 +65,7 @@ describe("OAuth refresh safety", () => {
     }),
   )
 
-  it.effect("rejects expired imported auth even when the method has no refresh callback", () =>
+  single.effect("rejects expired imported auth even when the method has no refresh callback", () =>
     Effect.gen(function* () {
       const integration = yield* Integration.Service
       yield* register()
@@ -73,7 +75,7 @@ describe("OAuth refresh safety", () => {
     }),
   )
 
-  it.effect("coalesces concurrent refreshes and rereads the persisted replacement", () =>
+  single.effect("coalesces concurrent refreshes and rereads the persisted replacement", () =>
     Effect.gen(function* () {
       const integration = yield* Integration.Service
       const credentials = yield* Credential.Service
@@ -108,7 +110,7 @@ describe("OAuth refresh safety", () => {
     }),
   )
 
-  it.effect("does not serialize different credentials", () =>
+  single.effect("does not serialize different credentials", () =>
     Effect.gen(function* () {
       const integration = yield* Integration.Service
       const now = yield* Clock.currentTimeMillis
@@ -132,7 +134,7 @@ describe("OAuth refresh safety", () => {
     }),
   )
 
-  it.effect("releases the refresh lock when its owner is interrupted", () =>
+  single.effect("releases a timed-out refresh lock after its first caller is interrupted", () =>
     Effect.gen(function* () {
       const integration = yield* Integration.Service
       const credentials = yield* Credential.Service
@@ -153,13 +155,18 @@ describe("OAuth refresh safety", () => {
       const pending = yield* integration.connection.resolve(connection(credential)).pipe(Effect.forkScoped)
       yield* Deferred.await(entered)
       yield* Fiber.interrupt(pending)
+      const waiting = yield* integration.connection.resolve(connection(credential)).pipe(Effect.flip, Effect.forkScoped)
+      yield* Effect.yieldNow
+      // Credential owns refresh independently of the caller; its timeout must still release the lock.
+      yield* TestClock.adjust("30 seconds")
+      expect(yield* Fiber.join(waiting)).toBeInstanceOf(Integration.AuthorizationError)
       expect((yield* credentials.get(credential.id))?.value).toEqual(credential.value)
       expect(yield* integration.connection.resolve(connection(credential))).toMatchObject({ expires: now + 3_600_000 })
       expect(yield* Ref.get(calls)).toBe(2)
     }),
   )
 
-  it.effect("releases the refresh lock after failure without replacing stored auth", () =>
+  single.effect("releases the refresh lock after failure without replacing stored auth", () =>
     Effect.gen(function* () {
       const integration = yield* Integration.Service
       const credentials = yield* Credential.Service
@@ -180,3 +187,111 @@ describe("OAuth refresh safety", () => {
     }),
   )
 })
+
+const locations = Effect.gen(function* () {
+  const layer = LayerNode.compile(LayerNode.group([Integration.node, Credential.node]), {
+    shared: Node.tags.values.global,
+  })
+  const memo = yield* Layer.makeMemoMap
+  const scope = yield* Effect.scope
+  const first = yield* Layer.buildWithMemoMap(layer, memo, scope)
+  const second = yield* Layer.buildWithMemoMap(layer, memo, scope)
+  const a = Context.get(first, Integration.Service)
+  const b = Context.get(second, Integration.Service)
+  const credentials = Context.get(first, Credential.Service)
+  expect(a).not.toBe(b)
+  expect(credentials).toBe(Context.get(second, Credential.Service))
+  return { a, b, credentials }
+})
+
+for (const cancel of [false, true]) {
+  located.effect(`shares refresh across Locations${cancel ? " after the first caller is interrupted" : ""}`, () =>
+    Effect.gen(function* () {
+      const services = yield* locations
+      const entered = yield* Deferred.make<void>()
+      const release = yield* Deferred.make<void>()
+      const integrationID = Integration.ID.make("openai")
+      const methodID = Integration.MethodID.make("oauth")
+      let calls = 0
+      const registration = {
+        integrationID,
+        method: { id: methodID, type: "oauth" as const, label: "OAuth" },
+        authorize: () => Effect.die("unused sign-in"),
+        refresh: (value: Credential.OAuth) =>
+          Effect.gen(function* () {
+            calls++
+            expect(value.refresh).toBe("old-refresh")
+            yield* Deferred.succeed(entered, undefined)
+            yield* Deferred.await(release)
+            return Credential.OAuth.make({
+              ...value,
+              access: "new-access",
+              refresh: "new-refresh",
+              expires: Number.MAX_SAFE_INTEGER,
+            })
+          }),
+      }
+      yield* services.a.transform((editor) => editor.method.update(registration))
+      yield* services.b.transform((editor) => editor.method.update(registration))
+      const stored = yield* services.credentials.create({
+        integrationID,
+        value: Credential.OAuth.make({
+          type: "oauth",
+          methodID,
+          access: "old-access",
+          refresh: "old-refresh",
+          expires: 1,
+        }),
+      })
+      const connection = { type: "credential" as const, id: stored.id, label: stored.label, method: "oauth" as const }
+      const first = yield* services.a.connection.resolve(connection).pipe(Effect.forkScoped)
+      yield* Deferred.await(entered)
+      if (cancel) yield* Fiber.interrupt(first)
+      const second = yield* services.b.connection.resolve(connection).pipe(Effect.forkScoped)
+      yield* Effect.yieldNow
+      expect(calls).toBe(1)
+      yield* Deferred.succeed(release, undefined)
+      const value = yield* Fiber.join(second)
+      if (!cancel) expect(yield* Fiber.join(first)).toEqual(value)
+      expect((yield* services.credentials.get(stored.id))?.value).toEqual(value)
+      expect(yield* services.b.connection.resolve(connection)).toEqual(value)
+      expect(calls).toBe(1)
+    }),
+  )
+}
+
+located.effect("bounds a stuck integration refresh and allows a later attempt", () =>
+  Effect.gen(function* () {
+    const services = yield* locations
+    const entered = yield* Deferred.make<void>()
+    const integrationID = Integration.ID.make("openai")
+    const methodID = Integration.MethodID.make("oauth")
+    const stored = yield* services.credentials.create({
+      integrationID,
+      value: Credential.OAuth.make({ type: "oauth", methodID, access: "old", refresh: "refresh", expires: 1 }),
+    })
+    yield* services.a.transform((editor) =>
+      editor.method.update({
+        integrationID,
+        method: { id: methodID, type: "oauth", label: "OAuth" },
+        authorize: () => Effect.die("unused sign-in"),
+        refresh: () => Deferred.succeed(entered, undefined).pipe(Effect.andThen(Effect.never)),
+      }),
+    )
+    const connection = { type: "credential" as const, id: stored.id, label: stored.label, method: "oauth" as const }
+    const first = yield* services.a.connection.resolve(connection).pipe(Effect.flip, Effect.forkScoped)
+    yield* Deferred.await(entered)
+    yield* TestClock.adjust("30 seconds")
+    expect(yield* Fiber.join(first)).toBeInstanceOf(Integration.AuthorizationError)
+    yield* services.a.transform((editor) =>
+      editor.method.update({
+        integrationID,
+        method: { id: methodID, type: "oauth", label: "OAuth" },
+        authorize: () => Effect.die("unused sign-in"),
+        refresh: (value) =>
+          Effect.succeed(Credential.OAuth.make({ ...value, access: "new", expires: Number.MAX_SAFE_INTEGER })),
+      }),
+    )
+    expect(yield* services.a.connection.resolve(connection)).toMatchObject({ access: "new" })
+  }),
+)

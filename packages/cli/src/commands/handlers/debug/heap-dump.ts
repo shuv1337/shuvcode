@@ -6,13 +6,15 @@ import path from "node:path"
 import { Commands } from "../../commands"
 import { Runtime } from "../../../framework/runtime"
 import { ServerConnection } from "../../../services/server-connection"
+import { ServerSetting } from "../../../services/server-flags"
 import { ServiceConfig } from "../../../services/service-config"
 import { errorMessage } from "../../../util/error"
 
 const handler = Effect.fn("cli.debug.heap-dump")(function* (
   input: Runtime.Input<(typeof Commands.commands.debug.commands)["heap-dump"]>,
 ) {
-  const endpoint = yield* running(Option.getOrUndefined(input.server))
+  const server = yield* Effect.serviceOption(ServerSetting).pipe(Effect.map(Option.flatten))
+  const endpoint = yield* running(Option.getOrUndefined(server))
   const client = OpenCode.make({ baseUrl: endpoint.url, headers: Service.headers(endpoint) })
   // The server writes the file, so a relative directory resolves against this shell. An absolute one passes through
   // untouched, which keeps a POSIX path for a remote server intact on Windows.

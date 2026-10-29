@@ -14,7 +14,8 @@
   "exports": {
     ".": "./src/index.ts",
     "./highlights": "./src/highlights.ts",
-    "./version": "./src/version.ts"
+    "./version": "./src/version.ts",
+    "./pack": "./src/pack.ts"
   },
   "scripts": {
     "test": "bun test",

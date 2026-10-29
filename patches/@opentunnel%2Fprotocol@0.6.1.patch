@@ -1,0 +1,26 @@
+diff --git a/dist/bridge-protocol.d.ts b/dist/bridge-protocol.d.ts
+index b731a7154929a2c6b4be2ce1a9addd4f83309bc7..46d7cad6ee99e3e41dd8027014d98364bca384fd 100644
+--- a/dist/bridge-protocol.d.ts
++++ b/dist/bridge-protocol.d.ts
+@@ -84,7 +84,7 @@ export type ServerControlMessage = Schema.Schema.Type<typeof ServerControlMessag
+ export declare function decodeServerMessage(text: string): Option.Option<ServerControlMessage>;
+ export declare const ControlMessage: Schema.Union<readonly [typeof AttachMessage, typeof AttachedMessage, typeof AttachErrorMessage, typeof PingMessage, typeof PongMessage, typeof DrainMessage, typeof OpenMessage, typeof EndMessage, typeof ResetMessage]>;
+ export type ControlMessage = Schema.Schema.Type<typeof ControlMessage>;
+-export declare const WEBSOCKET_SUBPROTOCOL = "opentunnel";
++export declare const WEBSOCKET_SUBPROTOCOL = "shuvtunnel";
+ export declare const BridgeErrorCode: {
+     readonly BAD_ATTACH: "bad_attach";
+     readonly BAD_TOKEN: "bad_token";
+diff --git a/dist/bridge-protocol.js b/dist/bridge-protocol.js
+index 5a3b810ed6cfe43772a354a5efbda63e8309a326..3ed9d77d75eae96fe3d7517ca9562cb998af90bc 100644
+--- a/dist/bridge-protocol.js
++++ b/dist/bridge-protocol.js
+@@ -119,7 +119,7 @@ export const ControlMessage = Schema.Union([
+     ResetMessage,
+ ]);
+ // WebSocket subprotocol name
+-export const WEBSOCKET_SUBPROTOCOL = "opentunnel";
++export const WEBSOCKET_SUBPROTOCOL = "shuvtunnel";
+ // Error codes from specs.md
+ export const BridgeErrorCode = {
+     BAD_ATTACH: "bad_attach",

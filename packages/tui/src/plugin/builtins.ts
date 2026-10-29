@@ -5,6 +5,7 @@ import QuickQuote from "../feature-plugins/prompt/quick-quote"
 import SkillDollar from "../feature-plugins/prompt/skill-dollar"
 import SidebarContext from "../feature-plugins/sidebar/context"
 import SidebarFooter from "../feature-plugins/sidebar/footer"
+import SidebarLimit from "../feature-plugins/sidebar/limit"
 import SidebarMcp from "../feature-plugins/sidebar/mcp"
 import SidebarQuota from "../feature-plugins/sidebar/quota"
 import SidebarSubagents from "../feature-plugins/sidebar/subagents"
@@ -28,6 +29,7 @@ export const builtins = [
   SidebarQuota,
   SidebarContext,
   SidebarSubagents,
+  SidebarLimit,
   SidebarMcp,
   SidebarTodo,
   SidebarFooter,
