@@ -820,25 +820,23 @@ const lowerToolResultContentItem = Effect.fnUntraced(function* (item: Tool.Conte
 
 const lowerToolResultContent = Effect.fnUntraced(function* (part: ToolResultPart, request: LLMRequest) {
   const rich = ProviderShared.toolErrorContent(part)
-  // Text / json / error results stay as a string for backward compatibility
-  // with existing cassettes and provider expectations.
-  if (part.result.type !== "content" && rich === undefined) return ProviderShared.toolResultText(part)
-  // Preserve the narrowed array element type when compiled through a consumer package.
-  const content: ReadonlyArray<Tool.Content> = part.result.type === "content" ? part.result.value : rich!
-  // An is_error tool_result may contain only text. Image and document blocks in that content are
-  // rejected, so replace them with a note instead of lowering media.
-  if (part.result.type === "error") return lowerToolErrorContent(part, content)
-  return yield* Effect.forEach(content, (item) => lowerToolResultContentItem(item, request))
+  // An is_error tool_result may contain only text. Blank text is rejected, and image or document
+  // blocks are replaced with a note instead of lowering media.
+  if (part.result.type === "error") return lowerToolErrorContent(part, rich ?? [])
+  // Text and json results stay as a string for backward compatibility with existing cassettes.
+  if (part.result.type !== "content") return ProviderShared.toolResultText(part)
+  return yield* Effect.forEach(part.result.value, (item) => lowerToolResultContentItem(item, request))
 })
 
-const lowerToolErrorContent = (part: ToolResultPart, content: ReadonlyArray<Tool.Content>) => [
-  { type: "text" as const, text: ProviderShared.toolResultText(part) },
-  ...content.map((item) =>
-    item.type === "text"
-      ? { type: "text" as const, text: item.text }
-      : { type: "text" as const, text: omittedToolErrorNote(item) },
-  ),
-]
+const lowerToolErrorContent = (part: ToolResultPart, content: ReadonlyArray<Tool.Content>) => {
+  const blocks = [ProviderShared.toolResultText(part), ...content.map(toolErrorItemText)].filter(
+    (text) => text.trim().length > 0,
+  )
+  const text = blocks.length > 0 ? blocks : ["[tool error]"]
+  return text.map((item) => ({ type: "text" as const, text: item }))
+}
+
+const toolErrorItemText = (item: Tool.Content) => (item.type === "text" ? item.text : omittedToolErrorNote(item))
 
 const omittedToolErrorNote = (item: Tool.FileContent) => {
   if (item.mime.startsWith("image/")) return "[image omitted]"
