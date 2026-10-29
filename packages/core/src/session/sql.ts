@@ -24,6 +24,7 @@ type SessionMessageData = DistributiveOmit<
   Exclude<(typeof SessionMessage.Info)["Encoded"], { readonly type: "user" }> | (typeof SessionStored.User)["Encoded"],
   "type" | "id"
 >
+export type SessionPartData = SessionMessage.AssistantContentEncoded
 
 export const SessionTable = sqliteTable(
   "session_v2",
@@ -63,6 +64,7 @@ export const SessionTable = sqliteTable(
       variant?: string
     }>(),
     ...Timestamps,
+    time_busy: integer(),
     time_idle: integer(),
     time_viewed: integer(),
     idle_outcome: text().$type<NonNullable<Session.Info["outcome"]>>(),
@@ -121,6 +123,29 @@ export const SubagentOperationTable = sqliteTable(
     status: text().$type<"prepared" | "completed" | "failed">().notNull(),
   },
   (table) => [primaryKey({ columns: [table.session_id, table.assistant_message_id, table.call_id] })],
+)
+
+export const SessionPartTable = sqliteTable(
+  "session_part",
+  {
+    message_id: text()
+      .$type<SessionMessage.ID>()
+      .notNull()
+      .references(() => SessionMessageTable.id, { onDelete: "cascade" }),
+    session_id: text()
+      .$type<SessionSchema.ID>()
+      .notNull()
+      .references(() => SessionTable.id, { onDelete: "cascade" }),
+    ordinal: integer().notNull(),
+    type: text().$type<SessionMessage.AssistantContent["type"]>().notNull(),
+    call_id: text(),
+    ...Timestamps,
+    data: text({ mode: "json" }).notNull().$type<SessionPartData>(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.message_id, table.ordinal] }),
+    index("session_part_session_message_idx").on(table.session_id, table.message_id, table.ordinal),
+  ],
 )
 
 export const SessionInboxTable = sqliteTable(

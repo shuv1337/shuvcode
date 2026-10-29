@@ -112,6 +112,13 @@ export const clientSettings: Entry<SettingsRootTab>[] = [
     keywords: "fold collapse long messages prompts read more",
   },
   {
+    tab: "experimental",
+    label: "settings.experimental.row.newQuestionUI.title",
+    target: "settings-new-question-ui",
+    description: "settings.experimental.row.newQuestionUI.description",
+    keywords: "question answers keyboard dock redesign",
+  },
+  {
     tab: "appearance",
     label: "settings.general.row.colorScheme.title",
     target: "settings-color-scheme",

@@ -131,6 +131,8 @@ const generalSchema = Persistence.struct({
   newIcons: Schema.Boolean,
   // The "Fold long messages" experiment, off until it ships.
   foldUserMessages: Schema.Boolean,
+  // The redesigned keyboard-first question dock, off until it ships.
+  newQuestionUI: Schema.Boolean,
   mobileTitlebarPosition: Schema.Literals(["top", "bottom"]),
   // Owned by the review plugin, which copies it out once; kept so settings rewrites cannot drop it first.
   mobileDiffWrap: Persistence.optional(Schema.Boolean),
@@ -300,6 +302,7 @@ export const defaultSettings: Settings = {
     timelineWidth: "comfortable",
     newIcons: false,
     foldUserMessages: false,
+    newQuestionUI: false,
     mobileTitlebarPosition: "top",
     followUpBehavior: "steer",
   },
@@ -411,6 +414,10 @@ export const { use: useSettings, provider: SettingsProvider } = createSimpleCont
         foldUserMessages: withFallback(() => store.general?.foldUserMessages, defaultSettings.general.foldUserMessages),
         setFoldUserMessages(value: boolean) {
           setStore("general", "foldUserMessages", value)
+        },
+        newQuestionUI: withFallback(() => store.general?.newQuestionUI, defaultSettings.general.newQuestionUI),
+        setNewQuestionUI(value: boolean) {
+          setStore("general", "newQuestionUI", value)
         },
         mobileTitlebarPosition: withFallback(
           () => store.general?.mobileTitlebarPosition,
