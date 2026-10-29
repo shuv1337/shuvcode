@@ -648,6 +648,53 @@ describe("Bedrock Converse route", () => {
     }),
   )
 
+  it.effect("drops blank tool-result text and keeps the image", () =>
+    Effect.gen(function* () {
+      const prepared = yield* compileRequest(
+        LLM.request({
+          id: "req_tool_blank_text",
+          model,
+          messages: [
+            Message.user("Capture the screen."),
+            Message.assistant([ToolCallPart.make({ id: "tool_1", name: "screenshot", input: {} })]),
+            Message.tool({
+              id: "tool_1",
+              name: "screenshot",
+              result: {
+                type: "content",
+                value: [
+                  { type: "text", text: " " },
+                  { type: "file", uri: "data:image/png;base64,AAAA", mime: "image/png" },
+                ],
+              },
+            }),
+          ],
+          cache: "none",
+        }),
+      )
+
+      expect(prepared.body.messages).toEqual([
+        { role: "user", content: [{ text: "Capture the screen." }] },
+        {
+          role: "assistant",
+          content: [{ toolUse: { toolUseId: "tool_1", name: "screenshot", input: {} } }],
+        },
+        {
+          role: "user",
+          content: [
+            {
+              toolResult: {
+                toolUseId: "tool_1",
+                content: [{ image: { format: "png", source: { bytes: "AAAA" } } }],
+                status: "success",
+              },
+            },
+          ],
+        },
+      ])
+    }),
+  )
+
   it.effect("hoists tool-result images beside the result for Bedrock GPT models", () =>
     Effect.gen(function* () {
       const prepared = yield* compileRequest(

@@ -823,6 +823,47 @@ describe("Anthropic Messages route", () => {
     }),
   )
 
+  it.effect("drops whitespace-only tool-result text and keeps non-blank text", () =>
+    Effect.gen(function* () {
+      const spaced = "  Keep this spacing.  "
+      const prepared = yield* compileRequest(
+        LLM.request({
+          model,
+          cache: "none",
+          messages: [
+            Message.assistant([ToolCallPart.make({ id: "call_1", name: "read", input: {} })]),
+            Message.tool({
+              id: "call_1",
+              name: "read",
+              resultType: "content",
+              result: [
+                { type: "text", text: " \n\t" },
+                { type: "text", text: spaced },
+                { type: "file", uri: "data:image/png;base64,AAECAw==", mime: "image/png" },
+              ],
+            }),
+          ],
+        }),
+      )
+      const blank = yield* compileRequest(
+        LLM.request({
+          model,
+          cache: "none",
+          messages: [
+            Message.assistant([ToolCallPart.make({ id: "call_1", name: "read", input: {} })]),
+            Message.tool({ id: "call_1", name: "read", resultType: "text", result: " \n\t" }),
+          ],
+        }),
+      )
+
+      expect(expectToolResult(prepared.body).content).toEqual([
+        { type: "text", text: spaced },
+        { type: "image", source: { type: "base64", media_type: "image/png", data: "AAECAw==" } },
+      ])
+      expect(expectToolResult(blank.body).content).toBe("(no tool output)")
+    }),
+  )
+
   it.effect("lowers single-image tool-result content as a structured image block", () =>
     Effect.gen(function* () {
       const prepared = yield* compileRequest(
@@ -1036,7 +1077,7 @@ describe("Anthropic Messages route", () => {
       const prepared = yield* compileErrorToolResult("  \n", [{ type: "text", text: "\t " }])
       const result = expectToolResult(prepared.body)
       expect(result.is_error).toBe(true)
-      expect(result.content).toEqual([{ type: "text", text: "[tool error]" }])
+      expect(result.content).toEqual([{ type: "text", text: "(no tool output)" }])
       expectNoEmptyText(result.content)
     }),
   )

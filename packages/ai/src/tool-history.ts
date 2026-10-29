@@ -2,6 +2,7 @@ import { Message, ToolResultPart, type ToolCallPart } from "./schema/messages.js
 
 const EMPTY_TOOL_OUTPUT = "(no tool output)"
 const MISSING_TOOL_RESULT = "Tool result missing"
+const blankText = (value: unknown) => typeof value === "string" && value.trim() === ""
 
 export function normalizeToolHistory(messages: ReadonlyArray<Message>) {
   const normalized: Message[] = []
@@ -86,13 +87,17 @@ function normalizeToolResult(part: ToolResultPart, call: ToolCallPart | undefine
     call === undefined || (part.name === call.name && part.namespace === call.namespace)
       ? part
       : { ...part, name: call.name, namespace: call.namespace }
-  if (named.result.type === "text" && named.result.value === "")
+  if (named.result.type === "text" && blankText(named.result.value))
     return { ...named, result: { type: "text", value: EMPTY_TOOL_OUTPUT } }
-  if (named.result.type === "error" && named.result.value === "")
+  if (named.result.type === "error" && blankText(named.result.value))
     return { ...named, result: { ...named.result, value: EMPTY_TOOL_OUTPUT } }
   if (named.result.type !== "content") return named
+  // Exact "" is not a separator. Drop it, then replace the array only when every remaining
+  // item is blank and there is no media. Whitespace such as "\n" stays: Mistral joins text
+  // with "", so ["foo", "\n", "bar"] must remain "foo\nbar".
   const value = named.result.value.filter((item) => item.type !== "text" || item.text !== "")
-  if (value.length === 0) return { ...named, result: { type: "text", value: EMPTY_TOOL_OUTPUT } }
+  if (value.every((item) => item.type === "text" && blankText(item.text)))
+    return { ...named, result: { type: "text", value: EMPTY_TOOL_OUTPUT } }
   if (value.length === named.result.value.length) return named
   return { ...named, result: { type: "content", value } }
 }
