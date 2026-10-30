@@ -1416,7 +1416,7 @@ describe("Bedrock Converse route", () => {
 
   for (const signature of [undefined, "", "   "]) {
     for (const cache of ["none", "auto"] as const) {
-      it.effect(`demotes unsigned reasoning to text (${JSON.stringify(signature)}, cache: ${cache})`, () =>
+      it.effect(`drops unsigned reasoning (${JSON.stringify(signature)}, cache: ${cache})`, () =>
         Effect.gen(function* () {
           const prepared = yield* compileRequest(
             ai.request({
@@ -1436,10 +1436,15 @@ describe("Bedrock Converse route", () => {
               cache,
             }),
           )
-          expect(prepared.body.messages[1]).toEqual({
-            role: "assistant",
-            content: [{ text: "Partial thought" }, { cachePoint: { type: "default" } }],
-          })
+          expect(prepared.body.messages).toEqual([
+            {
+              role: "user",
+              content:
+                cache === "auto"
+                  ? [{ text: "Think" }, { text: "Continue" }, { cachePoint: { type: "default" } }]
+                  : [{ text: "Think" }, { text: "Continue" }],
+            },
+          ])
         }),
       )
     }
@@ -1471,7 +1476,7 @@ describe("Bedrock Converse route", () => {
     }),
   )
 
-  it.effect("demotes foreign reasoning while preserving signed, redacted, text, and tool blocks", () =>
+  it.effect("drops foreign reasoning while preserving signed, redacted, text, and tool blocks", () =>
     Effect.gen(function* () {
       const cache = new CacheHint({ type: "ephemeral" })
       const prepared = yield* compileRequest(
@@ -1500,7 +1505,6 @@ describe("Bedrock Converse route", () => {
         {
           role: "assistant",
           content: [
-            { text: "Foreign thought" },
             { reasoningContent: { reasoningText: { text: "Signed thought", signature: "sig_1" } } },
             { reasoningContent: { reasoningText: { text: "", signature: "sig_2" } } },
             { reasoningContent: { redactedContent: "cmVkYWN0ZWQ=" } },
