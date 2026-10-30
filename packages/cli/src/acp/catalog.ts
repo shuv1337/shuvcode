@@ -3,6 +3,7 @@ import type { Agent } from "@opencode/schema/agent"
 import type { Command } from "@opencode/schema/command"
 import type { Model } from "@opencode/schema/model"
 import { FSUtil } from "@opencode/util/fs-util"
+import { isHiddenProvider } from "@opencode/util/hidden-provider"
 import { Cause, Deferred, Effect, Exit, Schedule, Semaphore, Stream, SubscriptionRef } from "effect"
 import { ACPError } from "./error"
 
@@ -147,10 +148,12 @@ const read = Effect.fnUntraced(function* (client: OpenCodeClient, cwd: string) {
     ],
     { concurrency: "unbounded" },
   ).pipe(Effect.mapError((cause) => new ACPError.CatalogLoadError({ cause })))
-  const models = modelResult.data.filter((model) => model.enabled)
+  const models = modelResult.data.filter((model) => model.enabled && !isHiddenProvider(model.providerID))
   const preferred = defaultResult.data
   // The parallel default read can name a model missing from this list.
-  const defaultModel = preferred ? findModel(models, preferred) : models[0]
+  // A hidden Claude Agent default falls through to the first visible model.
+  const defaultModel =
+    preferred && !isHiddenProvider(preferred.providerID) ? findModel(models, preferred) : models[0]
   if (!defaultModel) return yield* new ACPError.CatalogNotReadyError({ reason: "models" })
   const agents = agentResult.data.filter((agent) => agent.mode !== "subagent" && !agent.hidden)
   // Core lists its resolved default agent first, the same one a new session runs.

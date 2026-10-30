@@ -21,7 +21,6 @@ import {
   onMount,
   Show,
   Switch,
-  untrack,
 } from "solid-js"
 import { createStore } from "solid-js/store"
 import { useParams } from "@solidjs/router"
@@ -32,12 +31,12 @@ import { useData } from "@/runtime/server/current"
 import { useGlobal } from "@/runtime/server/runtime"
 import { ServerConnection } from "@/runtime/server/registry"
 import { useProviders } from "@/providers/catalog/providers"
+import { connectPopular, isHiddenProvider } from "@/providers/catalog/order"
 import { consoleProviderGroup, consoleProviderName } from "@/providers/catalog/console"
 import { useIntegrations } from "@/providers/catalog/integrations"
 import { ProviderModelGroup, ProviderModelIcon } from "@/providers/models/provider-group"
 import type { ModelSelection } from "@/providers/models/selection"
 import { decode64 } from "@/runtime/persistence/base64"
-import { ExternalLink } from "@/runtime/platform/external-link"
 import { SettingsList } from "@/settings/list"
 import { useTabs } from "@/shell/tabs/tabs"
 import { Persist, persisted } from "@/runtime/persistence/storage"
@@ -45,7 +44,6 @@ import { Persistence } from "@/runtime/persistence/schema"
 import { Schema } from "effect"
 import type { FormAnswer, FormField, FormValue, IntegrationInfo } from "@opencode/client/promise"
 import {
-  CLAUDE_AGENT_INTEGRATION,
   CONSOLE_INTEGRATION,
   connectMethods,
   createProviderConnectionController,
@@ -268,12 +266,8 @@ export const DialogConnectProvider: Component<{
   )
 }
 
-const CLAUDE_CODE_SETUP_URL = "https://code.claude.com/docs/en/setup"
-
-const CLAUDE_AGENT_DOCS_URL = "https://opencode.ai/v2/docs/providers#claude-agent"
-
-// The TUI's integration groups and order, plus Claude Agent, with connected integrations pulled up into their own group first.
-const POPULAR = ["opencode", "opencode-go", "openai", "github-copilot", "anthropic", "claude-agent", "google"]
+// The TUI's integration groups and order, with connected integrations pulled up into their own group first.
+const POPULAR: readonly string[] = connectPopular
 
 function ProviderPicker(props: { directory?: string; onSelect: (provider: string) => void; onPrepare?: () => void }) {
   const integrations = useIntegrations(() => props.directory)
@@ -518,7 +512,6 @@ function ProviderConnection(props: {
   const accountActions = useProviderAccountActions(directory)
   const integrationID = props.provider
   const isConsole = props.provider === CONSOLE_INTEGRATION
-  const isClaudeAgent = props.provider === CLAUDE_AGENT_INTEGRATION
   const remote = isConsole && authServerName(sdk.server) !== undefined
 
   const [state, setState] = createStore<{
@@ -535,7 +528,6 @@ function ProviderConnection(props: {
     switching?: string
     activating?: string
     renaming?: string
-    claudeAgent?: "checking" | "confirming" | "timeout"
   }>({
     adding: false,
     direct: false,
@@ -565,21 +557,12 @@ function ProviderConnection(props: {
   const controller = createProviderConnectionController({
     provider: () => integrationID,
     directory,
-    // Claude Agent explains its setup before connecting, so its lone method never starts on its own.
-    manual: () => isClaudeAgent || (!!props.accounts && accounts().length > 0),
+    manual: () => !!props.accounts && accounts().length > 0,
     prepare: isConsole ? prepareConsoleCatalog : undefined,
     pollInterval: isConsole ? 500 : undefined,
     onComplete: () => {
       const method = controller.currentMethod()
       props.onConnected?.(method?.type === "oauth" ? method.id : undefined)
-
-      // Saving the connection only records the choice; wait for the server's check of `claude`.
-      if (isClaudeAgent) {
-        setState("claudeAgent", "checking")
-
-        return
-      }
-
       showConnected()
     },
   })
@@ -625,7 +608,8 @@ function ProviderConnection(props: {
 
   const connectionProviders = createMemo(() =>
     (data.location.provider.list(location()) ?? []).filter(
-      (provider) => provider.id === props.provider || provider.integrationID === integrationID,
+      (provider) =>
+        !isHiddenProvider(provider.id) && (provider.id === props.provider || provider.integrationID === integrationID),
     ),
   )
 
@@ -633,7 +617,11 @@ function ProviderConnection(props: {
     const ids = new Set(connectionProviders().map((provider) => provider.id))
 
     return (data.location.model.list(location()) ?? []).filter(
-      (model) => ids.has(model.providerID) && model.enabled && model.status !== "deprecated",
+      (model) =>
+        !isHiddenProvider(model.providerID) &&
+        ids.has(model.providerID) &&
+        model.enabled &&
+        model.status !== "deprecated",
     )
   })
 
@@ -646,58 +634,6 @@ function ProviderConnection(props: {
   })
 
   const managedProviders = createMemo(() => (isConsole ? consoleProviderGroup(connectionProviders()) : undefined))
-
-  // The server lists the active account first, and its status is the latest check of `claude`.
-  const claudeAgentProblem = () => (isClaudeAgent ? serverAccounts()[0]?.status : undefined)
-
-  // A healthy connection keeps the usual accounts list; anything else shows the setup and its latest check.
-  const claudeAgentSetup = () =>
-    isClaudeAgent &&
-    controller.auth.state() !== "error" &&
-    (!showAccounts() || !!state.claudeAgent || !!claudeAgentProblem() || controller.methodIndex() !== undefined)
-
-  // A check that outlives the timeout can still finish, so a late result replaces the timeout message.
-  createEffect(() => {
-    if (!state.claudeAgent) return
-
-    if (claudeAgentProblem()) return setState("claudeAgent", undefined)
-
-    if (state.claudeAgent === "confirming" || connectionGroups().length === 0) return
-    setState("claudeAgent", "confirming")
-    void untrack(confirmClaudeAgent)
-  })
-
-  // A signed-out `claude` still lists its models, and the login problem arrives in a separate event,
-  // so read the connection again before treating the models as a working login.
-  async function confirmClaudeAgent() {
-    const ref = location()
-    data.location.integration.invalidate(ref)
-    await data.location.integration.sync(ref).catch(() => undefined)
-
-    if (state.claudeAgent !== "confirming" || claudeAgentProblem()) return
-    setState("claudeAgent", undefined)
-    showConnected()
-  }
-
-  createEffect(() => {
-    if (state.claudeAgent !== "checking") return
-    // The server allows 30 seconds for `claude` to start and 30 more to read each model's context size.
-    const timer = setTimeout(() => setState("claudeAgent", "timeout"), 65_000)
-    onCleanup(() => clearTimeout(timer))
-  })
-
-  // Connecting again is what makes the server check `claude` again.
-  const checkClaudeAgent = async () => {
-    const previous = serverAccounts().map((account) => account.id)
-    setState("claudeAgent", undefined)
-    await controller.auth.select(0)
-
-    if (controller.auth.state() !== "ready") return
-    // Each connect saves a new account, so drop the ones this check replaces.
-    await Promise.all(
-      previous.map((credentialID) => sdk.api.credential.remove({ credentialID }).catch(() => undefined)),
-    )
-  }
 
   // The server loads the Console workspace's providers after the grant lands, so the first refresh
   // can still show only the free catalog. Poll briefly for the workspace providers before moving on.
@@ -793,7 +729,7 @@ function ProviderConnection(props: {
     controller.authorization()?.mode === "auto"
 
   createEffect(() => {
-    if (showAccounts() && !claudeAgentSetup()) return props.onTitle(provider().name)
+    if (showAccounts()) return props.onTitle(provider().name)
 
     if (isConsole && controller.auth.state() === "error")
       return props.onTitle(language.t("provider.connect.opencode.errorTitle"))
@@ -1215,7 +1151,6 @@ function ProviderConnection(props: {
     props.onAccounts(
       showAccounts() &&
         controller.methodIndex() === undefined &&
-        !claudeAgentSetup() &&
         !(state.noModels && controller.auth.state() !== "error"),
     ),
   )
@@ -1480,8 +1415,8 @@ function ProviderConnection(props: {
   const addAccount = () => {
     setState({ adding: true, direct: false, confirming: undefined })
 
-    // Like the TUI: a lone method starts directly, several show the method list. Claude Agent shows its setup first.
-    if (isClaudeAgent || controller.methods().length !== 1) return
+    // Like the TUI: a lone method starts directly, several show the method list.
+    if (controller.methods().length !== 1) return
     setState("direct", true)
     void controller.auth.select(0)
   }
@@ -1630,72 +1565,6 @@ function ProviderConnection(props: {
           </span>
           {language.t("dialog.provider.accounts.add")}
         </button>
-      </div>
-    )
-  }
-
-  function ClaudeAgentSetup() {
-    const problem = () =>
-      claudeAgentProblem()?.message ??
-      (state.claudeAgent === "timeout" ? language.t("provider.connect.claudeAgent.timeout") : undefined)
-
-    const checking = () =>
-      state.claudeAgent === "checking" ||
-      state.claudeAgent === "confirming" ||
-      controller.auth.state() === "pending" ||
-      controller.auth.state() === "refreshing"
-
-    return (
-      <div
-        data-component="claude-agent-setup"
-        class="flex flex-col items-start gap-5 px-3 pb-2 text-[13px] font-[440] leading-5 tracking-[-0.04px] text-v2-text-text-muted"
-      >
-        <p>
-          {language.t("provider.connect.claudeAgent.description")}{" "}
-          <ExternalLink href={CLAUDE_AGENT_DOCS_URL}>{language.t("provider.connect.claudeAgent.learnMore")}</ExternalLink>
-        </p>
-        <Show when={problem()}>
-          {(message) => (
-            <div class="flex items-start gap-2 text-v2-text-text-base">
-              <Icon name="circle-ban-sign" size="small" class="mt-0.5 shrink-0 text-v2-state-fg-danger" />
-              <span role="alert">{message()}</span>
-            </div>
-          )}
-        </Show>
-        <TextField
-          label={language.t("provider.connect.claudeAgent.signIn.command")}
-          hideLabel
-          class="font-mono"
-          value="claude auth login"
-          readOnly
-          copyable
-        />
-        <Show
-          when={!checking()}
-          fallback={<StatusRow>{language.t("provider.connect.claudeAgent.checking")}</StatusRow>}
-        >
-          <div class="flex flex-wrap items-center gap-2">
-            <Button
-              variant="contrast"
-              data-action="provider-connect-submit"
-              disabled={controller.loading()}
-              onClick={() => void checkClaudeAgent()}
-            >
-              {language.t(
-                serverAccounts().length > 0
-                  ? "provider.connect.claudeAgent.checkAgain"
-                  : "provider.connect.claudeAgent.connect",
-              )}
-            </Button>
-            <Button
-              variant="neutral"
-              icon="arrow-up-right"
-              onClick={() => platform.openExternal(claudeAgentProblem()?.url ?? CLAUDE_CODE_SETUP_URL)}
-            >
-              {language.t("provider.connect.claudeAgent.install")}
-            </Button>
-          </div>
-        </Show>
       </div>
     )
   }
@@ -1910,9 +1779,6 @@ function ProviderConnection(props: {
                 onOpen={() => void controller.auth.open()}
               />
             </div>
-          </Match>
-          <Match when={claudeAgentSetup()}>
-            <ClaudeAgentSetup />
           </Match>
           <Match when={showAccounts() && controller.methodIndex() === undefined}>
             <AccountsView />

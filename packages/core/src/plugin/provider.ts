@@ -5,7 +5,6 @@ import { AmazonBedrockPlugin } from "./provider/amazon-bedrock.js"
 import { AzurePlugin } from "./provider/azure.js"
 import { CerebrasPlugin } from "./provider/cerebras.js"
 import { ChatGPTPlugin } from "./provider/chatgpt.js"
-import { ClaudeAgentPlugin } from "./provider/claude-agent/index.js"
 import { CloudflareAIGatewayPlugin } from "./provider/cloudflare-ai-gateway.js"
 import { CloudflareWorkersAIPlugin } from "./provider/cloudflare-workers-ai.js"
 import { DatabricksPlugin } from "./provider/databricks.js"
@@ -34,6 +33,10 @@ import { XAIPlugin } from "./provider/xai.js"
 import { ZenmuxPlugin } from "./provider/zenmux.js"
 import type { PluginInternal } from "./internal.js"
 
+// Shuvcode keeps the upstream Claude Agent SDK tree on disk for sync and does
+// not load it. Anthropic in the product is ClaudePlugin. Drop a reintroduced
+// `opencode.provider.claude-agent` registration so restoring the import is not
+// enough to publish the provider.
 export const ProviderPlugins: PluginInternal.InternalPlugin[] = [
   AmazonBedrockPlugin,
   ClaudePlugin,
@@ -69,5 +72,4 @@ export const ProviderPlugins: PluginInternal.InternalPlugin[] = [
   DynamicProviderPlugin,
   // Reads the active subscription connections registered above; order it last.
   QuotaPlugin,
-  ClaudeAgentPlugin,
-]
+].filter((plugin) => plugin.id !== "opencode.provider.claude-agent")

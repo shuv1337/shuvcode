@@ -54,7 +54,11 @@ still `2.0.3`). Re-fetch again at kickoff and re-run the watchlist checks.
 3. **Plugin rule:** if it can be a plugin, it is a plugin, **bundled and
    enabled** (Core `ProviderPlugins` / TUI `builtins`). Disable by config id
    (`-<id>` in `plugins`). Do not require a user `plugins` array for the
-   shipped set.
+   shipped set. Exception: the upstream Claude Agent SDK provider
+   (`packages/core/src/plugin/provider/claude-agent/**`) stays on disk for
+   sync and stays unregistered. Config must not recreate it, and client
+   lists must keep filtering it. Do not re-enable it. Anthropic remains
+   `@shuvcode/claude-plugin`. See `AGENTS.md` Shuvcode Fork.
 4. **Core may change only for:** identity, default port, XDG app id, one-shot
    DB convert script, OAuth refresh single-flight, host seams plugins cannot
    exist without, and watchlist items whose check **fails** at kickoff.

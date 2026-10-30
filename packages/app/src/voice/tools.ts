@@ -1,5 +1,6 @@
 import type { SessionInfo, SessionMessageInfo } from "@opencode/client/promise"
 import { SessionMessage } from "@opencode/schema/session-message"
+import { isHiddenProvider } from "@/providers/catalog/order"
 import type { ServerCtx } from "@/runtime/server/runtime"
 import { decodeArguments, type ToolCall } from "./protocol"
 import { ReplyWatch } from "./replies"
@@ -242,7 +243,7 @@ export class VoiceTools {
       const current = session.model
 
       const models = matchModels(
-        catalog.data.filter((model) => model.enabled),
+        catalog.data.filter((model) => model.enabled && !isHiddenProvider(model.providerID)),
         args.query,
       )
 
@@ -270,7 +271,7 @@ export class VoiceTools {
       if (!wanted) throw new Error("model required")
       const session = await api.session.get({ sessionID }, options)
       const catalog = await api.model.list({ location: { directory: session.location.directory } }, options)
-      const enabled = catalog.data.filter((item) => item.enabled)
+      const enabled = catalog.data.filter((item) => item.enabled && !isHiddenProvider(item.providerID))
 
       const model =
         enabled.find((item) => `${item.providerID}/${item.id}` === wanted) ??

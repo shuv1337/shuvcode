@@ -1,6 +1,7 @@
-import { Effect } from "effect"
 import { OpenCode, type IntegrationInfo, type IntegrationMethod, type OpenCodeClient } from "@opencode/client"
 import { Service } from "@opencode/client/effect/service"
+import { isHiddenProvider } from "@opencode/util/hidden-provider"
+import { Effect } from "effect"
 import { ServerConnection } from "../../../services/server-connection"
 
 export const location = { directory: process.cwd() }
@@ -19,7 +20,10 @@ export const loadIntegrations = Effect.fn("cli.auth.integrations")(function* (cl
   yield* request((signal) => client.model.default({ location }, { signal }))
   return yield* request((signal) => client.integration.list({ location }, { signal })).pipe(
     Effect.map((response) =>
-      response.data.toSorted((a, b) => Number(b.id === "opencode-go") - Number(a.id === "opencode-go")),
+      response.data
+        // Shuvcode does not offer the upstream Claude Agent provider.
+        .filter((integration) => !isHiddenProvider(integration.id))
+        .toSorted((a, b) => Number(b.id === "opencode-go") - Number(a.id === "opencode-go")),
     ),
   )
 })

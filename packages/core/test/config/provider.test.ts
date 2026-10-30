@@ -343,6 +343,46 @@ describe("ConfigProviderPlugin.Plugin", () => {
     )
   }
 
+  it.effect("does not create Claude Agent from a configured provider id", () =>
+    Effect.gen(function* () {
+      const integrations = yield* Integration.Service
+      const providers = yield* Provider.Service
+      const entries = [
+        new Document({
+          type: "document",
+          info: decode({
+            providers: {
+              "claude-agent": {
+                name: "Claude Agent",
+                package: "aisdk:@ai-sdk/openai-compatible",
+                models: { chat: {} },
+              },
+              "opencode.provider.claude-agent": {
+                package: "aisdk:@ai-sdk/openai-compatible",
+                models: { chat: {} },
+              },
+              litellm: {
+                package: "aisdk:@ai-sdk/openai-compatible",
+                models: { chat: {} },
+              },
+            },
+          }),
+        }),
+      ]
+
+      yield* addPlugin(entries)
+
+      expect(yield* integrations.get(Integration.ID.make("claude-agent"))).toBeUndefined()
+      expect(yield* integrations.get(Integration.ID.make("opencode.provider.claude-agent"))).toBeUndefined()
+      expect(yield* providers.get(Provider.ID.claudeAgent)).toBeUndefined()
+      expect(yield* providers.get(Provider.ID.make("opencode.provider.claude-agent"))).toBeUndefined()
+      expect(yield* integrations.get(Integration.ID.make("litellm"))).toMatchObject({
+        id: "litellm",
+        methods: [{ type: "key", label: "Manually enter API Key" }],
+      })
+    }),
+  )
+
   it.effect("adds key auth for custom providers without env credentials", () =>
     Effect.gen(function* () {
       const integrations = yield* Integration.Service

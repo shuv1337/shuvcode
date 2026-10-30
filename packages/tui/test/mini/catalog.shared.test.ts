@@ -73,4 +73,26 @@ describe("run catalog shared", () => {
       },
     ])
   })
+
+  test("drops the upstream Claude Agent provider from the footer catalog", () => {
+    expect(
+      runProviders(
+        [catalogProvider("claude-agent", "Claude Agent"), catalogProvider("anthropic", "Anthropic")],
+        [
+          catalogModel({
+            id: "sonnet",
+            modelID: "sonnet",
+            providerID: "claude-agent",
+            name: "Claude Agent Sonnet",
+          }),
+          catalogModel({
+            id: "claude-sonnet",
+            modelID: "claude-sonnet",
+            providerID: "anthropic",
+            name: "Claude Sonnet",
+          }),
+        ],
+      ).map((provider) => provider.id),
+    ).toEqual(["anthropic"])
+  })
 })

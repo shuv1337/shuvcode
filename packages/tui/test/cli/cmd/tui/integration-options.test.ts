@@ -14,6 +14,15 @@ const integration = (value: Partial<IntegrationInfo> & Pick<IntegrationInfo, "id
 })
 
 describe("integrationOptions", () => {
+  test("hides the upstream Claude Agent integration", () => {
+    expect(
+      integrationOptions([
+        integration({ id: "claude-agent", name: "Claude Agent" }),
+        integration({ id: "anthropic", name: "Anthropic" }),
+      ]).map((item) => item.id),
+    ).toEqual(["anthropic"])
+  })
+
   test("keeps popular integrations first and sorts the rest alphabetically", () => {
     expect(
       integrationOptions([

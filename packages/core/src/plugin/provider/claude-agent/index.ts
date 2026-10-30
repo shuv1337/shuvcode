@@ -45,4 +45,12 @@ export const make = (io: ClaudeIO.Interface, registry = ClaudeSessions.registry(
     }),
   } satisfies PluginInternal.InternalPlugin)
 
-export const ClaudeAgentPlugin = make(ClaudeIO.real)
+// Product import. `make` still builds the upstream plugin for the on-disk tests.
+// This export does not register a provider, integration, or model.
+export const ClaudeAgentPlugin = define({
+  id: ID,
+  effect: Effect.fn("ClaudeAgent.Plugin")(function* () {
+    // Registered plugins with this id are also filtered out of ProviderPlugins.
+    yield* Effect.void
+  }),
+})

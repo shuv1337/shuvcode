@@ -1,3 +1,4 @@
+import { isHiddenProvider } from "@opencode/util/hidden-provider"
 import * as fuzzysort from "fuzzysort"
 import { createMemo, createSignal } from "solid-js"
 import { useData } from "../context/data"
@@ -25,7 +26,7 @@ export function DialogFreeModels(props: {
 
   const options = createMemo(() => {
     const all = (data.location.model.list(location.ref) ?? [])
-      .filter((model) => model.status !== "deprecated" && isFreeModel(model))
+      .filter((model) => model.status !== "deprecated" && isFreeModel(model) && !isHiddenProvider(model.providerID))
       .map((model) => {
         const value = { providerID: model.providerID, modelID: model.id }
         return {

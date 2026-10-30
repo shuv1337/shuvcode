@@ -1,4 +1,5 @@
 import type { ModelInfo, SessionMessageAssistant } from "@opencode/client"
+import { isHiddenProvider } from "@opencode/util/hidden-provider"
 import { TextAttributes } from "@opentui/core"
 import { createEffect, createMemo, createSignal, For, Match, onCleanup, onMount, Show, Switch } from "solid-js"
 import { useData } from "../context/data"
@@ -33,7 +34,14 @@ export function useUsageLimits() {
   const data = useData()
   const location = useLocation()
   const ref = () => location.ref ?? data.location.default()
-  const providers = createMemo(() => new Map((data.location.provider.list(ref()) ?? []).map((item) => [item.id, item])))
+  const providers = createMemo(
+    () =>
+      new Map(
+        (data.location.provider.list(ref()) ?? [])
+          .filter((item) => !isHiddenProvider(item.id))
+          .map((item) => [item.id, item]),
+      ),
+  )
   const info = () => data.location.usage.limits(ref())
   const usage = (model: ModelInfo) => {
     const value = info()
@@ -46,7 +54,7 @@ export function useUsageLimits() {
       if (refresh) data.location.usage.invalidate(ref())
       void data.location.usage.sync(ref()).catch(() => undefined)
     },
-    models: () => data.location.model.list(ref()) ?? [],
+    models: () => (data.location.model.list(ref()) ?? []).filter((model) => !isHiddenProvider(model.providerID)),
     usage,
     served: (providerID: string) => servedByConsole(providers().get(providerID)),
     /** A paid model OpenCode Console serves without any limit on it. */

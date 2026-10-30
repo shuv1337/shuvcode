@@ -36,6 +36,20 @@ identity facts when merging or refactoring:
   single bookmark, so channel inference can be ambiguous or unavailable. The
   build fails closed in that case; the explicit channel pins the intended
   database and service identity.
+- The upstream Claude Agent SDK provider stays on disk
+  (`packages/core/src/plugin/provider/claude-agent/**` and its tests, plus the
+  optional `@anthropic-ai/claude-agent-sdk` peer and `#claude-agent-sdk`
+  alias) so later syncs do not resurrect a deleted tree. It is not a Shuvcode
+  provider. The guarantee is three layers, not the bundled registry alone:
+  `ProviderPlugins` does not load it, `ConfigProviderPlugin` skips provider
+  ids `claude-agent` and `opencode.provider.claude-agent`, and every client
+  list of integrations, providers, or models calls
+  `isHiddenProvider` from `@opencode/util/hidden-provider`. Do not register
+  `ClaudeAgentPlugin` or `make(...)`, do not let config recreate the id, and
+  do not add a list surface that omits the predicate. Anthropic in the
+  product is `@shuvcode/claude-plugin` (`ClaudePlugin`). When merging
+  `upstream/dev`, drop any reintroduced registration, config path, or
+  user-facing surface for that provider.
 
 ## Live V2 TUI Testing
 

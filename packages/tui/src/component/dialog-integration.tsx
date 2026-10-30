@@ -12,6 +12,7 @@ import type {
   FormValue,
   LocationRef,
 } from "@opencode/client"
+import { isHiddenProvider } from "@opencode/util/hidden-provider"
 import { openUrl } from "@opencode/util/open"
 import { createEffect, createMemo, createSignal, For, onCleanup, onMount, Show } from "solid-js"
 import { createStore } from "solid-js/store"
@@ -67,13 +68,15 @@ const SUBMIT = Symbol("submit")
 const OAUTH_CODE = /[A-Z0-9]{4}-[A-Z0-9]{4,5}/
 
 export function integrationOptions(list: IntegrationInfo[]) {
-  return list.toSorted(
-    (a, b) =>
-      Number(b.metadata?.source === "mcp") - Number(a.metadata?.source === "mcp") ||
-      (INTEGRATION_PRIORITY[a.id] ?? 99) - (INTEGRATION_PRIORITY[b.id] ?? 99) ||
-      a.name.localeCompare(b.name) ||
-      a.id.localeCompare(b.id),
-  )
+  return list
+    .filter((item) => !isHiddenProvider(item.id))
+    .toSorted(
+      (a, b) =>
+        Number(b.metadata?.source === "mcp") - Number(a.metadata?.source === "mcp") ||
+        (INTEGRATION_PRIORITY[a.id] ?? 99) - (INTEGRATION_PRIORITY[b.id] ?? 99) ||
+        a.name.localeCompare(b.name) ||
+        a.id.localeCompare(b.id),
+    )
 }
 
 export function connectMethods(integration: IntegrationInfo): ConnectMethod[] {

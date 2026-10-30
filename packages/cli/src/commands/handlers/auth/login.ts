@@ -1,6 +1,7 @@
 import { intro, log, outro, select, spinner, text } from "@clack/prompts"
-import { Effect, Option } from "effect"
 import type { FormAnswer, IntegrationInfo, OpenCodeClient } from "@opencode/client"
+import { isHiddenProvider } from "@opencode/util/hidden-provider"
+import { Effect, Option } from "effect"
 import { Commands } from "../../commands"
 import { Runtime } from "../../../framework/runtime"
 import { selectIntegration, type IntegrationChoice } from "../../../ui/integration-picker"
@@ -77,7 +78,8 @@ const findIntegration = Effect.fn("cli.auth.login.integration")(function* (clien
 
 export function loginChoices(integrations: IntegrationInfo[]): IntegrationChoice[] {
   return integrations
-    .filter((integration) => connectMethods(integration).length > 0)
+    // Shuvcode does not offer the upstream Claude Agent provider.
+    .filter((integration) => !isHiddenProvider(integration.id) && connectMethods(integration).length > 0)
     .toSorted(
       (a, b) =>
         Number(b.metadata?.source === "mcp") - Number(a.metadata?.source === "mcp") ||
