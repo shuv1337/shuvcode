@@ -988,7 +988,7 @@ Earlier work
     ])
   })
 
-  test("lowers failed assistant reasoning to text", () => {
+  test("drops failed assistant reasoning while preserving settled hosted tools", () => {
     const messages = toLLMMessages(
       [
         SessionMessage.Assistant.make({
@@ -1038,7 +1038,6 @@ Earlier work
     )
 
     expect(messages[0]?.content).toEqual([
-      { type: "text", text: "Partial thought" },
       {
         type: "tool-call",
         id: "hosted-completed",
@@ -1084,7 +1083,7 @@ Earlier work
     ])
   })
 
-  test("drops unfinished reasoning metadata from an interrupted assistant message", () => {
+  test("omits unfinished reasoning from an interrupted assistant message", () => {
     const messages = toLLMMessages(
       [
         SessionMessage.Assistant.make({
@@ -1112,7 +1111,7 @@ Earlier work
       model,
     )
 
-    expect(messages[0]?.content).toEqual([{ type: "text", text: "Completed summary part" }])
+    expect(messages).toEqual([])
   })
 
   test("drops model-scoped continuation metadata after a model switch but keeps hosted result payloads", () => {
