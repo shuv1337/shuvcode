@@ -39,6 +39,8 @@ import { eq } from "drizzle-orm"
 import { Document, Info } from "@opencode/schema/config"
 import { ConfigExperimental } from "@opencode/schema/config/experimental"
 import { testEffect } from "./lib/effect"
+import { permissionLayer } from "./lib/permission"
+import { Permission } from "@opencode/core/permission"
 
 // Per-workspace experimental.location_idle_timeout, read by each location's Config.
 const idleTimeouts = new Map<string, Duration.Duration | false>()
@@ -341,7 +343,11 @@ type ToolGate = {
 }
 
 const toolServices = LayerNode.compile(LayerNode.group([Tool.node, PluginHooks.node]), {
-  replacements: [Image.node.replace(Layer.mock(Image.Service, { normalize: () => Effect.die("unused") }))],
+  replacements: [
+    Image.node.replace(Layer.mock(Image.Service, { normalize: () => Effect.die("unused") })),
+    // Tool.node gained Permission.node in v2.2.3; stub it so this fixture does not need Location.
+    Permission.node.replace(permissionLayer()),
+  ],
 })
 
 const gates = new Map<string, ToolGate>()
