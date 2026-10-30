@@ -568,7 +568,10 @@ describe("Gemini route", () => {
       const errorText = `${JSON.stringify(value)}\ncould not capture`
 
       expect(legacy.body.contents).toEqual([
-        { role: "model", parts: [{ functionCall: { name: "snapshot", args: {} } }] },
+        {
+          role: "model",
+          parts: [{ functionCall: { name: "snapshot", args: {} }, thoughtSignature: "skip_thought_signature_validator" }],
+        },
         {
           role: "user",
           parts: [
