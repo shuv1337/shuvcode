@@ -7,7 +7,7 @@ import { Iterable, pipe } from "effect"
 import { createEffect, createMemo, type Accessor } from "solid-js"
 import type { ProviderListResponse } from "@/runtime/server/types"
 import { useIntegrations } from "./integrations"
-import { popularProviders } from "./order"
+import { omitHiddenProviderCatalog, popularProviders } from "./order"
 
 export { popularProviders } from "./order"
 
@@ -49,7 +49,7 @@ export function useProviders(directory: Accessor<string | undefined>) {
 
     if (!provider || !model) return emptyProviderCatalog
 
-    return normalizeProviderList(provider, model)
+    return omitHiddenProviderCatalog(normalizeProviderList(provider, model))
   })
 
   const ready = () => {

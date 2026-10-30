@@ -95,7 +95,10 @@ function DialogConnectedModels(props: {
   const providers = createMemo(
     () => new Map((data.location.provider.list(location.ref) ?? []).map((item) => [item.id, item])),
   )
-  const models = createMemo(() => data.location.model.list(location.ref) ?? [])
+  // Shuvcode does not offer the upstream Claude Agent provider.
+  const models = createMemo(() =>
+    (data.location.model.list(location.ref) ?? []).filter((model) => model.providerID !== "claude-agent"),
+  )
 
   const showExtra = createMemo(() => connected() && !props.providerID)
 

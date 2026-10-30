@@ -8,6 +8,15 @@ const integration = (value: Partial<IntegrationInfo> & Pick<IntegrationInfo, "id
   ...value,
 })
 
+test("hides the upstream Claude Agent integration", () => {
+  expect(
+    loginChoices([
+      integration({ id: "claude-agent", name: "Claude Agent" }),
+      integration({ id: "anthropic", name: "Anthropic" }),
+    ]).map((choice) => choice.value),
+  ).toEqual(["anthropic"])
+})
+
 test("groups the CLI choices like /connect while keeping stable login IDs", () => {
   expect(
     loginChoices([
