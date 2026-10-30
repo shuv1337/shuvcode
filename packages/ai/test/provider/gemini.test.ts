@@ -1,7 +1,18 @@
 import { describe, expect } from "bun:test"
 import { Deferred, Effect, Fiber } from "effect"
 import * as TestClock from "effect/testing/TestClock"
-import { ai, AIError, isRetryable, LLMEvent, LLMRequest, Media, Message, ToolCallPart, ToolDefinition, Usage } from "../../src/effect.js"
+import {
+  ai,
+  AIError,
+  isRetryable,
+  LLMEvent,
+  LLMRequest,
+  Media,
+  Message,
+  ToolCallPart,
+  ToolDefinition,
+  Usage,
+} from "../../src/effect.js"
 import { Auth, LLMClient } from "../../src/route.js"
 import { compileRequest } from "../../src/route/client.js"
 import * as Gemini from "../../src/protocols/gemini.js"
@@ -568,7 +579,12 @@ describe("Gemini route", () => {
       const errorText = `${JSON.stringify(value)}\ncould not capture`
 
       expect(legacy.body.contents).toEqual([
-        { role: "model", parts: [{ functionCall: { name: "snapshot", args: {} } }] },
+        {
+          role: "model",
+          parts: [
+            { functionCall: { name: "snapshot", args: {} }, thoughtSignature: "skip_thought_signature_validator" },
+          ],
+        },
         {
           role: "user",
           parts: [
@@ -582,7 +598,10 @@ describe("Gemini route", () => {
         },
         {
           role: "user",
-          parts: [{ text: "Attached media from tool result:" }, { inlineData: { mimeType: "image/png", data: "AAECAw==" } }],
+          parts: [
+            { text: "Attached media from tool result:" },
+            { inlineData: { mimeType: "image/png", data: "AAECAw==" } },
+          ],
         },
       ])
       expect(current.body.contents[1]).toMatchObject({
@@ -686,9 +705,7 @@ describe("Gemini route", () => {
           },
           {
             role: "user",
-            parts: [
-              { functionResponse: { id: "call_video", name: "read", response: { name: "read", content: "" } } },
-            ],
+            parts: [{ functionResponse: { id: "call_video", name: "read", response: { name: "read", content: "" } } }],
           },
           {
             role: "user",
@@ -2168,7 +2185,9 @@ describe("Gemini response continuation", () => {
   it.effect("forgets a block once the resumed request finishes", () =>
     Effect.gen(function* () {
       const server = scripted([
-        sseEvents(text("THIRTEEN", { continuationToken: "checkpoint-1" }), { promptFeedback: { blockReason: "OTHER" } }),
+        sseEvents(text("THIRTEEN", { continuationToken: "checkpoint-1" }), {
+          promptFeedback: { blockReason: "OTHER" },
+        }),
         sseEvents(text(" THOUSAND", { finishReason: "STOP" })),
       ])
       const response = yield* LLMClient.generate(continuedRequest).pipe(Effect.provide(server.layer))
@@ -2263,13 +2282,17 @@ describe("Gemini response continuation", () => {
           pull(controller) {
             if (sent) return new Promise<void>(() => Deferred.doneUnsafe(stalled, Effect.void))
             sent = true
-            controller.enqueue(new TextEncoder().encode(chunks(text("THIRTEEN", { continuationToken: "checkpoint-1" }))))
+            controller.enqueue(
+              new TextEncoder().encode(chunks(text("THIRTEEN", { continuationToken: "checkpoint-1" }))),
+            )
           },
         }),
       ])
-      const fiber = yield* LLMClient.generate(
-        LLMRequest.update(continuedRequest, { http: { timeout: 1_000 } }),
-      ).pipe(Effect.provide(server.layer), Effect.flip, Effect.forkChild({ startImmediately: true }))
+      const fiber = yield* LLMClient.generate(LLMRequest.update(continuedRequest, { http: { timeout: 1_000 } })).pipe(
+        Effect.provide(server.layer),
+        Effect.flip,
+        Effect.forkChild({ startImmediately: true }),
+      )
       yield* Deferred.await(stalled)
       yield* TestClock.adjust("1 second")
       const error = yield* Fiber.join(fiber)
