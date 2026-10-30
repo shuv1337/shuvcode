@@ -3,6 +3,7 @@ import { createStore } from "solid-js/store"
 import type { ComposerControls } from "./adapter"
 import { useLocal, type ModelKey, type ModelSelection } from "@/providers/models/selection"
 import { useWorkspaceLocation } from "@/workspaces/location"
+import { omitHiddenProviderCatalog } from "@/providers/catalog/order"
 import { useProviders } from "@/providers/catalog/providers"
 import { useData } from "@/runtime/server/current"
 import { normalizeAgentList, normalizeProviderList } from "@/runtime/server/global-sync/utils"
@@ -55,7 +56,7 @@ export function createComposerControls(input: { model?: ModelSelection } = {}) {
           const catalog = data.location.model.list(location)
 
           if (!provider || !catalog) return
-          const normalized = normalizeProviderList(provider, catalog)
+          const normalized = omitHiddenProviderCatalog(normalizeProviderList(provider, catalog))
 
           return { all: normalized.all, connected: normalized.connected }
         })

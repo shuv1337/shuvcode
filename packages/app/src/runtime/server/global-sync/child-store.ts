@@ -17,6 +17,7 @@ import { QueryOptionsApi } from "../sync"
 import { directoryKey, type DirectoryKey } from "./utils"
 import type { ServerScope } from "@/runtime/server/scope"
 import type { Data } from "@opencode/client/solid"
+import { omitHiddenProviderCatalog } from "@/providers/catalog/order"
 import { normalizeAgentList, normalizeProviderList } from "./utils"
 import { ProjectState, VcsState } from "../persistence"
 
@@ -213,7 +214,7 @@ export function createChildStoreManager(input: {
 
               if (!provider || !model) return { all: new Map(), connected: [], default: {} }
 
-              return normalizeProviderList(provider, model)
+              return omitHiddenProviderCatalog(normalizeProviderList(provider, model))
             },
             config: {},
             get path() {

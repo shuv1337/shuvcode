@@ -40,12 +40,16 @@ identity facts when merging or refactoring:
   (`packages/core/src/plugin/provider/claude-agent/**` and its tests, plus the
   optional `@anthropic-ai/claude-agent-sdk` peer and `#claude-agent-sdk`
   alias) so later syncs do not resurrect a deleted tree. It is not a Shuvcode
-  provider. Do not register `ClaudeAgentPlugin` or `make(...)` in
-  `ProviderPlugins`, and do not restore connect, catalog, settings, popular,
-  TUI, or CLI entries for `claude-agent` / "Claude Agent". Anthropic in the
+  provider. The guarantee is three layers, not the bundled registry alone:
+  `ProviderPlugins` does not load it, `ConfigProviderPlugin` skips provider
+  ids `claude-agent` and `opencode.provider.claude-agent`, and every client
+  list of integrations, providers, or models calls
+  `isHiddenProvider` from `@opencode/util/hidden-provider`. Do not register
+  `ClaudeAgentPlugin` or `make(...)`, do not let config recreate the id, and
+  do not add a list surface that omits the predicate. Anthropic in the
   product is `@shuvcode/claude-plugin` (`ClaudePlugin`). When merging
-  `upstream/dev`, drop any reintroduced registration and user-facing surface
-  for that provider.
+  `upstream/dev`, drop any reintroduced registration, config path, or
+  user-facing surface for that provider.
 
 ## Live V2 TUI Testing
 

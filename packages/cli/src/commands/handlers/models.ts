@@ -1,5 +1,6 @@
 import { OpenCode } from "@opencode/client"
 import { Service } from "@opencode/client/effect/service"
+import { isHiddenProvider } from "@opencode/util/hidden-provider"
 import { Effect } from "effect"
 import { EOL } from "node:os"
 import { Commands } from "../commands"
@@ -16,6 +17,7 @@ export default Runtime.handler(
     })
     const response = yield* Effect.promise(() => client.model.list({ location: { directory: process.cwd() } }))
     const models = response.data
+      .filter((model) => !isHiddenProvider(model.providerID))
       .map((model) => `${model.providerID}/${model.id}`)
       .toSorted((a, b) => a.localeCompare(b))
     if (models.length > 0) process.stdout.write(models.join(EOL) + EOL)

@@ -25,6 +25,7 @@ import { useRoute } from "./route"
 import { useData } from "./data"
 import { usePermission } from "./permission"
 import { useLocation } from "./location"
+import { isHiddenProvider } from "@opencode/util/hidden-provider"
 import { parse } from "../util/model"
 
 export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
@@ -41,8 +42,10 @@ export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
     const permission = usePermission()
     const location = useLocation()
 
-    const models = () => data.location.model.list(location.ref)
-    const providers = () => data.location.provider.list(location.ref)
+    const models = () =>
+      data.location.model.list(location.ref)?.filter((model) => !isHiddenProvider(model.providerID))
+    const providers = () =>
+      data.location.provider.list(location.ref)?.filter((provider) => !isHiddenProvider(provider.id))
 
     function isModelValid(model: ModelPreferenceModel) {
       return !!models()?.some((item) => item.providerID === model.providerID && item.id === model.modelID)

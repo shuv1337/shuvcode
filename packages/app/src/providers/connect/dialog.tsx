@@ -31,7 +31,7 @@ import { useData } from "@/runtime/server/current"
 import { useGlobal } from "@/runtime/server/runtime"
 import { ServerConnection } from "@/runtime/server/registry"
 import { useProviders } from "@/providers/catalog/providers"
-import { connectPopular } from "@/providers/catalog/order"
+import { connectPopular, isHiddenProvider } from "@/providers/catalog/order"
 import { consoleProviderGroup, consoleProviderName } from "@/providers/catalog/console"
 import { useIntegrations } from "@/providers/catalog/integrations"
 import { ProviderModelGroup, ProviderModelIcon } from "@/providers/models/provider-group"
@@ -608,7 +608,8 @@ function ProviderConnection(props: {
 
   const connectionProviders = createMemo(() =>
     (data.location.provider.list(location()) ?? []).filter(
-      (provider) => provider.id === props.provider || provider.integrationID === integrationID,
+      (provider) =>
+        !isHiddenProvider(provider.id) && (provider.id === props.provider || provider.integrationID === integrationID),
     ),
   )
 
@@ -616,7 +617,11 @@ function ProviderConnection(props: {
     const ids = new Set(connectionProviders().map((provider) => provider.id))
 
     return (data.location.model.list(location()) ?? []).filter(
-      (model) => ids.has(model.providerID) && model.enabled && model.status !== "deprecated",
+      (model) =>
+        !isHiddenProvider(model.providerID) &&
+        ids.has(model.providerID) &&
+        model.enabled &&
+        model.status !== "deprecated",
     )
   })
 

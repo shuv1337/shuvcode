@@ -1,4 +1,5 @@
 import type { ModelInfo } from "@opencode/client"
+import { isHiddenProvider } from "@opencode/util/hidden-provider"
 import { createMemo, createSignal, onMount, Show } from "solid-js"
 import { useLocal } from "../context/local"
 import { DialogSelect } from "../ui/dialog-select"
@@ -93,11 +94,15 @@ function DialogConnectedModels(props: {
 
   const connected = useConnected()
   const providers = createMemo(
-    () => new Map((data.location.provider.list(location.ref) ?? []).map((item) => [item.id, item])),
+    () =>
+      new Map(
+        (data.location.provider.list(location.ref) ?? [])
+          .filter((item) => !isHiddenProvider(item.id))
+          .map((item) => [item.id, item]),
+      ),
   )
-  // Shuvcode does not offer the upstream Claude Agent provider.
   const models = createMemo(() =>
-    (data.location.model.list(location.ref) ?? []).filter((model) => model.providerID !== "claude-agent"),
+    (data.location.model.list(location.ref) ?? []).filter((model) => !isHiddenProvider(model.providerID)),
   )
 
   const showExtra = createMemo(() => connected() && !props.providerID)

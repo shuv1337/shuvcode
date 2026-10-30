@@ -56,7 +56,8 @@ still `2.0.3`). Re-fetch again at kickoff and re-run the watchlist checks.
    (`-<id>` in `plugins`). Do not require a user `plugins` array for the
    shipped set. Exception: the upstream Claude Agent SDK provider
    (`packages/core/src/plugin/provider/claude-agent/**`) stays on disk for
-   sync and stays unregistered. Do not re-enable it. Anthropic remains
+   sync and stays unregistered. Config must not recreate it, and client
+   lists must keep filtering it. Do not re-enable it. Anthropic remains
    `@shuvcode/claude-plugin`. See `AGENTS.md` Shuvcode Fork.
 4. **Core may change only for:** identity, default port, XDG app id, one-shot
    DB convert script, OAuth refresh single-flight, host seams plugins cannot

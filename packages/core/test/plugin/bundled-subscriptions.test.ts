@@ -32,15 +32,22 @@ describe("bundled subscription providers", () => {
     expect(ProviderPlugins).not.toContain(ClaudeAgentPlugin)
   })
 
-  it.effect("does not let the product Claude Agent export register a provider", () =>
+  it.effect("loads bundled providers without registering Claude Agent", () =>
     Effect.gen(function* () {
       const integration = yield* Integration.Service
       const provider = yield* Provider.Service
       const plugin = yield* Plugin.Service
       const host = yield* PluginHost.make(plugin)
-      yield* ClaudeAgentPlugin.effect(host)
+      for (const entry of ProviderPlugins) {
+        // Bundled plugins ask for more services than this test's effect type lists.
+        // The fixture layer provides them; the cast only widens the checker.
+        yield* entry.effect(host) as Effect.Effect<void>
+      }
       expect(yield* integration.get(Integration.ID.make("claude-agent"))).toBeUndefined()
       expect(yield* provider.get(Provider.ID.claudeAgent)).toBeUndefined()
+      expect((yield* integration.get(Integration.ID.make("anthropic")))?.methods).toContainEqual(
+        expect.objectContaining({ id: "claude-pro-max", type: "oauth" }),
+      )
     }),
   )
 

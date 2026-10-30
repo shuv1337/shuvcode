@@ -12,6 +12,7 @@ import {
   Switch,
   type Accessor,
 } from "solid-js"
+import { isHiddenProvider } from "@opencode/util/hidden-provider"
 import path from "node:path"
 import { EOL, tmpdir } from "node:os"
 import { mkdir, writeFile } from "node:fs/promises"
@@ -262,7 +263,9 @@ export function Session(props: {
     commands: [{ bind: "escape,ctrl+c", title: "Close sidebar", group: "Session", run: props.onToggleSidebar }],
   }))
   const contentWidth = createMemo(() => (props.width ?? dimensions().width - props.verticalTabsWidth) - 4)
-  const models = createMemo(() => data.location.model.list(location()) ?? [])
+  const models = createMemo(
+    () => (data.location.model.list(location()) ?? []).filter((model) => !isHiddenProvider(model.providerID)),
+  )
 
   const scrollAcceleration = createMemo(() => getScrollAcceleration(config))
   const toast = useToast()

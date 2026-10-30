@@ -6,6 +6,7 @@ import { define } from "@opencode/plugin/effect/plugin"
 import { Document, type Entry } from "@opencode/schema/config"
 import { ConfigProvider } from "@opencode/schema/config/provider"
 import { Money } from "@opencode/schema/money"
+import { isHiddenProvider } from "@opencode/util/hidden-provider"
 import { Effect } from "effect"
 import { Config } from "../../config.js"
 import { Model } from "../../model.js"
@@ -109,7 +110,8 @@ export const Plugin = define({
     // model transforms. They can recreate or re-enable a model within an available provider.
     yield* ctx.model.transform((models) => {
       const configuredDefault = sources.defaultModel
-      if (configuredDefault !== undefined) models.default.set(configuredDefault.providerID, configuredDefault.model)
+      if (configuredDefault !== undefined && !isHiddenProvider(configuredDefault.providerID))
+        models.default.set(configuredDefault.providerID, configuredDefault.model)
       for (const [item, definition] of sources.models) {
         const providerID = definition.providerID
         for (const [id, config] of Object.entries(item.models ?? {})) {
@@ -159,6 +161,7 @@ function configuredProviders(entries: readonly Entry[]) {
   return entries
     .filter((entry): entry is Document => entry.type === "document" && !(entry instanceof ConfigIntegration.Document))
     .flatMap((file) => Object.entries(file.info.providers ?? {}))
+    .filter(([id]) => !isHiddenProvider(id))
 }
 
 /**
@@ -168,6 +171,7 @@ function configuredProviders(entries: readonly Entry[]) {
  */
 export function integrate(providers: ProviderEditor, document: ConfigIntegration.Document) {
   for (const [providerID, item] of Object.entries(document.info.providers ?? {})) {
+    if (isHiddenProvider(providerID)) continue
     const { source } = overlayProvider(providers, providerID, item, document.integrationID)
     // An integration lists the models it routes: each starts again from the catalog and takes the provider's
     // package and URL. Its models are complete here, so later model transforms and config apply on top.

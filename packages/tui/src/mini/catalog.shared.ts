@@ -6,6 +6,7 @@ import type {
   OpenCodeClient,
   ProviderListOutput,
 } from "@opencode/client/promise"
+import { isHiddenProvider } from "@opencode/util/hidden-provider"
 import type { RunAgent, RunCommand, RunProvider, RunReference } from "./types"
 
 type CurrentAgent = AgentListOutput["data"][number]
@@ -48,6 +49,7 @@ export function runProviders(providers: CurrentProvider[], models: CurrentModel[
   const grouped = new Map<string, RunProvider>()
 
   for (const provider of providers) {
+    if (isHiddenProvider(provider.id)) continue
     grouped.set(provider.id, {
       id: provider.id,
       name: provider.name,
@@ -56,6 +58,7 @@ export function runProviders(providers: CurrentProvider[], models: CurrentModel[
   }
 
   for (const model of models) {
+    if (isHiddenProvider(model.providerID)) continue
     const provider = grouped.get(model.providerID) ?? {
       id: model.providerID,
       name: model.providerID,
