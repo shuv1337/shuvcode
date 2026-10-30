@@ -65,7 +65,11 @@ describe("public event manifest", () => {
       Permission.Event.Replied,
       Permission.Event.Cancelled,
     ])
-    expect(PersistentPty.Event.Definitions).toEqual([PersistentPty.Event.Added, PersistentPty.Event.Removed])
+    expect(PersistentPty.Event.Definitions).toEqual([
+      PersistentPty.Event.Added,
+      PersistentPty.Event.Removed,
+      PersistentPty.Event.Updated,
+    ])
     expect(Form.Event.Definitions).toEqual([Form.Event.Created, Form.Event.Replied, Form.Event.Cancelled])
     expect(Reference.Event.Definitions).toEqual([Reference.Event.Updated])
     expect(McpEvent.Definitions).toEqual([McpEvent.ToolsChanged, McpEvent.ResourcesChanged, McpEvent.StatusChanged])

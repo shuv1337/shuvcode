@@ -12,4 +12,7 @@ paths = [
   '''^packages/http\-recorder/test/http\.test\.ts$''',
   '''^packages/http\-recorder/test/redaction\.test\.ts$''',
   '''^packages/session\-ui/src/components/tool\-count\-summary\.tsx$''',
+  # Upstream v2.2.3 Claude Agent HTTP fixtures: generic-api-key matches
+  # api_message_id + literal REDACTED (not credentials).
+  '''^packages/core/test/plugin/provider/claude\-agent/fixtures/recordings/.*\.jsonl$''',
 ]

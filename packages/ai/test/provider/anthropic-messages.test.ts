@@ -2,15 +2,15 @@ import { describe, expect } from "bun:test"
 import { Effect } from "effect"
 import { HttpClientRequest } from "effect/http"
 import {
-  CacheHint,
-  LLM,
+  ai,
   AIError,
+  CacheHint,
   LLMRequest,
+  Media,
   Message,
   ToolCallPart,
   ToolDefinition,
   Usage,
-  Media,
 } from "../../src/effect.js"
 import { Auth, Endpoint, LLMClient, Route } from "../../src/route.js"
 import { compileRequest } from "../../src/route/client.js"
@@ -31,7 +31,7 @@ const opus48 = AnthropicMessages.route
 
 const compileUnsignedReasoning = (model: LLMRequest["model"]) =>
   compileRequest(
-    LLM.request({
+    ai.request({
       model,
       messages: [Message.assistant([{ type: "reasoning", text: "unsigned reasoning" }])],
       cache: "none",
@@ -44,7 +44,7 @@ const vertexOpus48 = GoogleVertexMessages.configure({
   project: "test",
 }).model("claude-opus-4-8")
 
-const request = LLM.request({
+const request = ai.request({
   id: "req_1",
   model,
   system: { type: "text", text: "You are concise.", cache: new CacheHint({ type: "ephemeral" }) },
@@ -97,7 +97,7 @@ describe("Anthropic Messages route", () => {
   it.effect("filters whitespace-only text and removes empty messages", () =>
     Effect.gen(function* () {
       const prepared = yield* compileRequest(
-        LLM.request({
+        ai.request({
           model,
           messages: [
             Message.user(" \n\t"),
@@ -294,7 +294,7 @@ describe("Anthropic Messages route", () => {
   it.effect("lowers chronological system updates natively for Claude Opus 4.8 with cache hints", () =>
     Effect.gen(function* () {
       const prepared = yield* compileRequest(
-        LLM.request({
+        ai.request({
           model: opus48,
           messages: [
             Message.user("Before."),
@@ -332,7 +332,7 @@ describe("Anthropic Messages route", () => {
 
       const prepared = yield* Effect.forEach(ids, (id) =>
         compileRequest(
-          LLM.request({
+          ai.request({
             model: AnthropicMessages.route
               .with({ endpoint: { baseURL: "https://api.anthropic.test/v1/" }, auth: Auth.header("x-api-key", "test") })
               .model({ id }),
@@ -349,7 +349,7 @@ describe("Anthropic Messages route", () => {
   it.effect("lowers chronological system updates to wrapped user text for unsupported Anthropic models", () =>
     Effect.gen(function* () {
       const prepared = yield* compileRequest(
-        LLM.request({
+        ai.request({
           model,
           messages: [
             Message.user("Before."),
@@ -385,7 +385,7 @@ describe("Anthropic Messages route", () => {
 
       const prepared = yield* Effect.forEach(ids, (id) =>
         compileRequest(
-          LLM.request({
+          ai.request({
             model: AnthropicMessages.route
               .with({ endpoint: { baseURL: "https://api.anthropic.test/v1/" }, auth: Auth.header("x-api-key", "test") })
               .model({ id }),
@@ -404,7 +404,7 @@ describe("Anthropic Messages route", () => {
   it.effect("rejects non-text chronological system update content before send", () =>
     Effect.gen(function* () {
       const error = yield* compileRequest(
-        LLM.request({
+        ai.request({
           model: opus48,
           messages: [
             Message.user("Before."),
@@ -421,7 +421,7 @@ describe("Anthropic Messages route", () => {
     Effect.gen(function* () {
       expect(
         (yield* compileRequest(
-          LLM.request({
+          ai.request({
             model: opus48,
             messages: [Message.assistant("Plain."), Message.system("After plain assistant.")],
             cache: "none",
@@ -435,12 +435,12 @@ describe("Anthropic Messages route", () => {
         },
       ])
       expect(
-        (yield* compileRequest(LLM.request({ model: opus48, messages: [Message.system("First.")], cache: "none" })))
-          .body.messages,
+        (yield* compileRequest(ai.request({ model: opus48, messages: [Message.system("First.")], cache: "none" }))).body
+          .messages,
       ).toEqual([{ role: "user", content: [{ type: "text", text: "<system-update>\nFirst.\n</system-update>" }] }])
       expect(
         (yield* compileRequest(
-          LLM.request({
+          ai.request({
             model: opus48,
             messages: [
               Message.user("Start."),
@@ -463,7 +463,7 @@ describe("Anthropic Messages route", () => {
   it.effect("moves system updates to the next assistant turn and sends consecutive updates together", () =>
     Effect.gen(function* () {
       const lower = (messages: ReadonlyArray<Message>) =>
-        compileRequest(LLM.request({ model: opus48, messages: [...messages], cache: "none" })).pipe(
+        compileRequest(ai.request({ model: opus48, messages: [...messages], cache: "none" })).pipe(
           Effect.map((prepared) => prepared.body.messages),
         )
       const system = (text: string) => ({ role: "system", content: [{ type: "text", text, cache_control: undefined }] })
@@ -521,7 +521,7 @@ describe("Anthropic Messages route", () => {
   it.effect("keeps wrapped system updates in place for models without native system updates", () =>
     Effect.gen(function* () {
       const prepared = yield* compileRequest(
-        LLM.request({
+        ai.request({
           model,
           messages: [
             Message.user("Fix it."),
@@ -566,9 +566,9 @@ describe("Anthropic Messages route", () => {
         { role: "system", content: [{ type: "text", text: "Operator update.", cache_control: undefined }] },
       ]
 
-      const terminal = yield* compileRequest(LLM.request({ model: vertexOpus48, messages: toolTurn, cache: "none" }))
+      const terminal = yield* compileRequest(ai.request({ model: vertexOpus48, messages: toolTurn, cache: "none" }))
       const history = yield* compileRequest(
-        LLM.request({
+        ai.request({
           model: vertexOpus48,
           messages: [...toolTurn, Message.assistant("Acknowledged."), Message.user("Next step.")],
           cache: "none",
@@ -587,7 +587,7 @@ describe("Anthropic Messages route", () => {
   it.effect("keeps a terminal direct Anthropic system update native", () =>
     Effect.gen(function* () {
       const prepared = yield* compileRequest(
-        LLM.request({
+        ai.request({
           model: opus48,
           messages: [
             Message.assistant([ToolCallPart.make({ id: "call_1", name: "lookup", input: {} })]),
@@ -626,7 +626,7 @@ describe("Anthropic Messages route", () => {
   it.effect("keeps an ordinary terminal Vertex system update native", () =>
     Effect.gen(function* () {
       const prepared = yield* compileRequest(
-        LLM.request({
+        ai.request({
           model: vertexOpus48,
           messages: [Message.user("Before."), Message.system("Operator update.")],
           cache: "none",
@@ -646,7 +646,7 @@ describe("Anthropic Messages route", () => {
   it.effect("moves a system update between a local tool call and its result after the result", () =>
     Effect.gen(function* () {
       const prepared = yield* compileRequest(
-        LLM.request({
+        ai.request({
           model: opus48,
           messages: [
             Message.user("Use the tool."),
@@ -669,7 +669,7 @@ describe("Anthropic Messages route", () => {
   it.effect("prepares tool call and tool result messages", () =>
     Effect.gen(function* () {
       const prepared = yield* compileRequest(
-        LLM.request({
+        ai.request({
           id: "req_tool_result",
           model,
           messages: [
@@ -702,7 +702,7 @@ describe("Anthropic Messages route", () => {
       const id = `functions.lookup:1|${"x".repeat(64)}`
       const scrubbed = `functions_lookup_1_${"x".repeat(64)}`
       const prepared = yield* compileRequest(
-        LLM.request({
+        ai.request({
           model,
           messages: [
             Message.assistant([ToolCallPart.make({ id, name: "lookup", input: {} })]),
@@ -723,7 +723,7 @@ describe("Anthropic Messages route", () => {
   it.effect("batches parallel tool results into one Anthropic user message", () =>
     Effect.gen(function* () {
       const prepared = yield* compileRequest(
-        LLM.request({
+        ai.request({
           model,
           messages: [
             Message.user("Check both cities."),
@@ -764,7 +764,7 @@ describe("Anthropic Messages route", () => {
   it.effect("keeps tools and sends tool_choice none", () =>
     Effect.gen(function* () {
       const prepared = yield* compileRequest(
-        LLM.request({
+        ai.request({
           id: "req_tool_choice_none",
           model,
           tools: [{ name: "lookup", description: "Look things up", inputSchema: { type: "object", properties: {} } }],
@@ -794,7 +794,7 @@ describe("Anthropic Messages route", () => {
   it.effect("lowers media tool-result content as structured blocks", () =>
     Effect.gen(function* () {
       const prepared = yield* compileRequest(
-        LLM.request({
+        ai.request({
           id: "req_tool_result_image",
           model,
           messages: [
@@ -827,7 +827,7 @@ describe("Anthropic Messages route", () => {
     Effect.gen(function* () {
       const spaced = "  Keep this spacing.  "
       const prepared = yield* compileRequest(
-        LLM.request({
+        ai.request({
           model,
           cache: "none",
           messages: [
@@ -846,7 +846,7 @@ describe("Anthropic Messages route", () => {
         }),
       )
       const blank = yield* compileRequest(
-        LLM.request({
+        ai.request({
           model,
           cache: "none",
           messages: [
@@ -867,7 +867,7 @@ describe("Anthropic Messages route", () => {
   it.effect("lowers single-image tool-result content as a structured image block", () =>
     Effect.gen(function* () {
       const prepared = yield* compileRequest(
-        LLM.request({
+        ai.request({
           id: "req_tool_result_image_only",
           model,
           messages: [
@@ -892,7 +892,7 @@ describe("Anthropic Messages route", () => {
   it.effect("rejects tool-result media that cannot be lowered", () =>
     Effect.gen(function* () {
       const error = yield* compileRequest(
-        LLM.request({
+        ai.request({
           id: "req_tool_result_unsupported_media",
           model,
           messages: [
@@ -926,7 +926,7 @@ describe("Anthropic Messages route", () => {
         return Array.isArray(content) ? content.filter((item) => item.type === "image") : []
       }
       const success = yield* compileRequest(
-        LLM.request({
+        ai.request({
           model,
           cache: "none",
           messages: [
@@ -936,7 +936,7 @@ describe("Anthropic Messages route", () => {
         }),
       )
       const failure = yield* compileRequest(
-        LLM.request({
+        ai.request({
           model,
           cache: "none",
           messages: [
@@ -974,7 +974,7 @@ describe("Anthropic Messages route", () => {
   it.effect("sends only text blocks in an error tool_result", () =>
     Effect.gen(function* () {
       const prepared = yield* compileRequest(
-        LLM.request({
+        ai.request({
           model,
           cache: "none",
           messages: [
@@ -1023,7 +1023,7 @@ describe("Anthropic Messages route", () => {
     content?: ReadonlyArray<{ type: "text"; text: string } | { type: "file"; uri: string; mime: string }>,
   ) =>
     compileRequest(
-      LLM.request({
+      ai.request({
         model,
         cache: "none",
         messages: [
@@ -1088,7 +1088,7 @@ describe("Anthropic Messages route", () => {
 
   it.effect("serializes Messages video inputs", () =>
     Effect.gen(function* () {
-      const user = LLM.request({
+      const user = ai.request({
         model: customModel,
         prompt: [
           Message.media(Media.base64("AAECAw==", "video/mp4"), { cache: new CacheHint({ type: "ephemeral" }) }),
@@ -1129,7 +1129,7 @@ describe("Anthropic Messages route", () => {
       expect(foreign.message).toContain("got custom:file_clip")
 
       const native = yield* compileRequest(
-        LLM.request({
+        ai.request({
           model: AnthropicMessages.route.model({ id: "video-model" }),
           prompt: Message.media(Media.base64("AAECAw==", "video/mp4")),
           cache: "none",
@@ -1141,7 +1141,7 @@ describe("Anthropic Messages route", () => {
 
   it.effect("moves Meta tool result videos after consecutive results", () =>
     Effect.gen(function* () {
-      const meta = LLM.request({
+      const meta = ai.request({
         model: Meta.configure({ apiKey: "test" }).messages("video-model"),
         messages: [
           Message.assistant([
@@ -1230,7 +1230,7 @@ describe("Anthropic Messages route", () => {
   it.effect("lowers preserved Anthropic reasoning signature metadata", () =>
     Effect.gen(function* () {
       const prepared = yield* compileRequest(
-        LLM.request({
+        ai.request({
           model,
           messages: [
             Message.assistant([
@@ -1308,7 +1308,7 @@ describe("Anthropic Messages route", () => {
   it.effect("round-trips redacted thinking as redacted_thinking blocks", () =>
     Effect.gen(function* () {
       const prepared = yield* compileRequest(
-        LLM.request({
+        ai.request({
           model,
           messages: [
             Message.assistant([
@@ -1350,7 +1350,7 @@ describe("Anthropic Messages route", () => {
           citations: [{ type: "web_search_result_location", cited_text: "Example" }],
         },
       ]
-      const response = yield* LLMClient.generate(LLM.request({ model: compatible, prompt: "Search." })).pipe(
+      const response = yield* LLMClient.generate(ai.request({ model: compatible, prompt: "Search." })).pipe(
         Effect.provide(
           fixedResponse(
             sseEvents(
@@ -1410,7 +1410,7 @@ describe("Anthropic Messages route", () => {
       })
 
       const prepared = yield* compileRequest(
-        LLM.request({ model: compatible, messages: [response.message], cache: "none" }),
+        ai.request({ model: compatible, messages: [response.message], cache: "none" }),
       )
       expect(prepared.body.messages).toEqual([
         {
@@ -1448,7 +1448,7 @@ describe("Anthropic Messages route", () => {
         { type: "message_delta", delta: { stop_reason: "end_turn" }, usage: { output_tokens: 2 } },
         { type: "message_stop" },
       )
-      const response = yield* LLMClient.generate(LLM.request({ model: compatible, prompt: "Think." })).pipe(
+      const response = yield* LLMClient.generate(ai.request({ model: compatible, prompt: "Think." })).pipe(
         Effect.provide(fixedResponse(body)),
       )
 
@@ -1466,7 +1466,7 @@ describe("Anthropic Messages route", () => {
       ])
 
       const prepared = yield* compileRequest(
-        LLM.request({ model: compatible, messages: [response.message], cache: "none" }),
+        ai.request({ model: compatible, messages: [response.message], cache: "none" }),
       )
       expect(prepared.body.messages).toEqual([
         { role: "assistant", content: [{ type: "thinking", thinking: "Reasoning.", signature: "sig_1" }] },
@@ -1843,7 +1843,7 @@ describe("Anthropic Messages route", () => {
         { type: "reasoning", text: "", providerMetadata: { anthropic: { signature: "sig_1" } } },
       ])
 
-      const prepared = yield* compileRequest(LLM.request({ model, messages: [response.message], cache: "none" }))
+      const prepared = yield* compileRequest(ai.request({ model, messages: [response.message], cache: "none" }))
       expect(prepared.body.messages).toEqual([
         { role: "assistant", content: [{ type: "thinking", thinking: "", signature: "sig_1" }] },
       ])
@@ -1985,7 +1985,7 @@ describe("Anthropic Messages route", () => {
         ),
       )
       const prepared = yield* compileRequest(
-        LLM.request({
+        ai.request({
           model,
           messages: [
             Message.user("Say hello."),
@@ -2516,7 +2516,7 @@ describe("Anthropic Messages route", () => {
   it.effect("round-trips provider-executed assistant content into server tool blocks", () =>
     Effect.gen(function* () {
       const prepared = yield* compileRequest(
-        LLM.request({
+        ai.request({
           id: "req_round_trip",
           model,
           messages: [
@@ -2567,7 +2567,7 @@ describe("Anthropic Messages route", () => {
   it.effect("rejects round-trip for unknown server tool names", () =>
     Effect.gen(function* () {
       const error = yield* compileRequest(
-        LLM.request({
+        ai.request({
           id: "req_unknown_server_tool",
           model,
           messages: [
@@ -2591,7 +2591,7 @@ describe("Anthropic Messages route", () => {
   it.effect("continues a conversation with user media content", () =>
     Effect.gen(function* () {
       const response = yield* LLMClient.generate(
-        LLM.request({
+        ai.request({
           id: "req_media",
           model,
           messages: [
@@ -2644,7 +2644,7 @@ describe("Anthropic Messages route", () => {
   it.effect("sends the hint ttl on cache_control", () =>
     Effect.gen(function* () {
       const prepared = yield* compileRequest(
-        LLM.request({
+        ai.request({
           model,
           system: { type: "text", text: "system", cache: new CacheHint({ type: "ephemeral", ttl: "1h" }) },
           prompt: "hi",
@@ -2660,7 +2660,7 @@ describe("Anthropic Messages route", () => {
   it.effect("emits cache_control on tool definitions and tool-result blocks", () =>
     Effect.gen(function* () {
       const prepared = yield* compileRequest(
-        LLM.request({
+        ai.request({
           model,
           tools: [
             {
@@ -2701,7 +2701,7 @@ describe("Anthropic Messages route", () => {
     Effect.gen(function* () {
       const hint = new CacheHint({ type: "ephemeral" })
       const prepared = yield* compileRequest(
-        LLM.request({
+        ai.request({
           model,
           system: [
             { type: "text", text: "a", cache: hint },
@@ -2727,7 +2727,7 @@ describe("Anthropic Messages route", () => {
     Effect.gen(function* () {
       const hint = new CacheHint({ type: "ephemeral" })
       const prepared = yield* compileRequest(
-        LLM.request({
+        ai.request({
           model,
           tools: [
             {
