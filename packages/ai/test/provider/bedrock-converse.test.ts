@@ -651,7 +651,7 @@ describe("Bedrock Converse route", () => {
   it.effect("drops blank tool-result text and keeps the image", () =>
     Effect.gen(function* () {
       const prepared = yield* compileRequest(
-        LLM.request({
+        ai.request({
           id: "req_tool_blank_text",
           model,
           messages: [
@@ -869,7 +869,7 @@ describe("Bedrock Converse route", () => {
   it.effect("lowers rich Claude tool failures as text notes", () =>
     Effect.gen(function* () {
       const prepared = yield* compileRequest(
-        LLM.request({
+        ai.request({
           model,
           cache: "none",
           messages: [
@@ -916,7 +916,7 @@ describe("Bedrock Converse route", () => {
     Effect.gen(function* () {
       for (const id of [model.id, "us.amazon.nova-pro-v1:0"]) {
         const prepared = yield* compileRequest(
-          LLM.request({
+          ai.request({
             model: AmazonBedrock.configure({ baseURL: "https://bedrock-runtime.test", apiKey: "test-bearer" }).model(
               id,
             ),
@@ -966,7 +966,7 @@ describe("Bedrock Converse route", () => {
   it.effect("keeps an error whose text is the empty-output placeholder when media is present", () =>
     Effect.gen(function* () {
       const prepared = yield* compileRequest(
-        LLM.request({
+        ai.request({
           model,
           cache: "none",
           messages: [
@@ -999,7 +999,7 @@ describe("Bedrock Converse route", () => {
   it.effect("hoists an image from a blank error for models that do not keep tool images inline", () =>
     Effect.gen(function* () {
       const prepared = yield* compileRequest(
-        LLM.request({
+        ai.request({
           model: AmazonBedrock.configure({ baseURL: "https://bedrock-runtime.test", apiKey: "test-bearer" }).model(
             "global.openai.gpt-6-sol",
           ),

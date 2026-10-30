@@ -202,7 +202,7 @@ export type {
   ToolSchema,
   ToolToModelOutput,
 } from "./tool.js"
-export type { LLM } from "./llm.js"
+export * as LLM from "./llm.js"
 export type {
   Definition as ProviderPackageDefinition,
   Settings as ProviderPackageSettings,

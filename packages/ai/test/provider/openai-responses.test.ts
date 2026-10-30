@@ -1651,7 +1651,7 @@ describe("OpenAI Responses route", () => {
       const uri = "data:image/png;base64,AAECAw=="
       const value = { error: { type: "tool.execution", message: "snapshot failed" }, content: [] }
       const prepared = yield* compileRequest(
-        LLM.request({
+        ai.request({
           model,
           messages: [
             Message.assistant([ToolCallPart.make({ id: "call_1", name: "snapshot", input: {} })]),

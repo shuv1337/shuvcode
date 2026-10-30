@@ -1,6 +1,6 @@
 import { describe, expect } from "bun:test"
 import { Effect } from "effect"
-import { ai, LLM, LLMEvent, Message, ToolCallPart } from "../../src/effect.js"
+import { ai, LLMEvent, Message, ToolCallPart } from "../../src/effect.js"
 import { OpenAI } from "../../src/providers.js"
 import { configure } from "../../src/providers/openai-compatible-responses.js"
 import { compileRequest, LLMClient } from "../../src/route/client.js"
@@ -18,7 +18,7 @@ for (const model of [
         const uri = "data:image/png;base64,AAECAw=="
         const value = { error: { type: "tool.execution", message: "snapshot failed" }, content: [] }
         const prepared = yield* compileRequest(
-          LLM.request({
+          ai.request({
             model,
             messages: [
               Message.assistant([ToolCallPart.make({ id: "call_1", name: "snapshot", input: {} })]),

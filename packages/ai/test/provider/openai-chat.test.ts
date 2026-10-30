@@ -672,7 +672,7 @@ describe("OpenAI Chat route", () => {
         { type: "file" as const, uri: image, mime: "image/png", name: "local.png" },
       ]
       const success = yield* compileRequest(
-        LLM.request({
+        ai.request({
           model,
           messages: [
             Message.assistant([ToolCallPart.make({ id: "call_1", name: "snapshot", input: {} })]),
@@ -681,7 +681,7 @@ describe("OpenAI Chat route", () => {
         }),
       )
       const failure = yield* compileRequest(
-        LLM.request({
+        ai.request({
           model,
           messages: [
             Message.assistant([ToolCallPart.make({ id: "call_1", name: "snapshot", input: {} })]),
@@ -712,7 +712,7 @@ describe("OpenAI Chat route", () => {
       const uri = "data:image/png;base64,AAECAw=="
       const value = { error: { type: "tool.execution", message: "snapshot failed" }, content: [] }
       const prepared = yield* compileRequest(
-        LLM.request({
+        ai.request({
           model,
           messages: [
             Message.assistant([ToolCallPart.make({ id: "call_1", name: "snapshot", input: {} })]),

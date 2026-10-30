@@ -175,7 +175,6 @@ const layer = AppNodeBuilder.build(
     SessionExecution.node,
     SessionRestart.node,
     LocationServiceMap.node,
-    Tool.node,
   ]),
   [
     Database.node.replace(Database.layer({ path: "recovery.db" }).pipe(Layer.provide(globalLayer))),

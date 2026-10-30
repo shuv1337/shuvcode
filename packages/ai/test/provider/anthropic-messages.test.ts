@@ -827,7 +827,7 @@ describe("Anthropic Messages route", () => {
     Effect.gen(function* () {
       const spaced = "  Keep this spacing.  "
       const prepared = yield* compileRequest(
-        LLM.request({
+        ai.request({
           model,
           cache: "none",
           messages: [
@@ -846,7 +846,7 @@ describe("Anthropic Messages route", () => {
         }),
       )
       const blank = yield* compileRequest(
-        LLM.request({
+        ai.request({
           model,
           cache: "none",
           messages: [
@@ -926,7 +926,7 @@ describe("Anthropic Messages route", () => {
         return Array.isArray(content) ? content.filter((item) => item.type === "image") : []
       }
       const success = yield* compileRequest(
-        LLM.request({
+        ai.request({
           model,
           cache: "none",
           messages: [
@@ -936,7 +936,7 @@ describe("Anthropic Messages route", () => {
         }),
       )
       const failure = yield* compileRequest(
-        LLM.request({
+        ai.request({
           model,
           cache: "none",
           messages: [
@@ -974,7 +974,7 @@ describe("Anthropic Messages route", () => {
   it.effect("sends only text blocks in an error tool_result", () =>
     Effect.gen(function* () {
       const prepared = yield* compileRequest(
-        LLM.request({
+        ai.request({
           model,
           cache: "none",
           messages: [
@@ -1023,7 +1023,7 @@ describe("Anthropic Messages route", () => {
     content?: ReadonlyArray<{ type: "text"; text: string } | { type: "file"; uri: string; mime: string }>,
   ) =>
     compileRequest(
-      LLM.request({
+      ai.request({
         model,
         cache: "none",
         messages: [

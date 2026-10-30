@@ -505,7 +505,7 @@ describe("Gemini route", () => {
     Effect.gen(function* () {
       const uri = "data:image/png;base64,AAECAw=="
       const value = { error: { type: "tool.execution", message: "snapshot failed" }, content: [] }
-      const request = LLM.request({
+      const request = ai.request({
         model,
         messages: [
           Message.assistant([ToolCallPart.make({ id: "call_1", name: "snapshot", input: {} })]),

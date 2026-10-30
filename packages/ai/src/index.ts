@@ -316,9 +316,7 @@ export const tool = <
 /** Default client over `RequestExecutor.fetchLayer`; the runtime builds its layer on first use and holds nothing to dispose. */
 export const ai: Omit<Client, "dispose"> = make()
 
-// Fork callers still import the Effect surface from the package root. The promise entry above uses these internally.
-export { LLM } from "./effect.js"
-export { AIError, LanguageModel, LLMEvent, Message, ToolDefinition } from "./schema/index.js"
+// Fork callers (e.g. JevTool) still import ToolFailure from the package root.
 export { ToolFailure }
 
 export * as AI from "./index.js"

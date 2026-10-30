@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test"
 import { ConfigProvider, Effect } from "effect"
 import { HttpClientRequest } from "effect/http"
-import { ai, LanguageModel, LLM, LLMEvent, Message, SystemPart, ToolCallPart, ToolDefinition, Media } from "../../src/effect.js"
+import { ai, LanguageModel, LLMEvent, Message, SystemPart, ToolCallPart, ToolDefinition, Media } from "../../src/effect.js"
 import { Mistral } from "../../src/providers/index.js"
 import { MistralChat } from "../../src/protocols/index.js"
 import { LLMClient } from "../../src/route.js"
@@ -286,7 +286,7 @@ describe("Mistral Chat", () => {
       const uri = "data:image/png;base64,AAECAw=="
       const value = { error: { type: "tool.execution", message: "snapshot failed" }, content: [] }
       const prepared = yield* compileRequest(
-        LLM.request({
+        ai.request({
           model,
           messages: [
             Message.assistant([ToolCallPart.make({ id: "Ab12Cd34E", name: "snapshot", input: {} })]),
@@ -356,7 +356,7 @@ describe("Mistral Chat", () => {
   it.effect("keeps a whitespace separator when joining text-only tool results", () =>
     Effect.gen(function* () {
       const prepared = yield* compileRequest(
-        LLM.request({
+        ai.request({
           model,
           messages: [
             Message.tool({
