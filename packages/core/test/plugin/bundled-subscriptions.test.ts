@@ -39,8 +39,8 @@ describe("bundled subscription providers", () => {
       const plugin = yield* Plugin.Service
       const host = yield* PluginHost.make(plugin)
       for (const entry of ProviderPlugins) {
-        // Bundled plugins ask for more services than this test's effect type lists.
-        // The fixture layer provides them; the cast only widens the checker.
+        // SAFETY: PluginTestLayer provides the services these plugins read. The assertion
+        // only hides requirements this test effect's type does not list.
         yield* entry.effect(host) as Effect.Effect<void>
       }
       expect(yield* integration.get(Integration.ID.make("claude-agent"))).toBeUndefined()
