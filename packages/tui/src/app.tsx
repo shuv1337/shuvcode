@@ -496,6 +496,10 @@ function App() {
   const config = useConfig()
   const devtools = createMemo(() => config.data.debug?.devtools ?? app.channel === "local")
   const route = useRoute()
+  // Keep the last session ID so a closing frame never reads a disposed <Show> accessor.
+  const routeSessionID = createMemo<string | undefined>((previous) =>
+    route.data.type === "session" ? route.data.sessionID : previous,
+  )
   const dimensions = useTerminalDimensions()
   const renderer = useRenderer()
   const dialog = useDialog()
@@ -1447,7 +1451,7 @@ function App() {
                   <Show when={route.data.type === "session" ? route.data.sessionID : undefined}>
                     {(sessionID) => (
                       <SessionFrame
-                        sessionID={sessionID()}
+                        sessionID={routeSessionID() ?? sessionID()}
                         verticalTabsWidth={verticalTabsVisible() ? tabsResize.size() : 0}
                       />
                     )}
