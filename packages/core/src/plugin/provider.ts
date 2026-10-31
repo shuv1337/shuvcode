@@ -9,7 +9,6 @@ import { CloudflareAIGatewayPlugin } from "./provider/cloudflare-ai-gateway.js"
 import { CloudflareWorkersAIPlugin } from "./provider/cloudflare-workers-ai.js"
 import { DatabricksPlugin } from "./provider/databricks.js"
 import { DigitalOceanPlugin } from "./provider/digitalocean.js"
-import { DynamicProviderPlugin } from "./provider/dynamic.js"
 import { GithubCopilotPlugin } from "./provider/github-copilot.js"
 import { GitLabPlugin } from "./provider/gitlab.js"
 import { GoogleVertexPlugin } from "./provider/google-vertex.js"
@@ -69,7 +68,6 @@ export const ProviderPlugins: PluginInternal.InternalPlugin[] = [
   VLLMPlugin,
   XAIPlugin,
   ZenmuxPlugin,
-  DynamicProviderPlugin,
   // Reads the active subscription connections registered above; order it last.
   QuotaPlugin,
 ].filter((plugin) => plugin.id !== "opencode.provider.claude-agent")

@@ -709,7 +709,7 @@ describe("Tool", () => {
     }),
   )
 
-  it.effect("does not call a disabled direct tool through a cached code-mode runtime", () =>
+  it.effect("does not call a disabled tool through a cached code-mode runtime", () =>
     Effect.gen(function* () {
       const service = yield* Tool.Service
       const calls: string[] = []
@@ -724,7 +724,6 @@ describe("Tool", () => {
             },
           },
         },
-        { codemode: false },
       )
       const enabled = yield* service.snapshot()
       const run = (snapshot: Tool.Snapshot, id: string) =>
