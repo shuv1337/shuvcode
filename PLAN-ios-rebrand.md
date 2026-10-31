@@ -95,3 +95,29 @@ fork-owned change from the first draft. It's a cheap interim step, and it's the 
 6. Artwork and the exact name casing (`shuvcode`)?
 7. Native (Swift) or a WebView shell around `packages/app`?
 8. Do the PWA rebrand now as an interim step?
+
+## 8. Source hunt for v2-compatible iOS clients (2026-10-31)
+
+Option A is confirmed working (Anomaly TestFlight + `shuvcode pair --remote`). The official app's source is still not public.
+
+Ryan Vogel = GitHub `R44VC0RP` ("work @ opencode", company @anomalyco). None of his public repos is the TestFlight app:
+- `R44VC0RP/openpad`: iPad viewer, TS/Expo, last commit 2025-12-18, no licence, v1 only.
+- `R44VC0RP/OpenCode-Island`: macOS notch app, `com.opencode.island`, Apache-2.0, 2025-12-29.
+- `R44VC0RP/hark`: iPhone notifications/approvals (Expo + `harkctl`); routes OpenCode V2 permissions, not a client. Licence NOASSERTION.
+
+| Repo | Licence | Last commit | Kind | v2 `/pair` (QR `{code,urls}` / `/auth/connect`) | Bundle ID | Fork viability |
+|---|---|---|---|---|---|---|
+| armanruzgar/opencode-ios | GPL-3.0-only | 2026-10-31 | Native Swift 6, 454 files, iOS 26.4+, opencode 2.0.25+ | Yes: VisionKit QR, link paste, `GET /auth/connect/<code>` (ARCHITECTURE.md:141-144), v2 2.0.32 fixtures | `$(BUNDLE_ID_PREFIX).client`, prefix `dev.opencodeios` (Config/Signing.xcconfig) | Best feature fit; prefix is one setting. GPL means a fork must stay GPL with source published. 0 stars, solo dev. |
+| grapeot/opencode_ios_client | MIT | 2026-10-18 | Native Swift, 188 files, + watch app | No: v1 API; docs/v2_server_compatibility.md says v2 "waiting for parity" | `com.grapeot.OpenCodeClient` | Most mature/popular (275★, 55 forks, own TestFlight 2cWrmPVq), MIT-friendly, but needs a v2 port first. |
+| sambitcreate/aiden-for-opencode-ios | MIT | 2026-10-08 | Native SwiftUI, 55 files | Partly: v2 API, but its own pairing payload (`kind`/`endpoint`), not upstream QR | (not set in pbxproj) | Clean MIT v2 base; needs upstream pairing added. |
+| ShawnDiego/opencode-ios | none | 2026-10-06 | Native Swift, xcodegen | v2 API; host/port/password only | `ai.opencode.ios.client` | No licence, so we can't legally fork. |
+| gogo564/opencode-ios-client | none | 2026-10-30 | Native Swift, 8 files | v2 API, minimal | `com.gogo564.OpenCodeClient` | Too small; no licence. |
+| kkcode-app/kkcode | AGPL-3.0 | 2026-08-08 | TS (web/RN) | v2-ish API | — | AGPL, not native. |
+
+Dead ends: jackwener/opencode-ios (Apache-2.0, v1, Feb 2026), PhillipChaffee/opencode-ios (MIT, v1), goniz/opencode-ios
+(no Swift), Justintunsday/opencode-ios and repos1tory/opencode-ios (jailbreak ports of the CLI/server, not clients),
+synthentica/opencode-fledly (unrelated plugin), the upstream `ios-*`/`mobile-*` branches (PWA only), and anomalyco public repos.
+
+Recommendation, if we go beyond option A: fork armanruzgar/opencode-ios if GPL is acceptable (it already speaks upstream
+`/pair`); otherwise fork sambitcreate/aiden (MIT, v2) and add `{code,urls}` + `/auth/connect` pairing. grapeot is the
+fallback with most community, but it needs the v2 port.
