@@ -1,148 +1,97 @@
-# Plan: rebrand the iOS app to shuvcode
+# PLAN: rebrand the OpenCode iOS app to shuvcode
 
-Status: plan only. Nothing here is implemented yet.
+Status: plan only. Nothing here is implemented. Correction to the first draft: there IS a native app.
 
-## What "the iOS app" is
+## 1. What the native app is (facts, checked 2026-10-31)
 
-Neither this fork nor upstream `anomalyco/opencode` has a native iOS app. A
-search of `integration-v2`, `upstream/dev`, `upstream/v2`, `origin/dev`, and
-`origin/shuvdev` finds no `*.pbxproj`, `Info.plist`, `*.entitlements` for iOS,
-Expo/EAS/Capacitor config, or Swift sources. Upstream closed its React Native
-PR (#10624) unmerged. Its mobile answer (issue #10288) is the installable web
-app (PWA) served by `pair --remote`.
+| Fact | Value | Source |
+|---|---|---|
+| Listing | "Join the OpenCode beta", TestFlight public link | https://testflight.apple.com/join/EnFsKYQ1 (curl of public page) |
+| Developer | Anomaly Innovations, Inc. | TestFlight listing (Lauren's screenshot) |
+| Version / build | 0.1.0 (676) | TestFlight listing |
+| What-to-test copy | "WELCOME ONE WELCOME ALL TO THE EXTRAORDINARY AMAZING OPENCODE iOS APP! … Simply run /pair on the latest version of opencode v2!" | TestFlight public page |
+| Public since | Dax opened extra slots ~2026-10-09; listed in pluwen/awesome-testflight-link 2026-10-13 | gh search code "EnFsKYQ1" |
 
-On iOS, the app is therefore `packages/app` added to the Home Screen from
-Safari. Every iOS-visible brand surface lives in that web app and in the icon
-sets it borrows from `packages/desktop/icons/<channel>/ios`.
+### Where the source lives: not public
+- Not in `anomalyco/opencode` (any branch). Searched all upstream refs, including `ios-pwa-shell`, `mobile-*`,
+  `ios-titlebar-safe-area`, `opencode/swift-nebula`, for `*.pbxproj`, `Info.plist`, `project.yml`, `*.swift`,
+  `Fastfile`, `eas.json`, `app.json`, Capacitor config. None found. Those branches are PWA/mobile-web work only.
+- Not in any public `anomalyco/*` repo (gh repo list anomalyco). Only `anomalyco/hex` has iOS code (`HEXMobile`, bundle `com.kitlangton.hex.mobile`), which is unrelated.
+- `gh search code` for TestFlight/PRODUCT_BUNDLE_IDENTIFIER under anomalyco and in opencode: no hits for this app.
+- Not in `shuv1337/*`. (`hermes-ios`, `pebble-mobileapp`, `zero-native` exist but are not this app.)
+- No CI in opencode uploads to TestFlight. No `.github/workflows` references `altool`, `asc`, `fastlane`, or `xcodebuild`.
+- Conclusion: the app is closed-source/private at Anomaly. Bundle ID, Apple team ID, signing, Info.plist,
+  URL schemes, and the icon set are NOT inspectable by us. The bundle ID could be read from an installed build
+  (for example from a device sysdiagnose or a decrypted IPA) or by asking Anomaly. I have not done that.
 
-That means none of the following exist to change: a bundle ID, an App Store
-listing, signing, entitlements, a URL scheme, associated domains, or an iOS CI
-workflow. If Lauren means a native App Store app, that is new work. See the
-open questions.
+### What the fork does own: the contract the app speaks
+The app pairs with a v2 server, so a shuvcode server must keep this wire contract:
+- `packages/cli/src/commands/handlers/pair.ts`: prints `<server>/auth/connect/<code>` links plus a QR code of JSON `{"code","urls"}` (remote URLs only).
+- `POST /api/pair` (`packages/client/src/promise/generated/client.ts:431`) and `server.connect({code})` → `{token}` (`packages/app/src/servers/connect/pairing.ts`).
+- TUI `/pair` slash (`packages/tui/src/app.tsx:993`, alias `web`).
+- The web app's QR scanner (`packages/app/src/servers/connect/scanner.tsx`, `qr-scanner`) is the PWA equivalent.
 
-## Inventory
+## 2. Options, since we can't edit their app
 
-### Must change (shown on iOS)
+| | A. Use Anomaly's app as-is | B. Ask Anomaly for a white-label/source | C. Build our own native shuvcode app |
+|---|---|---|---|
+| Branding | Stays "OpenCode / Anomaly Innovations" | Theirs to grant | Fully ours |
+| Bundle ID | Theirs | New one under our team (an App Store app can't be renamed into another team without an App Transfer, which Anomaly must start) | New, e.g. `dev.shuv.shuvcode` |
+| Work | Keep pairing compatible | Licence + agreement | New codebase + Apple Developer account |
+| Store | Their TestFlight | Ours | Ours (TestFlight first) |
 
-| Surface | Path | Current |
-| --- | --- | --- |
-| Home Screen name (PWA) | `packages/app/manifest.json` `name`, `short_name` | `OpenCode` |
-| Home Screen title fallback (iOS reads `<title>` when no `apple-mobile-web-app-title` exists) | `packages/app/index.html` | `<title data-sm>OpenCode</title>`, no `apple-mobile-web-app-title` |
-| Runtime title | `packages/app/src/app.tsx:60` | `<Title>OpenCode</Title>` |
-| Session title | `packages/app/src/session/route.tsx:251` | `` `${value} · OpenCode` `` |
-| Home Screen icon (180px) | `packages/app/vite.icons.ts` → `packages/desktop/icons/<channel>/ios/AppIcon-60x60@3x.png` | OpenCode artwork |
-| Manifest icons 192/512 | `vite.icons.ts` → `desktop/icons/<channel>/android/...ic_launcher.png`, `icon.png` | OpenCode artwork |
-| Favicon | `vite.icons.ts` → `desktop/icons/<channel>/icon.ico` | OpenCode artwork |
-| Connect-screen brand mark | `packages/app/src/servers/connect/screen.tsx:117` | `aria-label="OpenCode"` plus logo |
-| Pairing errors | `packages/app/src/runtime/i18n/en.ts:431,437` | "not an OpenCode pairing code", "older version of OpenCode" |
-| About page | `packages/app/src/settings/about/about.tsx:149`; `settings.about.website` in every locale | `https://opencode.ai`, `www.opencode.ai` |
-| Social share image | `index.html` `og:image`/`twitter:image` → `/social-share.png` | OpenCode image |
+App Transfer note: Apple transfers move the whole app record (bundle ID, reviews, testers) from Anomaly's team to ours.
+It must be started by Anomaly's Account Holder. TestFlight-only apps with no App Store release can still be transferred only after at least one approved version. That's unlikely, and it would also take OpenCode's app away from upstream users.
 
-The pairing hint strings already say `shuvcode pair` (`en.ts:419-433`,
-`screen.tsx:249`). Follow that pattern.
+## 3. Branding inventory for a shuvcode native app (option B or C)
 
-### Nice to have
+Must change:
+- Display name `CFBundleDisplayName` / `CFBundleName`: "OpenCode" → shuvcode.
+- Bundle ID `PRODUCT_BUNDLE_IDENTIFIER`: new under our team. Don't reuse Anomaly's.
+- Team / signing `DEVELOPMENT_TEAM`, distribution cert, provisioning profiles, App Store Connect API key in CI secrets.
+- App icon set `AppIcon.appiconset` (1024 marketing plus sizes) and the launch screen.
+- URL scheme / universal links: any `opencode://` scheme (desktop already uses `opencode://`, `packages/desktop/README.md:75`). Choose `shuvcode://` to avoid clashing with the OpenCode app on the same phone.
+- In-app strings: About, onboarding ("run /pair on opencode v2" → `shuvcode pair`), links to opencode.ai.
+- Permission strings: `NSCameraUsageDescription` (QR scan), `NSLocalNetworkUsageDescription`, `NSBonjourServices` if used.
+- App Store Connect record: name, subtitle, description, privacy policy URL, support URL, category, screenshots.
+- TestFlight copy: beta description, what-to-test, feedback email, public link.
+- Copyright / seller: "Anomaly Innovations, Inc." → Lauren's entity or individual.
 
-- The remaining "OpenCode" strings in `en.ts` (36 total) and the other locales.
-  Most are product prose, such as the desktop menu `desktop.menu.app`.
-- External links to `opencode.ai`: `desktop-feedback` (`shell/errors/error.tsx:416`,
-  `home/projects/controller.tsx:171`, `titlebar.tsx:767`), docs
-  (`desktop-menu.ts:275`, `appearance.tsx:116`, `project-extensions.tsx:382`),
-  and `GO_URL` (`usage-exceeded-dialogs.tsx:19`). Decide per link whether to
-  keep upstream docs or point at a shuvcode page.
-- `theme_color`/`background_color` `#080808` in the manifest, if shuvcode
-  wants its own palette.
-- `apple-mobile-web-app-status-bar-style`, and a dedicated iOS launch image
-  (none exists today).
+Nice to have:
+- Theme/accent colours, haptics, widget/extension names if any.
+- Usage analytics/crash reporting destinations (theirs → ours or off).
 
-### Leave alone (sync-sensitive or not user-visible)
+Sync-sensitive (server side, in this repo):
+- Pairing contract above. Don't fork it, or Anomaly's app and ours both break.
+- `opencode pair` vs `shuvcode pair`: keep both binaries printing the same payload.
 
-- Package names `@opencode/app`, `@opencode/ui`, and so on, the placeholder
-  tokens `%OPENCODE_FAVICON%`, `oc-theme-preload.js`, and the
-  `opencode-app:icons` plugin name. They are internal, and renaming them would
-  conflict on every sync.
-- `packages/ui/src/theme/themes/oc-2.json` `"name": "OpenCode"`: a theme name,
-  not the product.
-- `packages/desktop/icons/{dev,beta}` content: the desktop app is still
-  branded OpenCode (`electron-builder.config.ts:221,239,258`). Desktop
-  branding was out of scope in `PLAN-fresh-v2-rewrite.md`.
-- `packages/console/**` and `packages/web/**` (opencode.ai's own site and
-  docs). The fork doesn't ship them.
+## 4. Phases
+0. Decide A/B/C (questions below). Nothing else starts until then.
+1. If A: document in README/AGENTS.md that Anomaly's TestFlight app works with `shuvcode pair --remote`. Add a contract test on `pairingLink`/`/api/pair` so sync can't silently break it. No branding changes are possible.
+2. If B/C: set up Apple Developer team, reserve bundle ID and scheme, create App Store Connect record. Lauren has to do this herself (paid account, 2FA, legal entity).
+3. Codebase: obtain source (B) or scaffold (C). The lowest-effort C is a WKWebView/Capacitor shell around `packages/app`, with native QR scan. It reuses the fork's existing branding overlay.
+4. Brand: apply the inventory in §3, with assets from Lauren.
+5. CI: GitHub Actions macOS job → `xcodebuild archive` → upload via App Store Connect API key, internal TestFlight on push to a release branch. Secrets are stored in the repo, not on the box.
+6. External TestFlight (needs Beta App Review), then optional App Store release.
 
-## Fork pattern to mirror
+## 5. PWA path still exists
+`shuvcode pair --remote` + Safari "Add to Home Screen" uses `packages/app`. Rebranding it (manifest name, title,
+`apple-mobile-web-app-title`, icons via `packages/app/vite.icons.ts`, pairing strings in `en.ts`) is a small,
+fork-owned change from the first draft. It's a cheap interim step, and it's the base for a C-style shell.
 
-The fork brands by overlay, not by rename. The CLI package and bin are
-`shuvcode` (`packages/cli/package.json`), XDG uses `app = "shuvcode"`, the
-TUI logo is a separate `packages/tui/src/shuv-logo.ts`, the default theme is
-`nightowl`, and the app's pairing copy says `shuvcode pair`. Desktop has no
-shuvcode branding yet, and there is no Android or other mobile target.
+## 6. Risks
+- Can't touch Anomaly's binary. Anything branded "shuvcode" in the App Store is a new app under a new team.
+- Trademark/confusion: shipping "OpenCode"-derived artwork or copy under our team could draw App Review "4.1 copycat" rejections. Use original artwork.
+- Pairing drift: upstream may change `/api/pair` or the QR payload alongside their app. Watch for it in sync PRs.
+- Two apps on one phone, both claiming `opencode://`. Use a distinct scheme.
+- Signing secrets and Apple account are sensitive. They need Lauren's own account and approval.
 
-## Approach
-
-Keep the diff small and isolated, so that sync conflicts land in files the fork
-already owns:
-
-1. Add `packages/app/brand.ts`, exporting `productName = "shuvcode"`, the
-   website URL, and an icon root.
-2. Add fork-owned icons under `packages/app/icons/shuvcode/` (ios 180, 192,
-   512, ico, maskable). Point `vite.icons.ts` at that directory. Don't
-   overwrite `packages/desktop/icons/**`, which upstream regenerates.
-3. Have `vite.icons.ts` (already a transform step) override `name` and
-   `short_name` in the emitted `site.webmanifest`, and replace `<title>` plus a
-   new `apple-mobile-web-app-title` in `transformIndexHtml`. The upstream
-   `manifest.json` and `index.html` then barely change.
-4. Use `brand.productName` in `app.tsx`, `session/route.tsx`, and the
-   connect-screen aria-label.
-5. Strings: edit `en.ts` for the user-visible lines. For the other locales,
-   either replace mechanically "OpenCode"→"shuvcode" in brand-only keys, or
-   let them fall back. A one-file sed script under `script/` keeps this
-   repeatable after each sync.
-6. Tests: one test asserting the built `site.webmanifest` and `index.html`
-   carry `shuvcode`, and that no emitted iOS icon equals the upstream bytes.
-   Add a hygiene grep that fails on `OpenCode` in a list of brand-only keys.
-
-## Phases
-
-1. **Decide.** Lauren answers the open questions, especially whether this is
-   only the PWA or a native app, and provides icon artwork.
-2. **PWA identity.** Make steps 1–4 and the icons, then verify by building the
-   app, serving it with `shuvcode pair --remote`, and doing Add to Home Screen on
-   an iPhone. Check the name, icon, title, splash colour, and connect screen.
-3. **Strings and links.** Make step 5 and settle the link decisions.
-4. **Guardrails.** Add the step 6 tests and hygiene, plus a line in
-   `AGENTS.md` (Shuvcode Fork) and the sync plans: "iOS/PWA brand overlay
-   lives in `packages/app/brand.ts` + `packages/app/icons/shuvcode`."
-5. **Optional, separate:** desktop branding, or a native iOS app.
-
-## Risks
-
-- **Sync friction:** `index.html`, `manifest.json`, `app.tsx`, and `en.ts`
-  change upstream often. The overlay keeps the fork's edits to one-line
-  imports. Expect locale conflicts if every locale is edited by hand.
-- **Home Screen caching:** iOS caches the Home Screen name and icon when the
-  app is added. Existing users must remove and re-add the shortcut. The
-  manifest `id: "/"` stays, so storage and pairing survive.
-- **Shared icons:** `vite.icons.ts` reads desktop icons. Changing those in
-  place would rebrand desktop as a side effect and fight upstream icon
-  updates.
-- **Native app (if wanted):** this needs an Apple Developer team, a new bundle
-  ID such as `dev.shuv.shuvcode`, and a new App Store record. There is no
-  existing opencode App Store app to take over. It also needs signing secrets
-  in CI, App Review, and a client codebase (fork a community client or build
-  one). That is a separate project, not a rebrand.
-
-## Open questions for Lauren
-
-1. Is the target the PWA from `shuvcode pair --remote` (today's iOS
-   experience), or a native App Store or TestFlight app?
-2. Icon artwork: is there a shuvcode mark? The TUI has only ASCII
-   (`shuv-logo.ts`).
-3. Display name casing: `shuvcode`, `Shuvcode`, or `ShuvCode`? The CLI uses
-   `shuvcode`, and the TUI Discord copy and AGENTS use "Shuvcode".
-4. Should About, docs, and feedback links stay on opencode.ai or move to
-   shuv.dev / GitHub?
-5. Should desktop branding come along in the same pass? It shares icon
-   plumbing.
-6. If native: which Apple team ID and bundle ID? Fork an existing community
-   client (for example `grapeot/opencode_ios_client`, which needs a licence
-   check), or build new?
+## 7. Open questions for Lauren
+1. Is "rebrand" option A (just use Anomaly's app with shuvcode), B (ask Anomaly), or C (our own native app)?
+2. Apple Developer account: personal or a company? Team ID? Who's the Account Holder?
+3. Bundle ID and URL scheme preference (e.g. `dev.shuv.shuvcode`, `shuvcode://`)?
+4. Do you have access to Anomaly's app source, or a relationship with Dax/Anomaly to ask for it?
+5. App Transfer from Anomaly: wanted at all? (Probably not, since it removes their app.)
+6. Artwork and the exact name casing (`shuvcode`)?
+7. Native (Swift) or a WebView shell around `packages/app`?
+8. Do the PWA rebrand now as an interim step?
