@@ -7,7 +7,7 @@ test("the prompt keeps a cursor style set on its textarea when the theme changes
   // Other app tests can leave a home draft in the process-wide stash.
   takeDraft(undefined)
   await using setup = await createAppFixture({
-    config: { animations: false, keybinds: { "theme.switch_mode": "f6" } },
+    config: { theme: { name: "opencode" }, animations: false, keybinds: { "theme.switch_mode": "f6" } },
   })
   await setup.ready
   await setup.waitForFrame((frame) => frame.includes("commands"))
