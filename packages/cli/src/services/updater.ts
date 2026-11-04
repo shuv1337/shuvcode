@@ -1,7 +1,7 @@
 import { Global } from "@opencode/util/global"
 import { AppProcess } from "@opencode/util/process"
 import { EffectFlock } from "@opencode/util/effect-flock"
-import { OPENCODE_CHANNEL, OPENCODE_LOCAL, OPENCODE_VERSION } from "../version"
+import { OPENCODE_ARTIFACT, OPENCODE_CHANNEL, OPENCODE_LOCAL, OPENCODE_VERSION } from "../version"
 import { Context, Duration, Effect, FileSystem, Layer, Ref } from "effect"
 import { ChildProcess } from "effect/process"
 import { parse, type ParseError } from "jsonc-parser"
@@ -335,7 +335,13 @@ const make = Effect.gen(function* () {
         "npm",
         "install",
         "--global",
-        ...(installedPackage && targetPackage !== installedPackage ? ["--force"] : []),
+        `--allow-scripts=${targetPackage}`,
+        ...((OPENCODE_ARTIFACT === "cli" &&
+          !installedPackage?.endsWith("-node") &&
+          !installedPackage?.endsWith("/cli-node")) ||
+        (installedPackage && targetPackage !== installedPackage)
+          ? ["--force"]
+          : []),
         target,
       ],
       pnpm: ["pnpm", "add", "--global", `--allow-build=${targetPackage}`, target],

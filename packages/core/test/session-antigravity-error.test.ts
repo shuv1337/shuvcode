@@ -47,7 +47,7 @@ for (const modelID of ["gemini-4-argon-high", "gemini-3.8-flash-high"] as const)
             model: Model.Ref.make({ providerID: Provider.ID.google, id: Model.ID.make(modelID) }),
           }
           const plugin = yield* Plugin.Service
-          const host = yield* PluginHost.make(plugin)
+          const host = yield* PluginHost.make(plugin, "test")
           let responsePhase = false
           yield* GoogleAntigravityPlugin.effect({
             ...host,

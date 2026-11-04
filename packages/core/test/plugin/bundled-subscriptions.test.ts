@@ -37,7 +37,7 @@ describe("bundled subscription providers", () => {
       const integration = yield* Integration.Service
       const provider = yield* Provider.Service
       const plugin = yield* Plugin.Service
-      const host = yield* PluginHost.make(plugin)
+      const host = yield* PluginHost.make(plugin, "test")
       for (const entry of ProviderPlugins) {
         // SAFETY: PluginTestLayer provides the services these plugins read. The assertion
         // only hides requirements this test effect's type does not list.
@@ -55,7 +55,7 @@ describe("bundled subscription providers", () => {
     Effect.gen(function* () {
       const integration = yield* Integration.Service
       const plugin = yield* Plugin.Service
-      const host = yield* PluginHost.make(plugin)
+      const host = yield* PluginHost.make(plugin, "test")
       for (const entry of required) {
         yield* entry.plugin.effect(host)
         expect((yield* integration.get(Integration.ID.make(entry.integration)))?.methods).toContainEqual(

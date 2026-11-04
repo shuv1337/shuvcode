@@ -47,6 +47,10 @@ export type ComposerEditorView = {
     stopping: Accessor<boolean>
     /** A send pressed while agents and models load, which goes through once they do. */
     held?: Accessor<boolean>
+    /** A send is held, or is preparing and handing off its draft; the submit button shows progress. */
+    busy?: Accessor<boolean>
+    /** False while a send, client command or quote is underway, so the composer cannot submit it twice. */
+    canSubmit?: Accessor<boolean>
     working?: Accessor<boolean>
     queue?: ComposerQueue
     quote?: {
@@ -641,6 +645,8 @@ export function createComposerEditor(input: {
     canSubmit() {
       if (input.view.submit.available?.() === false) return false
 
+      if (input.view.submit.canSubmit?.() === false) return false
+
       if (input.view.draftOnly) return false
 
       if (attachments?.pending().length) return false
@@ -745,14 +751,15 @@ export function createComposerEditor(input: {
       selection.addRange(range)
       target.dispatchEvent(new InputEvent("input", { bubbles: true, inputType: "insertFromPaste", data: normalized }))
     },
+    // The document's dragover owns the drag state. A dragleave fires on every move between the editor's own
+    // nodes, so clearing the state here made the dropzone flicker.
     onDragEnter(event: DragEvent) {
       event.preventDefault()
-      dispatch({ type: "drag.enter" })
     },
     onDragOver(event: DragEvent) {
       event.preventDefault()
     },
-    onDragLeave() {
+    clearDrag() {
       dispatch({ type: "drag.leave" })
     },
     onDrop(event: DragEvent) {

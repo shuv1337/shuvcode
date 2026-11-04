@@ -48,7 +48,7 @@ const normalOAuth = Credential.OAuth.make({
 })
 const addPlugin = Effect.fn(function* () {
   const plugin = yield* Plugin.Service
-  const host = yield* PluginHost.make(plugin)
+  const host = yield* PluginHost.make(plugin, "test")
   yield* GoogleAntigravityPlugin.effect(host)
 })
 const source = Effect.fn(function* () {
@@ -228,7 +228,7 @@ it.effect(
   () =>
     Effect.gen(function* () {
       const plugin = yield* Plugin.Service
-      const host = yield* PluginHost.make(plugin)
+      const host = yield* PluginHost.make(plugin, "test")
       const hooks = yield* PluginHooks.Service
       let resolutions = 0
       yield* GoogleAntigravityPlugin.effect({
@@ -318,7 +318,7 @@ it.effect("expired imported auth retains the login method while inference remain
 it.effect("Antigravity fails resolution and invalid request metadata without API key fallback", () =>
   Effect.gen(function* () {
     const plugin = yield* Plugin.Service
-    const host = yield* PluginHost.make(plugin)
+    const host = yield* PluginHost.make(plugin, "test")
     const hooks = yield* PluginHooks.Service
     let mode = "valid"
     yield* GoogleAntigravityPlugin.effect({

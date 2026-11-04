@@ -24,6 +24,7 @@ import { classifyProviderFailure } from "../provider-error.js"
 import { JsonObject, optionalArray, ProviderShared } from "./shared.js"
 import { BedrockAuth } from "./utils/bedrock-auth.js"
 import { BedrockCache } from "./utils/bedrock-cache.js"
+import { warnDropped } from "./utils/cache.js"
 import { BedrockMedia } from "./utils/bedrock-media.js"
 import { claudeVersion, supportsThinkingBlockBinding, THINKING_BINDING_BETA } from "./utils/claude-model.js"
 import { Lifecycle } from "./utils/lifecycle.js"
@@ -383,10 +384,7 @@ const lowerToolResult = Effect.fnUntraced(function* (
 // Keep Claude and Nova tool-result images inline; put other models' images beside the result.
 const keepToolImagesInline = (id: string) => id.includes("anthropic.claude-") || id.includes("amazon.nova-")
 
-const lowerMessages = Effect.fnUntraced(function* (
-  request: LLMRequest,
-  breakpoints: BedrockCache.Breakpoints,
-) {
+const lowerMessages = Effect.fnUntraced(function* (request: LLMRequest, breakpoints: BedrockCache.Breakpoints) {
   const messages: BedrockMessage[] = []
   const documentNames = new Set<string>()
   // Mistral can reject replay IDs even when they satisfy Converse's broader ID syntax.
@@ -418,8 +416,6 @@ const lowerMessages = Effect.fnUntraced(function* (
     if (message.role === "user") {
       const content: BedrockUserBlock[] = []
       for (const part of message.content) {
-        if (!ProviderShared.supportsContent(part, ["text", "media"]))
-          return yield* ProviderShared.unsupportedContent("Bedrock Converse", "user", ["text", "media"])
         if (part.type === "text") {
           content.push(...textWithCache(breakpoints, part.text, part.cache))
           continue
@@ -642,11 +638,7 @@ const fromRequest = Effect.fn("BedrockConverse.fromRequest")(function* (request:
   })()
   const system = lowerSystem(breakpoints, request.system)
   const messages = yield* lowerMessages(flattened.request, breakpoints)
-  if (breakpoints.dropped > 0) {
-    yield* Effect.logWarning(
-      `Bedrock Converse: dropped ${breakpoints.dropped} cache breakpoint(s); the API allows at most ${BedrockCache.BEDROCK_BREAKPOINT_CAP} per request.`,
-    )
-  }
+  yield* warnDropped(breakpoints, "Bedrock Converse", BedrockCache.BEDROCK_BREAKPOINT_CAP)
   const inferenceConfig = (() => {
     if (
       maxTokens === undefined &&

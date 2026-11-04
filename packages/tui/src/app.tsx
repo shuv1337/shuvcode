@@ -700,6 +700,7 @@ function App() {
         limit: 1,
         order: "desc",
         parentID: null,
+        archived: false,
         directory: location.directory,
       })
       .then((response) => {
