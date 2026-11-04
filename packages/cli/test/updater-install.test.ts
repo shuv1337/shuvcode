@@ -6,7 +6,7 @@ import { AppProcess } from "@opencode/util/process"
 import { expect, spyOn, test } from "bun:test"
 import { Effect, FileSystem, Layer, PlatformError, Stream } from "effect"
 import { OPENCODE_CHANNEL } from "../src/version"
-import { ChildProcess, ChildProcessSpawner } from "effect/process"
+import { ChildProcessSpawner } from "effect/process"
 import { existsSync, readdirSync, readFileSync } from "node:fs"
 import path from "node:path"
 import { Updater } from "../src/services/updater"
@@ -17,7 +17,10 @@ const it = testEffect(NodeServices.layer)
 declare const OPENCODE_CLI_NAME: string | undefined
 
 function fixture(
-  respond: (command: ChildProcess.StandardCommand) => Partial<AppProcess.RunResult> & {
+  respond: (command: {
+    readonly command: string
+    readonly args: ReadonlyArray<string>
+  }) => Partial<AppProcess.RunResult> & {
     error?: AppProcess.AppProcessError
   } = () => ({}),
   name = "shuvcode",
@@ -90,8 +93,9 @@ function fixture(
           run: (command) =>
             Effect.suspend(() => {
               if (command._tag !== "StandardCommand") return Effect.die("Unexpected piped install command")
-              commands.push([command.command, ...command.args])
-              const result = respond(command)
+              const args = command.args.map(String)
+              commands.push([command.command, ...args])
+              const result = respond({ command: command.command, args })
               if (result.error) return Effect.fail(result.error)
               return Effect.succeed({
                 command: command.command,
@@ -115,7 +119,10 @@ const windows = process.platform === "win32" ? it.live : it.live.skip
 const unix = process.platform === "win32" ? it.live.skip : it.live
 
 const installs = [
-  { method: "npm", command: ["npm", "install", "--global", "shuvcode@2.3.4-beta.1"] },
+  {
+    method: "npm",
+    command: ["npm", "install", "--global", "--allow-scripts=shuvcode", "--force", "shuvcode@2.3.4-beta.1"],
+  },
   {
     method: "pnpm",
     command: ["pnpm", "add", "--global", "--allow-build=shuvcode", "shuvcode@2.3.4-beta.1"],
@@ -398,7 +405,7 @@ if (typeof OPENCODE_CLI_NAME === "string" && OPENCODE_CLI_NAME === "shuvcode-nod
         ["pnpm", "list", "-g", "--depth=0", "shuvcode-node"],
         ["bun", "pm", "ls", "-g"],
         ["yarn", "global", "list"],
-        ["npm", "install", "--global", "shuvcode-node@2.3.4"],
+        ["npm", "install", "--global", "--allow-scripts=shuvcode-node", "shuvcode-node@2.3.4"],
         ["pnpm", "add", "--global", "--allow-build=shuvcode-node", "shuvcode-node@2.3.4"],
       ])
     }),

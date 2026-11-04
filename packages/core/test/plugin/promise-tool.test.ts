@@ -22,7 +22,7 @@ it.live("plugin activation exposes richFailures without reading the engine versi
       async setup(context) {
         seen.push(context.features?.richFailures)
       },
-    }).effect(yield* PluginHost.make(plugins))
+    }).effect(yield* PluginHost.make(plugins, "test"))
     expect(seen).toEqual([true])
   }),
 )
@@ -49,7 +49,7 @@ it.live("Promise tool executors receive interruption through their AbortSignal",
           }),
         )
       },
-    }).effect(yield* PluginHost.make(plugins))
+    }).effect(yield* PluginHost.make(plugins, "test"))
 
     const snapshot = yield* tools.snapshot()
     const fiber = yield* snapshot
@@ -107,7 +107,7 @@ it.live("Promise tool throws become tool failures", () =>
           })
         })
       },
-    }).effect(yield* PluginHost.make(plugins))
+    }).effect(yield* PluginHost.make(plugins, "test"))
 
     const snapshot = yield* tools.snapshot()
     const plain = yield* execute(snapshot, "plain")
@@ -144,7 +144,7 @@ it.live("Promise tools that rethrow a decline attach it to the tool failure", ()
           }),
         )
       },
-    }).effect(yield* PluginHost.make(plugins))
+    }).effect(yield* PluginHost.make(plugins, "test"))
 
     const exit = yield* execute(yield* tools.snapshot(), "guarded")
     expect(Option.getOrUndefined(Exit.findErrorOption(exit))?.error).toBe(declined)

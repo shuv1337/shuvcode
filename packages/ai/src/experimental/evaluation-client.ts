@@ -1,6 +1,6 @@
 import { Context, Effect, Layer } from "effect"
 import { RequestExecutor } from "../route/executor.js"
-import { AIError, InvalidProviderOutputError, mergeHttpOptions } from "../schema/index.js"
+import { AIError, InvalidProviderOutputError, mergeTransport } from "../schema/index.js"
 import { sanitizeSurrogates } from "../utils/sanitize.js"
 import {
   type EvaluationOptions,
@@ -36,7 +36,7 @@ export const layer: Layer.Layer<Service, never, RequestExecutor.Service> = Layer
               ...sanitizeSurrogates({
                 ...request,
                 model: undefined,
-                http: mergeHttpOptions(request.model.http, request.http),
+                http: mergeTransport({ http: request.model.http }, { http: request.http }).http,
               }),
               model: request.model,
             },

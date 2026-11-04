@@ -15,7 +15,7 @@ import { RequestExecutor } from "../route/executor.js"
 import { JsonObject, ProviderShared } from "../protocols/shared.js"
 import {
   AIError,
-  HttpOptions,
+  type HttpOptions,
   InvalidProviderOutputError,
   InvalidRequestError,
   ModelID,
@@ -126,7 +126,7 @@ export const model = <Options extends EvaluationOptions = EvaluationOptions>(cfg
             method: "POST",
             url: url.toString(),
             body,
-            headers: Headers.fromInput({ ...cfg.headers, ...req.http?.headers }),
+            headers: Headers.fromInput(cfg.headers),
           })
           const res = yield* send(
             HttpClientRequest.post(url).pipe(

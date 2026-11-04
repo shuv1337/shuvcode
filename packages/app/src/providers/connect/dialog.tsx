@@ -43,13 +43,8 @@ import { Persist, persisted } from "@/runtime/persistence/storage"
 import { Persistence } from "@/runtime/persistence/schema"
 import { Schema } from "effect"
 import type { FormAnswer, FormField, FormValue, IntegrationInfo } from "@opencode/client/promise"
-import {
-  CONSOLE_INTEGRATION,
-  connectMethods,
-  createProviderConnectionController,
-  providerFormDefaults,
-  type ProviderConnectMethod,
-} from "./controller"
+import { CONSOLE_INTEGRATION, createProviderConnectionController } from "./controller"
+import { connectMethods, providerFormDefaults, type ProviderConnectMethod } from "./machine"
 import { ConsoleAuthorization } from "./console"
 import { DialogChatGPTPlanWelcome } from "./chatgpt-welcome"
 import { authServerName, RemoteAuthNotice } from "./remote"
@@ -531,17 +526,18 @@ function ProviderConnection(props: {
   const showAccounts = () => !!props.accounts && !state.adding && accounts().length > 0
 
   const controller = createProviderConnectionController({
-    provider: () => integrationID,
-    directory,
+    provider: integrationID,
+    directory: initialDirectory,
     manual: () => !!props.accounts && accounts().length > 0,
     prepare: isConsole ? prepareConsoleCatalog : undefined,
     pollInterval: isConsole ? 500 : undefined,
-    onComplete: () => {
-      const method = controller.currentMethod()
-      props.onConnected?.(method?.type === "oauth" ? method.id : undefined)
+    onComplete: (method) => {
+      props.onConnected?.(method.type === "oauth" ? method.id : undefined)
       showConnected()
     },
   })
+
+  const view = controller.view
 
   function showConnected() {
     // The picker only lists the newest model per family by default, which hides most of
@@ -612,8 +608,8 @@ function ProviderConnection(props: {
 
   // The server loads the Console workspace's providers after the grant lands, so the first refresh
   // can still show only the free catalog. Poll briefly for the workspace providers before moving on.
-  async function prepareConsoleCatalog(active: () => boolean) {
-    if (controller.currentMethod()?.type === "key") return active()
+  async function prepareConsoleCatalog(method: ProviderConnectMethod, active: () => boolean) {
+    if (method.type === "key") return active()
 
     const loaded = () =>
       managedProviders() !== undefined || connectionProviders().some((provider) => provider.id !== "opencode")
@@ -646,7 +642,7 @@ function ProviderConnection(props: {
   const selectedModel = () => connectionModels().find((model) => modelKey(model) === state.selectedModel)
 
   const copyLink = async () => {
-    const url = controller.authorization()?.url
+    const url = view().authorization?.url
 
     if (!url) return
 
@@ -655,27 +651,23 @@ function ProviderConnection(props: {
       .then(() => true)
       .catch(() => false)
 
-    if (controller.authorization()?.url !== url) return
+    if (view().authorization?.url !== url) return
     setState({ copied, copyFailed: !copied })
   }
 
+  const attemptID = createMemo(() => view().authorization?.attemptID)
   createEffect(() => {
-    controller.authorization()?.attemptID
+    attemptID()
     setState({ copied: false, copyFailed: false })
   })
-  createEffect(() => {
-    const current = controller.auth.state()
-    props.onAuthorization(
-      controller.authorization() !== undefined && (current === "waiting" || current === "refreshing"),
-    )
-  })
+  createEffect(() => props.onAuthorization(view().authorizing))
 
   const provider = createMemo(() => ({
     id: props.provider,
     name:
       integrations.list().find((item) => item.id === props.provider)?.name ??
       providers.all().get(props.provider)?.name ??
-      controller.integration()?.name ??
+      view().integration?.name ??
       props.provider,
   }))
 
@@ -683,7 +675,7 @@ function ProviderConnection(props: {
     value.type === "key" ? (value.label ?? language.t("provider.connect.method.apiKey")) : value.label
 
   const code = createMemo(() => {
-    const authorization = controller.authorization()
+    const authorization = view().authorization
 
     if (!authorization) return
     const userCode = new URL(authorization.url).searchParams.get("user_code")
@@ -696,17 +688,12 @@ function ProviderConnection(props: {
     return instructions
   })
 
-  const consoleSignIn = () =>
-    isConsole &&
-    !state.noModels &&
-    controller.currentMethod()?.type === "oauth" &&
-    controller.auth.state() !== "error" &&
-    controller.authorization()?.mode === "auto"
+  const consoleSignIn = () => isConsole && !state.noModels && view().screen === "browser"
 
   createEffect(() => {
     if (showAccounts()) return props.onTitle(provider().name)
 
-    if (isConsole && controller.auth.state() === "error")
+    if (isConsole && view().status === "failed")
       return props.onTitle(language.t("provider.connect.opencode.errorTitle"))
 
     if (consoleSignIn())
@@ -716,7 +703,7 @@ function ProviderConnection(props: {
         ),
       )
 
-    if (props.provider === "anthropic" && controller.currentMethod()?.label?.toLowerCase().includes("max"))
+    if (props.provider === "anthropic" && view().method?.label?.toLowerCase().includes("max"))
       return props.onTitle(language.t("provider.connect.title.anthropicProMax"))
 
     props.onTitle(
@@ -728,7 +715,7 @@ function ProviderConnection(props: {
 
   // Asks one visible field at a time, like the TUI, so `when` conditions see every earlier answer.
   function AuthFormView() {
-    const method = controller.currentMethod()
+    const method = view().method
     const fields = method && method.type !== "command" ? (method.form ?? []) : []
     const hidden = providerFormDefaults(fields)
 
@@ -791,7 +778,7 @@ function ProviderConnection(props: {
       const index = fields.findIndex((item, i) => i > formStore.index && asked(item) && active(item, merged))
 
       if (index === -1) {
-        void controller.auth.select(controller.methodIndex()!, answer)
+        controller.answer(answer)
 
         return
       }
@@ -1113,33 +1100,30 @@ function ProviderConnection(props: {
   }
 
   const backToAccounts = () =>
-    !!props.accounts &&
-    state.adding &&
-    accounts().length > 0 &&
-    (state.direct || controller.methodIndex() === undefined)
+    !!props.accounts && state.adding && accounts().length > 0 && (state.direct || view().methodIndex === undefined)
 
-  const backToMethods = () => (isConsole || controller.methods().length > 1) && controller.methodIndex() !== undefined
+  const backToMethods = () => (isConsole || view().methods.length > 1) && view().methodIndex !== undefined
 
   createEffect(() => props.onStepBack(backToAccounts() || backToMethods()))
   onCleanup(() => props.onAccounts(false))
   createEffect(() =>
     props.onAccounts(
       showAccounts() &&
-        controller.methodIndex() === undefined &&
-        !(state.noModels && controller.auth.state() !== "error"),
+        view().methodIndex === undefined &&
+        !(state.noModels && view().status !== "failed"),
     ),
   )
 
   function goBack() {
     if (backToAccounts()) {
-      controller.auth.reset()
+      controller.back()
       setState({ adding: false, direct: false })
 
       return
     }
 
     if (backToMethods()) {
-      controller.auth.reset()
+      controller.back()
 
       return
     }
@@ -1152,13 +1136,13 @@ function ProviderConnection(props: {
   function MethodSelection() {
     return (
       <div class="flex flex-col">
-        <For each={controller.methods()}>
+        <For each={view().methods}>
           {(item, index) => (
             <button
               type="button"
               data-action="provider-connect-method"
               class="group flex h-9 w-full items-center gap-2 rounded-md px-3 text-left text-[13px] leading-5 tracking-[-0.04px] hover:bg-v2-overlay-simple-overlay-hover focus-visible:bg-v2-overlay-simple-overlay-hover focus-visible:outline-none"
-              onClick={() => void controller.auth.select(index())}
+              onClick={() => controller.select(index())}
             >
               <span class="font-[530] text-v2-text-text-base">{methodLabel(item)}</span>
             </button>
@@ -1171,7 +1155,7 @@ function ProviderConnection(props: {
   function CommandView() {
     return (
       <div class="flex flex-col gap-4 px-3 text-[13px] font-[440] leading-5 tracking-[-0.04px] text-v2-text-text-muted">
-        <Show when={controller.command()?.output.trim()}>
+        <Show when={view().commandOutput.trim()}>
           {(output) => (
             <pre
               data-component="provider-connect-command-output"
@@ -1201,49 +1185,43 @@ function ProviderConnection(props: {
         <div class="flex items-start gap-2 text-[13px] font-[440] leading-5 tracking-[-0.04px] text-v2-text-text-base">
           <Icon name="circle-ban-sign" size="small" class="mt-0.5 shrink-0 text-v2-state-fg-danger" />
           <span role="alert">
-            {isConsole
-              ? controller.auth.error()
-              : language.t("provider.connect.status.failed", { error: controller.auth.error() ?? "" })}
+            {isConsole ? view().error : language.t("provider.connect.status.failed", { error: view().error ?? "" })}
           </span>
         </div>
-        <Button variant={isConsole ? undefined : "neutral"} onClick={() => void controller.auth.retry()}>
+        <Button variant={isConsole ? undefined : "neutral"} onClick={() => controller.retry()}>
           {language.t(isConsole ? "provider.connect.console.retry" : "common.retry")}
         </Button>
       </div>
     )
   }
 
+  const entryError = () => {
+    const error = view().entryError
+
+    if (error?.type === "rejected") return error.message
+
+    if (!error) return
+
+    return language.t(
+      view().screen === "code" ? "provider.connect.oauth.code.required" : "provider.connect.apiKey.required",
+    )
+  }
+
+  const submitEntry = (event: SubmitEvent, name: string) => {
+    event.preventDefault()
+
+    if (!(event.currentTarget instanceof HTMLFormElement)) return
+    const value = new FormData(event.currentTarget).get(name)
+    controller.submit(value instanceof File || value === null ? "" : value)
+  }
+
   function ApiAuthView() {
     let apiKey: HTMLInputElement | undefined
     const errorID = createUniqueId()
 
-    const [formStore, setFormStore] = createStore<{
-      value: string
-      error?: string
-    }>({
-      value: "",
-    })
-
     onMount(() => {
       apiKey?.focus({ preventScroll: true })
     })
-
-    async function handleSubmit(e: SubmitEvent) {
-      e.preventDefault()
-
-      if (!(e.currentTarget instanceof HTMLFormElement)) return
-      const value = new FormData(e.currentTarget).get("apiKey")
-      const key = value instanceof File || value === null ? "" : value
-
-      if (!key.trim()) {
-        setFormStore("error", language.t("provider.connect.apiKey.required"))
-
-        return
-      }
-
-      setFormStore("error", undefined)
-      await controller.auth.connectKey(key)
-    }
 
     return (
       <div
@@ -1255,7 +1233,7 @@ function ProviderConnection(props: {
             ? language.t("provider.connect.console.serviceKeyDescription")
             : language.t("provider.connect.apiKey.description", { provider: provider().name })}
         </p>
-        <form onSubmit={handleSubmit} class="flex flex-col items-start gap-5 self-stretch">
+        <form onSubmit={(event) => submitEntry(event, "apiKey")} class="flex flex-col items-start gap-5 self-stretch">
           <label class="flex w-full flex-col gap-2 font-[530] leading-4 text-v2-text-text-base">
             {language.t("provider.connect.apiKey.label", { provider: provider().name })}
             <TextInput
@@ -1264,15 +1242,14 @@ function ProviderConnection(props: {
               name="apiKey"
               data-input="provider-api-key"
               placeholder={language.t("provider.connect.apiKey.placeholder")}
-              value={formStore.value}
-              invalid={formStore.error !== undefined}
-              aria-describedby={formStore.error ? errorID : undefined}
+              readOnly={view().submitting}
+              invalid={entryError() !== undefined}
+              aria-describedby={entryError() ? errorID : undefined}
               autocomplete="off"
               spellcheck={false}
-              onInput={(event) => setFormStore("value", event.currentTarget.value)}
             />
           </label>
-          <Show when={formStore.error}>
+          <Show when={entryError()}>
             {(error) => (
               <div id={errorID} role="alert" class="-mt-4 text-xs text-v2-state-fg-danger">
                 {error()}
@@ -1284,6 +1261,8 @@ function ProviderConnection(props: {
             variant="contrast"
             class={isConsole ? "!px-3" : undefined}
             data-action="provider-connect-submit"
+            disabled={view().submitting}
+            aria-busy={view().submitting}
           >
             {language.t("common.continue")}
           </Button>
@@ -1296,64 +1275,39 @@ function ProviderConnection(props: {
     let codeInput: HTMLInputElement | undefined
     const errorID = createUniqueId()
 
-    const [formStore, setFormStore] = createStore<{
-      value: string
-      error?: string
-    }>({
-      value: "",
-    })
-
     onMount(() => {
       codeInput?.focus({ preventScroll: true })
     })
 
-    async function handleSubmit(e: SubmitEvent) {
-      e.preventDefault()
-
-      if (!(e.currentTarget instanceof HTMLFormElement)) return
-      const value = new FormData(e.currentTarget).get("code")
-      const code = value instanceof File || value === null ? "" : value
-
-      if (!code.trim()) {
-        setFormStore("error", language.t("provider.connect.oauth.code.required"))
-
-        return
-      }
-
-      setFormStore("error", undefined)
-      setFormStore("error", await controller.auth.completeCode(code))
-    }
-
     return (
       <div class="flex flex-col gap-5 px-3 text-[13px] font-[440] leading-5 tracking-[-0.04px] text-v2-text-text-muted">
         <div>{language.t("provider.connect.oauth.code.description", { provider: provider().name })}</div>
-        <Button variant="neutral" icon="arrow-up-right" onClick={() => void controller.auth.open()}>
+        <Button variant="neutral" icon="arrow-up-right" onClick={() => controller.openBrowser()}>
           {language.t("provider.connect.oauth.openBrowser")}
         </Button>
-        <form onSubmit={handleSubmit} class="flex flex-col items-start gap-5 self-stretch">
+        <form onSubmit={(event) => submitEntry(event, "code")} class="flex flex-col items-start gap-5 self-stretch">
           <label class="flex w-full flex-col gap-2 font-[530] leading-4 text-v2-text-text-base">
-            {language.t("provider.connect.oauth.code.label", { method: controller.currentMethod()?.label ?? "" })}
+            {language.t("provider.connect.oauth.code.label", { method: view().method?.label ?? "" })}
             <TextInput
               ref={codeInput}
               class="!w-full"
               name="code"
               placeholder={language.t("provider.connect.oauth.code.placeholder")}
-              value={formStore.value}
-              invalid={formStore.error !== undefined}
-              aria-describedby={formStore.error ? errorID : undefined}
+              readOnly={view().submitting}
+              invalid={entryError() !== undefined}
+              aria-describedby={entryError() ? errorID : undefined}
               autocomplete="off"
               spellcheck={false}
-              onInput={(event) => setFormStore("value", event.currentTarget.value)}
             />
           </label>
-          <Show when={formStore.error}>
+          <Show when={entryError()}>
             {(error) => (
               <div id={errorID} role="alert" class="-mt-4 text-xs text-v2-state-fg-danger">
                 {error()}
               </div>
             )}
           </Show>
-          <Button type="submit" variant="contrast">
+          <Button type="submit" variant="contrast" disabled={view().submitting} aria-busy={view().submitting}>
             {language.t("common.continue")}
           </Button>
         </form>
@@ -1367,7 +1321,7 @@ function ProviderConnection(props: {
         <div>{language.t("provider.connect.oauth.auto.description", { provider: provider().name })}</div>
         <StatusRow>{language.t("provider.connect.status.waiting")}</StatusRow>
         <div class="flex flex-wrap items-center gap-2">
-          <Button variant="neutral" icon="arrow-up-right" onClick={() => void controller.auth.open()}>
+          <Button variant="neutral" icon="arrow-up-right" onClick={() => controller.openBrowser()}>
             {language.t("provider.connect.oauth.openBrowser")}
           </Button>
         </div>
@@ -1390,10 +1344,9 @@ function ProviderConnection(props: {
   const addAccount = () => {
     setState({ adding: true, direct: false, confirming: undefined })
 
-    // Like the TUI: a lone method starts directly, several show the method list.
-    if (controller.methods().length !== 1) return
+    if (view().methods.length !== 1) return
     setState("direct", true)
-    void controller.auth.select(0)
+    controller.select(0)
   }
 
   const activateAccount = async (account: ProviderAccount) => {
@@ -1532,7 +1485,7 @@ function ProviderConnection(props: {
           type="button"
           data-action="provider-account-add"
           class="flex h-7 w-full items-center gap-1.5 rounded-md ps-1.5 pe-2 text-start text-[13px] font-[440] leading-5 tracking-[-0.04px] text-v2-text-text-muted hover:bg-v2-overlay-simple-overlay-hover hover:text-v2-text-text-base focus-visible:bg-v2-overlay-simple-overlay-hover focus-visible:text-v2-text-text-base focus-visible:outline-none disabled:pointer-events-none"
-          disabled={state.switching !== undefined || controller.methods().length === 0}
+          disabled={state.switching !== undefined || view().methods.length === 0}
           onClick={addAccount}
         >
           <span class="flex size-4 shrink-0 items-center justify-center">
@@ -1565,9 +1518,9 @@ function ProviderConnection(props: {
             </Button>
           </Show>
           <Button
-            disabled={controller.auth.state() === "refreshing"}
-            aria-busy={controller.auth.state() === "refreshing"}
-            onClick={() => void controller.auth.refresh()}
+            disabled={view().status === "refreshing"}
+            aria-busy={view().status === "refreshing"}
+            onClick={() => controller.refresh()}
           >
             {language.t("provider.connect.console.refresh")}
           </Button>
@@ -1740,55 +1693,55 @@ function ProviderConnection(props: {
           </div>
         </Show>
         <Switch>
-          <Match when={state.noModels && controller.auth.state() !== "error"}>
+          <Match when={state.noModels && view().status !== "failed"}>
             <ConsoleNoModels />
           </Match>
           <Match when={consoleSignIn()}>
             <div class="px-3">
               <ConsoleAuthorization
                 code={code()}
-                browserFailed={controller.browserFailed()}
+                browserFailed={view().browserFailed}
                 copied={state.copied}
                 copyFailed={state.copyFailed}
                 onCopy={() => void copyLink()}
-                onOpen={() => void controller.auth.open()}
+                onOpen={() => controller.openBrowser()}
               />
             </div>
           </Match>
-          <Match when={showAccounts() && controller.methodIndex() === undefined}>
+          <Match when={showAccounts() && view().methodIndex === undefined}>
             <AccountsView />
           </Match>
-          <Match when={controller.busy()}>
+          <Match when={view().screen === "busy"}>
             <div class="px-3">
               <StatusRow>{language.t("provider.connect.status.inProgress")}</StatusRow>
             </div>
           </Match>
-          <Match when={controller.methodIndex() === undefined && controller.methods().length === 0}>
+          <Match when={view().screen === "environment-only"}>
             <div class="px-3 text-[13px] font-[440] leading-5 tracking-[-0.04px] text-v2-text-text-muted">
               {language.t("dialog.provider.environmentOnly")}
             </div>
           </Match>
-          <Match when={controller.methodIndex() === undefined}>
+          <Match when={view().screen === "methods"}>
             <MethodSelection />
           </Match>
-          <Match when={controller.auth.state() === "form"}>
+          <Match when={view().screen === "form"}>
             <AuthFormView />
           </Match>
-          <Match when={controller.auth.state() === "error"}>
+          <Match when={view().screen === "failed"}>
             <div class="px-3">
               <ErrorRow />
             </div>
           </Match>
-          <Match when={controller.currentMethod()?.type === "command"}>
+          <Match when={view().screen === "command"}>
             <CommandView />
           </Match>
-          <Match when={controller.currentMethod()?.type === "key"}>
+          <Match when={view().screen === "key"}>
             <ApiAuthView />
           </Match>
-          <Match when={controller.authorization()?.mode === "code"}>
+          <Match when={view().screen === "code"}>
             <OAuthCodeView />
           </Match>
-          <Match when={controller.authorization()?.mode === "auto"}>
+          <Match when={view().screen === "browser"}>
             <OAuthAutoView />
           </Match>
         </Switch>

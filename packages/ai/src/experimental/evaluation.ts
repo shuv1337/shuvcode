@@ -2,12 +2,19 @@ import { Effect, Schema } from "effect"
 import { tryRequest } from "../media-model.js"
 import {
   AIError,
-  HttpOptions,
+  type HttpOptions,
   ModelID,
   ProviderID,
   ProviderMetadata,
+  RequestEncoding,
   Usage,
 } from "../schema/index.js"
+
+const HttpOptionsSchema = Schema.Struct({
+  query: Schema.optional(Schema.Record(Schema.String, Schema.String)),
+  body: Schema.optional(Schema.Record(Schema.String, Schema.Unknown)),
+  encoding: Schema.optional(RequestEncoding),
+})
 import { EvaluationClient, Service, type Execute } from "./evaluation-client.js"
 
 export const EvaluationInput = Schema.Union([Schema.String, Schema.JsonObject, Schema.Array(Schema.Json)])
@@ -162,7 +169,7 @@ export class EvaluationRequest extends Schema.Class<EvaluationRequest>("Evaluati
   state: EvaluationInput,
   questions: EvaluationQuestions,
   options: Schema.optional(Schema.Record(Schema.String, Schema.Unknown)),
-  http: Schema.optional(HttpOptions),
+  http: Schema.optional(HttpOptionsSchema),
 }) {
   declare protected readonly _EvaluationRequest: void
 }
@@ -185,7 +192,7 @@ export type EvaluationRequestInput<
   readonly model: Model
   readonly questions: Questions
   readonly options?: NoInfer<EvaluationModelOptions<Model>>
-  readonly http?: HttpOptions.Input
+  readonly http?: HttpOptions
 }
 
 export class EvaluationRounding extends Schema.Class<EvaluationRounding>("Evaluation.Rounding")({
@@ -214,7 +221,7 @@ export function request(input: EvaluationRequest | EvaluationRequestInput) {
   if (input instanceof EvaluationRequest) return input
   return new EvaluationRequest({
     ...input,
-    http: HttpOptions.make(input.http),
+    http: input.http,
   })
 }
 

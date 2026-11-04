@@ -2,6 +2,7 @@ import { afterEach, describe, expect, mock, spyOn, test } from "bun:test"
 import {
   OpenCode,
   type EventSubscribeOutput,
+  type ExperimentalJobListOutput,
   type SessionMessageAssistantTool,
   type SessionMessageInfo,
 } from "@opencode/client/promise"
@@ -217,6 +218,7 @@ async function run(input: {
   renderToolError?: (part: SessionMessageAssistantTool) => Promise<void>
   messages?: (inboxID: string) => SessionMessageInfo[]
   wait?: () => Promise<void>
+  jobs?: () => ExperimentalJobListOutput
   terminalDelay?: number
 }) {
   const sdk = OpenCode.make({ baseUrl: "https://opencode.test" })
@@ -254,6 +256,12 @@ async function run(input: {
   spyOn(sdk.session.form, "cancel").mockImplementation((request) => (input.cancel?.(request) ?? ok(undefined)) as never)
   let promptID = "msg_prompt"
   spyOn(sdk.experimental.session, "wait").mockImplementation(() => input.wait?.() ?? wait.promise)
+  spyOn(sdk.experimental.job, "list").mockImplementation(() => ok(input.jobs?.() ?? []) as never)
+  spyOn(sdk.session, "active").mockImplementation(() => ok({}) as never)
+  spyOn(sdk.session.inbox, "list").mockImplementation(() => ok([]) as never)
+  spyOn(sdk.session, "get").mockImplementation(
+    ({ sessionID }) => ok({ id: sessionID, parentID: sessionID === "ses_child" ? "ses_1" : undefined }) as never,
+  )
   spyOn(sdk.message, "list").mockImplementation(() =>
     ok({
       data: input.messages?.(promptID) ?? [{ id: promptID, type: "user", text: "hello", time: { created: 1 } }],
@@ -311,6 +319,21 @@ afterEach(() => {
   mock.restore()
   process.exitCode = 0
 })
+
+function shellJob(id: string, command: string): ExperimentalJobListOutput[number] {
+  return { kind: "shell", id, sessionID: "ses_1", status: "running", shellID: id, command, time: { started: 1 } }
+}
+
+const subagentJob: ExperimentalJobListOutput[number] = {
+  kind: "subagent",
+  id: "ses_child",
+  sessionID: "ses_1",
+  status: "running",
+  childSessionID: "ses_child",
+  agent: "explore",
+  description: "scan repo",
+  time: { started: 1 },
+}
 
 describe("runNonInteractivePrompt", () => {
   test("keeps formatted tool output and compact tool metadata in JSON", async () => {
@@ -631,5 +654,54 @@ describe("runNonInteractivePrompt", () => {
     expect(output.stderr).toMatch(
       /^Connecting event stream\.\.\.\nAdmitting prompt \(session ses_1, request msg_[^)]+\)\.\.\.\n$/,
     )
+  })
+
+  test("waits for a background shell and streams the reply it wakes", async () => {
+    const lists: ExperimentalJobListOutput[] = [[shellJob("sh_train", "python train.py")], []]
+    const output = await capture({
+      format: "json",
+      jobs: () => lists.shift() ?? [],
+      turn: (id) => [
+        prompted(id),
+        settled(),
+        {
+          id: "evt_text",
+          created: 2,
+          type: "session.text.ended",
+          durable: { aggregateID: "ses_1", seq: 2, version: 1 },
+          data: { sessionID: "ses_1", assistantMessageID: "msg_2", ordinal: 0, text: "Training finished." },
+        },
+        settled(),
+      ],
+    })
+    expect(output.stdout).toContain("Training finished.")
+  })
+
+  test("waits for a background shell owned by a subagent", async () => {
+    const lists: ExperimentalJobListOutput[] = [[{ ...shellJob("sh_test", "pytest"), sessionID: "ses_child" }], []]
+    const sdk = await run({
+      jobs: () => lists.shift() ?? [],
+      turn: (id) => [
+        prompted(id),
+        settled(),
+        {
+          id: "evt_child_done",
+          created: 2,
+          type: "session.execution.succeeded",
+          durable: { aggregateID: "ses_child", seq: 1, version: 1 },
+          data: { sessionID: "ses_child" },
+        },
+      ],
+    })
+    expect(sdk.experimental.job.list).toHaveBeenCalledWith({ sessionID: "ses_1", descendants: true })
+    expect(lists).toEqual([])
+  })
+
+  test("Ctrl-C while waiting on a background subagent exits with code 130", async () => {
+    const running = run({ turn: (id) => [prompted(id), settled()], jobs: () => [subagentJob] })
+    expect(await Promise.race([running.then(() => "exited"), Bun.sleep(20).then(() => "waiting")])).toBe("waiting")
+    process.emit("SIGINT")
+    await running
+    expect(process.exitCode).toBe(130)
   })
 })
