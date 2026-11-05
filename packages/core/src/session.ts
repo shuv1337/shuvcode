@@ -302,7 +302,9 @@ const layer = Layer.effect(
         if (Option.isNone(agents)) return undefined
         return (yield* agents.value.get(agent))?.permissions
       }).pipe(instances.provide(parent), Effect.orDie)
-      return withAgentDenies(parent.permissions, rules)
+      // A named parent agent that cannot be resolved is the same state permission checks treat as
+      // missing: deny every action. An undefined ruleset is that miss; an empty ruleset is a real record.
+      return withAgentDenies(parent.permissions, rules ?? missingParentAgent)
     })
 
     const result = Service.of({
@@ -595,6 +597,8 @@ export const node: LayerNode.Provider<Service, never, typeof Node.tags.values.gl
     App.node,
   ],
 })
+
+const missingParentAgent: Permission.Ruleset = [{ action: "*", resource: "*", effect: "deny" }]
 
 function withAgentDenies(session: Permission.Ruleset | undefined, agent: Permission.Ruleset | undefined) {
   const inherited = session ?? []

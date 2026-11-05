@@ -2,21 +2,29 @@ import { describe, expect } from "bun:test"
 import path from "path"
 import { Cause, Effect, Exit } from "effect"
 import { Agent } from "@opencode/core/agent"
+import { Bus } from "@opencode/core/bus"
+import { Database } from "@opencode/core/database/database"
 import { AppNodeBuilder } from "@opencode/core/effect/app-node-builder"
 import { Watcher } from "@opencode/core/filesystem/watcher"
+import { Location } from "@opencode/core/location"
 import { LocationServiceMap } from "@opencode/core/location-service-map"
 import { Permission } from "@opencode/core/permission"
+import { Project } from "@opencode/core/project"
 import { Plugin } from "@opencode/core/plugin"
 import { AbsolutePath } from "@opencode/core/schema"
 import { Session } from "@opencode/core/session"
 import { SessionExecution } from "@opencode/core/session/execution"
+import { SessionProjector } from "@opencode/core/session/projector"
+import { SessionStore } from "@opencode/core/session/store"
 import { Tool } from "@opencode/core/tool"
 import { LayerNode } from "@opencode/util/effect/layer-node"
 import { Global } from "@opencode/util/global"
 import { tempGlobalLayer } from "./fixture/global"
 import { offlineModels } from "./fixture/models"
+import { promptLocationNode } from "./fixture/prompt-location"
 import { tmpdirScoped } from "./fixture/tmpdir"
 import { testEffect } from "./lib/effect"
+import { globalProjectNode } from "./lib/project"
 
 const plan = Agent.ID.make("plan")
 const general = Agent.ID.make("general")
@@ -25,6 +33,21 @@ const locked = Agent.ID.make("locked")
 const guard = Agent.ID.make("guard")
 const outside = "src/app.ts"
 const granted = "/granted/file.ts"
+
+const location = Location.Ref.make({ directory: AbsolutePath.make("/project") })
+const allowAll: Permission.Ruleset = [{ action: "*", resource: "*", effect: "allow" }]
+
+const absent = testEffect(
+  AppNodeBuilder.build(
+    LayerNode.group([Database.node, Bus.node, SessionProjector.node, SessionStore.node, Session.node]),
+    [
+      Bus.node.replace(Bus.configured({ persist: true })),
+      Project.node.replace(globalProjectNode),
+      LocationServiceMap.node.replace(promptLocationNode),
+      SessionExecution.node.replace(SessionExecution.noopLayer),
+    ],
+  ),
+)
 
 const it = testEffect(
   AppNodeBuilder.build(LayerNode.group([Session.node, LocationServiceMap.node]), [
@@ -207,6 +230,55 @@ describe("child sessions inherit parent agent denies", () => {
       expect(
         yield* permission.allows({ sessionID: readOnly.id, agent: locked, action: "read", resources: ["README.md"] }),
       ).toBe(true)
+    }),
+  )
+
+  it.live("denies a child whose parent agent is not in the registry and leaves an agentless parent unchanged", () =>
+    Effect.gen(function* () {
+      const tmp = yield* tmpdirScoped()
+      const directory = { directory: AbsolutePath.make(tmp.path) }
+      const sessions = yield* Session.Service
+      const plain = yield* sessions.create({
+        location: directory,
+        permissions: [{ action: "read", resource: "secrets/*", effect: "deny" }],
+      })
+      const plainChild = yield* sessions.create({ parentID: plain.id, agent: general, title: "agentless" })
+      const missing = yield* sessions.create({
+        location: directory,
+        agent: Agent.ID.make("missing-parent"),
+      })
+      const child = yield* sessions.create({ parentID: missing.id, agent: general, title: "missing" })
+      const locations = yield* LocationServiceMap.Service
+      const permission = yield* Permission.Service.pipe(Effect.provide(locations.get(plain.location)))
+      yield* Plugin.Service.use((plugins) => plugins.awaitActivation).pipe(
+        Effect.provide(locations.get(plain.location)),
+      )
+
+      expect(
+        yield* permission.allows({ sessionID: plainChild.id, agent: general, action: "edit", resources: [outside] }),
+      ).toBe(true)
+      yield* expectDenied(permission, {
+        sessionID: plainChild.id,
+        agent: general,
+        action: "read",
+        resources: ["secrets/key"],
+      })
+      yield* expectDenied(permission, { sessionID: child.id, agent: general, action: "edit", resources: [outside] })
+      yield* expectDenied(permission, { sessionID: child.id, agent: general, action: "read", resources: ["README.md"] })
+    }),
+  )
+
+  absent.effect("denies a child when the parent location has no agent service", () =>
+    Effect.gen(function* () {
+      const sessions = yield* Session.Service
+      const named = yield* sessions.create({ location, agent: Agent.ID.make("plan") })
+      const child = yield* sessions.create({ parentID: named.id, agent: general })
+      const plain = yield* sessions.create({ location })
+      const plainChild = yield* sessions.create({ parentID: plain.id, agent: general })
+
+      expect(Permission.evaluate("edit", outside, allowAll, child.permissions ?? []).effect).toBe("deny")
+      expect(Permission.evaluate("read", "README.md", allowAll, child.permissions ?? []).effect).toBe("deny")
+      expect(Permission.evaluate("edit", outside, allowAll, plainChild.permissions ?? []).effect).toBe("allow")
     }),
   )
 })
