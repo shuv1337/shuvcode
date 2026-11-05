@@ -19,8 +19,9 @@ import { SessionMessageTable, SubagentOperationTable } from "./session/sql.js"
 import { SessionBlob } from "./session/blob.js"
 import { SessionSchema } from "./session/schema.js"
 import { RelativePath } from "./schema.js"
-import { Agent } from "@opencode/schema/agent"
+import { Agent } from "./agent.js"
 import type { Permission } from "@opencode/schema/permission"
+import { Plugin } from "./plugin/service.js"
 import { App } from "./app.js"
 import { Slug } from "./util/slug.js"
 import path from "path"
@@ -289,6 +290,21 @@ const layer = Layer.effect(
     const isDurableSessionEvent = (item: Bus.LogItem): item is SessionEvent.DurableEvent =>
       Object.hasOwn(SessionEvent.Durable.cases, item.type)
 
+    // Agent denies live on the agent, not the session. Read them from the parent location after
+    // plugins activate: recovery can create a child while a cold location is still starting, and
+    // the caller's context may be a different registry than the parent's.
+    const inheritedPermissions = Effect.fnUntraced(function* (parent: SessionSchema.Info) {
+      const agent = parent.agent
+      if (agent === undefined) return parent.permissions
+      const rules = yield* Effect.gen(function* () {
+        yield* Plugin.awaitActivation
+        const agents = yield* Effect.serviceOption(Agent.Service)
+        if (Option.isNone(agents)) return undefined
+        return (yield* agents.value.get(agent))?.permissions
+      }).pipe(instances.provide(parent), Effect.orDie)
+      return withAgentDenies(parent.permissions, rules)
+    })
+
     const result = Service.of({
       create: Effect.fn("Session.create")(function* (input) {
         const sessionID = input.id ?? SessionSchema.ID.create()
@@ -315,8 +331,9 @@ const layer = Layer.effect(
               agent: input.agent,
               // Children inherit metadata and permissions the way they inherit
               // location, so host policies that read them treat the family uniformly.
+              // An explicit ruleset replaces that inheritance, including parent-agent denies.
               metadata: input.metadata ?? parent?.metadata,
-              permissions: input.permissions ?? parent?.permissions,
+              permissions: input.permissions ?? (parent ? yield* inheritedPermissions(parent) : undefined),
               model: input.model,
             },
             { location },
@@ -578,3 +595,20 @@ export const node: LayerNode.Provider<Service, never, typeof Node.tags.values.gl
     App.node,
   ],
 })
+
+function withAgentDenies(session: Permission.Ruleset | undefined, agent: Permission.Ruleset | undefined) {
+  const inherited = session ?? []
+  // Only deny rules move. Session permissions are evaluated after the child agent's rules, and
+  // these denies are appended after the inherited session rules, so a copied allow or ask would
+  // be last and could grant something the child or the session had already refused. A later allow
+  // on the parent, such as Plan's plan-directory edit, stays on the parent for the same reason.
+  const extra = (agent ?? []).filter(
+    (deny) =>
+      deny.effect === "deny" &&
+      !inherited.some(
+        (rule) => rule.action === deny.action && rule.resource === deny.resource && rule.effect === deny.effect,
+      ),
+  )
+  if (extra.length === 0) return session
+  return [...inherited, ...extra]
+}
