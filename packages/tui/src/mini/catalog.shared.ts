@@ -33,6 +33,7 @@ function runAgent(input: CurrentAgent): RunAgent {
     id: input.id,
     name: input.name,
     description: input.description,
+    color: input.color,
     mode: input.mode,
     hidden: input.hidden,
   }

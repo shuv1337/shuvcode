@@ -553,6 +553,8 @@ describe("ConfigNormalize", () => {
           todo: true,
           background_compaction: true,
           media_blob: true,
+          part_rows: true,
+          codemode_vm: true,
           image_generate: { model: "openai/gpt-image-2" },
           subagent_depth: 0,
           jev: true,
@@ -566,6 +568,8 @@ describe("ConfigNormalize", () => {
         todo: true,
         background_compaction: true,
         media_blob: true,
+        part_rows: true,
+        codemode_vm: true,
         image_generate: { model: { providerID: "openai", model: "gpt-image-2" } },
         subagent_depth: 0,
         location_idle_timeout: "7200000 millis",
@@ -598,6 +602,24 @@ describe("ConfigNormalize", () => {
         ["invalid", ["experimental", "image_generate"]],
       ])
     }
+  })
+
+  test("normalizes every registered flag as a boolean", () => {
+    const result = normalized({ experimental: { todo: true, media_blob: false, schedules: "yes" } })
+    expect(result.encoded.experimental).toEqual({ todo: true, media_blob: false })
+    expect(result.diagnostics.map((item) => [item.kind, item.path])).toEqual([
+      ["invalid", ["experimental", "schedules"]],
+    ])
+  })
+
+  test("passes experimental.all_flags through as a boolean", () => {
+    expect(normalized({ experimental: { all_flags: true } }).encoded.experimental).toEqual({ all_flags: true })
+    expect(normalized({ experimental: { all_flags: false } }).encoded.experimental).toEqual({ all_flags: false })
+    const invalid = normalized({ experimental: { all_flags: "yes" } })
+    expect(invalid.encoded.experimental).toBeUndefined()
+    expect(invalid.diagnostics.map((item) => [item.kind, item.path])).toEqual([
+      ["invalid", ["experimental", "all_flags"]],
+    ])
   })
 
   test("never emits experimental policies", () => {
