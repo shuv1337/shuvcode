@@ -14,6 +14,7 @@ test("Home and End navigate a subagent transcript", async () => {
     tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
     time: { created: 0, updated: 0 },
   }
+  const parent = { ...session, id: "ses_parent", parentID: undefined, title: "Parent" }
   const messages = Array.from({ length: 20 }, (_, index) => ({
     id: `message-${index}`,
     type: "user",
@@ -28,6 +29,8 @@ test("Home and End navigate a subagent transcript", async () => {
     fetch: (url) => {
       if (url.pathname === "/api/session") return json({ data: [session], cursor: {} })
       if (url.pathname === `/api/session/${session.id}`) return json({ data: session })
+      // Session family permissions resolve the subagent's root session.
+      if (url.pathname === `/api/session/${parent.id}`) return json({ data: parent })
       if (url.pathname === `/api/session/${session.id}/message`)
         return json({ data: messages.toReversed(), cursor: {} })
       if (url.pathname === `/api/session/${session.id}/inbox`) return json({ data: [] })
