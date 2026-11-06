@@ -281,8 +281,9 @@ Internal imports stay `@opencode/*`.
 - Workspace bin is `bin/shuvcode.mjs`, a one-line shim over
   `script/launcher.mjs`; published packages ship the launcher as
   `bin/launcher.mjs`.
-- `packages/cli` self-imports moved to `shuvcode/vite-host` and
-  `shuvcode/run` (package self-reference follows the package name).
+- `packages/cli` self-imports moved to `shuvcode/vite-host` (package
+  self-reference follows the package name). Upstream removed the `./run`
+  export with the V1 bridge in `a950fa2741`, so there is no `shuvcode/run`.
 - User-facing command hints (`shuvcode service set …`, `shuvcode models`,
   exit splash resume line, ACP terminal-auth) follow the bin. Product
   strings elsewhere ("OpenCode" in TUI copy) were left alone.
