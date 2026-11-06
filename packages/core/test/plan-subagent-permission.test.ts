@@ -14,6 +14,7 @@ import { Plugin } from "@opencode/core/plugin"
 import { AbsolutePath } from "@opencode/core/schema"
 import { Session } from "@opencode/core/session"
 import { SessionExecution } from "@opencode/core/session/execution"
+import { SessionMessage } from "@opencode/core/session/message"
 import { SessionProjector } from "@opencode/core/session/projector"
 import { SessionStore } from "@opencode/core/session/store"
 import { Tool } from "@opencode/core/tool"
@@ -24,6 +25,7 @@ import { offlineModels } from "./fixture/models"
 import { promptLocationNode } from "./fixture/prompt-location"
 import { tmpdirScoped } from "./fixture/tmpdir"
 import { testEffect } from "./lib/effect"
+import { executeTool } from "./lib/tool"
 import { globalProjectNode } from "./lib/project"
 
 const plan = Agent.ID.make("plan")
@@ -230,6 +232,42 @@ describe("child sessions inherit parent agent denies", () => {
       expect(
         yield* permission.allows({ sessionID: readOnly.id, agent: locked, action: "read", resources: ["README.md"] }),
       ).toBe(true)
+    }),
+  )
+
+  it.live("keeps a child from moving its session past a parent agent's external_directory deny", () =>
+    Effect.gen(function* () {
+      const tmp = yield* tmpdirScoped()
+      const elsewhere = yield* tmpdirScoped()
+      const sessions = yield* Session.Service
+      const parent = yield* sessions.create({ location: { directory: AbsolutePath.make(tmp.path) }, agent: guard })
+      const locations = yield* LocationServiceMap.Service
+      const provide = locations.get(parent.location)
+      yield* Plugin.Service.use((plugins) => plugins.awaitActivation).pipe(Effect.provide(provide))
+      const agents = yield* Agent.Service.pipe(Effect.provide(provide))
+      const tools = yield* Tool.Service.pipe(Effect.provide(provide))
+      yield* agents.transform((editor) => {
+        editor.update(guard, (agent) => {
+          agent.mode = "primary"
+          agent.permissions.push({ action: "external_directory", resource: "*", effect: "deny" })
+        })
+      })
+
+      const child = yield* sessions.create({ parentID: parent.id, agent: general, title: "general" })
+      const moved = yield* executeTool(tools, {
+        sessionID: child.id,
+        agent: general,
+        messageID: SessionMessage.ID.create(),
+        call: {
+          type: "tool-call",
+          id: "call-move-out",
+          name: "execute",
+          input: { code: `return await tools.opencode.session_move(${JSON.stringify({ directory: elsewhere.path })})` },
+        },
+      })
+      expect(moved).toMatchObject({ metadata: { error: true } })
+      expect((yield* sessions.get(child.id)).location.directory).toBe(AbsolutePath.make(tmp.path))
+      expect(yield* sessions.inbox(child.id)).toEqual([])
     }),
   )
 

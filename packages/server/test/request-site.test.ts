@@ -45,6 +45,8 @@ it.live("rejects API navigations and calls from other sites while other clients 
     expect(yield* status(read, cors("oc://renderer"))).toBe(200)
     expect(yield* status(read, cors("http://localhost:3000"))).toBe(200)
     expect(yield* status(read, cors("https://example.com"))).toBe(403)
+    expect(yield* status(read, cors("http://localhost.example.com:4919"))).toBe(403)
+    expect(yield* status(read, cors("https://app.opencode.ai.example.com"))).toBe(403)
     expect(yield* status("/api/path", cors("null"), "POST")).toBe(403)
     expect(
       yield* status(
