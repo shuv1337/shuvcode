@@ -46,13 +46,9 @@ pii:packages/app/src/shell/routes/routes.tsx
 pii:packages/app/src/shell/shell.tsx
 pii:packages/app/src/shell/titlebar/inbox-model.ts
 pii:packages/app/src/shell/titlebar/recently-closed-tabs-menu.tsx
-pii:packages/app/src/shell/titlebar/sidebar-organized.tsx
-pii:packages/app/src/shell/titlebar/sidebar-sessions.ts
 pii:packages/stories/mocks/gui-plugins/ssh.tsx
-# Synthetic home directory in an upstream story fixture.
-pii:packages/app/src/components-lab/dialog-story-runtime.tsx
-# Upstream site files from anomalyco/opencode#62209, kept as upstream wrote them.
-# source-logo.ts has an upstream developer's worktree path in a code comment.
-pii:services/site/src/lib/source-logo.ts
-# press-media.sh loops over single-value lists on purpose (SC2043).
-shellcheck:services/site/script/press-media.sh
+# The same aliases as exact tokens, for files that import them after the baseline.
+text:/home/projects
+text:/home/sessions
+# Synthetic home directory in an upstream story fixture (components-lab/dialog-story-runtime.tsx).
+text:/Users/alex

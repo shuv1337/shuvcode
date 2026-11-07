@@ -6,6 +6,7 @@
 set -euo pipefail
 
 videos=public/product-videos
+set=locked
 # The stills come from the real-straight films, archived with the other panning cuts (Nov 3 2026)
 # next to the checkout; the films and posters come from the "locked" set.
 stills=${PRESS_STILLS_DIR:-../../../../archive/product-videos/real-straight}
@@ -41,10 +42,8 @@ for slug in desktop mobile terminal sdk; do
       "$out/frames/$slug-frame-$index.jpg"
     thumb "$out/frames/$slug-frame-$index.jpg" "$slug-frame-$index" 960
   done
-  for set in locked; do
-    thumb "$videos/$set/$slug-landscape.jpg" "$slug-$set-landscape" 960
-    thumb "$videos/$set/$slug-portrait.jpg" "$slug-$set-portrait" 640
-  done
+  thumb "$videos/$set/$slug-landscape.jpg" "$slug-$set-landscape" 960
+  thumb "$videos/$set/$slug-portrait.jpg" "$slug-$set-portrait" 640
   for clip in 1 2 3; do
     thumb "$videos/features/$slug-$clip.jpg" "$slug-feature-$clip" 960
   done
@@ -54,12 +53,10 @@ for slug in desktop mobile terminal sdk; do
   root="$staging/opencode-$slug"
   mkdir -p "$root/images" "$root/videos"
   cp "$out"/frames/"$slug"-frame-*.jpg "$root/images/"
-  for set in locked; do
-    name=film
-    for aspect in landscape portrait; do
-      cp "$videos/$set/$slug-$aspect.jpg" "$root/images/$slug-$name-$aspect.jpg"
-      cp "$videos/$set/$slug-$aspect.mp4" "$root/videos/$slug-$name-$aspect.mp4"
-    done
+  name=film
+  for aspect in landscape portrait; do
+    cp "$videos/$set/$slug-$aspect.jpg" "$root/images/$slug-$name-$aspect.jpg"
+    cp "$videos/$set/$slug-$aspect.mp4" "$root/videos/$slug-$name-$aspect.mp4"
   done
   for clip in 1 2 3; do
     cp "$videos/features/$slug-$clip.jpg" "$root/images/$slug-feature-$clip.jpg"

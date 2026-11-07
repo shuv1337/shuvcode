@@ -4,7 +4,7 @@ import { forHumansRows } from "./source-logo-nav"
 // The comment at the top of every page's source: the wordmark with a drop shadow (▓ open, █ code,
 // ░ shadow), then pointers for people and agents, each section's rows on a ├── / └── tree under its
 // title. Concept 1 "Manifest", option 13, list style 2, from
-// /Users/davidhill/.local/share/opencode/worktree/012780/source-concepts. It must not contain "--".
+// source-concepts. It must not contain "--".
 // The build line under the tagline, from src/lib/build-stamp.json (script/build-stamp.ts, run by the
 // build and dev scripts). A glob, so a checkout that never ran the script still renders. FOR HUMANS
 // starts with the main nav, from the nav data (source-logo-nav.ts), so it follows the header.
