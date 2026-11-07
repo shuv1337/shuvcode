@@ -97,7 +97,7 @@ const crossSiteCall = (origin: string) => ({
 const servers = {
   ServerProcess: Effect.fnUntraced(function* (directory: string) {
     const server = yield* startServer(path.join(directory, "config"))
-    return (url: string, init: RequestInit) => fetch(server.base + url, init)
+    return { origin: server.base, send: (url: string, init: RequestInit) => fetch(server.base + url, init) }
   }),
   ServerFetch: Effect.fnUntraced(function* (directory: string) {
     const handler = yield* ServerFetch.make({
@@ -108,28 +108,36 @@ const servers = {
       fs: { filewatcher: false },
       models: { fetch: false },
     })
-    return (url: string, init: RequestInit) => handler(new Request(`http://opencode.local${url}`, init))
+    return {
+      origin: "http://opencode.local",
+      send: (url: string, init: RequestInit) => handler(new Request(`http://opencode.local${url}`, init)),
+    }
   }),
 }
 
 const client = Effect.fnUntraced(function* (start: (typeof servers)[keyof typeof servers]) {
   const tmp = yield* tmpdirScoped()
   yield* Effect.promise(() => fs.writeFile(path.join(tmp.path, "secret.txt"), "TOP-SECRET"))
-  const send = yield* start(tmp.path)
+  const server = yield* start(tmp.path)
   const call = (url: string, headers: Record<string, string>, init: RequestInit = {}) =>
     Effect.promise(async () => {
-      const response = await send(url, { ...init, headers: { ...auth, ...headers } })
+      const response = await server.send(url, { ...init, headers: { ...auth, ...headers } })
       return { url, status: response.status, leaked: (await response.text()).includes("TOP-SECRET") }
     })
   return {
+    origin: server.origin,
     query: `?${new URLSearchParams({ "location[directory]": tmp.path })}`,
-    send,
+    send: server.send,
     call,
-    create: (url: string, headers: Record<string, string>) =>
-      call(url, headers, { method: "POST", body: JSON.stringify({ title: url }) }),
-    titles: Effect.promise(async () => {
-      const body: { data: Array<{ title: string }> } = await (await send("/api/session", { headers: auth })).json()
-      return body.data.map((session) => session.title).toSorted()
+    create: (url: string, headers: Record<string, string>, title = url) =>
+      call(url, headers, { method: "POST", body: JSON.stringify({ title }) }),
+    sessions: Effect.promise(async () => {
+      const body: { data: Array<{ id: string; title: string }> } = await (
+        await server.send("/api/session", { headers: auth })
+      ).json()
+      return body.data
+        .map((session) => ({ id: session.id, title: session.title }))
+        .toSorted((a, b) => (a.title < b.title ? -1 : 1))
     }),
   }
 })
@@ -149,14 +157,43 @@ for (const [name, start] of Object.entries(servers)) {
     }),
   )
 
-  it.live(`${name} rejects cross-site writes under every spelling and creates no session`, () =>
+  it.live(`${name} rejects cross-site writes under every spelling and leaves the session list unchanged`, () =>
     Effect.gen(function* () {
       const api = yield* client(start)
-      const responses = yield* Effect.forEach(writes, (url) => api.create(url, crossSiteCall("https://example.com")))
-      expect({ responses, sessions: yield* api.titles }).toEqual({
-        responses: writes.map((url) => ({ url, status: 403, leaked: false })),
-        sessions: [],
+      yield* api.create("/api/session", { "content-type": "application/json" }, "existing")
+      const before = yield* api.sessions
+      const existing = readPrefixes.slice(0, 4).map((prefix) => `${prefix}/session/${before[0].id}`)
+      const crossSite = crossSiteCall("https://example.com")
+      const responses = [
+        ...(yield* Effect.forEach(writes, (url) => api.create(url, crossSite))),
+        ...(yield* Effect.forEach(existing, (url) =>
+          api.call(url, crossSite, { method: "PATCH", body: JSON.stringify({ title: "changed" }) }),
+        )),
+        ...(yield* Effect.forEach(existing, (url) => api.call(url, crossSite, { method: "DELETE" }))),
+      ]
+      expect({ responses, sessions: yield* api.sessions }).toEqual({
+        responses: [...writes, ...existing, ...existing].map((url) => ({ url, status: 403, leaked: false })),
+        sessions: before,
       })
+    }),
+  )
+
+  it.live(`${name} keeps normal /api reads and writes from native clients and the same origin`, () =>
+    Effect.gen(function* () {
+      const api = yield* client(start)
+      const json = { "content-type": "application/json" }
+      const sameOrigin = { "sec-fetch-site": "same-origin", "sec-fetch-mode": "cors", origin: api.origin, ...json }
+      const read = `/api/fs/read/secret.txt${api.query}`
+      expect(yield* api.call(read, {})).toMatchObject({ status: 200, leaked: true })
+      expect(yield* api.call(read, sameOrigin)).toMatchObject({ status: 200, leaked: true })
+      expect(yield* api.create("/api/session", json, "native")).toMatchObject({ status: 200 })
+      expect(yield* api.create("/api/session", sameOrigin, "same-origin")).toMatchObject({ status: 200 })
+      const created = yield* api.sessions
+      expect(created.map((session) => session.title)).toEqual(["native", "same-origin"])
+      const update = { method: "PATCH", body: JSON.stringify({ title: "renamed" }) }
+      expect(yield* api.call(`/api/session/${created[0].id}`, sameOrigin, update)).toMatchObject({ status: 204 })
+      expect(yield* api.call(`/api/session/${created[1].id}`, {}, { method: "DELETE" })).toMatchObject({ status: 204 })
+      expect(yield* api.sessions).toEqual([{ id: created[0].id, title: "renamed" }])
     }),
   )
 
@@ -174,7 +211,7 @@ for (const [name, start] of Object.entries(servers)) {
       expect(yield* api.create("/%61pi/Session", crossSiteCall("https://app.opencode.ai"))).toMatchObject({
         status: 200,
       })
-      expect(yield* api.titles).toEqual(["/%61pi/Session", "/API/session"])
+      expect((yield* api.sessions).map((session) => session.title)).toEqual(["/%61pi/Session", "/API/session"])
 
       const artifact = yield* Effect.promise(() =>
         api
