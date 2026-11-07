@@ -1,11 +1,19 @@
 export * as RequestSite from "./request-site"
 
 import { Effect } from "effect"
-import { HttpMiddleware, HttpServerRequest, HttpServerResponse } from "effect/http"
+import { FindMyWay, HttpMiddleware, HttpServerRequest, HttpServerResponse } from "effect/http"
 import { type CorsOptions, isAllowedRequestOrigin } from "./cors"
 
+// The router's own matcher with `HttpRouter`'s default configuration, so a path counts as API exactly when routing
+// would send it there: case-folded, percent-decoded, and with duplicate and trailing slashes ignored. A path the
+// router cannot decode matches nothing here and nothing there. Every path is looked up under one method, so the
+// request's method cannot change the answer.
+const apiPaths = FindMyWay.make<"api" | "artifact-view">()
+apiPaths.on("GET", "/api", "api")
+apiPaths.on("GET", "/api/*", "api")
 // Artifact pages render in sandboxed frames, so their own requests come from an opaque origin.
-const ARTIFACT_VIEW = /^\/api\/experimental\/artifacts\/[^/]+\/view(\/|$)/
+apiPaths.on("GET", "/api/experimental/artifacts/:artifactID/view", "artifact-view")
+apiPaths.on("GET", "/api/experimental/artifacts/:artifactID/view/*", "artifact-view")
 
 /**
  * API routes are called by scripts and native clients, not opened as pages from other sites. Browsers label requests
@@ -15,9 +23,7 @@ const ARTIFACT_VIEW = /^\/api\/experimental\/artifacts\/[^/]+\/view(\/|$)/
 export function rejected(request: HttpServerRequest.HttpServerRequest, options?: CorsOptions) {
   const site = request.headers["sec-fetch-site"]
   if (site !== "cross-site" && site !== "same-site") return false
-  const pathname = new URL(request.url, "http://localhost").pathname
-  if (pathname !== "/api" && !pathname.startsWith("/api/")) return false
-  if (ARTIFACT_VIEW.test(pathname)) return false
+  if (apiPaths.find("GET", request.url)?.handler !== "api") return false
   if (request.headers["sec-fetch-mode"] === "navigate") return true
   const origin = request.headers.origin
   return origin !== undefined && !isAllowedRequestOrigin(origin, request.headers.host, options)
