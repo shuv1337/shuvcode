@@ -1,7 +1,7 @@
 {
   "$schema": "https://json.schemastore.org/package.json",
   "name": "shuvcode",
-  "version": "2.2.5-shuv.1",
+  "version": "2.2.6-shuv.1",
   "type": "module",
   "license": "MIT",
   "bin": {
@@ -12,7 +12,6 @@
   ],
   "exports": {
     "./vite-host": "./dev/host.js",
-    "./run": "./src/run/index.ts",
     "./server-process": "./src/server-process.ts"
   },
   "scripts": {

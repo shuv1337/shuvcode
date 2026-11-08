@@ -302,6 +302,9 @@ async function start(options: { stall?: string; body?: boolean; duration?: numbe
         })
       }
       if (url.pathname.endsWith("/form") || url.pathname.endsWith("/permission")) return Response.json({ data: [] })
+      if (route === "GET /api/experimental/job" || route === `GET /api/session/${sessionID}/inbox`)
+        return Response.json({ data: [] })
+      if (route === "GET /api/session/active") return Response.json({ data: {} })
       if (request.method === "POST" || request.method === "PATCH") return new Response(null, { status: 204 })
       return new Response("unexpected fixture request", { status: 500 })
     },

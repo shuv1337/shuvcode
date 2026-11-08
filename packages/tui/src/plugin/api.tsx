@@ -26,6 +26,7 @@ import { DialogConfirm } from "../ui/dialog-confirm"
 import { DialogPrompt } from "../ui/dialog-prompt"
 import { DialogSelect } from "../ui/dialog-select"
 import { useDialog } from "../ui/dialog"
+import { PluginBoundary } from "./render"
 import { useToast } from "../ui/toast"
 import { useAttention } from "../context/attention"
 import { useStorage } from "../context/storage"
@@ -120,7 +121,11 @@ export function createPluginContext(input: {
   const provide = (render: () => JSX.Element) => (
     <PluginContextProvider value={context}>{render()}</PluginContextProvider>
   )
-  const dialogApi = createDialogApi(host.dialog, provide)
+  const dialogApi = createDialogApi(host.dialog, (render) => (
+    <PluginBoundary id={input.id} where="dialog" onCrash={() => host.dialog.clear()}>
+      {provide(render)}
+    </PluginBoundary>
+  ))
   const toastApi: Toast = {
     show(options) {
       const toast = {
