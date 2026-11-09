@@ -7,15 +7,19 @@
 - New upstream pin: `a5fda7ee1347eb3bb1227724e0ad8cdc091ad7e3` (140 commits).
 - Latest upstream v2 tag checked with `git ls-remote --tags upstream 'v2.*'`: `v2.2.6`, `dc2ffcf8bf26f9e669b6aa22b95f50e12be15e06`; no newer v2 tag.
 - Main checkout left untouched (pre-existing untracked `packages/posts/`, `services/www/`).
+- Completion fetch: `upstream/dev` advanced to `20c056d84249fe29be7244ff4f9e0aad044c4799`; the frozen upstream pin is unchanged.
+- Combined fork base: `51cede01da` ([#478](https://github.com/shuv1337/shuvcode/pull/478)), merged normally in `de46a5bacec2008616e703102c6e425d8a1d177f`. No rebase or history rewrite; `packages/claude-plugin` is byte-for-byte equal to #478's merged tree.
 
 ## Pre-merge fork branch inventory
 
 Local `integration-v2` and refreshed `origin/integration-v2` both equal the base above. Inventory uses both AGENTS.md commands, excludes upstream refs, and groups local/remote refs of the same name. Each tip, first-parent unique commits, merge-base diff path/stat summary and fork PR status were inspected. Ancestry alone overstates missing work: many refs predate the fresh-V2 rewrite or rebased/squashed merges. A merged historical PR is evidence of its original landing, not a claim its old implementation belongs in current V2.
 
-No branch is merged or deleted. Historical/closed work without a current equivalent is deliberately parked under its named work reference, not silently discarded or reintroduced. `PLAN-fresh-v2-rewrite.md` controls the old V1/V2 overlay selection. No additional missing-fix reconciliation was identified. The parallel Claude CLI-identity work is explicitly reserved for its separate PR, then a merge of `origin/integration-v2` and re-verification here.
+No branch is merged or deleted. Historical/closed work without a current equivalent is deliberately parked under its named work reference, not silently discarded or reintroduced. `PLAN-fresh-v2-rewrite.md` controls the old V1/V2 overlay selection. No additional missing-fix reconciliation was identified. The parallel Claude CLI-identity work landed separately as #478 and was then merged here, as requested. Validation below covers the combined tree, not the superseded pre-#478 runs.
 
 | Refs | Tip / unique work | PR status | Disposition |
 |---|---|---|---|
+| `fix/claude-cli-identity`, `origin/fix/claude-cli-identity` | `30cd850abc` Claude CLI identity | #478 MERGED | Landed as `51cede01da`; included by normal merge `de46a5bace`. No additional package edits. |
+| `sync/upstream-dev-20261109` | This sync | Current work | Preserved as this PR; not another missing-fix branch to merge. |
 | `183-docker-self-hosted-deployments` | a562aca4c2 2025-12-21 fix: restore ghostty-opentui dependency lost in upstream merge | #184 MERGED | Previously landed via #184; historical/rebased ref preserved. No old tree re-import. |
 | `191-merge`, `origin/191-merge` | 54580871d1 2025-12-23 fix: update sst.desktop.config.ts to deploy packages/app instead of packages/desktop | #198 MERGED | Previously landed via #198; historical/rebased ref preserved. No old tree re-import. |
 | `197-consolidate-ask-tool-implementations`, `origin/197-consolidate-ask-tool-implementations` | 5392b8c8dc 2025-12-23 docs: add implementation plan for ask tool consolidation | #201 MERGED | Previously landed via #201; historical/rebased ref preserved. No old tree re-import. |

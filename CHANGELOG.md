@@ -23,6 +23,7 @@ Shuvcode sync of upstream `dev` at `a5fda7ee1347eb3bb1227724e0ad8cdc091ad7e3`: 1
 
 ### Fork and security
 
+- Include [Shuvcode #478](https://github.com/shuv1337/shuvcode/pull/478): Claude subscription requests follow the installed Claude CLI identity, with the checked-in fallback when no CLI is available.
 - Preserve Shuvcode identity, npm updates, guarded CLI publishing, bundled provider/UI plugins, hidden Claude Agent filtering, run deadlines, parent-agent deny inheritance and redirect guards.
 - Release resolution honors the checked-in `2.2.6-shuv.2` minimum even while npm's latest tag trails the source tree.
 - The router-matched cross-site path guard from `4bb0ded8a7` is unchanged. #477's R2-F1 absolute-form request-target bypass remains unresolved; this sync does not claim to fix it. R2-F2 (bare versions accepted on explicit `next`/`beta` releases) also remains deferred.
