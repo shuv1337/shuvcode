@@ -23,6 +23,7 @@ Shuvcode sync of upstream `dev` at `a5fda7ee1347eb3bb1227724e0ad8cdc091ad7e3`: 1
 
 ### Fork and security
 
+- For users signed in to OpenCode Console with watches enabled, a successful `gh pr create` or `git push` to GitHub automatically creates a watch, and outside events—including third-party comments and reviews—can wake the session and resume runs. Upstream limits these wakes to 5 per 10 minutes and 20 per prompt, and fences outside text as information only. ([#62662](https://github.com/anomalyco/opencode/pull/62662), [#62924](https://github.com/anomalyco/opencode/pull/62924))
 - Include [Shuvcode #478](https://github.com/shuv1337/shuvcode/pull/478): Claude subscription requests follow the installed Claude CLI identity, with the checked-in fallback when no CLI is available.
 - Preserve Shuvcode identity, npm updates, guarded CLI publishing, bundled provider/UI plugins, hidden Claude Agent filtering, run deadlines, parent-agent deny inheritance and redirect guards.
 - Release resolution honors the checked-in `2.2.6-shuv.2` minimum even while npm's latest tag trails the source tree.
