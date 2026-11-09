@@ -3,6 +3,7 @@ import { Service } from "@opencode/client/effect/service"
 import { isHiddenProvider } from "@opencode/util/hidden-provider"
 import { Effect } from "effect"
 import { ServerConnection } from "../../../services/server-connection"
+import { waitForPlugins } from "../../../services/plugin-startup"
 
 export const location = { directory: process.cwd() }
 
@@ -16,8 +17,7 @@ export function request<A>(run: (signal: AbortSignal) => Promise<A>) {
 }
 
 export const loadIntegrations = Effect.fn("cli.auth.integrations")(function* (client: OpenCodeClient) {
-  // The model endpoint is the existing public readiness boundary for the initial plugin generation.
-  yield* request((signal) => client.model.default({ location }, { signal }))
+  yield* waitForPlugins(client, location.directory)
   return yield* request((signal) => client.integration.list({ location }, { signal })).pipe(
     Effect.map((response) =>
       response.data
