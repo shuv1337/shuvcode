@@ -273,4 +273,4 @@ Final full app suite on `d201eed3fa`: **755 passed, 0 failed**, five workers, no
 
 Before the e2e fixture correction, full runs produced 754/755 and 753/755. Both hit the focus race fixed above; the second also missed the mobile touch-tab reorder. That unchanged mobile case passed 10/10 targeted repeats on both this tree and the `51cede01da` archive. Its intermittent failure's root cause is not established; the test was not weakened or changed.
 
-Local raw logs and failure artifacts are retained under `/home/shuv/.cache/agent-ws/shuvcode-sync-finish-20261109/`. The standalone e2e compiler check is distinct from the passing canonical/CI typechecks. Dedicated service-worker/component suites, live provider calls, non-Linux execution and new security mutations were not run.
+Local raw logs and failure artifacts are retained under `~/.cache/agent-ws/shuvcode-sync-finish-20261109/`. The standalone e2e compiler check is distinct from the passing canonical/CI typechecks. Dedicated service-worker/component suites, live provider calls, non-Linux execution and new security mutations were not run.

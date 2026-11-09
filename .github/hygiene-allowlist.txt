@@ -35,6 +35,7 @@ pii:services/www/src/docs/content/cli/config.mdx
 pii:services/www/src/docs/content/plugins.mdx
 # Synthetic home directories in upstream documentation examples.
 text:/home/me
+text:/Users/me
 text:/Users/username
 # `@/home/<segment>` module aliases. Scoped to the files that import them.
 pii:packages/app/src/home/projects/view.tsx
