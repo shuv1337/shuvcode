@@ -50,6 +50,10 @@ export function withRunSetupDeadlines(client: OpenCodeClient) {
       get: (input, options) =>
         runSetupRequest("Looking up location", (signal) => client.location.get(input, { ...options, signal }), options),
     },
+    worktree: {
+      ...client.worktree,
+      create: bounded("Creating worktree", client.worktree.create),
+    },
     model: {
       ...client.model,
       default: (input, options) =>

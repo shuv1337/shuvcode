@@ -23,6 +23,8 @@ describe("isolated run setup", () => {
 
   const stalls = [
     { route: "GET /api/location", phase: "Looking up location", args: [] },
+    { route: "GET /api/location", phase: "Looking up location", args: ["--worktree"] },
+    { route: "POST /api/worktree", phase: "Creating worktree", args: ["--worktree", "fixture"] },
     { route: "POST /api/session", phase: "Creating session", args: [] },
     { route: `GET /api/session/${sessionID}`, phase: "Resolving session", args: ["--session", sessionID] },
     { route: "GET /api/session", phase: "Looking up sessions", args: ["--continue"] },
@@ -39,7 +41,7 @@ describe("isolated run setup", () => {
   ]
   for (const stall of stalls) {
     test(
-      `${stall.phase} aborts without retrying or replacing the session`,
+      `${stall.phase}${stall.args.includes("--worktree") ? " with --worktree" : ""} aborts without retrying or replacing the session`,
       async () => {
         const fixture = await start({ stall: stall.route })
         try {
