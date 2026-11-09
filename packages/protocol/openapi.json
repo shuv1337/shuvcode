@@ -10143,6 +10143,7 @@
                     "session.tool.input.delta",
                     "session.tool.input.ended",
                     "session.tool.called",
+                    "session.tool.subagent.prepared",
                     "session.tool.progress",
                     "session.tool.success",
                     "session.tool.failed",
@@ -10158,6 +10159,7 @@
                     "reference.updated",
                     "permission.asked",
                     "permission.replied",
+                    "permission.cancelled",
                     "plugin.updated",
                     "project.updated",
                     "worktree.updated",
@@ -10252,6 +10254,7 @@
                           "session.tool.input.delta",
                           "session.tool.input.ended",
                           "session.tool.called",
+                          "session.tool.subagent.prepared",
                           "session.tool.progress",
                           "session.tool.success",
                           "session.tool.failed",
@@ -10267,6 +10270,7 @@
                           "reference.updated",
                           "permission.asked",
                           "permission.replied",
+                          "permission.cancelled",
                           "plugin.updated",
                           "project.updated",
                           "worktree.updated",
@@ -22951,6 +22955,9 @@
             "$ref": "#/components/schemas/session.tool.called"
           },
           {
+            "$ref": "#/components/schemas/session.tool.subagent.prepared"
+          },
+          {
             "$ref": "#/components/schemas/session.tool.success"
           },
           {
@@ -25466,6 +25473,9 @@
             "$ref": "#/components/schemas/session.tool.called"
           },
           {
+            "$ref": "#/components/schemas/session.tool.subagent.prepared"
+          },
+          {
             "$ref": "#/components/schemas/session.tool.progress"
           },
           {
@@ -25509,6 +25519,9 @@
           },
           {
             "$ref": "#/components/schemas/permission.replied"
+          },
+          {
+            "$ref": "#/components/schemas/permission.cancelled"
           },
           {
             "$ref": "#/components/schemas/plugin.updated"
@@ -26764,6 +26777,42 @@
               }
             },
             "required": ["id", "sessionID", "action", "resources"],
+            "additionalProperties": false
+          }
+        },
+        "required": ["id", "created", "type", "data"],
+        "additionalProperties": false
+      },
+      "permission.cancelled": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/Event.ID"
+          },
+          "created": {
+            "type": "number"
+          },
+          "metadata": {
+            "type": "object"
+          },
+          "type": {
+            "type": "string",
+            "enum": ["permission.cancelled"]
+          },
+          "location": {
+            "$ref": "#/components/schemas/Location.Ref"
+          },
+          "data": {
+            "type": "object",
+            "properties": {
+              "sessionID": {
+                "$ref": "#/components/schemas/Session.ID"
+              },
+              "requestID": {
+                "$ref": "#/components/schemas/Permission.ID"
+              }
+            },
+            "required": ["sessionID", "requestID"],
             "additionalProperties": false
           }
         },
@@ -29977,6 +30026,83 @@
           }
         },
         "required": ["id", "created", "type", "data"],
+        "additionalProperties": false
+      },
+      "session.tool.subagent.prepared": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/Event.ID"
+          },
+          "created": {
+            "type": "number"
+          },
+          "metadata": {
+            "type": "object"
+          },
+          "type": {
+            "type": "string",
+            "enum": ["session.tool.subagent.prepared"]
+          },
+          "durable": {
+            "type": "object",
+            "properties": {
+              "aggregateID": {
+                "type": "string"
+              },
+              "seq": {
+                "$ref": "#/components/schemas/Event.Seq"
+              },
+              "version": {
+                "$ref": "#/components/schemas/Event.VersionEncoded_c77c5abcb68d"
+              }
+            },
+            "required": ["aggregateID", "seq", "version"],
+            "additionalProperties": false
+          },
+          "location": {
+            "$ref": "#/components/schemas/Location.Ref"
+          },
+          "data": {
+            "type": "object",
+            "properties": {
+              "sessionID": {
+                "$ref": "#/components/schemas/Session.ID"
+              },
+              "assistantMessageID": {
+                "$ref": "#/components/schemas/Session.Message.ID"
+              },
+              "id": {
+                "type": "string"
+              },
+              "recovery": {
+                "type": "object",
+                "properties": {
+                  "childSessionID": {
+                    "$ref": "#/components/schemas/Session.ID"
+                  },
+                  "inboxID": {
+                    "$ref": "#/components/schemas/Session.Message.ID"
+                  },
+                  "inputDigest": {
+                    "type": "string"
+                  },
+                  "agent": {
+                    "$ref": "#/components/schemas/Agent.ID"
+                  },
+                  "model": {
+                    "$ref": "#/components/schemas/Model.Ref"
+                  }
+                },
+                "required": ["childSessionID", "inboxID", "inputDigest", "agent"],
+                "additionalProperties": false
+              }
+            },
+            "required": ["sessionID", "assistantMessageID", "id", "recovery"],
+            "additionalProperties": false
+          }
+        },
+        "required": ["id", "created", "type", "durable", "data"],
         "additionalProperties": false
       },
       "session.tool.success": {
