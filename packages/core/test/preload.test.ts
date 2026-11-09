@@ -13,13 +13,15 @@ describe("Core test environment", () => {
     expect(home).toBeDefined()
     if (!home) return
 
-    expect(os.homedir()).toBe(home)
+    // The runner isolates HOME/TMPDIR; the preload creates fresh app roots within TMPDIR.
+    expect(process.env.HOME).toBe(os.homedir())
+    expect(home).toStartWith(path.join(os.tmpdir(), "shuvcode-test-"))
     expect(Global.Path.home).toBe(home)
     expect(Global.Path.config).toBe(path.join(home, ".config", "shuvcode"))
     expect(Global.Path.data).toBe(path.join(home, ".local", "share", "shuvcode"))
     expect(Global.Path.cache).toBe(path.join(home, ".cache", "shuvcode"))
     expect(Global.Path.state).toBe(path.join(home, ".local", "state", "shuvcode"))
-    expect(os.tmpdir()).toBe(path.join(home, "tmp"))
+    expect(os.tmpdir()).toBe(path.join(os.homedir(), "tmp"))
     expect(process.env.OPENCODE_CONFIG_DIR).toBe(Global.Path.config)
     expect(process.env.OPENCODE_CONFIG).toBeUndefined()
     expect(process.env.OPENCODE_CONFIG_CONTENT).toBeUndefined()

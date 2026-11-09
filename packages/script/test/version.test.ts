@@ -271,6 +271,14 @@ describe("nextForkVersion", () => {
     expect(nextForkVersion({ base: "2.0.3", published: "2.0.3-shuv.17" })).toBe("2.0.3-shuv.18")
   })
 
+  test("honors the checked-in release when npm latest is behind", () => {
+    expect(nextForkVersion({ base: "2.2.6", published: "2.2.5-shuv.2", minimum: "2.2.6-shuv.2" })).toBe("2.2.6-shuv.2")
+    expect(nextForkVersion({ base: "2.2.6", minimum: "2.2.6-shuv.2" })).toBe("2.2.6-shuv.2")
+    expect(nextForkVersion({ base: "2.2.6", published: "2.2.6-shuv.2", minimum: "2.2.6-shuv.2" })).toBe("2.2.6-shuv.3")
+    expect(() => nextForkVersion({ base: "2.2.6", minimum: "2.2.6" })).toThrow("Invalid minimum fork version")
+    expect(() => nextForkVersion({ base: "2.2.6", minimum: "2.2.5-shuv.2" })).toThrow("Invalid minimum fork version")
+  })
+
   test("never produces a bare upstream version", () => {
     expect(nextForkVersion({ base: "2.0.3", published: "2.0.3" })).toBe("2.0.3-shuv.1")
   })

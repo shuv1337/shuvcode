@@ -1,0 +1,276 @@
+# Upstream dev sync — 2.2.6-shuv.2
+
+## Frozen inputs
+
+- Fork base: `6a581a34c564da7c93cc8a1b19060c49811cafa9` (`origin/integration-v2`, #477).
+- Previous upstream pin: `64f2403ffa55b8bbbd7c05f79b630f866f0ae66a`.
+- New upstream pin: `a5fda7ee1347eb3bb1227724e0ad8cdc091ad7e3` (140 commits).
+- Latest upstream v2 tag checked with `git ls-remote --tags upstream 'v2.*'`: `v2.2.6`, `dc2ffcf8bf26f9e669b6aa22b95f50e12be15e06`; no newer v2 tag.
+- Main checkout left untouched (pre-existing untracked `packages/posts/`, `services/www/`).
+- Completion fetch: `upstream/dev` advanced to `20c056d84249fe29be7244ff4f9e0aad044c4799`; the frozen upstream pin is unchanged.
+- Combined fork base: `51cede01da` ([#478](https://github.com/shuv1337/shuvcode/pull/478)), merged normally in `de46a5bacec2008616e703102c6e425d8a1d177f`. No rebase or history rewrite; `packages/claude-plugin` is byte-for-byte equal to #478's merged tree.
+
+## Pre-merge fork branch inventory
+
+Local `integration-v2` and refreshed `origin/integration-v2` both equal the base above. Inventory uses both AGENTS.md commands, excludes upstream refs, and groups local/remote refs of the same name. Each tip, first-parent unique commits, merge-base diff path/stat summary and fork PR status were inspected. Ancestry alone overstates missing work: many refs predate the fresh-V2 rewrite or rebased/squashed merges. A merged historical PR is evidence of its original landing, not a claim its old implementation belongs in current V2.
+
+No branch is merged or deleted. Historical/closed work without a current equivalent is deliberately parked under its named work reference, not silently discarded or reintroduced. `PLAN-fresh-v2-rewrite.md` controls the old V1/V2 overlay selection. No additional missing-fix reconciliation was identified. The parallel Claude CLI-identity work landed separately as #478 and was then merged here, as requested. Validation below covers the combined tree, not the superseded pre-#478 runs.
+
+| Refs | Tip / unique work | PR status | Disposition |
+|---|---|---|---|
+| `fix/claude-cli-identity`, `origin/fix/claude-cli-identity` | `30cd850abc` Claude CLI identity | #478 MERGED | Landed as `51cede01da`; included by normal merge `de46a5bace`. No additional package edits. |
+| `sync/upstream-dev-20261109` | This sync | Current work | Preserved as this PR; not another missing-fix branch to merge. |
+| `183-docker-self-hosted-deployments` | a562aca4c2 2025-12-21 fix: restore ghostty-opentui dependency lost in upstream merge | #184 MERGED | Previously landed via #184; historical/rebased ref preserved. No old tree re-import. |
+| `191-merge`, `origin/191-merge` | 54580871d1 2025-12-23 fix: update sst.desktop.config.ts to deploy packages/app instead of packages/desktop | #198 MERGED | Previously landed via #198; historical/rebased ref preserved. No old tree re-import. |
+| `197-consolidate-ask-tool-implementations`, `origin/197-consolidate-ask-tool-implementations` | 5392b8c8dc 2025-12-23 docs: add implementation plan for ask tool consolidation | #201 MERGED | Previously landed via #201; historical/rebased ref preserved. No old tree re-import. |
+| `add-pr-4515`, `origin/add-pr-4515` | d86d620113 2025-12-07 feat: show plugins in /status dialog | #93 MERGED | Previously landed via #93; historical/rebased ref preserved. No old tree re-import. |
+| `backup-before-upstream-merge-20251229-092500` | d10031c78e 2025-12-29 release: v1.0.207-1 | No fork PR found | Intentionally parked and preserved as work ref `backup-before-upstream-merge-20251229-092500`; no landing/discard decision in this sync. |
+| `backup/shuvcode-dev-20260114-235741` | 58176ee0f8 2026-01-14 chore: update plan progress | No fork PR found | Intentionally parked and preserved as work ref `backup/shuvcode-dev-20260114-235741`; no landing/discard decision in this sync. |
+| `bb-tools-engine` | 1e15c5e1c3 2026-09-24 feat(core): merge rich tool failure content | #366 MERGED | Previously landed via #366; historical/rebased ref preserved. No old tree re-import. |
+| `default-commands-missing` | 041bd7d557 2026-01-20 fix: correct custom-elements.d.ts files and update dependencies | #318 CLOSED | Intentionally parked and preserved as work ref `default-commands-missing`; no landing/discard decision in this sync. |
+| `dev-pr`, `origin/dev-pr` | b1372b14cb 2025-12-27 removing docs | #208 MERGED, #207 CLOSED | Previously landed via #208; historical/rebased ref preserved. No old tree re-import. |
+| `feat-v186`, `origin/feat-v186` | fbd343d502 2025-12-22 sync: merge upstream v1.0.190 into feat-v186 | #196 MERGED | Previously landed via #196; historical/rebased ref preserved. No old tree re-import. |
+| `feat/codex-multi-account`, `origin/feat/codex-multi-account` | 5577b5b64b 2026-01-15 test(auth): add codex migration and OAuth compatibility tests | No fork PR found | Intentionally parked and preserved as work ref `feat/codex-multi-account`; no landing/discard decision in this sync. |
+| `feat/desktop-favorite-models` | da2aef8347 2025-12-13 fix(desktop): resolve mobile viewport horizontal overflow | No fork PR found | Intentionally parked and preserved as work ref `feat/desktop-favorite-models`; no landing/discard decision in this sync. |
+| `feat/docker-serve-static` | b571d532af 2025-12-21 feat: add static directory to Dockerfile | #175 MERGED | Previously landed via #175; historical/rebased ref preserved. No old tree re-import. |
+| `feat/handle-sigterm` | 04fdc28c8d 2025-12-21 Properly handle SIGTERM and SIGINT | #173 MERGED | Previously landed via #173; historical/rebased ref preserved. No old tree re-import. |
+| `feat/image-preview-tabs`, `origin/feat/image-preview-tabs` | a47063c2f8 2025-12-30 fix(app): remove redundant file init call during tab render | #218 CLOSED | Intentionally parked and preserved as work ref `feat/image-preview-tabs`; no landing/discard decision in this sync. |
+| `feat/merge-upstream-6478` | 68ba19bd55 2025-12-31 feat: merge upstream PR #6478 - parallel subtasks, model inheritance, command.execute.before hook | #229 MERGED | Previously landed via #229; historical/rebased ref preserved. No old tree re-import. |
+| `feat/reconnect`, `origin/feat/reconnect` | 7639636cbf 2026-01-05 fix: improve event stream reconnection with heartbeat and state tracking | #262 MERGED | Previously landed via #262; historical/rebased ref preserved. No old tree re-import. |
+| `feat/save-favorite-models-desktop`, `origin/feat/save-favorite-models-desktop` | 4c7cd33f4d 2025-12-14 updates | No fork PR found | Intentionally parked and preserved as work ref `feat/save-favorite-models-desktop`; no landing/discard decision in this sync. |
+| `feat/skills-registry`, `origin/feat/skills-registry` | eb1ecf16ca 2026-01-15 feat(skill): add skill registry module with index fetchers | No fork PR found | Intentionally parked and preserved as work ref `feat/skills-registry`; no landing/discard decision in this sync. |
+| `feat/tauri-release-workflow` | e8b9a52be9 2025-12-09 feat: allow configuring desktop URL via SHUVCODE_DESKTOP_URL env var | No fork PR found | Intentionally parked and preserved as work ref `feat/tauri-release-workflow`; no landing/discard decision in this sync. |
+| `feat/tools-command` | 14c410a5b4 2025-12-23 Add /tools dialog | #199 MERGED | Previously landed via #199; historical/rebased ref preserved. No old tree re-import. |
+| `feat/tui-variant-cycle-tooltip`, `origin/feat/tui-variant-cycle-tooltip` | ea74b8e3e6 2026-01-10 Add variant cycle tooltip in session prompt | #291 CLOSED | Intentionally parked and preserved as work ref `feat/tui-variant-cycle-tooltip`; no landing/discard decision in this sync. |
+| `feat/usage-tracking` | b7df5d3ad9 2026-01-16 Delete .opencode/remember.jsonc | No fork PR found | Intentionally parked and preserved as work ref `feat/usage-tracking`; no landing/discard decision in this sync. |
+| `feat/worktree-support` | d81156ee23 2025-12-22 docs: add implementation plan for worktree project ID fix | No fork PR found | Intentionally parked and preserved as work ref `feat/worktree-support`; no landing/discard decision in this sync. |
+| `fix-argon-routing` | fc9d551361 2026-10-15 fix(antigravity): update client identity for Argon access | No fork PR found | Already landed as cb3e2d9626 (Argon client identity). |
+| `fix-channel-resolution` | 6d2354465f 2026-09-03 fix(script): handle detached build channels | No fork PR found | Intentionally parked and preserved as work ref `fix-channel-resolution`; no landing/discard decision in this sync. |
+| `fix-prefill`, `origin/fix-prefill` | 25e4042eaa 2026-08-19 no-mistakes(document): update max-steps guardrail doc to user message | #356 MERGED | Previously landed via #356; historical/rebased ref preserved. No old tree re-import. |
+| `fix-publish-provenance` | 35a36bf87e 2026-07-27 fix(cli): disable provenance on self-hosted publish | #345 MERGED | Previously landed via #345; historical/rebased ref preserved. No old tree re-import. |
+| `fix-release-finalize` | a6d38058f0 2026-07-27 fix(ci): skip dev sync for fork releases | #346 MERGED | Previously landed via #346; historical/rebased ref preserved. No old tree re-import. |
+| `fix/directory-handling-combined`, `origin/fix/directory-handling-combined` | ab9f5a31e4 2026-01-02 test(tui): add path normalization utility tests | #256 CLOSED, #251 CLOSED | Intentionally parked and preserved as work ref `fix/directory-handling-combined`; no landing/discard decision in this sync. |
+| `fix/disable-models-fetch-shuvcode` | 525ad048b3 2026-01-17 fix: respect OPENCODE_DISABLE_MODELS_FETCH flag in ModelsDev.get() | #307 CLOSED | Intentionally parked and preserved as work ref `fix/disable-models-fetch-shuvcode`; no landing/discard decision in this sync. |
+| `fix/dockerfile-add-git` | 3997e0d88a 2025-12-21 fix(docker): add git to container image | #182 CLOSED, #180 CLOSED | Intentionally parked and preserved as work ref `fix/dockerfile-add-git`; no landing/discard decision in this sync. |
+| `fix/dockerfile-rename` | f5ffdbe5ec 2025-12-21 fix: update Dockerfile to use renamed shuvcode binary | #174 MERGED | Previously landed via #174; historical/rebased ref preserved. No old tree re-import. |
+| `fix/file-viewer-add-img-support`, `origin/fix/file-viewer-add-img-support` | 7434e1f95a 2025-12-30 Merge branch 'sst:dev' into dev | No fork PR found | Intentionally parked and preserved as work ref `fix/file-viewer-add-img-support`; no landing/discard decision in this sync. |
+| `fix/file-viewer-blank-content`, `origin/fix/file-viewer-blank-content` | df040037b2 2025-12-29 fix(desktop): prevent blank content in file viewer tabs | No fork PR found | Intentionally parked and preserved as work ref `fix/file-viewer-blank-content`; no landing/discard decision in this sync. |
+| `fix/file-viewer-project-root` | 35681dc118 2025-12-30 fix(app): remove redundant file init call during tab render | No fork PR found | Intentionally parked and preserved as work ref `fix/file-viewer-project-root`; no landing/discard decision in this sync. |
+| `fix/issue-2773-osc52-shuvcode` | 97b3ff7be8 2026-01-16 fix: centralize OSC 52 clipboard support for SSH sessions (resolves #2773) | #304 MERGED | Previously landed via #304; historical/rebased ref preserved. No old tree re-import. |
+| `fix/mobile-timeline-rail`, `origin/fix/mobile-timeline-rail` | 2330c8bccd 2025-12-14 wip | No fork PR found | Intentionally parked and preserved as work ref `fix/mobile-timeline-rail`; no landing/discard decision in this sync. |
+| `fix/ripgrep-tree-perf` | e6330bca2a 2025-12-31 fix: optimize Ripgrep.tree() for large repositories (109x faster) | No fork PR found | Intentionally parked and preserved as work ref `fix/ripgrep-tree-perf`; no landing/discard decision in this sync. |
+| `fix/root-file-view`, `origin/fix/root-file-view` | 11acee97ea 2025-12-30 fix(app): handle empty path in file list to avoid leading slash | #233 CLOSED | Intentionally parked and preserved as work ref `fix/root-file-view`; no landing/discard decision in this sync. |
+| `fork-readme-alignment` | cc15752eca 2026-01-20 fix(e2e): update home test to match fork's 'Add project' button text | No fork PR found | Intentionally parked and preserved as work ref `fork-readme-alignment`; no landing/discard decision in this sync. |
+| `gemini-38` | 6829c0e589 2026-09-02 no-mistakes(document): format Gemini 3.8 Flash doc and test with Prettier | No fork PR found | Intentionally parked and preserved as work ref `gemini-38`; no landing/discard decision in this sync. |
+| `integration`, `origin/integration` | a5d3b86a4f 2026-04-06 sync: record last synced tag v1.3.16 | #183 CLOSED, #32 MERGED, #31 CLOSED | Previously landed via #32; historical/rebased ref preserved. No old tree re-import. |
+| `integration-backup-20260915`, `origin/integration-backup-20260915` | fe267dfaa9 2026-09-08 fix(script): restore detached build channel handling | No fork PR found | Intentionally parked and preserved as work ref `integration-backup-20260915`; no landing/discard decision in this sync. |
+| `integration-v230` | 5d2a74a382 2026-10-15 Merge pull request #450 from shuv1337/sync-upstream-v230 | No fork PR found | Already landed as #450 / 3e02afbd9f; rebased predecessor. |
+| `merge-v1.0.153`, `origin/merge-v1.0.153` | 3518a2ada9 2025-12-14 chore: format code | No fork PR found | Intentionally parked and preserved as work ref `merge-v1.0.153`; no landing/discard decision in this sync. |
+| `merge-v1.1.39`, `origin/merge-v1.1.39` | 46db693ee6 2026-01-28 Merge pull request #326 from Latitudes-Dev/copilot/sub-pr-325 | #325 MERGED | Previously landed via #325; historical/rebased ref preserved. No old tree re-import. |
+| `merge/v1.1.1-integration` | d6f823eaca 2026-01-04 docs(plan): mark F2 and F3 as complete - permission docs updated in README | No fork PR found | Intentionally parked and preserved as work ref `merge/v1.1.1-integration`; no landing/discard decision in this sync. |
+| `native-supervisor`, `origin/native-supervisor` | 1a8a997cd6 2026-10-06 fix(cli): keep supervisor knowledge out of user messages | #440 CLOSED | Intentionally parked, preserved; #440 closed, native supervisor is not part of this sync. |
+| `nightly-backup` | 4b47862c91 2026-08-03 feat(cli): package Promise client with releases | No fork PR found | Intentionally parked and preserved as work ref `nightly-backup`; no landing/discard decision in this sync. |
+| `opencode/happy-mountain`, `origin/opencode/happy-mountain` | f806194393 2026-01-24 fix(tui): restore attach command cwd auto-pass feature | #324 MERGED | Previously landed via #324; historical/rebased ref preserved. No old tree re-import. |
+| `opencode/issue178-20251221030922`, `origin/opencode/issue178-20251221030922` | afe1e792e7 2025-12-20 docs: document IDE integration and spinner speed features | #179 MERGED | Previously landed via #179; historical/rebased ref preserved. No old tree re-import. |
+| `opencode/tidy-moon` | 164556f33b 2026-01-23 release: v1.1.34 | No fork PR found | Intentionally parked and preserved as work ref `opencode/tidy-moon`; no landing/discard decision in this sync. |
+| `plugin-slash-commands`, `origin/plugin-slash-commands` | 49d1595fad 2025-12-27 Merge branch 'dev' into plugin-slash-commands | No fork PR found | Intentionally parked and preserved as work ref `plugin-slash-commands`; no landing/discard decision in this sync. |
+| `pr-183-temp` | 471c33b1b0 2025-12-21 Fix commit hash in docker | No fork PR found | Intentionally parked and preserved as work ref `pr-183-temp`; no landing/discard decision in this sync. |
+| `pr-298` | df300ff3a1 2026-01-14 feat(skill): create skill registry module | No fork PR found | Intentionally parked and preserved as work ref `pr-298`; no landing/discard decision in this sync. |
+| `pr-300` | bdba5f1183 2026-01-14 tweak: rename opencode references in anthropic prompt | No fork PR found | Intentionally parked and preserved as work ref `pr-300`; no landing/discard decision in this sync. |
+| `pr-330` | dc7314f1f6 2025-12-24 Undo to last non-ignored message (fix for https://github.com/Opencode-DCP/opencode-dynamic-context-pruning/issues/191) | No fork PR found | Intentionally parked and preserved as work ref `pr-330`; no landing/discard decision in this sync. |
+| `pr-331` | 25fb016aea 2026-02-20 Add backslash newline | No fork PR found | Intentionally parked and preserved as work ref `pr-331`; no landing/discard decision in this sync. |
+| `pr-332` | 729ecc8a85 2026-02-20 Add Openpad-based mobile app | No fork PR found | Intentionally parked and preserved as work ref `pr-332`; no landing/discard decision in this sync. |
+| `pr-5202` | bf817daa9c 2025-12-10 fix: uncorrupt | No fork PR found | Intentionally parked and preserved as work ref `pr-5202`; no landing/discard decision in this sync. |
+| `pr-5582` | 5e7a459f95 2025-12-19 feat: add create project functionality | No fork PR found | Intentionally parked and preserved as work ref `pr-5582`; no landing/discard decision in this sync. |
+| `pr-5958` | 19ad1ee520 2025-12-22 fix(askquestion): fix memory leaks, race conditions, and TUI UX bugs | No fork PR found | Intentionally parked and preserved as work ref `pr-5958`; no landing/discard decision in this sync. |
+| `pr-6368-sidebar-subsession` | 48d4b41927 2025-12-29 Desktop: Sidebar subsessions support | No fork PR found | Intentionally parked and preserved as work ref `pr-6368-sidebar-subsession`; no landing/discard decision in this sync. |
+| `pr-6372-image-preview` | ce4570ed1b 2025-12-29 Desktop: Image Preview and Dedupe File Upload | No fork PR found | Intentionally parked and preserved as work ref `pr-6372-image-preview`; no landing/discard decision in this sync. |
+| `pr-9124` | cb93d509bb 2026-01-17 fix: route compatible GPT-5* models to /responses | No fork PR found | Intentionally parked and preserved as work ref `pr-9124`; no landing/discard decision in this sync. |
+| `pre-integration` | 7d42627e65 2025-12-09 Merge origin/dev into pre-integration | No fork PR found | Intentionally parked and preserved as work ref `pre-integration`; no landing/discard decision in this sync. |
+| `pre-sync-backup` | 31e460ecde 2026-08-01 chore: sync upstream v2 through 85ea15e56d | No fork PR found | Intentionally parked and preserved as work ref `pre-sync-backup`; no landing/discard decision in this sync. |
+| `primary-backup-20260916` | b226dca264 2026-09-15 | No fork PR found | Intentionally parked and preserved as work ref `primary-backup-20260916`; no landing/discard decision in this sync. |
+| `prompt-body-keys` | fa7ae394ec 2026-10-13 fix(server): preserve unknown session.prompt body keys on Effect 4.0.1 | #449 MERGED | Previously landed via #449; historical/rebased ref preserved. No old tree re-import. |
+| `push-mkkkrpltpomy` | 77b9baaf91 2025-12-30 Merge branch 'dev' into push-mkkkrpltpomy | No fork PR found | Intentionally parked and preserved as work ref `push-mkkkrpltpomy`; no landing/discard decision in this sync. |
+| `release-v218` | 6369e8242e 2026-09-26 no-mistakes(document): Prettier-format session-runner test; no stale docs | No fork PR found | Intentionally parked and preserved as work ref `release-v218`; no landing/discard decision in this sync. |
+| `reply-routing-recovery`, `origin/reply-routing-recovery` | 61953c8ebb 2026-09-08 fix(core): address reply receipt review findings | #364 MERGED | Previously landed via #364; historical/rebased ref preserved. No old tree re-import. |
+| `revert-pr-4773-subagent-restrictions`, `origin/revert-pr-4773-subagent-restrictions` | f500359cec 2025-12-10 [WIP] Update subagent restrictions based on PR feedback (#106) | #105 MERGED | Previously landed via #105; historical/rebased ref preserved. No old tree re-import. |
+| `rich-tool-errors` | a799356cf1 2026-09-24 test: match rich failure truncation and remote images to success | No fork PR found | Already landed as #366 / ca55b605b3 and 0f1e13a5d9. |
+| `heads/shuv` | 783a0a7fd9 2025-12-22 Add mobile message navigation in header | No fork PR found | Intentionally parked and preserved as work ref `heads/shuv`; no landing/discard decision in this sync. |
+| `shuvbotta/anthropic-claude-code`, `origin/shuvbotta/anthropic-claude-code` | ed1f8bd2ce 2026-07-29 feat(anthropic): native Claude Pro/Max subscription support | #349 MERGED | Previously landed via #349; historical/rebased ref preserved. No old tree re-import. |
+| `shuvbotta/codemode-fixes`, `origin/shuvbotta/codemode-fixes` | 935dc2dcd2 2026-07-28 refactor(codemode): address review findings | #348 MERGED | Previously landed via #348; historical/rebased ref preserved. No old tree re-import. |
+| `shuvcode-dev`, `origin/shuvcode-dev` | a5d3b86a4f 2026-04-06 sync: record last synced tag v1.3.16 | #329 MERGED, #327 MERGED, #323 MERGED | Previously landed via #329; historical/rebased ref preserved. No old tree re-import. |
+| `shuvcode-dev-backup-v1.0.223`, `origin/shuvcode-dev-backup-v1.0.223` | edb9f9ffaa 2026-01-04 chore(plan): mark task 1.1.1 complete - working directory verified clean | No fork PR found | Intentionally parked and preserved as work ref `shuvcode-dev-backup-v1.0.223`; no landing/discard decision in this sync. |
+| `shuvcode-dev-old` | 8d21fbfb9d 2026-01-18 fix: track text parts and reasoning by output_index for copilot compatibility | No fork PR found | Intentionally parked and preserved as work ref `shuvcode-dev-old`; no landing/discard decision in this sync. |
+| `sidebar-fix`, `origin/sidebar-fix` | 90d3e7e8f9 2025-12-09 chore: format code | #97 MERGED | Previously landed via #97; historical/rebased ref preserved. No old tree re-import. |
+| `sidebar-indicator-fixup` | 2c8cb0c196 2026-01-20 fix(sync): improve session synchronization handling and error recovery. This greatly improves subagent display in the sidebar. | #317 CLOSED | Intentionally parked and preserved as work ref `sidebar-indicator-fixup`; no landing/discard decision in this sync. |
+| `subagent-sidebar-improvement` | beed0be9ac 2026-01-18 feat(tui): show subagents in sidebar based on subagent_type property | #310 MERGED | Previously landed via #310; historical/rebased ref preserved. No old tree re-import. |
+| `sync-latest-v2`, `origin/sync-latest-v2` | 81d57449ba 2026-08-01 chore: sync upstream v2 through c1db982f69 | No fork PR found | Intentionally parked and preserved as work ref `sync-latest-v2`; no landing/discard decision in this sync. |
+| `sync-upstream-sep23` | be4c643d67 2026-09-23 chore(sync): merge upstream v2 through 757e565c23 | No fork PR found | Intentionally parked and preserved as work ref `sync-upstream-sep23`; no landing/discard decision in this sync. |
+| `sync-upstream-tabs` | 9cfa3fc4f9 2026-07-30 chore(sync): merge upstream v2 session tabs | No fork PR found | Intentionally parked and preserved as work ref `sync-upstream-tabs`; no landing/discard decision in this sync. |
+| `sync-upstream-v2` | c5d81db8ff 2026-09-23 test: align fork test fixtures with shuvcode identity and theme | #344 MERGED, #342 MERGED | Previously landed via #344; historical/rebased ref preserved. No old tree re-import. |
+| `sync-upstream-v228` | 2780445719 2026-10-13 fix(sync): isolate system config, regenerate openapi, and order fork highlights | #447 MERGED | Previously landed via #447; historical/rebased ref preserved. No old tree re-import. |
+| `sync-upstream-v230` | ef135a15e7 2026-10-15 test(core): expect managed settings after global config | #450 MERGED | Previously landed via #450; historical/rebased ref preserved. No old tree re-import. |
+| `sync-v2-aug13`, `origin/sync-v2-aug13` | 0edf34c9fb 2026-08-15 chore(sync): merge upstream v2 | No fork PR found | Intentionally parked and preserved as work ref `sync-v2-aug13`; no landing/discard decision in this sync. |
+| `sync-v2-sep`, `origin/sync-v2-sep` | 5151e9faf7 2026-09-04 chore(sync): merge upstream v2 and preserve PTY handoff | No fork PR found | Intentionally parked and preserved as work ref `sync-v2-sep`; no landing/discard decision in this sync. |
+| `sync/opencode-v2.2.6-gap-audit` | 331c6a1ec3 2026-11-06 docs: note upstream removed the shuvcode/run export | No fork PR found | Already landed by #477 (bed62da587, 597dc63c6d, b2428136a3, b3a198c0a4). |
+| `sync/upstream-v1.1.20`, `origin/sync/upstream-v1.1.20` | 4feb204219 2026-01-14 fix: suppress TS2589 type recursion error in server route chain | #301 MERGED | Previously landed via #301; historical/rebased ref preserved. No old tree re-import. |
+| `tauri-integration` | afe2896c4f 2025-12-09 ci: add desktop deployment step to snapshot workflow | No fork PR found | Intentionally parked and preserved as work ref `tauri-integration`; no landing/discard decision in this sync. |
+| `temp` | fbb7fe61db 2025-12-14 chore: format code | No fork PR found | Intentionally parked and preserved as work ref `temp`; no landing/discard decision in this sync. |
+| `tool-activity` | 5341c3d97e 2026-09-24 fix(core): cover hosted calls, hooks, and sweep races in location leases | No fork PR found | Already landed as c4c7f2709c and d5c1c13ccb (location leases). |
+| `tui-variant-cycle-tooltip`, `origin/tui-variant-cycle-tooltip` | d84a2f9b49 2026-01-10 Add variant cycle tooltip in session prompt | #290 CLOSED | Intentionally parked and preserved as work ref `tui-variant-cycle-tooltip`; no landing/discard decision in this sync. |
+| `upstream-pr-5447` | db1089ba44 2025-12-12 Correct function names. Remove bin fragment. | No fork PR found | Intentionally parked and preserved as work ref `upstream-pr-5447`; no landing/discard decision in this sync. |
+| `upstream-pr-5582` | 5e7a459f95 2025-12-19 feat: add create project functionality | No fork PR found | Intentionally parked and preserved as work ref `upstream-pr-5582`; no landing/discard decision in this sync. |
+| `upstream-pr-5873` | af006cf0e0 2025-12-20 fix: add error handling for malformed lock file JSON | No fork PR found | Intentionally parked and preserved as work ref `upstream-pr-5873`; no landing/discard decision in this sync. |
+| `upstream-pr-5917` | 8dbd3ac4b8 2025-12-22 feat: add draggable sidebar resize functionality | No fork PR found | Intentionally parked and preserved as work ref `upstream-pr-5917`; no landing/discard decision in this sync. |
+| `upstream-rebase` | 8adb6e0c57 2026-08-02 chore: rebase fork onto upstream v2 | No fork PR found | Intentionally parked and preserved as work ref `upstream-rebase`; no landing/discard decision in this sync. |
+| `v1.1.1.1-integration-test`, `origin/v1.1.1.1-integration-test` | d16007bfb8 2026-01-04 fix(ci): add integration branch to test workflow triggers for snapshot releases | #263 MERGED | Previously landed via #263; historical/rebased ref preserved. No old tree re-import. |
+| `v2-rewrite` | e578d3fe21 2026-09-16 feat(core,codemode): allow direct tools in Code Mode runtime and accept string queries in search | No fork PR found | Already landed by the fresh-V2 cutover; direct-tool tip equivalent 529e4f7258. |
+| `origin/73-fix-branding-update-message` | 8a1b2b5c24 2025-12-02 Merge branch 'integration' into 73-fix-branding-update-message | #75 MERGED | Previously landed via #75; historical/rebased ref preserved. No old tree re-import. |
+| `origin/73-fix-branding-upgrade` | 26c72de8be 2025-12-02 fix: update upgrade command ASCII logo to shuvcode branding | #76 MERGED | Previously landed via #76; historical/rebased ref preserved. No old tree re-import. |
+| `origin/add-model-favorites` | ce61e9ec78 2026-10-17 Update Nix flake.lock and hashes | #35 MERGED, #27 CLOSED | Previously landed via #35; historical/rebased ref preserved. No old tree re-import. |
+| `origin/config-hot-reload` | 6a4cca152a 2026-10-17 Update Nix flake.lock and hashes | #29 CLOSED, #20 MERGED, #17 MERGED | Previously landed via #20; historical/rebased ref preserved. No old tree re-import. |
+| `origin/copilot/install-bun-version-1-3-3` | 2ab19f8fb2 2025-12-09 Fix bun version in fork workflows to match upstream requirement 1.3.3 | #95 MERGED | Previously landed via #95; historical/rebased ref preserved. No old tree re-import. |
+| `origin/copilot/resolve-upstream-sync-conflict` | 7ce35ef6c4 2026-10-17 Update Nix flake.lock and hashes | #38 CLOSED | Intentionally parked and preserved as work ref `copilot/resolve-upstream-sync-conflict`; no landing/discard decision in this sync. |
+| `origin/copilot/sub-pr-105` | 0388a7633c 2025-12-10 Merge branch 'revert-pr-4773-subagent-restrictions' into copilot/sub-pr-105 | #106 MERGED | Previously landed via #106; historical/rebased ref preserved. No old tree re-import. |
+| `origin/copilot/sub-pr-27` | 96ef37296d 2026-10-17 Update Nix flake.lock and hashes | #28 CLOSED | Intentionally parked and preserved as work ref `copilot/sub-pr-27`; no landing/discard decision in this sync. |
+| `origin/copilot/sub-pr-325` | 13501a24d2 2026-01-28 chore: update last-synced-tag to v1.1.39 | #326 MERGED | Previously landed via #326; historical/rebased ref preserved. No old tree re-import. |
+| `origin/copilot/sub-pr-97` | b005b693b1 2025-12-09 fix: use guaranteed part.sessionID field directly | #98 MERGED | Previously landed via #98; historical/rebased ref preserved. No old tree re-import. |
+| `origin/cursor/ab-check-git-ad5d` | fbd03ae4b6 2026-10-04 Merge remote-tracking branch 'origin/integration-v2' into cursor/ab-check-git-ad5d | #388 MERGED | Previously landed via #388; historical/rebased ref preserved. No old tree re-import. |
+| `origin/cursor/antigravity-quota-errors-c5e1` | 3ee7aff758 2026-10-04 no-mistakes(document): Document Antigravity 429 quota classification in plugin README | #427 MERGED | Previously landed via #427; historical/rebased ref preserved. No old tree re-import. |
+| `origin/cursor/ci-integration-v2-61f7` | c80279ae2d 2026-10-04 fix(ci): run test and typecheck on integration-v2 pushes | #415 CLOSED | Intentionally parked and preserved as work ref `cursor/ci-integration-v2-61f7`; no landing/discard decision in this sync. |
+| `origin/cursor/cli-test-env-a867` | 336effb840 2026-10-04 Merge remote-tracking branch 'origin/integration-v2' into cursor/cli-test-env-a867 | #396 MERGED | Previously landed via #396; historical/rebased ref preserved. No old tree re-import. |
+| `origin/cursor/client-test-contract-de6d` | 18823adc3d 2026-10-04 Merge remote-tracking branch 'origin/integration-v2' into cursor/client-test-contract-de6d | #421 MERGED | Previously landed via #421; historical/rebased ref preserved. No old tree re-import. |
+| `origin/cursor/core-test-node-a8d0` | 2769dcf17b 2026-10-04 Merge remote-tracking branch 'origin/integration-v2' into cursor/core-test-node-a8d0 | #426 MERGED | Previously landed via #426; historical/rebased ref preserved. No old tree re-import. |
+| `origin/cursor/dependency-inspection-a7f4` | 2b5a49aaed 2026-10-04 Merge remote-tracking branch 'origin/integration-v2' into cursor/dependency-inspection-a7f4 | #395 MERGED | Previously landed via #395; historical/rebased ref preserved. No old tree re-import. |
+| `origin/cursor/host-deploy-channel-5f72` | c7b49996ea 2026-10-04 Merge remote-tracking branch 'origin/integration-v2' into cursor/host-deploy-channel-5f72 | #414 MERGED | Previously landed via #414; historical/rebased ref preserved. No old tree re-import. |
+| `origin/cursor/jj-pr-review-149d` | dd326d57f1 2026-10-04 no-mistakes(review): Clarify JJ review prompt uses the PR's origin remote | #423 MERGED | Previously landed via #423; historical/rebased ref preserved. No old tree re-import. |
+| `origin/cursor/large-pr-diff-87a3` | d45563597c 2026-10-04 Merge remote-tracking branch 'origin/integration-v2' into cursor/large-pr-diff-87a3 | #394 MERGED | Previously landed via #394; historical/rebased ref preserved. No old tree re-import. |
+| `origin/cursor/legacy-health-probe-5e6a` | 7f39e0127a 2026-10-04 Merge remote-tracking branch 'origin/integration-v2' into cursor/legacy-health-probe-5e6a | #424 MERGED | Previously landed via #424; historical/rebased ref preserved. No old tree re-import. |
+| `origin/cursor/live-service-binary-8c38` | 78ea063e6e 2026-10-04 Merge remote-tracking branch 'origin/integration-v2' into cursor/live-service-binary-8c38 | #390 MERGED | Previously landed via #390; historical/rebased ref preserved. No old tree re-import. |
+| `origin/cursor/persist-session-log-5c6b` | b66e278dc6 2026-10-04 no-mistakes(document): Format event persistence test with prettier | #422 MERGED | Previously landed via #422; historical/rebased ref preserved. No old tree re-import. |
+| `origin/cursor/pre-sync-checklist-b97e` | 8468a92d0b 2026-10-04 chore: merge integration-v2 documentation updates | #389 MERGED | Previously landed via #389; historical/rebased ref preserved. No old tree re-import. |
+| `origin/cursor/remote-port-probes-4afe` | 2756f48b00 2026-10-04 Merge remote-tracking branch 'origin/integration-v2' into cursor/remote-port-probes-4afe | #392 MERGED | Previously landed via #392; historical/rebased ref preserved. No old tree re-import. |
+| `origin/cursor/standalone-global-flag-1969` | a5f15a7ab5 2026-10-04 no-mistakes(document): Document global connection flags and format CLI files | #428 MERGED | Previously landed via #428; historical/rebased ref preserved. No old tree re-import. |
+| `origin/cursor/stdin-epipe-listener-968d` | aedf6dd481 2026-10-04 fix(util): keep stdin error listeners through EPIPE teardown | #425 CLOSED | Intentionally parked and preserved as work ref `cursor/stdin-epipe-listener-968d`; no landing/discard decision in this sync. |
+| `origin/cursor/tui-probe-404-7466` | 4c7e7aa894 2026-10-04 Merge remote-tracking branch 'origin/integration-v2' into cursor/tui-probe-404-7466 | #418 MERGED | Previously landed via #418; historical/rebased ref preserved. No old tree re-import. |
+| `origin/cursor/whitespace-check-docs-bdca` | 8147925044 2026-10-04 Merge remote-tracking branch 'origin/integration-v2' into cursor/whitespace-check-docs-bdca | #387 MERGED | Previously landed via #387; historical/rebased ref preserved. No old tree re-import. |
+| `origin/docs/plan-ios-rebrand` | 6eddaeffe3 2026-10-31 docs: iOS client source hunt findings | #472 CLOSED | Intentionally parked, preserved; #472 closed; iOS source hunt is not part of this sync. |
+| `origin/fix-tui-img-attachments` | 534bb79d1f 2026-10-17 Update Nix flake.lock and hashes | #26 CLOSED | Intentionally parked and preserved as work ref `fix-tui-img-attachments`; no landing/discard decision in this sync. |
+| `origin/fleet-hygiene` | 4450a8092f 2026-10-17 ci(hygiene): pin reusable workflow to shark main 2c100bd7f54c9635ac8301657dd6a61820c23989 | #451 MERGED | Previously landed via #451; historical/rebased ref preserved. No old tree re-import. |
+| `origin/fm/sc-361-jj-channel` | 29efc2fd65 2026-10-03 no-mistakes(document): Update detached-HEAD channel note and format version test | #377 MERGED | Previously landed via #377; historical/rebased ref preserved. No old tree re-import. |
+| `origin/fm/sc-362-agent-model` | c16b50387d 2026-10-03 no-mistakes(document): Document agent model fallback for sessions without a model | #378 MERGED | Previously landed via #378; historical/rebased ref preserved. No old tree re-import. |
+| `origin/fm/sc-363-prompt-keys` | f9cb57de18 2026-10-03 no-mistakes(document): Format protocol session group with Prettier | #393 MERGED | Previously landed via #393; historical/rebased ref preserved. No old tree re-import. |
+| `origin/fm/sc-373-jev` | 8803f6d56c 2026-10-03 no-mistakes(document): Document jev_systemOne permission action | #397 MERGED | Previously landed via #397; historical/rebased ref preserved. No old tree re-import. |
+| `origin/fm/sc-ci-reenable` | a9c5efc1ab 2026-10-04 no-mistakes(ci): unit (fixed): One test failed out of 5373: the first PowerShell test in `packages/core/test/tool-shell.test.ts` ("PowerShell legacy | #420 MERGED | Previously landed via #420; historical/rebased ref preserved. No old tree re-import. |
+| `origin/fm/sc-cursor-378` | 41c749ffb1 2026-10-04 no-mistakes(document): Prettier-format subagent model fallback in command plugin | #431 MERGED | Previously landed via #431; historical/rebased ref preserved. No old tree re-import. |
+| `origin/fm/sc-e2e-timeline` | 06511bea6b 2026-10-04 chore: merge integration-v2 for gate resubmission | #432 MERGED | Previously landed via #432; historical/rebased ref preserved. No old tree re-import. |
+| `origin/fm/sc-folderswitch-quarantine` | b0527abf89 2026-10-06 test(app): carry tracking issue in FolderSwitch fixme description | #439 MERGED | Previously landed via #439; historical/rebased ref preserved. No old tree re-import. |
+| `origin/fm/sc-i407-toolcall-recovery` | 39aefb825f 2026-10-06 no-mistakes(test): Omit undefined model from subagent recovery metadata | #437 MERGED | Previously landed via #437; historical/rebased ref preserved. No old tree re-import. |
+| `origin/fm/sc-i411-watcher-flake` | cbc2a85896 2026-10-04 test(core): await native acquisition in HEAD watcher cases | #433 MERGED | Previously landed via #433; historical/rebased ref preserved. No old tree re-import. |
+| `origin/fm/sc-i412-run-admission` | 6248a7c425 2026-10-04 no-mistakes(review): Scope run deadlines to setup, add 120s admission deadline | #434 MERGED | Previously landed via #434; historical/rebased ref preserved. No old tree re-import. |
+| `origin/fm/sc-i438-tab-popover` | 098a70eba6 2026-10-06 test(app): hold the tab preview open in the folder-switch regression | #442 MERGED | Previously landed via #442; historical/rebased ref preserved. No old tree re-import. |
+| `origin/intergation-streamline` | 91a6ff8fa3 2026-10-17 Update Nix flake.lock and hashes | No fork PR found | Intentionally parked and preserved as work ref `intergation-streamline`; no landing/discard decision in this sync. |
+| `origin/merge-PRs` | 1d16bf70d6 2026-10-17 Update Nix flake.lock and hashes | #65 MERGED | Previously landed via #65; historical/rebased ref preserved. No old tree re-import. |
+| `origin/merge/upstream-v2.1.4` | a56efe2d54 2026-10-23 chore(sync): merge upstream v2.1.4 | #456 CLOSED | Obsolete sync proposal #456, superseded by #457 / 6bab70f39a; ref preserved. |
+| `origin/mobile-pairing` | 6a9f0f188f 2026-07-15 fix(ci): align service smoke with fork | #336 MERGED | Previously landed via #336; historical/rebased ref preserved. No old tree re-import. |
+| `origin/model-diag-cleanup` | 1f91715278 2026-10-17 Update Nix flake.lock and hashes | #40 CLOSED | Intentionally parked and preserved as work ref `model-diag-cleanup`; no landing/discard decision in this sync. |
+| `origin/opencode/issue102-20251210030021` | 3439392061 2025-12-10 chore: format code | #104 CLOSED, #103 MERGED | Previously landed via #103; historical/rebased ref preserved. No old tree re-import. |
+| `origin/opencode/issue113-20251211062235` | 9118d30d5b 2025-12-11 chore: format code | #115 CLOSED | Intentionally parked and preserved as work ref `opencode/issue113-20251211062235`; no landing/discard decision in this sync. |
+| `origin/opencode/issue114-20251211062613` | 5b68d29028 2025-12-11 chore: format code | #116 CLOSED | Intentionally parked and preserved as work ref `opencode/issue114-20251211062613`; no landing/discard decision in this sync. |
+| `origin/opencode/issue117-20251211083034` | 17977ebb47 2025-12-11 chore: format code | #119 MERGED, #118 MERGED | Previously landed via #119; historical/rebased ref preserved. No old tree re-import. |
+| `origin/opencode/issue120-20251211165001` | f0f45933db 2025-12-11 chore: format code | #122 CLOSED, #121 MERGED | Previously landed via #121; historical/rebased ref preserved. No old tree re-import. |
+| `origin/opencode/issue126-20251211201237` | b460393a40 2025-12-11 chore: format code | #128 CLOSED, #127 MERGED | Previously landed via #127; historical/rebased ref preserved. No old tree re-import. |
+| `origin/opencode/issue144-20251219021522` | 5083acfe76 2025-12-19 sync: record last synced tag v1.0.169 | #145 MERGED | Previously landed via #145; historical/rebased ref preserved. No old tree re-import. |
+| `origin/opencode/issue146-20251219134518` | d1dd3ce149 2025-12-19 chore: generate | #147 MERGED | Previously landed via #147; historical/rebased ref preserved. No old tree re-import. |
+| `origin/opencode/issue151-20251220031612` | 16171d726c 2025-12-20 chore: update bun.lock after dependency install | #153 MERGED | Previously landed via #153; historical/rebased ref preserved. No old tree re-import. |
+| `origin/opencode/issue152-20251220033120` | 46e79d193a 2025-12-20 sync: record last synced tag v1.0.172 | #154 CLOSED | Intentionally parked and preserved as work ref `opencode/issue152-20251220033120`; no landing/discard decision in this sync. |
+| `origin/opencode/issue155-20251220035024` | 10a6e5975d 2025-12-20 sync: record last synced tag v1.0.173 | #156 CLOSED | Intentionally parked and preserved as work ref `opencode/issue155-20251220035024`; no landing/discard decision in this sync. |
+| `origin/opencode/issue157-20251220040932` | ff528b5884 2025-12-20 sync: record last synced tag v1.0.174 | #158 MERGED | Previously landed via #158; historical/rebased ref preserved. No old tree re-import. |
+| `origin/opencode/issue159-20251220111304` | fca266b6a5 2025-12-20 sync: record last synced tag v1.0.175 | #160 CLOSED | Intentionally parked and preserved as work ref `opencode/issue159-20251220111304`; no landing/discard decision in this sync. |
+| `origin/opencode/issue161-20251220123030` | 5327451fc0 2025-12-20 sync: record last synced tag v1.0.176 | #162 CLOSED | Intentionally parked and preserved as work ref `opencode/issue161-20251220123030`; no landing/discard decision in this sync. |
+| `origin/opencode/issue167-20251220154038` | 7665eeafa3 2025-12-20 sync: record last synced tag v1.0.179 | #168 CLOSED | Intentionally parked and preserved as work ref `opencode/issue167-20251220154038`; no landing/discard decision in this sync. |
+| `origin/opencode/issue169-20251220160245` | 449c158bae 2025-12-20 sync: record last synced tag v1.0.180 | #170 MERGED | Previously landed via #170; historical/rebased ref preserved. No old tree re-import. |
+| `origin/opencode/issue176-20251221020906` | 99cc7523c7 2025-12-21 sync: record last synced tag v1.0.181 | #177 CLOSED | Intentionally parked and preserved as work ref `opencode/issue176-20251221020906`; no landing/discard decision in this sync. |
+| `origin/opencode/issue67-20251201020527` | 9bae941529 2026-10-17 Update Nix flake.lock and hashes | No fork PR found | Intentionally parked and preserved as work ref `opencode/issue67-20251201020527`; no landing/discard decision in this sync. |
+| `origin/opencode/issue68-20251201093246` | 85199590d5 2026-10-17 Update Nix flake.lock and hashes | No fork PR found | Intentionally parked and preserved as work ref `opencode/issue68-20251201093246`; no landing/discard decision in this sync. |
+| `origin/opencode/issue70-20251201190836` | 40c4eeda7f 2025-12-01 sync: record last synced tag v1.0.126 | No fork PR found | Intentionally parked and preserved as work ref `opencode/issue70-20251201190836`; no landing/discard decision in this sync. |
+| `origin/opencode/issue74-20251202181455` | 069b244200 2025-12-02 sync: record last synced tag v1.0.127 | No fork PR found | Intentionally parked and preserved as work ref `opencode/issue74-20251202181455`; no landing/discard decision in this sync. |
+| `origin/opencode/issue77-20251202201913` | 52a5e7032d 2025-12-02 sync: record last synced tag v1.0.128 | No fork PR found | Intentionally parked and preserved as work ref `opencode/issue77-20251202201913`; no landing/discard decision in this sync. |
+| `origin/opencode/issue78-20251203114126` | ac256ed024 2025-12-03 Merged upstream v1.0.129, PR #79 ready | #79 MERGED | Previously landed via #79; historical/rebased ref preserved. No old tree re-import. |
+| `origin/opencode/issue80-20251204034025` | df4c1f7510 2025-12-04 sync: record last synced tag v1.0.130 | #82 CLOSED, #81 MERGED | Previously landed via #81; historical/rebased ref preserved. No old tree re-import. |
+| `origin/opencode/issue83-20251204041504` | 9174faa11a 2025-12-04 chore: format code | #84 MERGED | Previously landed via #84; historical/rebased ref preserved. No old tree re-import. |
+| `origin/opencode/issue86-20251204220607` | ed75889426 2025-12-04 sync: record last synced tag v1.0.133 | #88 CLOSED, #87 MERGED | Previously landed via #87; historical/rebased ref preserved. No old tree re-import. |
+| `origin/opencode/issue89-20251205204907` | 5821af50ab 2025-12-05 chore: format code | #91 CLOSED, #90 MERGED | Previously landed via #90; historical/rebased ref preserved. No old tree re-import. |
+| `origin/opencode/issue99-20251209180809` | b02de610af 2025-12-09 chore: regen sdk | #101 CLOSED, #100 MERGED | Previously landed via #100; historical/rebased ref preserved. No old tree re-import. |
+| `origin/prompt-shuvcode` | 7ba4a9c567 2026-01-14 tweak: rename opencode references in anthropic prompt | #300 CLOSED | Intentionally parked and preserved as work ref `prompt-shuvcode`; no landing/discard decision in this sync. |
+| `origin/sc-cursor-377` | 033bbe0580 2026-10-04 chore: merge integration-v2 timeline fix | #430 MERGED | Previously landed via #430; historical/rebased ref preserved. No old tree re-import. |
+| `origin/sc-permission-fixes` | 35b78d5586 2026-10-04 no-mistakes(review): Gate root family sync on hydrated ancestor, drop duplicate toast | #429 MERGED | Previously landed via #429; historical/rebased ref preserved. No old tree re-import. |
+| `origin/sewer56-subagent-restrict` | a6ee592131 2026-10-17 Update Nix flake.lock and hashes | #57 MERGED | Previously landed via #57; historical/rebased ref preserved. No old tree re-import. |
+
+## Completion audit
+
+The inventory was rechecked against local and origin refs at the original fork base; every non-symbolic unmerged branch has a row above. `origin/HEAD` is the default-branch alias, not separate work. No branch was deleted, rebased, or silently merged. #478 is the only additional fork work brought in.
+
+Inspected `git show --remerge-diff bd6aebb7da`, compared the previous/new upstream-to-fork path sets, and checked the overlapping identity, provider, session and permission changes. No path deleted by the fork relative to the old upstream pin was resurrected. Upstream itself also deleted the obsolete setup-git-committer action, bot-docs-locale workflow and release-dry-run workflow; those are the only old fork-delta paths now identical to upstream.
+
+| Fork contract | Combined-tree evidence |
+|---|---|
+| Identity | CLI manifest/bin remain `shuvcode`; version is `2.2.6-shuv.2`. `Global.app` and both client service fallback/spawn implementations retain Shuvcode identity. ACP preserves `Shuvcode` while adding upstream steering metadata. |
+| Service and updates | `0x1337` / local `0x1338`, npm `shuvcode` / `shuvcode-node` updater, and CLI-only ownership guard remain unchanged from the original base. Custom build channels retain their existing derived port. |
+| Anthropic | Core still bundles `ClaudePlugin`; #478's package tree is preserved exactly. No loopback proxy or Core Anthropic transport wrapper was added. |
+| Hidden Claude Agent | On-disk SDK implementation/tests and optional peer/alias remain. Registry filtering, no-op product export, config-id exclusion (including integration documents), and app/TUI/CLI/mini list predicates remain. The model-picker conflict kept `isHiddenProvider`. |
+| Bundled fork features | Antigravity, quota, GPT-Live, `$skill`, quick quote, subagent sidebar and Night Owl default remain. OAuth refresh single-flight and fork host seams remain. |
+| Run and permissions | #434 setup/admission deadlines and `run` with `autostart: false` are unchanged. #475 fail-closed parent-agent deny inheritance is unchanged; upstream session changes touch generation output and build metadata, not that implementation. |
+| Guards | Router-matched cross-site guard and redirect protections are preserved, not replaced with upstream versions. This is preservation evidence, not a new security assessment. |
+| Trees and publishing | No previously removed tree/path is restored. Retained upstream console/web/services/enterprise/stats/desktop sources remain outside fork publishing; fork workflow files are unchanged from the original base. |
+| Release metadata | Changelog includes the upstream pin, fork preservation, version floor, and #478. `latest` version resolution returns `2.2.6-shuv.2` while npm latest trails the tree. No release was published. |
+
+### Historical rewrite-map differences (not introduced by this sync)
+
+`PLAN-fresh-v2-rewrite.md` is a September rewrite decision map, not an exact inventory of the November base. Night Owl is now a theme default rather than a separate plugin. The old standalone Codex identity plugin and xAI popular-order override are **not present in the #477 base either**: OpenAI currently uses the ChatGPT token-sharing provider; `codex_cli_rs` remains in the quota request, and the TUI integration priority has no xAI entry. This sync does not silently restore those older designs or claim they are present. The old `.github/last-synced-tag` file is also absent at the base; this document and the merge's second parent record the frozen pin.
+
+### Deferred
+
+- Security assessment of the linked upstream auth, permission and request-handling changes belongs to the PR reviewer.
+- #477 R2-F1 (absolute-form request target/Origin behavior) remains unresolved, and R2-F2 (explicit bare versions on `next`/`beta`) remains deferred. Neither implementation is changed here.
+- Live provider credentials, real subscription billing, and a real model reply were not exercised. All runtime validation uses disposable HOME/XDG/database state and private networking.
+- Post-pin upstream commit `20c056d842` is not merged. No merge to the default branch and no release are part of this task.
+
+## Validation after #478
+
+Product code was frozen at `de46a5bace`; subsequent commits change only this audit/changelog and two tests. Builds and smoke checks cover that combined product tree. Core's complete rerun covers `55ac7ee6d2`; the final e2e checks cover `d201eed3fa`. Documentation-only completion does not alter either artifact.
+
+Tests used an empty HOME/XDG/database environment and private loopback-only networking with uid 1000 and no capabilities, never the user's service or credentials. Earlier pre-#478 runs are not counted. The inherited root-uid/under-home scratch run was discarded because it bypassed permission checks and discovered ancestor config.
+
+| Check | Result |
+|---|---|
+| `bun run check`, including forced uncached typechecks | 39/39 tasks pass; 0 lint errors, 550 warnings. Repeated after both fixture fixes. |
+| Fork CI's per-package `typecheck:tsc` loop | Exit 0; core compiler check also rerun after its fix. |
+| Full fork Turbo unit gate, forced, concurrency 3 | Initially 34/35 tasks passed; only core failed to construct the location-activity fixture. |
+| Full core rerun after `55ac7ee6d2` | 7,416 pass, 16 skip, 0 fail. Every package gate now has a passing result; no second full Turbo invocation is claimed. |
+| Location-activity file, repeated 10 times | 200 pass, 0 fail. |
+| CLI / server / TUI | 448 / 138 / 1,737 pass; 7 / 1 / 2 skip; 0 fail each. |
+| Claude plugin / release-script suites | 43 / 22 pass, 0 fail; release scripts skip 12 jj-dependent cases. |
+| Effect rule tests / simplification lint | 10 rules pass / exit 0. |
+| Client generation | Exit 0; generated files unchanged. |
+| Code Mode package dry run | Exit 0; installed-tarball imports work in Node and Bun's workerd condition. Nothing published. |
+| `OPENCODE_CHANNEL=integration-v2 bun run --cwd packages/cli build` | Exit 0, every configured platform target built. |
+| Native Node CLI build | Exit 0, Linux x64; reused the Bun build's web archive. |
+| Bun and Node compiled smoke | Version/help, election, readiness, MCP, auth, embedded UI, plugin discovery, unauthenticated 401, stop: exit 0. |
+| Compiled #434 deadline file | 15/15 pass on each binary. |
+| Release-version resolution | `OPENCODE_CHANNEL=latest` resolves `2.2.6-shuv.2`. Integration-channel binaries intentionally print preview versions, not release versions. |
+| Extra standalone `typecheck:e2e` | Exit 2, 181 diagnostics. An isolated `51cede01da` archive produces exactly the same 181 diagnostic messages after ignoring line-number shifts. Existing gate debt (related papercut `pc_787142d3d2e1`), not a new regression. |
+| Changed test formatting / `git diff --check` | Pass. |
+
+### Verification fixes
+
+- `55ac7ee6d2`: add `Config.testLayer()` to the fork's location-activity Tool graph. Upstream added `Flag → Config` as a dependency, and this fixture intentionally supplies Location separately. The previous import-time `Unbound layer node: @opencode/Location` is gone; all 20 cases execute. Product code is unchanged.
+- `d201eed3fa`: wait for initial composer autofocus before opening review in the editor-launch timeout test. Upstream now preserves focus moves during panel animation. The uncorrected case failed 3/10 targeted attempts, versus 10/10 passing on `51cede01da`. Corrected: 10/10 pass and the entire session-header keeper 28/28 pass. All existing focus, editor-launch, disabled-state and timeout assertions remain; no sleep/retry or product change.
+
+### E2E results
+
+Final full app suite on `d201eed3fa`: **755 passed, 0 failed**, five workers, no retries (4.3 minutes). It used `PLAYWRIGHT_BUILD=1 PLAYWRIGHT_BASE_URL=http://127.0.0.1:4310 bun run test:e2e` against the existing production-fixture build on a fresh private static server. Earlier runs rebuilt with `bun --cwd packages/app test:e2e:built`; no app product code changed between those builds and the final run.
+
+Before the e2e fixture correction, full runs produced 754/755 and 753/755. Both hit the focus race fixed above; the second also missed the mobile touch-tab reorder. That unchanged mobile case passed 10/10 targeted repeats on both this tree and the `51cede01da` archive. Its intermittent failure's root cause is not established; the test was not weakened or changed.
+
+Local raw logs and failure artifacts are retained under `~/.cache/agent-ws/shuvcode-sync-finish-20261109/`. The standalone e2e compiler check is distinct from the passing canonical/CI typechecks. Dedicated service-worker/component suites, live provider calls, non-Linux execution and new security mutations were not run.

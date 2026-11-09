@@ -14,13 +14,13 @@ import {
 } from "solid-js"
 import { isHiddenProvider } from "@opencode/util/hidden-provider"
 import path from "node:path"
-import { EOL, tmpdir } from "node:os"
+import { EOL } from "node:os"
 import { mkdir, writeFile } from "node:fs/promises"
 import { useRoute, useRouteData } from "../../context/route"
 import { createStore } from "solid-js/store"
 import { useData } from "../../context/data"
 import { SplitBorder } from "../../ui/border"
-import { useTuiTerminalEnvironment } from "../../context/runtime"
+import { useTuiPaths, useTuiTerminalEnvironment } from "../../context/runtime"
 import { Spinner, SPINNER_FRAMES } from "../../component/spinner"
 import { PatchDiff } from "../../component/patch-diff"
 import { useTheme, useThemes } from "../../context/theme"
@@ -161,6 +161,7 @@ export function Session(props: {
 }) {
   const epilogue = useEpilogue()
   const clipboard = useClipboard()
+  const paths = useTuiPaths()
   const writeExport = async (file: string, content: string) => {
     await mkdir(path.dirname(file), { recursive: true })
     await writeFile(file, content)
@@ -1393,7 +1394,7 @@ export function Session(props: {
           }
 
           const filepath = path.join(
-            tmpdir(),
+            paths.cwd,
             `session-${crypto.randomUUID()}.${options.format === "markdown" ? "md" : "json"}`,
           )
           await writeExport(filepath, content)

@@ -344,6 +344,8 @@ type ToolGate = {
 
 const toolServices = LayerNode.compile(LayerNode.group([Tool.node, PluginHooks.node]), {
   replacements: [
+    // Tool's flag service reads Config; this fixture supplies Location separately below.
+    Config.node.replace(Config.testLayer()),
     Image.node.replace(Layer.mock(Image.Service, { normalize: () => Effect.die("unused") })),
     // Tool.node gained Permission.node in v2.2.3; stub it so this fixture does not need Location.
     Permission.node.replace(permissionLayer()),

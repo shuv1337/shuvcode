@@ -59,7 +59,7 @@ const VERSION = await (async () => {
       throw new Error(`Unexpected npm registry response for ${forkPackage}`)
     return data.version
   })
-  return nextForkVersion({ base, published })
+  return nextForkVersion({ base, published, minimum: cliPkg.version })
 })()
 
 function previewBuildNumber() {
