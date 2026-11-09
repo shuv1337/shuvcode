@@ -29,7 +29,7 @@ Shuvcode sync of upstream `dev` at `a5fda7ee1347eb3bb1227724e0ad8cdc091ad7e3`: 1
 - Release resolution honors the checked-in `2.2.6-shuv.2` minimum even while npm's latest tag trails the source tree.
 - The router-matched cross-site path guard from `4bb0ded8a7` is unchanged. #477's R2-F1 absolute-form request-target bypass remains unresolved; this sync does not claim to fix it. R2-F2 (bare versions accepted on explicit `next`/`beta` releases) also remains deferred.
 
-## v2.2.6-shuv.1 — 2026-11-06
+## v2.2.6-shuv.1 — 2026-11-06 (not published; ships in 2.2.6-shuv.2)
 
 Shuvcode fork release of OpenCode v2.2.6, built from upstream `dev` at `64f2403ffa`. It includes every change listed under v2.2.6 below, plus this fork-specific hardening.
 
