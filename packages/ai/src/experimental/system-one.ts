@@ -126,7 +126,7 @@ export const model = <Options extends EvaluationOptions = EvaluationOptions>(cfg
             method: "POST",
             url: url.toString(),
             body,
-            headers: Headers.fromInput(cfg.headers),
+            headers: Headers.setAll(Headers.fromInput(cfg.headers), req.headers ?? {}),
           })
           const res = yield* send(
             HttpClientRequest.post(url).pipe(
