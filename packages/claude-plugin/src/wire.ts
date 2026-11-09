@@ -1,5 +1,5 @@
 import { Option, Schema } from "effect"
-import { userAgent } from "./oauth.js"
+import { userAgent } from "./identity.js"
 
 export const betaFlags =
   "claude-code-20250219,oauth-2025-04-20,interleaved-thinking-2025-05-14,prompt-caching-scope-2026-01-05"
@@ -221,7 +221,7 @@ export function restoreStream(names: ReadonlyMap<string, string>) {
  * Headers Claude Code sends. `anthropic-beta` is merged rather than replaced so
  * a provider- or config-supplied flag survives alongside the required ones.
  */
-export function headers(existing?: Record<string, string>): Record<string, string> {
+export async function headers(existing?: Record<string, string>): Promise<Record<string, string>> {
   const incoming = Object.entries(existing ?? {}).find(([key]) => key.toLowerCase() === "anthropic-beta")?.[1] ?? ""
   const merged = [
     ...new Set([
@@ -235,7 +235,7 @@ export function headers(existing?: Record<string, string>): Record<string, strin
   return {
     "anthropic-beta": merged,
     "anthropic-dangerous-direct-browser-access": "true",
-    "user-agent": userAgent,
+    "user-agent": await userAgent(),
     "x-app": "cli",
   }
 }

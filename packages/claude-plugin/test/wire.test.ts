@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test"
+import { userAgent } from "../src/identity.js"
 import {
   decodeBody,
   headers,
@@ -61,11 +62,12 @@ describe("wire shaping", () => {
     expect(warnings[0]).toContain("extra usage")
   })
 
-  test("merges beta flags case-insensitively", () => {
-    const result = headers({ "Anthropic-Beta": "custom,oauth-2025-04-20" })
+  test("merges beta flags case-insensitively", async () => {
+    const result = await headers({ "Anthropic-Beta": "custom,oauth-2025-04-20" })
     expect(result["anthropic-beta"].split(",").filter((flag) => flag === "oauth-2025-04-20")).toHaveLength(1)
     expect(result["anthropic-beta"]).toContain("custom")
-    expect(result["user-agent"]).toBe("claude-cli/2.1.280 (external, cli)")
+    expect(result["user-agent"]).toBe(await userAgent())
+    expect(result["x-app"]).toBe("cli")
   })
 })
 
