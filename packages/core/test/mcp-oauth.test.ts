@@ -9,6 +9,7 @@ import { Integration } from "@opencode/core/integration"
 import { McpClient } from "@opencode/core/mcp/client"
 import { McpOAuth } from "@opencode/core/mcp/oauth"
 import { Cause, Effect, Exit, ManagedRuntime } from "effect"
+import { FetchHttpClient } from "effect/http"
 import { hostEnvironmentLayer } from "./fixture/environment"
 import { tmpdir } from "./fixture/tmpdir"
 
@@ -398,6 +399,47 @@ describe("MCP OAuth", () => {
     await staleProvider.tokens()
     await staleProvider.invalidateCredentials?.("tokens")
     expect(stale.rows.size).toBe(0)
+  })
+
+  test("uses the injected fetch without changing authentication or cancellation", async () => {
+    const controller = new AbortController()
+    const body = new URLSearchParams({ grant_type: "authorization_code", code: "sentinel" })
+    const calls: unknown[] = []
+    const fetchFn = await Effect.runPromise(
+      McpOAuth.loggedFetch({ server: "fixture" }).pipe(
+        Effect.provideService(
+          FetchHttpClient.Fetch,
+          Object.assign(
+            async (url: string | URL | Request, init?: RequestInit) => {
+              calls.push({ url, init })
+              return new Response("fixture", { status: 201 })
+            },
+            { preconnect: fetch.preconnect },
+          ),
+        ),
+      ),
+    )
+    const response = await fetchFn("https://oauth.example.test/token", {
+      method: "POST",
+      headers: { authorization: "Bearer sentinel" },
+      body,
+      signal: controller.signal,
+    })
+
+    expect(calls).toEqual([
+      {
+        url: "https://oauth.example.test/token",
+        init: {
+          method: "POST",
+          headers: { authorization: "Bearer sentinel" },
+          body,
+          signal: controller.signal,
+          timeout: false,
+        },
+      },
+    ])
+    expect(response.status).toBe(201)
+    expect(await response.text()).toBe("fixture")
   })
 
   test("shares concurrent refreshes for the same token", async () => {
