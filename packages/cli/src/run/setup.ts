@@ -45,6 +45,15 @@ export function withRunSetupDeadlines(client: OpenCodeClient) {
 
   const result: OpenCodeClient = {
     ...client,
+    config: {
+      ...client.config,
+      get: (input, options) =>
+        runSetupRequest(
+          "Checking configuration",
+          (signal) => client.config.get(input, { ...options, signal }),
+          options,
+        ),
+    },
     location: {
       ...client.location,
       get: (input, options) =>

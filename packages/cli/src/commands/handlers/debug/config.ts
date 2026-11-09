@@ -1,6 +1,6 @@
 import { EOL } from "os"
 import { Effect } from "effect"
-import { OpenCode } from "@opencode/client"
+import { OpenCode, configDiagnostics, formatConfigDiagnostic } from "@opencode/client"
 import { Service } from "@opencode/client/effect/service"
 import { Commands } from "../../commands"
 import { Runtime } from "../../../framework/runtime"
@@ -14,5 +14,10 @@ export default Runtime.handler(
     const client = OpenCode.make({ baseUrl: endpoint.url, headers: Service.headers(endpoint) })
     const entries = yield* Effect.promise(() => client.config.get({ location: { directory: process.cwd() } }))
     process.stdout.write(JSON.stringify(redactConfig(entries), null, 2) + EOL)
+    const diagnostics = configDiagnostics(entries)
+    if (diagnostics.length) {
+      process.stderr.write(diagnostics.map(formatConfigDiagnostic).join(EOL) + EOL)
+      process.exitCode = 1
+    }
   }),
 )

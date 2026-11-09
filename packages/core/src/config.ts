@@ -3,9 +3,17 @@ export * as Config from "./config.js"
 import { makeLocationNode } from "@opencode/util/effect/app-node"
 import path from "path"
 import { isDeepStrictEqual } from "node:util"
-import { applyEdits, modify, type ParseError, parse } from "jsonc-parser"
+import {
+  applyEdits,
+  findNodeAtLocation,
+  modify,
+  type ParseError,
+  parse,
+  parseTree,
+  printParseErrorCode,
+} from "jsonc-parser"
 import { Context, Effect, FiberMap, Layer, Option, PubSub, Ref, Schema, Semaphore, Stream } from "effect"
-import { Directory, Document, Info, type Patch, type Entry, Event } from "@opencode/schema/config"
+import { Directory, Document, Info, type Diagnostic, type Patch, type Entry, Event } from "@opencode/schema/config"
 import { Credential } from "./credential.js"
 import { Bus } from "./bus.js"
 import { Watcher } from "./filesystem/watcher.js"
@@ -138,20 +146,40 @@ export const layer = (options?: Options) =>
       const parseInfo = Effect.fn("Config.parseInfo")(function* (text: string, source: string) {
         const errors: ParseError[] = []
         const input: unknown = parse(text, errors, { allowTrailingComma: true })
-        if (errors.length) {
-          yield* Effect.logWarning("configuration normalization diagnostic", {
+        const diagnostics: Diagnostic[] = []
+        const tree = errors.length ? undefined : parseTree(text, [], { allowTrailingComma: true })
+        const report = (field: readonly string[], message: string, offset?: number) => {
+          const lines = offset === undefined ? undefined : text.slice(0, offset).split(/\r\n|\r|\n/)
+          diagnostics.push({
             source,
-            path: "$",
-            kind: "invalid",
-            action: "rejected malformed JSON or JSONC document",
+            path: field[0] === "$" ? "$" : `$.${field.join(".")}`,
+            message,
+            ...(lines ? { line: lines.length, column: lines[lines.length - 1]!.length + 1 } : {}),
           })
-          return
+        }
+        if (errors.length) {
+          report(
+            ["$"],
+            `File ignored: ${printParseErrorCode(errors[0]!.error)} (malformed JSON or JSONC)`,
+            errors[0]!.offset,
+          )
+          yield* Effect.logWarning("configuration normalization diagnostic", {
+            ...diagnostics[0],
+            kind: "invalid",
+            action: diagnostics[0]!.message,
+          })
+          return { info: new Info({}), experimental: { diagnostics } }
         }
         const result = ConfigNormalize.normalize(input)
         // Every reload repeats the routine notes on a config that loads. A rejected config or a dropped malformed
         // setting is the user's to fix, so those stay warnings.
         yield* Effect.forEach(result.diagnostics, (diagnostic) => {
-          const log = result.type === "rejected" || diagnostic.kind === "invalid" ? Effect.logWarning : Effect.logDebug
+          const invalid = result.type === "rejected" || diagnostic.kind === "invalid"
+          if (invalid) {
+            const node = diagnostic.path[0] === "$" ? tree : tree && findNodeAtLocation(tree, [...diagnostic.path])
+            report(diagnostic.path, diagnostic.message, node?.offset)
+          }
+          const log = invalid ? Effect.logWarning : Effect.logDebug
           return log("configuration normalization diagnostic", {
             source,
             path: diagnostic.path[0] === "$" ? "$" : `$.${diagnostic.path.join(".")}`,
@@ -159,24 +187,24 @@ export const layer = (options?: Options) =>
             action: diagnostic.message,
           })
         })
-        if (result.type === "rejected") return
-        const info = Option.getOrUndefined(decodeInfo(result.encoded))
-        if (info) return info
-        yield* Effect.logWarning("configuration normalization diagnostic", {
-          source,
-          path: "$",
-          kind: "invalid",
-          action: "rejected canonical configuration after final validation",
-        })
+        const info = result.type === "normalized" ? Option.getOrUndefined(decodeInfo(result.encoded)) : undefined
+        if (result.type === "normalized" && !info) {
+          report(["$"], "File ignored: rejected canonical configuration after final validation", tree?.offset)
+          yield* Effect.logWarning("configuration normalization diagnostic", {
+            ...diagnostics.at(-1),
+            kind: "invalid",
+            action: diagnostics.at(-1)!.message,
+          })
+        }
+        return { info: info ?? new Info({}), ...(diagnostics.length ? { experimental: { diagnostics } } : {}) }
       })
 
       const loadFile = Effect.fnUntraced(function* (filepath: string) {
         const text = yield* fs.readFileStringSafe(filepath)
         if (text === undefined) return
         const substituted = yield* ConfigVariable.substitute({ type: "path", path: filepath, text })
-        const info = yield* parseInfo(substituted, filepath)
-        if (!info) return
-        return new Document({ type: "document", path: AbsolutePath.make(filepath), info })
+        const document = yield* parseInfo(substituted, filepath)
+        return new Document({ type: "document", path: AbsolutePath.make(filepath), ...document })
       })
 
       const loadWellknownEntry = Effect.fnUntraced(function* (entry: WellKnown.Entry) {
@@ -186,13 +214,15 @@ export const layer = (options?: Options) =>
         // Logging out drops the saved remote config, so the source supplies nothing until a fresh fetch succeeds.
         if (!variables) return yield* wellknown.clearCached(entry.origin).pipe(Effect.as([]))
         // A failed refresh keeps the last resolved config so remote providers and allowlists do not disappear.
-        const configs = yield* wellknown.resolve(entry, variables).pipe(
-          Effect.catch((error) =>
-            Effect.logWarning("failed to load wellknown config", { source: entry.origin, error }).pipe(
-              Effect.andThen(wellknown.cached(entry.origin)),
+        const configs = yield* wellknown
+          .resolve(entry, variables)
+          .pipe(
+            Effect.catch((error) =>
+              Effect.logWarning("failed to load wellknown config", { source: entry.origin, error }).pipe(
+                Effect.andThen(wellknown.cached(entry.origin)),
+              ),
             ),
-          ),
-        )
+          )
         return yield* Effect.forEach(configs, (config) =>
           ConfigVariable.substitute({
             type: "virtual",
@@ -202,14 +232,13 @@ export const layer = (options?: Options) =>
             env: variables,
           }).pipe(
             Effect.flatMap((text) => parseInfo(text, entry.origin)),
-            Effect.map((info) =>
-              info
-                ? new ConfigIntegration.WellKnownDocument({
-                    type: "document",
-                    info,
-                    integrationID: entry.integrationID,
-                  })
-                : undefined,
+            Effect.map(
+              (document) =>
+                new ConfigIntegration.WellKnownDocument({
+                  type: "document",
+                  ...document,
+                  integrationID: entry.integrationID,
+                }),
             ),
           ),
         ).pipe(Effect.map((documents) => documents.filter((document) => document !== undefined)))
@@ -263,8 +292,8 @@ export const layer = (options?: Options) =>
           dir: path.dirname(plist),
           text: ConfigDiscovery.stripPreferenceMetadata(result.value.stdout.toString()),
         })
-        const info = yield* parseInfo(text, plist)
-        return info ? [new Document({ type: "document", path: plist, info })] : []
+        const document = yield* parseInfo(text, plist)
+        return [new Document({ type: "document", path: plist, ...document })]
       })
 
       const loadDirectory = Effect.fnUntraced(function* (directory: AbsolutePath) {
@@ -297,7 +326,7 @@ export const layer = (options?: Options) =>
                 text: options.content,
               }).pipe(
                 Effect.flatMap((text) => parseInfo(text, "OPENCODE_CONFIG_CONTENT")),
-                Effect.map((info) => (info ? [new Document({ type: "document", info })] : [])),
+                Effect.map((document) => [new Document({ type: "document", ...document })]),
                 Effect.orDie,
               )
             : []

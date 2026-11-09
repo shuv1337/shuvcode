@@ -1,3 +1,4 @@
+import { configDiagnostics, formatConfigDiagnostic } from "@opencode/client"
 import { useTheme } from "../context/theme"
 import { DialogHeader, DialogLayout } from "../ui/dialog"
 import { useData } from "../context/data"
@@ -8,6 +9,7 @@ export function DialogStatus() {
   const theme = useTheme().surface("dialog")
 
   const mcp = createMemo(() => data.location.mcp.server.list() ?? [])
+  const diagnostics = createMemo(() => configDiagnostics(data.location.config.list() ?? []))
   const color = (status: string) => {
     if (status === "connected") return theme.text.feedback.success.base
     if (status === "failed") return theme.text.feedback.error.base
@@ -16,6 +18,19 @@ export function DialogStatus() {
   }
   return (
     <DialogLayout header={<DialogHeader title="Status" />}>
+      <Show when={diagnostics().length}>
+        <box marginBottom={1}>
+          <text fg={theme.text.feedback.error.base}>Configuration errors</text>
+          <For each={diagnostics()}>
+            {(diagnostic) => (
+              <text fg={theme.text.base} wrapMode="word">
+                {formatConfigDiagnostic(diagnostic)}
+              </text>
+            )}
+          </For>
+          <text fg={theme.text.muted}>Fix the file to reload its settings automatically.</text>
+        </box>
+      </Show>
       <Show when={mcp().length > 0} fallback={<text fg={theme.text.base}>No MCP servers</text>}>
         <box>
           <text fg={theme.text.base}>
