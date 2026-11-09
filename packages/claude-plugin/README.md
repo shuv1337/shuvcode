@@ -26,6 +26,20 @@ It does not own inference transport.
   unknown events, and tool input arguments. Original tool-name spelling is retained.
 - Sets subscription model `cost = []`; public credential events reload that view.
 
+## CLI identity
+
+OAuth and subscription inference share a lazy, process-cached CLI identity. On first
+use, the plugin executes `claude --version` directly (no shell), with a 1.5-second
+timeout and a 1 KiB output limit. A newer installed Claude Code supplies the version;
+missing, failing, timed-out, malformed, or older installations use the verified
+`2.1.319` floor. Fable 5.2 requires at least `2.1.290`. Restart the Shuvcode server
+after upgrading Claude Code to refresh the cached identity. Without Claude Code
+installed, future model minimums may still require a fallback-version update.
+
+The `x-app: cli`, system identity and dated beta feature identifiers are not CLI
+release numbers. The plugin has no model allowlist and preserves caller beta flags
+and model IDs, including new Fable and Opus families.
+
 ## Auth safety
 
 The host owns persistence and the access-only expiry gate: OAuth credentials with

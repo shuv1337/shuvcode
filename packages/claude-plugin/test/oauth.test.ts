@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test"
 import { Credential } from "@opencode/schema/credential"
 import { IntegrationMethodID } from "@opencode/schema/integration-id"
 import { Effect } from "effect"
+import { userAgent } from "../src/identity.js"
 import { authorizeURL, exchange, isSubscription, methodID, parseCode, pkce, refresh } from "../src/oauth.js"
 
 const credential = Credential.OAuth.make({ type: "oauth", methodID, access: "old", refresh: "native", expires: 1 })
@@ -43,7 +44,7 @@ describe("OAuth boundary", () => {
         fetch: async (url, init) => {
           expect(url).toBe("https://platform.claude.com/v1/oauth/token")
           expect(init.signal).toBe(abort.signal)
-          expect(new Headers(init.headers).get("user-agent")).toBe("claude-cli/2.1.280 (external, cli)")
+          expect(new Headers(init.headers).get("user-agent")).toBe(await userAgent())
           const body = new URLSearchParams(String(init.body))
           expect(body.get("code")).toBe("code")
           expect(body.get("code_verifier")).toBe("verifier")
