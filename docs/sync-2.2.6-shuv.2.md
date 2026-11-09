@@ -206,3 +206,71 @@ No branch is merged or deleted. Historical/closed work without a current equival
 | `origin/sc-cursor-377` | 033bbe0580 2026-10-04 chore: merge integration-v2 timeline fix | #430 MERGED | Previously landed via #430; historical/rebased ref preserved. No old tree re-import. |
 | `origin/sc-permission-fixes` | 35b78d5586 2026-10-04 no-mistakes(review): Gate root family sync on hydrated ancestor, drop duplicate toast | #429 MERGED | Previously landed via #429; historical/rebased ref preserved. No old tree re-import. |
 | `origin/sewer56-subagent-restrict` | a6ee592131 2026-10-17 Update Nix flake.lock and hashes | #57 MERGED | Previously landed via #57; historical/rebased ref preserved. No old tree re-import. |
+
+## Completion audit
+
+The inventory was rechecked against local and origin refs at the original fork base; every non-symbolic unmerged branch has a row above. `origin/HEAD` is the default-branch alias, not separate work. No branch was deleted, rebased, or silently merged. #478 is the only additional fork work brought in.
+
+Inspected `git show --remerge-diff bd6aebb7da`, compared the previous/new upstream-to-fork path sets, and checked the overlapping identity, provider, session and permission changes. No path deleted by the fork relative to the old upstream pin was resurrected. Upstream itself also deleted the obsolete setup-git-committer action, bot-docs-locale workflow and release-dry-run workflow; those are the only old fork-delta paths now identical to upstream.
+
+| Fork contract | Combined-tree evidence |
+|---|---|
+| Identity | CLI manifest/bin remain `shuvcode`; version is `2.2.6-shuv.2`. `Global.app` and both client service fallback/spawn implementations retain Shuvcode identity. ACP preserves `Shuvcode` while adding upstream steering metadata. |
+| Service and updates | `0x1337` / local `0x1338`, npm `shuvcode` / `shuvcode-node` updater, and CLI-only ownership guard remain unchanged from the original base. Custom build channels retain their existing derived port. |
+| Anthropic | Core still bundles `ClaudePlugin`; #478's package tree is preserved exactly. No loopback proxy or Core Anthropic transport wrapper was added. |
+| Hidden Claude Agent | On-disk SDK implementation/tests and optional peer/alias remain. Registry filtering, no-op product export, config-id exclusion (including integration documents), and app/TUI/CLI/mini list predicates remain. The model-picker conflict kept `isHiddenProvider`. |
+| Bundled fork features | Antigravity, quota, GPT-Live, `$skill`, quick quote, subagent sidebar and Night Owl default remain. OAuth refresh single-flight and fork host seams remain. |
+| Run and permissions | #434 setup/admission deadlines and `run` with `autostart: false` are unchanged. #475 fail-closed parent-agent deny inheritance is unchanged; upstream session changes touch generation output and build metadata, not that implementation. |
+| Guards | Router-matched cross-site guard and redirect protections are preserved, not replaced with upstream versions. This is preservation evidence, not a new security assessment. |
+| Trees and publishing | No previously removed tree/path is restored. Retained upstream console/web/services/enterprise/stats/desktop sources remain outside fork publishing; fork workflow files are unchanged from the original base. |
+| Release metadata | Changelog includes the upstream pin, fork preservation, version floor, and #478. `latest` version resolution returns `2.2.6-shuv.2` while npm latest trails the tree. No release was published. |
+
+### Historical rewrite-map differences (not introduced by this sync)
+
+`PLAN-fresh-v2-rewrite.md` is a September rewrite decision map, not an exact inventory of the November base. Night Owl is now a theme default rather than a separate plugin. The old standalone Codex identity plugin and xAI popular-order override are **not present in the #477 base either**: OpenAI currently uses the ChatGPT token-sharing provider; `codex_cli_rs` remains in the quota request, and the TUI integration priority has no xAI entry. This sync does not silently restore those older designs or claim they are present. The old `.github/last-synced-tag` file is also absent at the base; this document and the merge's second parent record the frozen pin.
+
+### Deferred
+
+- Security assessment of the linked upstream auth, permission and request-handling changes belongs to the PR reviewer.
+- #477 R2-F1 (absolute-form request target/Origin behavior) remains unresolved, and R2-F2 (explicit bare versions on `next`/`beta`) remains deferred. Neither implementation is changed here.
+- Live provider credentials, real subscription billing, and a real model reply were not exercised. All runtime validation uses disposable HOME/XDG/database state and private networking.
+- Post-pin upstream commit `20c056d842` is not merged. No merge to the default branch and no release are part of this task.
+
+## Validation after #478
+
+Product code was frozen at `de46a5bace`; subsequent commits change only this audit/changelog and two tests. Builds and smoke checks cover that combined product tree. Core's complete rerun covers `55ac7ee6d2`; the final e2e checks cover `d201eed3fa`. Documentation-only completion does not alter either artifact.
+
+Tests used an empty HOME/XDG/database environment and private loopback-only networking with uid 1000 and no capabilities, never the user's service or credentials. Earlier pre-#478 runs are not counted. The inherited root-uid/under-home scratch run was discarded because it bypassed permission checks and discovered ancestor config.
+
+| Check | Result |
+|---|---|
+| `bun run check`, including forced uncached typechecks | 39/39 tasks pass; 0 lint errors, 550 warnings. Repeated after both fixture fixes. |
+| Fork CI's per-package `typecheck:tsc` loop | Exit 0; core compiler check also rerun after its fix. |
+| Full fork Turbo unit gate, forced, concurrency 3 | Initially 34/35 tasks passed; only core failed to construct the location-activity fixture. |
+| Full core rerun after `55ac7ee6d2` | 7,416 pass, 16 skip, 0 fail. Every package gate now has a passing result; no second full Turbo invocation is claimed. |
+| Location-activity file, repeated 10 times | 200 pass, 0 fail. |
+| CLI / server / TUI | 448 / 138 / 1,737 pass; 7 / 1 / 2 skip; 0 fail each. |
+| Claude plugin / release-script suites | 43 / 22 pass, 0 fail; release scripts skip 12 jj-dependent cases. |
+| Effect rule tests / simplification lint | 10 rules pass / exit 0. |
+| Client generation | Exit 0; generated files unchanged. |
+| Code Mode package dry run | Exit 0; installed-tarball imports work in Node and Bun's workerd condition. Nothing published. |
+| `OPENCODE_CHANNEL=integration-v2 bun run --cwd packages/cli build` | Exit 0, every configured platform target built. |
+| Native Node CLI build | Exit 0, Linux x64; reused the Bun build's web archive. |
+| Bun and Node compiled smoke | Version/help, election, readiness, MCP, auth, embedded UI, plugin discovery, unauthenticated 401, stop: exit 0. |
+| Compiled #434 deadline file | 15/15 pass on each binary. |
+| Release-version resolution | `OPENCODE_CHANNEL=latest` resolves `2.2.6-shuv.2`. Integration-channel binaries intentionally print preview versions, not release versions. |
+| Extra standalone `typecheck:e2e` | Exit 2, 181 diagnostics. An isolated `51cede01da` archive produces exactly the same 181 diagnostic messages after ignoring line-number shifts. Existing gate debt (related papercut `pc_787142d3d2e1`), not a new regression. |
+| Changed test formatting / `git diff --check` | Pass. |
+
+### Verification fixes
+
+- `55ac7ee6d2`: add `Config.testLayer()` to the fork's location-activity Tool graph. Upstream added `Flag → Config` as a dependency, and this fixture intentionally supplies Location separately. The previous import-time `Unbound layer node: @opencode/Location` is gone; all 20 cases execute. Product code is unchanged.
+- `d201eed3fa`: wait for initial composer autofocus before opening review in the editor-launch timeout test. Upstream now preserves focus moves during panel animation. The uncorrected case failed 3/10 targeted attempts, versus 10/10 passing on `51cede01da`. Corrected: 10/10 pass and the entire session-header keeper 28/28 pass. All existing focus, editor-launch, disabled-state and timeout assertions remain; no sleep/retry or product change.
+
+### E2E results
+
+Final full app suite on `d201eed3fa`: **755 passed, 0 failed**, five workers, no retries (4.3 minutes). It used `PLAYWRIGHT_BUILD=1 PLAYWRIGHT_BASE_URL=http://127.0.0.1:4310 bun run test:e2e` against the existing production-fixture build on a fresh private static server. Earlier runs rebuilt with `bun --cwd packages/app test:e2e:built`; no app product code changed between those builds and the final run.
+
+Before the e2e fixture correction, full runs produced 754/755 and 753/755. Both hit the focus race fixed above; the second also missed the mobile touch-tab reorder. That unchanged mobile case passed 10/10 targeted repeats on both this tree and the `51cede01da` archive. Its intermittent failure's root cause is not established; the test was not weakened or changed.
+
+Local raw logs and failure artifacts are retained under `/home/shuv/.cache/agent-ws/shuvcode-sync-finish-20261109/`. The standalone e2e compiler check is distinct from the passing canonical/CI typechecks. Dedicated service-worker/component suites, live provider calls, non-Linux execution and new security mutations were not run.
