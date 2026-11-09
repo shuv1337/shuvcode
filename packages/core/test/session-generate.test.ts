@@ -101,12 +101,12 @@ const models = Layer.mock(SessionRunnerModel.Service)({
         SessionRunnerModel.resolved(model, {
           capabilities: { tools: true, input: ["text", "image"], output: ["text"] },
           cost: [
-          {
-            input: Money.USDPerMillionTokens.make(1),
-            output: Money.USDPerMillionTokens.make(2),
-            cache: { read: Money.USDPerMillionTokens.make(0.1), write: Money.USDPerMillionTokens.make(0.5) },
-          },
-        ],
+            {
+              input: Money.USDPerMillionTokens.make(1),
+              output: Money.USDPerMillionTokens.make(2),
+              cache: { read: Money.USDPerMillionTokens.make(0.1), write: Money.USDPerMillionTokens.make(0.5) },
+            },
+          ],
           limit: { context: 200_000, output: 32_000 },
         }),
       ),

@@ -2,6 +2,31 @@
 
 Release notes for OpenCode V2, newest first.
 
+## v2.2.6-shuv.2 — 2026-11-09
+
+Shuvcode sync of upstream `dev` at `a5fda7ee1347eb3bb1227724e0ad8cdc091ad7e3`: 140 commits since the v2.2.6 sync pin `64f2403ffa`. The latest upstream release remains v2.2.6.
+
+### Core and providers
+
+- Refresh MCP OAuth tokens under the shared credential lock, and stop applying cached well-known remote configuration after logout. ([#62827](https://github.com/anomalyco/opencode/pull/62827), [#62760](https://github.com/anomalyco/opencode/pull/62760))
+- Run GitHub Copilot on native AI protocols, refresh its API endpoint with the model list, and stop retrying ChatGPT workspace usage limits. ([#62034](https://github.com/anomalyco/opencode/pull/62034), [#62171](https://github.com/anomalyco/opencode/pull/62171), [#62823](https://github.com/anomalyco/opencode/pull/62823))
+- Return usage from session generation; improve cache-TTL warming defaults, timing, and cache-miss handling. ([#62835](https://github.com/anomalyco/opencode/pull/62835), [#62831](https://github.com/anomalyco/opencode/pull/62831), [#62926](https://github.com/anomalyco/opencode/pull/62926), [#62941](https://github.com/anomalyco/opencode/pull/62941))
+- Add Console event watches with bounded follow-up wakes, retain policies when instructions or skills fail, and load instructions and skills concurrently. ([#62662](https://github.com/anomalyco/opencode/pull/62662), [#62924](https://github.com/anomalyco/opencode/pull/62924), [#62702](https://github.com/anomalyco/opencode/pull/62702), [#62672](https://github.com/anomalyco/opencode/pull/62672))
+- Improve tail reads and file suggestions, shell exit/timeout reporting, MCP prompt refresh resilience, legacy auth import, and markdown-agent discovery. Keep Code Mode catalogs small and stable; add durable/idempotent tools and safe suspension to its experimental VM. The `codemode_vm` flag is on in dev builds and off in releases. ([#62147](https://github.com/anomalyco/opencode/pull/62147), [#62141](https://github.com/anomalyco/opencode/pull/62141), [#62266](https://github.com/anomalyco/opencode/pull/62266), [#62568](https://github.com/anomalyco/opencode/pull/62568), [#62571](https://github.com/anomalyco/opencode/pull/62571), [#62176](https://github.com/anomalyco/opencode/pull/62176), [#62459](https://github.com/anomalyco/opencode/pull/62459), [#62444](https://github.com/anomalyco/opencode/pull/62444))
+- Server handlers now answer with currently loaded plugins rather than waiting for activation; one-shot clients wait client-side. ACP advertises and supports session steering. ([#62796](https://github.com/anomalyco/opencode/pull/62796), [#54394](https://github.com/anomalyco/opencode/pull/54394))
+
+### App and TUI
+
+- Mark sessions read/unread from menus; close side-panel tabs to the right and use side-panel-aware close/reopen shortcuts. Improve dialog popovers and focus. ([#62889](https://github.com/anomalyco/opencode/pull/62889), [#62922](https://github.com/anomalyco/opencode/pull/62922), [#62913](https://github.com/anomalyco/opencode/pull/62913))
+- Improve TUI dialogs and keyboard actions, simplify the model picker, find children by exact session ID, and save session exports in the working directory. ([#62906](https://github.com/anomalyco/opencode/pull/62906), [#62927](https://github.com/anomalyco/opencode/pull/62927), [#62262](https://github.com/anomalyco/opencode/pull/62262), [#62253](https://github.com/anomalyco/opencode/pull/62253))
+- Includes upstream site/docs, performance tooling and infrastructure updates; upstream deploy/release workflows remain disabled in this fork.
+
+### Fork and security
+
+- Preserve Shuvcode identity, npm updates, guarded CLI publishing, bundled provider/UI plugins, hidden Claude Agent filtering, run deadlines, parent-agent deny inheritance and redirect guards.
+- Release resolution honors the checked-in `2.2.6-shuv.2` minimum even while npm's latest tag trails the source tree.
+- The router-matched cross-site path guard from `4bb0ded8a7` is unchanged. #477's R2-F1 absolute-form request-target bypass remains unresolved; this sync does not claim to fix it. R2-F2 (bare versions accepted on explicit `next`/`beta` releases) also remains deferred.
+
 ## v2.2.6-shuv.1 — 2026-11-06
 
 Shuvcode fork release of OpenCode v2.2.6, built from upstream `dev` at `64f2403ffa`. It includes every change listed under v2.2.6 below, plus this fork-specific hardening.
@@ -986,15 +1011,15 @@ Version 2.1 makes intentional changes to public SDK, HTTP message/event, and plu
 
 Provider-owned replay data previously used different names on different surfaces. Read and write `native` instead; a tool's execution `state` and UI `metadata` are separate and are not renamed.
 
-| Surface | Before | After |
-| --- | --- | --- |
-| Text and reasoning parts | `state` | `native` |
-| Assistant and compaction messages | `providerState` | `native` |
-| Text/reasoning lifecycle events and `session.tool.called` | `state` | `native` |
-| `session.step.ended`, `session.step.failed`, and `session.compaction.ended` | `providerState` | `native` |
-| `session.tool.success` and `session.tool.failed` | `resultState` | `native` |
-| Exported replay-data schema | `SessionMessage.ProviderState` | `SessionMessage.Native` |
-| Plugin compaction hook result | `SessionCompactionResult.providerState` | `SessionCompactionResult.native` |
+| Surface                                                                     | Before                                  | After                            |
+| --------------------------------------------------------------------------- | --------------------------------------- | -------------------------------- |
+| Text and reasoning parts                                                    | `state`                                 | `native`                         |
+| Assistant and compaction messages                                           | `providerState`                         | `native`                         |
+| Text/reasoning lifecycle events and `session.tool.called`                   | `state`                                 | `native`                         |
+| `session.step.ended`, `session.step.failed`, and `session.compaction.ended` | `providerState`                         | `native`                         |
+| `session.tool.success` and `session.tool.failed`                            | `resultState`                           | `native`                         |
+| Exported replay-data schema                                                 | `SessionMessage.ProviderState`          | `SessionMessage.Native`          |
+| Plugin compaction hook result                                               | `SessionCompactionResult.providerState` | `SessionCompactionResult.native` |
 
 #### Tool call and result data share `tool.native`
 

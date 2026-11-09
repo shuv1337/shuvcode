@@ -121,8 +121,12 @@ export function parseForkVersion(version: string) {
   return { base: `${parsed.major}.${parsed.minor}.${parsed.patch}`, iteration }
 }
 
-/** Next `<base>-shuv.<n>` after `published`; the counter restarts when the upstream base moves. */
-export function nextForkVersion(input: { readonly base: string; readonly published?: string }) {
+/** Next fork version after `published`, never below the checked-in release minimum. */
+export function nextForkVersion(input: {
+  readonly base: string
+  readonly published?: string
+  readonly minimum?: string
+}) {
   const base = semver.parse(input.base)
   if (!base || base.prerelease.length) throw new Error(`Invalid upstream base version: ${input.base}`)
   if (input.published !== undefined && !semver.valid(input.published))
@@ -130,5 +134,9 @@ export function nextForkVersion(input: { readonly base: string; readonly publish
   const core = `${base.major}.${base.minor}.${base.patch}`
   const published = input.published === undefined ? undefined : parseForkVersion(input.published)
   const iteration = published?.base === core ? published.iteration : 0
-  return `${core}-${suffix}.${iteration + 1}`
+  const next = `${core}-${suffix}.${iteration + 1}`
+  if (input.minimum === undefined) return next
+  if (parseForkVersion(input.minimum)?.base !== core)
+    throw new Error(`Invalid minimum fork version for ${core}: ${input.minimum}`)
+  return semver.gt(input.minimum, next) ? input.minimum : next
 }
