@@ -8,6 +8,7 @@ import { Effect, Schema } from "effect"
 import fs from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
+import { cleanProcessEnv } from "../test/fixture/clean-env"
 
 const nodeBuild = process.argv.includes("--node")
 const target = `shuvcode${nodeBuild ? "-node" : ""}-${process.platform === "win32" ? "windows" : process.platform}-${process.arch}`
@@ -20,7 +21,7 @@ if (!(await Bun.file(binary).exists())) throw new Error(`Missing compiled CLI in
 
 const root = await fs.realpath(await fs.mkdtemp(path.join(os.tmpdir(), "opencode-service-smoke-")))
 const env = {
-  ...process.env,
+  ...cleanProcessEnv(),
   HOME: root,
   USERPROFILE: root,
   OPENCODE_DB: path.join(root, "opencode.db"),
@@ -107,7 +108,7 @@ if (failure)
   })
 
 function spawnService() {
-  const process = Bun.spawn([binary, "serve", "--service"], { env, stdout: "ignore", stderr: "pipe" })
+  const process = Bun.spawn([binary, "serve", "--service"], { cwd: root, env, stdout: "ignore", stderr: "pipe" })
   processes.push(process)
   errors.push(new Response(process.stderr).text())
   return process

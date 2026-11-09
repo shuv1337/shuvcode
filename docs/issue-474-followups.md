@@ -77,8 +77,38 @@ authorization precedence with bearer/passthrough auth, and retained query/body d
 
 ## Verification
 
-All execution tests use disposable HOME/XDG/database state, loopback fixtures or mocked browser API state.
-No test connects to the user's live Shuvcode service or reads its configuration.
+- Frozen installation; unchanged lockfile. `bun run check`: lint and 39/39 typecheck tasks.
+  Official `typecheck:tsc`: 32/32 tasks. Effect/lint-rule tests: 10/10 and 6/6.
+- Broad validation: 36/36 non-Core Turbo test tasks passed, including the full CLI and TUI suites.
+  Core passed separately in an isolated network namespace: 7,406 passed, 27 skipped, zero failed.
+- Setup subprocess suite: 17/17 each on source, compiled Bun, and compiled Node. New worktree cases:
+  20/20 across ten repetitions. Evaluation transport cases: 20/20 across ten repetitions.
+- Focused OAuth/integration/permission suites: 183/183. Injected-fetch regression: 10/10 repetitions.
+- Production-build MCP refresh-recovery browser tests: 2/2, then 20/20 across five workers with no retries.
+- Linux x64 Bun and Node SEA builds, compiled service-lifecycle smoke tests, client generation,
+  OpenAPI generation check, and whitespace checks passed.
 
-Final check/build results are recorded in the pull request. Cross-platform native release validation remains
-for the release CI matrix; this Linux host cannot execute macOS/Windows binaries, and no release is requested.
+Final execution checks use disposable HOME/XDG/database state, loopback fixtures or mocked browser API state.
+The first smoke invocation exposed inherited `OPENCODE_CONFIG_DIR` despite its HOME/XDG isolation.
+The smoke runner now uses the existing `cleanProcessEnv()` helper and a throwaway working directory.
+A deliberately invalid throwaway config plus disabled project-config discovery fails the old script and
+passes the corrected script for both compiled runtimes. No live service was targeted or stopped.
+
+The initial broad Core run encountered an unrelated listener on its GitLab OAuth callback port 8080.
+The listener was left alone. On Linux, rerun without host networking and drop namespace capabilities
+so filesystem permission tests remain meaningful:
+
+```sh
+unshare --user --map-root-user --net bash -c '
+  ip link set lo up
+  cd packages/core
+  CI=true setpriv --bounding-set=-all --inh-caps=-all --ambient-caps=-all bun run test
+'
+```
+
+Without the capability drop, two unwritable-lock-root tests incorrectly succeed under namespace root.
+This command passed the full Core suite; the recurring fixed-port test-helper gap is also tracked by
+papercut `pc_e9cd388c39fd`.
+
+Cross-platform native release validation remains for release CI: this Linux x64 host cannot execute
+macOS/Windows/ARM artifacts. No merge or release is requested.
