@@ -6,6 +6,7 @@ import { Model } from "@opencode/schema/model"
 import { Session } from "@opencode/schema/session"
 import { Effect } from "effect"
 import { hooks } from "../src/hooks.js"
+import { userAgent } from "../src/identity.js"
 import { methodID } from "../src/oauth.js"
 
 const scope = {
@@ -98,6 +99,23 @@ test("fresh request resolution, preserved custom URL and headers, response uses 
   const before = untouched.response
   await Effect.runPromise(http.response(untouched))
   expect(untouched.response).toBe(before)
+})
+
+test.each(["claude-fable-5-2", "claude-opus-5-5"])("preserves new model %s and its beta flags", async (model) => {
+  const http = hooks({
+    active: () => Effect.succeed({ type: "env", name: "CLAUDE_CODE_OAUTH_TOKEN" }),
+    resolve: () => Effect.succeed(oauth),
+    status: () => Effect.void,
+  })
+  const event = { ...request(), model: Model.Ref.parse(`anthropic/${model}`) }
+  event.request = new Request(event.request, {
+    body: JSON.stringify({ model, messages: [{ role: "user", content: "Reply OK" }] }),
+  })
+  await Effect.runPromise(http.request(event))
+  expect((await event.request.json()).model).toBe(model)
+  expect(event.request.headers.get("user-agent")).toBe(await userAgent())
+  expect(event.request.headers.get("x-app")).toBe("cli")
+  expect(event.request.headers.get("anthropic-beta")).toContain("custom")
 })
 
 test("setup token path, non-SSE error/status/header pass-through", async () => {
