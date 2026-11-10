@@ -2238,6 +2238,27 @@ describe("Config", () => {
     )
   }
 
+  for (const [text, message] of [
+    ['{\n  "mcp": {\n    "servers": {\n', "unclosed object opened at line 3"],
+    ['{\n  "instructions": ["a"\n', "unclosed array opened at line 2"],
+    ['{\n  "mcp": {\n    "servers": {}}', "unclosed object opened at line 1"],
+    ['{\n  "mcp": {\n    "servers": {}}\n', "unclosed object opened at line 1"],
+  ] as const) {
+    it.live(`identifies the innermost unclosed container: ${text}`, () =>
+      withTempDir((tmp) =>
+        Effect.gen(function* () {
+          yield* Effect.promise(() => fs.writeFile(path.join(tmp.path, "opencode.json"), text))
+          yield* Effect.gen(function* () {
+            const config = yield* Config.Service
+            const document = (yield* config.entries()).find((entry) => entry.type === "document")
+            if (document?.type !== "document") throw new Error("missing config document")
+            expect(document.experimental?.diagnostics?.[0]?.message).toContain(message)
+          }).pipe(Effect.provide(testLayer(tmp.path)))
+        }),
+      ),
+    )
+  }
+
   it.live("reports positions in the original file before substitutions", () =>
     withTempDir((tmp) =>
       Effect.gen(function* () {

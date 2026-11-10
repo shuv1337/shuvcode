@@ -7,7 +7,9 @@ import {
   applyEdits,
   findNodeAtLocation,
   modify,
+  type Node,
   type ParseError,
+  ParseErrorCode,
   parse,
   parseTree,
   printParseErrorCode,
@@ -124,6 +126,17 @@ export const testLayer = (
     }),
   )
 
+function unclosedContainer(tree: Node | undefined, text: string) {
+  const containers: Node[] = []
+  for (let node = tree; node && node.offset + node.length === text.length; node = node.children?.at(-1)) {
+    if (node.type === "object" || node.type === "array") containers.push(node)
+  }
+  // A closed innermost container can also end exactly at EOF; its ancestors still need closing.
+  const last = containers.at(-1)
+  if (last && text.endsWith(last.type === "object" ? "}" : "]")) containers.pop()
+  return containers.at(-1)
+}
+
 export const layer = (options?: Options) =>
   Layer.effect(
     Service,
@@ -160,9 +173,15 @@ export const layer = (options?: Options) =>
           })
         }
         if (errors.length) {
+          const unclosed =
+            sourceErrors[0]?.offset === original.length &&
+            (sourceErrors[0].error === ParseErrorCode.CloseBraceExpected ||
+              sourceErrors[0].error === ParseErrorCode.CloseBracketExpected)
+              ? unclosedContainer(tree, original)
+              : undefined
           report(
             ["$"],
-            `File ignored: ${printParseErrorCode(errors[0]!.error)} (malformed JSON or JSONC)`,
+            `File ignored: ${printParseErrorCode(errors[0]!.error)} (malformed JSON or JSONC)${unclosed ? `; unclosed ${unclosed.type} opened at line ${original.slice(0, unclosed.offset).split(/\r\n|\r|\n/).length}` : ""}`,
             sourceErrors[0]?.offset,
           )
           yield* Effect.logWarning("configuration normalization diagnostic", {
