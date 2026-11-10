@@ -3,7 +3,7 @@ import type { ConfigEntry } from "@opencode/client"
 import { createAppFixture } from "./fixture/app"
 import { json } from "./fixture/tui-client"
 
-test("config errors appear at startup, persist in status, and refresh after repair", async () => {
+test("config errors appear once, persist without repeat toasts on config.updated, and refresh after repair", async () => {
   const diagnostic = {
     source: "/config/opencode.json",
     path: "$",
@@ -11,7 +11,20 @@ test("config errors appear at startup, persist in status, and refresh after repa
     column: 2,
     message: "File ignored: CloseBraceExpected",
   }
-  let entries: ConfigEntry[] = [{ type: "document", info: {}, experimental: { diagnostics: [diagnostic] } }]
+  const other = {
+    source: "/config/other.json",
+    path: "$.snapshots",
+    message: "Skipped invalid setting: Expected boolean",
+  }
+  let entries: ConfigEntry[] = [
+    {
+      type: "document",
+      info: {},
+      experimental: {
+        diagnostics: [diagnostic, other],
+      },
+    },
+  ]
   const requests: string[] = []
   await using setup = await createAppFixture({
     width: 100,
@@ -31,6 +44,23 @@ test("config errors appear at startup, persist in status, and refresh after repa
   await setup.mockMouse.click(lines[row]!.indexOf("View diagnostics"), row)
   await setup.waitForFrame((frame) => frame.includes("Configuration errors"))
   expect(setup.captureCharFrame()).toContain("Fix the file")
+  expect(setup.captureCharFrame()).toContain("other.json")
+  // The same diagnostics in a new order force a refresh we can observe in Status.
+  // Neither unchanged error should toast again.
+  entries = [{ type: "document", info: {}, experimental: { diagnostics: [other, diagnostic] } }]
+  setup.events.emit({
+    id: "evt_unchanged",
+    created: 1,
+    type: "config.updated",
+    location: { directory: requests[0]! },
+    data: {},
+  })
+  await setup.waitForFrame(
+    (frame) => frame.includes("other.json") && frame.indexOf("other.json") < frame.indexOf("opencode.json:3:2"),
+  )
+  expect(setup.captureCharFrame()).toContain("CloseBraceExpected")
+  expect(setup.captureCharFrame()).not.toContain("Invalid configuration")
+  expect(setup.captureCharFrame()).not.toContain("View diagnostics")
   setup.resize(44, 35)
   await setup.renderOnce()
   expect(setup.captureCharFrame()).toContain("Configuration errors")
@@ -39,7 +69,7 @@ test("config errors appear at startup, persist in status, and refresh after repa
   entries = [{ type: "document", info: {} }]
   setup.events.emit({
     id: "evt_fixed",
-    created: 1,
+    created: 2,
     type: "config.updated",
     location: { directory: requests[0]! },
     data: {},
@@ -51,7 +81,7 @@ test("config errors appear at startup, persist in status, and refresh after repa
   entries = [{ type: "document", info: {}, experimental: { diagnostics: [diagnostic] } }]
   setup.events.emit({
     id: "evt_broken",
-    created: 2,
+    created: 3,
     type: "config.updated",
     location: { directory: requests[0]! },
     data: {},

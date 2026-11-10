@@ -4,7 +4,7 @@ import { tmpdir } from "node:os"
 import path from "node:path"
 import { cleanProcessEnv } from "../fixture/clean-env"
 import { RUN_ADMISSION_TIMEOUT_MS, RUN_SETUP_TIMEOUT_MS } from "../../src/run/setup"
-import type { EventSubscribeOutput, SessionMessageInfo, SessionInboxUser } from "@opencode/client/promise"
+import type { ConfigEntry, EventSubscribeOutput, SessionMessageInfo, SessionInboxUser } from "@opencode/client/promise"
 
 const repository = path.resolve(import.meta.dir, "../../../..")
 const scale = 30
@@ -19,6 +19,39 @@ describe("isolated run setup", () => {
   test("prompt admission has a longer deadline than setup RPCs", () => {
     expect(RUN_SETUP_TIMEOUT_MS).toBe(30_000)
     expect(RUN_ADMISSION_TIMEOUT_MS).toBe(120_000)
+  })
+
+  test.each(["$.snapshots", "$"])("config diagnostic %s only blocks run for an ignored file", async (path) => {
+    const fixture = await start({
+      config: [
+        {
+          type: "document",
+          info: {},
+          experimental: {
+            diagnostics: [
+              {
+                source: "/fixture/opencode.json",
+                path,
+                message:
+                  path === "$" ? "File ignored: CloseBraceExpected" : "Skipped invalid setting: Expected boolean",
+              },
+            ],
+          },
+        },
+      ],
+    })
+    try {
+      const child = fixture.cli([])
+      child.stdin.end()
+      const result = await capture(child)
+      expect(result.stderr).toContain("/fixture/opencode.json")
+      expect(result.stderr).not.toMatch(/\n\s+at /)
+      expect(result.code).toBe(path === "$" ? 1 : 0)
+      expect(fixture.prompts).toHaveLength(path === "$" ? 0 : 1)
+      if (path !== "$") expect(result.stdout).toContain("fixture response")
+    } finally {
+      await fixture.close()
+    }
   })
 
   const stalls = [
@@ -154,7 +187,15 @@ describe("isolated run setup", () => {
   )
 })
 
-async function start(options: { stall?: string; body?: boolean; duration?: number; pendingPermission?: boolean } = {}) {
+async function start(
+  options: {
+    stall?: string
+    body?: boolean
+    duration?: number
+    pendingPermission?: boolean
+    config?: ConfigEntry[]
+  } = {},
+) {
   const root = await mkdtemp(path.join(tmpdir(), "shuvcode-run-setup-"))
   // Source subprocesses cannot inherit the package's bunfig from their isolated cwd.
   if (!process.env.SHUV_RUN_TEST_CLI)
@@ -224,7 +265,7 @@ async function start(options: { stall?: string; body?: boolean; duration?: numbe
       }
       if (options.pendingPermission && url.pathname.endsWith("/reply")) return new Promise<Response>(() => {})
       if (url.pathname === "/api/info") return Response.json({ version: "local" })
-      if (url.pathname === "/api/config") return Response.json([])
+      if (url.pathname === "/api/config") return Response.json(options.config ?? [])
       if (url.pathname === "/api/location")
         return Response.json({ directory: root, project: { id: "project", directory: root, canonical: root } })
       if (route === "GET /api/session") return Response.json({ data: [session], cursor: {} })
