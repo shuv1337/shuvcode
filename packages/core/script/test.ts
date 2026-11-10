@@ -2,6 +2,7 @@ import fs from "fs/promises"
 import path from "path"
 import { nodeBinDirectory, prependNodeBin } from "./node-bin"
 import { tmpdir } from "../test/fixture/tmpdir"
+import { cleanProcessEnv } from "../test/fixture/clean-env"
 
 // Resolve node before the child env below replaces HOME and XDG_STATE_HOME.
 const nodeBin = await nodeBinDirectory(process.env)
@@ -13,19 +14,7 @@ await fs.mkdir(temporary)
 
 const environment = prependNodeBin(
   {
-    ...Object.fromEntries(
-      Object.entries(process.env).filter(([name]) => {
-        if (process.env.RECORD === "true" && name === "OPENAI_API_KEY") return true
-        if (
-          /^(?:AWS|AZURE|GOOGLE|GCP|GCLOUD|VERTEX|OPENAI|ANTHROPIC|GEMINI|XAI|CLOUDFLARE|CF_AIG|SNOWFLAKE|AICORE|GITLAB|NPM_CONFIG)_/i.test(
-            name,
-          )
-        ) {
-          return false
-        }
-        return !/(?:^|_)(?:API_KEY|AUTHORIZATION|TOKEN|SECRET|PASSWORD|CREDENTIALS?)$/i.test(name)
-      }),
-    ),
+    ...cleanProcessEnv(),
     HOME: home,
     OPENCODE_TEST_HOME: home,
     XDG_CONFIG_HOME: path.join(home, ".config"),
