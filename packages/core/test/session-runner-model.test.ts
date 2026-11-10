@@ -11,6 +11,7 @@ import { AbsolutePath } from "@opencode/core/schema"
 import { SessionRunnerModel } from "@opencode/core/session/runner/model"
 import { SessionSchema } from "@opencode/core/session/schema"
 import { DateTime, Effect, Layer } from "effect"
+import { LayerNode } from "@opencode/util/effect/layer-node"
 import { testEffect } from "./lib/effect"
 
 const catalogModel = (providerID: string, id: string) =>
@@ -44,11 +45,13 @@ const resolvedFor = (model: Info, variant?: VariantID) =>
   )
 
 const resolver = Layer.mock(ModelResolver.Service)({
-  resolve: (requested) => Effect.succeed(requested ? undefined : resolvedFor(fallback)),
+  fallback: () => Effect.succeed(fallback),
   resolveModel: (model, variant) => Effect.succeed(resolvedFor(model, variant)),
 })
 
-const it = testEffect(AppNodeBuilder.build(SessionRunnerModel.node, [ModelResolver.node.replace(resolver)]))
+const it = testEffect(
+  AppNodeBuilder.build(LayerNode.group([SessionRunnerModel.node, Agent.node]), [ModelResolver.node.replace(resolver)]),
+)
 
 const session = (model?: Ref) =>
   SessionSchema.Info.make({
@@ -62,7 +65,17 @@ const session = (model?: Ref) =>
     location: { directory: AbsolutePath.make("/project") },
   } as SessionSchema.Info)
 
-const agent = (model?: Ref) => ({ ...Agent.Info.default(Agent.ID.make("build")), ...(model ? { model } : {}) })
+const request = { kind: "primary" as const, agent: Agent.ID.make("build") }
+
+const agent = (model?: Ref) =>
+  Effect.gen(function* () {
+    const agents = yield* Agent.Service
+    yield* agents.transform((editor) =>
+      editor.update(request.agent, (info) => {
+        info.model = model
+      }),
+    )
+  })
 
 const ref = (model: Info, variant?: string) =>
   Ref.make({
@@ -75,7 +88,8 @@ describe("SessionRunnerModel.resolve", () => {
   it.effect("uses the agent model, including its variant, when the Session has none", () =>
     Effect.gen(function* () {
       const models = yield* SessionRunnerModel.Service
-      const resolved = yield* models.resolve(session(), available, agent(ref(agentModel, "medium")))
+      yield* agent(ref(agentModel, "medium"))
+      const resolved = yield* models.resolve(session(), available, request)
       expect(resolved.ref).toEqual(ref(agentModel, "medium"))
     }),
   )
@@ -83,7 +97,8 @@ describe("SessionRunnerModel.resolve", () => {
   it.effect("prefers the explicit Session model over the agent model", () =>
     Effect.gen(function* () {
       const models = yield* SessionRunnerModel.Service
-      const resolved = yield* models.resolve(session(ref(sessionModel)), available, agent(ref(agentModel)))
+      yield* agent(ref(agentModel))
+      const resolved = yield* models.resolve(session(ref(sessionModel)), available, request)
       expect(resolved.ref).toEqual(ref(sessionModel))
     }),
   )
@@ -91,8 +106,9 @@ describe("SessionRunnerModel.resolve", () => {
   it.effect("falls back to the catalog default when neither Session nor agent selects a model", () =>
     Effect.gen(function* () {
       const models = yield* SessionRunnerModel.Service
-      expect((yield* models.resolve(session(), available, agent())).ref).toEqual(ref(fallback))
-      expect((yield* models.resolve(session(), available)).ref).toEqual(ref(fallback))
+      expect((yield* models.resolve(session(), available, request)).ref).toEqual(ref(fallback))
+      yield* agent()
+      expect((yield* models.resolve(session(), available, request)).ref).toEqual(ref(fallback))
     }),
   )
 
@@ -100,7 +116,8 @@ describe("SessionRunnerModel.resolve", () => {
     Effect.gen(function* () {
       const models = yield* SessionRunnerModel.Service
       const missing = Ref.make({ providerID: Provider.ID.make("openai"), id: ID.make("missing") })
-      const error = yield* models.resolve(session(), available, agent(missing)).pipe(Effect.flip)
+      yield* agent(missing)
+      const error = yield* models.resolve(session(), available, request).pipe(Effect.flip)
       expect(error).toEqual(
         new SessionRunnerModel.ModelUnavailableError({ providerID: missing.providerID, modelID: missing.id }),
       )

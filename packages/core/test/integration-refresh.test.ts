@@ -96,7 +96,7 @@ describe("OAuth refresh safety", () => {
           })
         }),
       )
-      const credential = yield* create(now)
+      const credential = yield* create(now + 1)
       const first = yield* integration.connection.resolve(connection(credential)).pipe(Effect.forkScoped)
       yield* Deferred.await(entered)
       const second = yield* integration.connection.resolve(connection(credential)).pipe(Effect.forkScoped)
@@ -124,8 +124,8 @@ describe("OAuth refresh safety", () => {
           return Credential.OAuth.make({ ...value, expires: now + 3_600_000 })
         }),
       )
-      const first = yield* create(now)
-      const second = yield* create(now)
+      const first = yield* create(now + 1)
+      const second = yield* create(now + 1)
       yield* Effect.all(
         [integration.connection.resolve(connection(first)), integration.connection.resolve(connection(second))],
         { concurrency: "unbounded" },
@@ -151,7 +151,7 @@ describe("OAuth refresh safety", () => {
           return Credential.OAuth.make({ ...value, expires: now + 3_600_000 })
         }),
       )
-      const credential = yield* create(now)
+      const credential = yield* create(now + 1)
       const pending = yield* integration.connection.resolve(connection(credential)).pipe(Effect.forkScoped)
       yield* Deferred.await(entered)
       yield* Fiber.interrupt(pending)
@@ -179,7 +179,7 @@ describe("OAuth refresh safety", () => {
           return Credential.OAuth.make({ ...value, expires: now + 3_600_000 })
         }),
       )
-      const credential = yield* create(now)
+      const credential = yield* create(now + 1)
       yield* integration.connection.resolve(connection(credential)).pipe(Effect.flip)
       expect((yield* credentials.get(credential.id))?.value).toEqual(credential.value)
       expect(yield* integration.connection.resolve(connection(credential))).toMatchObject({ expires: now + 3_600_000 })
