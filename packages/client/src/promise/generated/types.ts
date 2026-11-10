@@ -378,6 +378,14 @@ export type ConfigModelReasoning =
   | { supported: false }
   | { supported: true; toggle?: boolean; effort?: Array<string>; budget?: { min?: number; max?: number } }
 
+export type ConfigDiagnostic = {
+  source: string
+  path: string
+  message: string
+  line?: number | "Infinity" | "-Infinity" | "NaN" | null
+  column?: number | "Infinity" | "-Infinity" | "NaN" | null
+}
+
 export type ConfigShellOption = { path: string; name: string; acceptable: boolean }
 
 export type LocationPublicRef = { directory: AbsolutePath }
@@ -2602,6 +2610,7 @@ export type ConfigEntry =
           }>
         }
       }
+      experimental?: { diagnostics?: Array<ConfigDiagnostic> | null } | null
     }
   | { type: "directory"; path: AbsolutePath }
 

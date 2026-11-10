@@ -19,6 +19,7 @@ async function serve(directory: string) {
       requests.push({ method: request.method, path: url.pathname, body: text ? JSON.parse(text) : undefined })
       if (url.pathname === "/api/info")
         return Response.json({ version: "test", pid: 0, urls: [], paths: { tmp: directory } })
+      if (url.pathname === "/api/config") return Response.json([])
       if (request.method === "GET" && url.pathname === "/api/location") return Response.json(location)
       if (request.method === "POST" && url.pathname === "/api/session")
         return Response.json({

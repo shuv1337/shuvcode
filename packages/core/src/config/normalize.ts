@@ -2,7 +2,7 @@ export * as ConfigNormalize from "./normalize.js"
 
 import { isDeepStrictEqual } from "node:util"
 import { isRecord } from "@opencode/util/record"
-import { Option, Schema } from "effect"
+import { Option, Schema, SchemaIssue, SchemaParser } from "effect"
 import { Info } from "@opencode/schema/config"
 import { ConfigAgent } from "@opencode/schema/config/agent"
 import { ConfigCommand } from "@opencode/schema/config/command"
@@ -711,9 +711,9 @@ function decodeValue<S extends Schema.Codec<unknown, unknown, never, never>>(
   path: string[],
   diagnostics: Diagnostic[],
 ) {
-  const decoded = Schema.decodeUnknownOption(schema, options)(value)
-  if (Option.isSome(decoded)) return decoded.value
-  invalid(path, diagnostics)
+  const decoded = SchemaParser.decodeUnknownResult(schema, options)(value)
+  if (decoded._tag === "Success") return decoded.success
+  invalidSchema(path, diagnostics, decoded.failure)
   return undefined
 }
 
@@ -723,12 +723,12 @@ function decodeEncoded<S extends Schema.Codec<unknown, unknown, never, never>>(
   path: string[],
   diagnostics: Diagnostic[],
 ) {
-  const decoded = Schema.decodeUnknownOption(schema, options)(value)
-  if (Option.isNone(decoded)) {
-    invalid(path, diagnostics)
+  const decoded = SchemaParser.decodeUnknownResult(schema, options)(value)
+  if (decoded._tag === "Failure") {
+    invalidSchema(path, diagnostics, decoded.failure)
     return undefined
   }
-  const encoded = Schema.encodeUnknownOption(schema, options)(decoded.value)
+  const encoded = Schema.encodeUnknownOption(schema, options)(decoded.success)
   if (Option.isSome(encoded)) return plain(encoded.value)
   invalid(path, diagnostics)
   return undefined
@@ -808,6 +808,18 @@ function prefer(legacy: unknown, native: unknown, path: string[], diagnostics: D
 function unsupportedIfPresent(value: Record<string, unknown>, key: string, path: string[], diagnostics: Diagnostic[]) {
   if (!own(value, key)) return
   diagnostics.push({ kind: "unsupported", path, message: "omitted unsupported legacy setting" })
+}
+
+function invalidSchema(path: string[], diagnostics: Diagnostic[], issue: SchemaIssue.Issue) {
+  // Schema parsing does not retain input by default. Never opt into reportInput here: config contains credentials.
+  const errors = SchemaIssue.makeFormatterStandardSchemaV1()(issue).issues
+  diagnostics.push({
+    kind: "invalid",
+    path,
+    message: `Skipped invalid setting: ${errors
+      .map((error) => (error.path?.length ? `${error.path.map(String).join(".")}: ${error.message}` : error.message))
+      .join("; ")}`,
+  })
 }
 
 function invalid(path: string[], diagnostics: Diagnostic[]) {

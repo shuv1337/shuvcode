@@ -121,10 +121,24 @@ export const Patch = Schema.Struct({
 }).annotate({ identifier: "Config.Patch" })
 export interface Patch extends Schema.Schema.Type<typeof Patch> {}
 
+export const Diagnostic = Schema.Struct({
+  source: Schema.String,
+  path: Schema.String,
+  message: Schema.String,
+  line: Schema.optional(Schema.Number),
+  column: Schema.optional(Schema.Number),
+}).annotate({ identifier: "Config.Diagnostic" })
+export type Diagnostic = typeof Diagnostic.Type
+
 export class Document extends Schema.Class<Document>("Config.Document")({
   type: Schema.Literal("document"),
   path: AbsolutePath.pipe(optional),
   info: Info,
+  experimental: Schema.optional(
+    Schema.Struct({
+      diagnostics: Schema.optional(Schema.Array(Diagnostic)),
+    }),
+  ).annotate({ description: "Experimental: may change without compatibility guarantees." }),
 }) {}
 
 export class Directory extends Schema.Class<Directory>("Config.Directory")({

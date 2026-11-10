@@ -16,7 +16,7 @@ export default Runtime.handler(
       baseUrl: server.endpoint.url,
       headers: Service.headers(server.endpoint),
     })
-    yield* waitForPlugins(client, process.cwd())
+    yield* waitForPlugins(client, process.cwd(), "any")
     const response = yield* Effect.promise(() => client.model.list({ location: { directory: process.cwd() } }))
     const models = response.data
       .filter((model) => !isHiddenProvider(model.providerID))

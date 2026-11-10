@@ -4,7 +4,7 @@ import { render, useRenderer, useTerminalDimensions } from "@opentui/solid"
 import "./component/spinner-renderable"
 import { Effect, Latch } from "effect"
 import { Service, type Endpoint } from "@opencode/client/effect/service"
-import { OpenCode, type SessionInfo } from "@opencode/client"
+import { OpenCode, configDiagnostics, formatConfigDiagnostic, type SessionInfo } from "@opencode/client"
 import { Global } from "@opencode/util/global"
 import { noTimeoutFetch } from "@opencode/util/no-timeout-fetch"
 import { ClipboardProvider, useClipboard } from "./context/clipboard"
@@ -556,9 +556,27 @@ function App() {
     },
   })
   const [openSessions, setOpenSessions] = createSignal<SessionInfo[]>([])
-  // Toast once when an MCP server enters a failed or needs-auth state so the user knows to act,
-  // without having to open the status panel. Tracking the last alerted status avoids re-toasting
-  // the same problem on every refresh while still re-alerting if the state changes.
+  // Config entries retain rejected files, so startup and hot reload use the same diagnostics.
+  const configAlerted = new Set<string>()
+  createEffect(() => {
+    const messages = configDiagnostics(data.location.config.list() ?? []).map(formatConfigDiagnostic)
+    for (const message of configAlerted) {
+      if (!messages.includes(message)) configAlerted.delete(message)
+    }
+    const fresh = messages.filter((message) => !configAlerted.has(message))
+    if (!fresh.length) return
+    fresh.forEach((message) => configAlerted.add(message))
+    toast.show({
+      variant: "error",
+      title: "Invalid configuration",
+      message:
+        fresh[0]! +
+        (messages.length > 1 ? `\n${messages.length} configuration errors. See Status for all diagnostics.` : ""),
+      duration: 15000,
+      action: { label: "View diagnostics", run: () => keymap.dispatch("opencode.status") },
+    })
+  })
+  // Toast once per failed/needs-auth state, and allow another alert after recovery.
   const mcpAlerted: Record<string, string> = {}
   createEffect(() => {
     for (const server of data.location.mcp.server.list() ?? []) {

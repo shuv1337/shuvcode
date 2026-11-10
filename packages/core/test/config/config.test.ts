@@ -34,6 +34,7 @@ import { withEnv } from "../fixture/env"
 import { location } from "../fixture/location"
 import { tmpdir, withTempDir } from "../fixture/tmpdir"
 import { testEffect } from "../lib/effect"
+import { advance } from "../lib/clock"
 
 const it = testEffect(Layer.empty)
 const itWithPermissions = process.platform === "win32" || process.getuid?.() === 0 ? it.live.skip : it.live
@@ -1219,7 +1220,7 @@ describe("Config", () => {
           await fs.mkdir(global, { recursive: true })
           await fs.mkdir(project, { recursive: true })
           await fs.writeFile(path.join(global, "opencode.json"), "null")
-          await fs.writeFile(path.join(project, "opencode.json"), "")
+          await fs.writeFile(path.join(project, "opencode.json"), "[")
           await fs.writeFile(malformed, '{ "credential": "file-secret"')
         })
         const integrationID = Integration.ID.make("https://invalid.example.com")
@@ -1276,7 +1277,7 @@ describe("Config", () => {
           Effect.provide(
             testLayer(project, global, project, undefined, undefined, credentialNode, wellknownNode, {
               file: malformed,
-              content: "",
+              content: "[",
             }),
           ),
         )
@@ -2206,6 +2207,172 @@ describe("Config", () => {
     ),
   )
 
+  for (const text of ["", " \t\r\n "]) {
+    it.live(`treats blank config as an empty object: ${JSON.stringify(text)}`, () =>
+      withTempDir((tmp) =>
+        Effect.gen(function* () {
+          const file = path.join(tmp.path, "opencode.json")
+          yield* Effect.promise(() => fs.writeFile(file, text))
+          yield* Effect.gen(function* () {
+            const config = yield* Config.Service
+            const document = (yield* config.entries()).find((entry) => entry.type === "document" && entry.path === file)
+            if (document?.type !== "document") throw new Error("missing config document")
+            expect(document.info).toEqual(new Info({}))
+            expect(document.experimental?.diagnostics ?? []).toEqual([])
+          }).pipe(Effect.provide(testLayer(tmp.path)))
+        }),
+      ),
+    )
+  }
+
+  for (const [name, text, message, line, column] of [
+    ["JSON", '{\n  "mcp": { "servers": {} }\n  "agents": {}\n}', "CommaExpected", 3, 3],
+    ["JSONC", '{\n  // config\n  "mcp": {\n}', "CloseBraceExpected", 4, 2],
+    ["schema", '{\n  "snapshots": "private-secret", "shell": "bash"\n}', "Expected boolean", 2, 16],
+    ["array", '{\n  "instructions": [false]\n}', "Expected string", 2, 20],
+  ] as const) {
+    it.live(`retains actionable, redacted ${name} diagnostics in config entries`, () =>
+      withTempDir((tmp) =>
+        Effect.gen(function* () {
+          const file = path.join(tmp.path, name === "JSONC" ? "opencode.jsonc" : "opencode.json")
+          yield* Effect.promise(() => fs.writeFile(file, text))
+          yield* Effect.gen(function* () {
+            const config = yield* Config.Service
+            const entries = yield* config.entries()
+            const document = entries.find((entry) => entry.type === "document" && entry.path === file)
+            if (document?.type !== "document") throw new Error("missing config document")
+            expect(document.experimental?.diagnostics).toHaveLength(1)
+            expect(document.experimental?.diagnostics?.[0]).toMatchObject({
+              source: file,
+              line,
+              column,
+              message: expect.stringContaining(message),
+            })
+            expect(JSON.stringify(document.experimental)).not.toContain("private-secret")
+            expect(document.info.shell).toBe(name === "schema" ? "bash" : undefined)
+          }).pipe(Effect.provide(testLayer(tmp.path)))
+        }),
+      ),
+    )
+  }
+
+  for (const [text, message] of [
+    ['{\n  "mcp": {\n    "servers": {\n', "unclosed object opened at line 3"],
+    ['{\n  "instructions": ["a"\n', "unclosed array opened at line 2"],
+    ['{\n  "mcp": {\n    "servers": {}}', "unclosed object opened at line 1"],
+    ['{\n  "mcp": {\n    "servers": {}}\n', "unclosed object opened at line 1"],
+  ] as const) {
+    it.live(`identifies the innermost unclosed container: ${text}`, () =>
+      withTempDir((tmp) =>
+        Effect.gen(function* () {
+          yield* Effect.promise(() => fs.writeFile(path.join(tmp.path, "opencode.json"), text))
+          yield* Effect.gen(function* () {
+            const config = yield* Config.Service
+            const document = (yield* config.entries()).find((entry) => entry.type === "document")
+            if (document?.type !== "document") throw new Error("missing config document")
+            expect(document.experimental?.diagnostics?.[0]?.message).toContain(message)
+          }).pipe(Effect.provide(testLayer(tmp.path)))
+        }),
+      ),
+    )
+  }
+
+  it.live("omits positions when substitution changes the parse error", () =>
+    withTempDir((tmp) =>
+      Effect.gen(function* () {
+        yield* Effect.promise(() =>
+          Promise.all([
+            fs.writeFile(path.join(tmp.path, "opencode.json"), '{"snapshots":{file:value.txt} "shell":"bash"}'),
+            fs.writeFile(path.join(tmp.path, "value.txt"), "true"),
+          ]),
+        )
+        yield* Effect.gen(function* () {
+          const config = yield* Config.Service
+          const document = (yield* config.entries()).find((entry) => entry.type === "document")
+          if (document?.type !== "document") throw new Error("missing config document")
+          expect(document.experimental?.diagnostics).toEqual([
+            {
+              source: path.join(tmp.path, "opencode.json"),
+              path: "$",
+              message: "File ignored: CommaExpected (malformed JSON or JSONC)",
+            },
+          ])
+        }).pipe(Effect.provide(testLayer(tmp.path)))
+      }),
+    ),
+  )
+
+  it.live("reports positions in the original file before substitutions", () =>
+    withTempDir((tmp) =>
+      Effect.gen(function* () {
+        const text = '{"shell":"{file:shell.txt}", "snapshots":123}'
+        yield* Effect.promise(() =>
+          Promise.all([
+            fs.writeFile(path.join(tmp.path, "opencode.json"), text),
+            fs.writeFile(path.join(tmp.path, "shell.txt"), "/a/long/path/that/changes/the/expanded/column/bash"),
+          ]),
+        )
+        yield* Effect.gen(function* () {
+          const config = yield* Config.Service
+          const entries = yield* config.entries()
+          const document = entries.find((entry) => entry.type === "document")
+          if (document?.type !== "document") throw new Error("missing config document")
+          expect(document.experimental?.diagnostics?.[0]).toMatchObject({
+            path: "$.snapshots",
+            line: 1,
+            column: text.indexOf("123") + 1,
+          })
+        }).pipe(Effect.provide(testLayer(tmp.path)))
+      }),
+    ),
+  )
+
+  it.effect("publishes diagnostic-only changes and clears them after repair or deletion", () =>
+    withTempDir((tmp) =>
+      Effect.gen(function* () {
+        const file = path.join(tmp.path, "opencode.json")
+        yield* Effect.promise(() => fs.writeFile(file, "{"))
+        yield* Effect.gen(function* () {
+          const config = yield* Config.Service
+          const watcher = yield* Watcher.Test
+          const bus = yield* Bus.Service
+          const updates: unknown[] = []
+          yield* bus.subscribe(Event.Updated).pipe(
+            Stream.runForEach((event) => Effect.sync(() => updates.push(event))),
+            Effect.forkScoped({ startImmediately: true }),
+          )
+          const errors = () =>
+            config
+              .entries()
+              .pipe(
+                Effect.map((entries) =>
+                  entries.flatMap((entry) =>
+                    entry.type === "document" ? (entry.experimental?.diagnostics ?? []) : [],
+                  ),
+                ),
+              )
+          expect((yield* errors())[0]?.line).toBe(1)
+          yield* Effect.promise(() => fs.writeFile(file, "{\n"))
+          yield* watcher.emit({ type: "update", path: file })
+          yield* advance(() => updates.length >= 1)
+          expect((yield* errors())[0]?.line).toBe(2)
+          yield* Effect.promise(() => fs.writeFile(file, "{}"))
+          yield* watcher.emit({ type: "update", path: file })
+          yield* advance(() => updates.length >= 2)
+          expect(yield* errors()).toEqual([])
+          yield* Effect.promise(() => fs.writeFile(file, "{"))
+          yield* watcher.emit({ type: "update", path: file })
+          yield* advance(() => updates.length >= 3)
+          expect(yield* errors()).toHaveLength(1)
+          yield* Effect.promise(() => fs.unlink(file))
+          yield* watcher.emit({ type: "delete", path: file })
+          yield* advance(() => updates.length >= 4)
+          expect(yield* errors()).toEqual([])
+        }).pipe(Effect.provide(testLayer(tmp.path)))
+      }),
+    ),
+  )
+
   it.live("ignores an invalid file while loading valid config values", () =>
     Effect.acquireDisposable(Effect.promise(() => tmpdir())).pipe(
       Effect.flatMap((tmp) =>
@@ -2221,7 +2388,14 @@ describe("Config", () => {
             const watcher = yield* Watcher.Test
             const documents = (yield* config.entries()).filter((entry) => entry.type === "document")
 
-            expect(documents.map((document) => document.info.$schema)).toEqual(["base"])
+            expect(documents.map((document) => document.info.$schema)).toEqual(["base", undefined])
+            expect(documents[1]?.experimental?.diagnostics?.[0]).toMatchObject({
+              source: path.join(tmp.path, "opencode.jsonc"),
+              path: "$",
+              line: 1,
+              column: 3,
+              message: expect.stringContaining("File ignored"),
+            })
             expect(yield* watcher.subscriptions()).toContainEqual({
               path: tmp.path,
               type: "entries",

@@ -78,6 +78,7 @@ async function run(input: RunCommandInput, signal: AbortSignal) {
 }
 
 async function execute(input: RunCommandInput, prepared: Prepared, endpoint: Endpoint, signal: AbortSignal) {
+  const { requireConfig } = await import("../services/config-diagnostics")
   const client = OpenCode.make({
     baseUrl: endpoint.url,
     headers: Service.headers(endpoint),
@@ -87,6 +88,7 @@ async function execute(input: RunCommandInput, prepared: Prepared, endpoint: End
   const setup = withRunSetupDeadlines(client)
   const explicit = parseRunModel(input.model)
   const location = { directory: prepared.directory }
+  if (!(await requireConfig(setup, location.directory, signal, "file"))) return
   const worktree =
     input.worktree === undefined
       ? undefined
@@ -118,6 +120,11 @@ async function execute(input: RunCommandInput, prepared: Prepared, endpoint: End
     return undefined
   })
   if (!target) return
+  if (
+    target.location.directory !== location.directory &&
+    !(await requireConfig(setup, target.location.directory, signal, "file"))
+  )
+    return
   const title =
     !target.resume && input.title !== undefined
       ? input.title || prepared.message.slice(0, 50) + (prepared.message.length > 50 ? "..." : "")
