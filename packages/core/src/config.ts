@@ -9,7 +9,6 @@ import {
   modify,
   type Node,
   type ParseError,
-  ParseErrorCode,
   parse,
   parseTree,
   printParseErrorCode,
@@ -173,16 +172,19 @@ export const layer = (options?: Options) =>
           })
         }
         if (errors.length) {
+          const error = errors[0]!
+          const sourceError = sourceErrors[0]?.error === error.error ? sourceErrors[0] : undefined
+          const code = printParseErrorCode((sourceError ?? error).error)
           const unclosed =
-            sourceErrors[0]?.offset === original.length &&
-            (sourceErrors[0].error === ParseErrorCode.CloseBraceExpected ||
-              sourceErrors[0].error === ParseErrorCode.CloseBracketExpected)
+            sourceError &&
+            sourceError.offset === original.length &&
+            (code === "CloseBraceExpected" || code === "CloseBracketExpected")
               ? unclosedContainer(tree, original)
               : undefined
           report(
             ["$"],
-            `File ignored: ${printParseErrorCode(errors[0]!.error)} (malformed JSON or JSONC)${unclosed ? `; unclosed ${unclosed.type} opened at line ${original.slice(0, unclosed.offset).split(/\r\n|\r|\n/).length}` : ""}`,
-            sourceErrors[0]?.offset,
+            `File ignored: ${code} (malformed JSON or JSONC)${unclosed ? `; unclosed ${unclosed.type} opened at line ${original.slice(0, unclosed.offset).split(/\r\n|\r|\n/).length}` : ""}`,
+            sourceError?.offset,
           )
           yield* Effect.logWarning("configuration normalization diagnostic", {
             ...diagnostics[0],

@@ -2259,6 +2259,31 @@ describe("Config", () => {
     )
   }
 
+  it.live("omits positions when substitution changes the parse error", () =>
+    withTempDir((tmp) =>
+      Effect.gen(function* () {
+        yield* Effect.promise(() =>
+          Promise.all([
+            fs.writeFile(path.join(tmp.path, "opencode.json"), '{"snapshots":{file:value.txt} "shell":"bash"}'),
+            fs.writeFile(path.join(tmp.path, "value.txt"), "true"),
+          ]),
+        )
+        yield* Effect.gen(function* () {
+          const config = yield* Config.Service
+          const document = (yield* config.entries()).find((entry) => entry.type === "document")
+          if (document?.type !== "document") throw new Error("missing config document")
+          expect(document.experimental?.diagnostics).toEqual([
+            {
+              source: path.join(tmp.path, "opencode.json"),
+              path: "$",
+              message: "File ignored: CommaExpected (malformed JSON or JSONC)",
+            },
+          ])
+        }).pipe(Effect.provide(testLayer(tmp.path)))
+      }),
+    ),
+  )
+
   it.live("reports positions in the original file before substitutions", () =>
     withTempDir((tmp) =>
       Effect.gen(function* () {
