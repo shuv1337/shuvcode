@@ -711,40 +711,26 @@ const layer = Layer.effect(
             .get()
             .integrations.get(credential.integrationID)
             ?.implementations.get(credential.value.methodID)?.refresh
-          const expiring = (value: Credential.OAuth) =>
-            Clock.currentTimeMillis.pipe(
-              Effect.map((now) => value.expires <= now + Duration.toMillis(Duration.minutes(5))),
-            )
-          if (imported(credential.value)) {
-            if (!(yield* expiring(credential.value))) return credential.value
-            return yield* new AuthorizationError({
+          const expiring = (value: Credential.OAuth, now: number) =>
+            imported(value)
+              ? value.expires <= now + Duration.toMillis(Duration.minutes(5))
+              : Credential.expiring(value, now)
+          const importError = () =>
+            new AuthorizationError({
               cause: new Error(
                 "Imported access token is near expiry; refresh is disabled. Import valid auth before continuing.",
               ),
             })
+          if (imported(credential.value)) {
+            if (!expiring(credential.value, yield* Clock.currentTimeMillis)) return credential.value
+            return yield* importError()
           }
-          if (!refresh || !(yield* expiring(credential.value))) return credential.value
+          if (!refresh || !expiring(credential.value, yield* Clock.currentTimeMillis)) return credential.value
           return yield* authorize(
-            credentials.lock(
-              credential.id,
-              Effect.gen(function* () {
-                // Another Location may have refreshed while this caller waited.
-                const current = yield* credentials.get(credential.id)
-                if (!current || current.value.type !== "oauth") return undefined
-                if (imported(current.value)) {
-                  if (!(yield* expiring(current.value))) return current.value
-                  return yield* new AuthorizationError({
-                    cause: new Error(
-                      "Imported access token is near expiry; refresh is disabled. Import valid auth before continuing.",
-                    ),
-                  })
-                }
-                if (!(yield* expiring(current.value))) return current.value
-                const value = yield* refresh(current.value).pipe(Effect.timeout("30 seconds"))
-                yield* credentials.update(current.id, { value })
-                return value
-              }),
-            ),
+            credentials.refresh(credential.id, {
+              stale: expiring,
+              refresh: (current) => (imported(current) ? Effect.fail(importError()) : refresh(current)),
+            }),
           )
         }),
         key: Effect.fn("Integration.connection.key")(function* (input) {

@@ -20,6 +20,7 @@ import { AppNodeBuilder } from "@opencode/core/effect/app-node-builder"
 import { llmClient } from "@opencode/core/effect/app-node-platform"
 import { LayerNode } from "@opencode/util/effect/layer-node"
 import { Bus } from "@opencode/core/bus"
+import { Event } from "@opencode/schema/event"
 import { EventTable } from "@opencode/core/event/sql"
 import { InstructionDiscovery } from "@opencode/core/instruction-discovery"
 import { Instance } from "@opencode/core/instance/service"
@@ -93,10 +94,10 @@ const client = Layer.mock(LLMClient.Service)({
       return response
     }),
 })
-const resolvedAgents: Array<Agent.Info | undefined> = []
+const resolvedRequests: Array<Parameters<SessionRunnerModel.Interface["resolve"]>[2]> = []
 const models = Layer.mock(SessionRunnerModel.Service)({
-  resolve: (_session, _available, agent) =>
-    Effect.sync(() => resolvedAgents.push(agent)).pipe(
+  resolve: (_session, _available, request) =>
+    Effect.sync(() => resolvedRequests.push(request)).pipe(
       Effect.as(
         SessionRunnerModel.resolved(model, {
           capabilities: { tools: true, input: ["text", "image"], output: ["text"] },
@@ -183,16 +184,9 @@ const it = testEffect(
   ),
 )
 
+// Session history generation must leave untouched; usage accounting is checked separately.
 const durableState = (db: Database.Interface["db"], sessionID: SessionSchema.ID) =>
   Effect.all({
-    sequence: Bus.latestSequence(db, sessionID),
-    bus: db
-      .select()
-      .from(EventTable)
-      .where(eq(EventTable.aggregate_id, sessionID))
-      .orderBy(asc(EventTable.seq))
-      .all()
-      .pipe(Effect.orDie),
     messages: db
       .select()
       .from(SessionMessageTable)
@@ -214,8 +208,25 @@ const durableState = (db: Database.Interface["db"], sessionID: SessionSchema.ID)
       .get()
       .pipe(Effect.orDie),
     blobs: db.select().from(InstructionBlobTable).orderBy(asc(InstructionBlobTable.hash)).all().pipe(Effect.orDie),
+  })
+
+const usageState = (db: Database.Interface["db"], sessionID: SessionSchema.ID) =>
+  Effect.all({
+    sequence: Bus.latestSequence(db, sessionID),
+    events: db
+      .select()
+      .from(EventTable)
+      .where(eq(EventTable.aggregate_id, sessionID))
+      .orderBy(asc(EventTable.seq))
+      .all()
+      .pipe(Effect.orDie),
     session: db.select().from(SessionTable).where(eq(SessionTable.id, sessionID)).get().pipe(Effect.orDie),
   })
+
+const recordedUsage = (
+  before: Effect.Success<ReturnType<typeof usageState>>,
+  after: Effect.Success<ReturnType<typeof usageState>>,
+) => after.events.slice(before.events.length).map((event) => ({ type: event.type, data: event.data }))
 
 const userTexts = (request: LLMRequest) =>
   request.messages.flatMap((message) =>
@@ -271,7 +282,7 @@ const setup = Effect.gen(function* () {
 })
 
 it.effect(
-  "generates from fresh settled Session context without durable mutation",
+  "generates from fresh settled Session context and records only its usage",
   () =>
     Effect.gen(function* () {
       requests.length = 0
@@ -342,6 +353,7 @@ it.effect(
       })
       instruction = "Changed context"
       const before = yield* durableState(db, sessionID)
+      const usageBefore = yield* usageState(db, sessionID)
 
       const result = yield* SessionGenerate.generate({ session, prompt: "Summarize privately" }).pipe(
         Effect.provideService(Instance.Service, instances),
@@ -375,29 +387,41 @@ it.effect(
       expect(requests[0]?.toolChoice).toBeUndefined()
       expect(options[0]?.webSocket).toBeUndefined()
       expect(yield* durableState(db, sessionID)).toEqual(before)
+      const usageAfter = yield* usageState(db, sessionID)
+      expect(recordedUsage(usageBefore, usageAfter)).toEqual([
+        {
+          type: Event.versionedType(SessionEvent.UsageRecorded.type, SessionEvent.UsageRecorded.durable.version),
+          data: { sessionID, source: "generate", cost: result.cost, tokens: result.tokens },
+        },
+      ])
+      expect(usageAfter.session?.cost).toBeCloseTo((usageBefore.session?.cost ?? 0) + result.cost)
+      expect(usageAfter.session).toMatchObject({
+        tokens_input: (usageBefore.session?.tokens_input ?? 0) + 60,
+        tokens_output: (usageBefore.session?.tokens_output ?? 0) + 10,
+        tokens_reasoning: usageBefore.session?.tokens_reasoning ?? 0,
+        tokens_cache_read: (usageBefore.session?.tokens_cache_read ?? 0) + 30,
+        tokens_cache_write: (usageBefore.session?.tokens_cache_write ?? 0) + 10,
+      })
     }),
   { timeout: 15_000 },
 )
 
 it.effect(
-  "resolves the selected agent's model only when the Session has none",
+  "passes model-resolution request metadata with and without an explicit Session model",
   () =>
     Effect.gen(function* () {
       const { session } = yield* setup
-      const agents = yield* Agent.Service
       const context = yield* SessionContext.Service
-      const configured = { providerID: Provider.ID.make("openai"), id: ID.make("agent-model") }
-      yield* agents.transform((editor) =>
-        editor.update(Agent.ID.make("build"), (agent) => {
-          agent.model = configured
-        }),
+      const request = { kind: "primary" as const, agent: Agent.ID.make("build") }
+      resolvedRequests.length = 0
+
+      yield* context.resolveModel(session, request)
+      yield* context.resolveModel(
+        { ...session, model: { providerID: Provider.ID.make("test"), id: ID.make("x") } },
+        request,
       )
-      resolvedAgents.length = 0
 
-      yield* context.resolveModel(session)
-      yield* context.resolveModel({ ...session, model: { providerID: Provider.ID.make("test"), id: ID.make("x") } })
-
-      expect(resolvedAgents.map((agent) => agent?.model)).toEqual([configured, undefined])
+      expect(resolvedRequests).toEqual([request, request])
     }),
   { timeout: 15_000 },
 )
@@ -445,6 +469,7 @@ it.effect("regenerates a failed partial answer without mutating Session history"
     const { db, bus, instructions, session, instances } = yield* setup
     yield* InstructionState.prepare(db, bus, instructions, sessionID)
     const before = yield* durableState(db, sessionID)
+    const usageBefore = yield* usageState(db, sessionID)
     const llm = yield* TestLLM.Test
     yield* llm.push(
       TestLLM.failAfter(
@@ -469,6 +494,8 @@ it.effect("regenerates a failed partial answer without mutating Session history"
     expect(requests[1]).toBe(requests[0])
     expect(userTexts(requests[1])).toContain("Summarize privately")
     expect(yield* durableState(db, sessionID)).toEqual(before)
+    // The retried attempt counts once.
+    expect(recordedUsage(usageBefore, yield* usageState(db, sessionID))).toHaveLength(1)
   }).pipe(Effect.provide(TestLLM.testLayer())),
 )
 
@@ -480,6 +507,7 @@ it.effect(
       instruction = Instructions.unavailable
       const { db, session, instances } = yield* setup
       const before = yield* durableState(db, sessionID)
+      const usageBefore = yield* usageState(db, sessionID)
 
       const error = yield* SessionGenerate.generate({ session, prompt: "Summarize privately" }).pipe(
         Effect.provideService(Instance.Service, instances),
@@ -489,6 +517,7 @@ it.effect(
       expect(error).toBeInstanceOf(Instructions.InitializationBlocked)
       expect(requests).toEqual([])
       expect(yield* durableState(db, sessionID)).toEqual(before)
+      expect(yield* usageState(db, sessionID)).toEqual(usageBefore)
     }),
   { timeout: 15_000 },
 )

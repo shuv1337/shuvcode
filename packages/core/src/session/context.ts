@@ -4,6 +4,7 @@ import { Model } from "../model.js"
 import { Permission } from "../permission.js"
 import { Context, Effect, Layer } from "effect"
 import { Agent } from "../agent.js"
+import type { SessionRequestKind } from "@opencode/plugin/effect/session"
 import { CodeModeInstructions } from "../codemode/instructions.js"
 import { Database } from "../database/database.js"
 import { makeLocationNode } from "@opencode/util/effect/app-node"
@@ -54,6 +55,7 @@ export interface Interface {
   readonly load: (selection: Selection) => Effect.Effect<Loaded, SessionRunnerModel.Error>
   readonly resolveModel: (
     session: SessionSchema.Info,
+    request: { readonly kind: SessionRequestKind; readonly agent: Agent.ID },
   ) => Effect.Effect<SessionRunnerModel.Resolved, SessionRunnerModel.Error>
   /** Selects auxiliary title capabilities without instruction or tool preflight. */
   readonly selectTitle: (session: SessionSchema.Info) => Effect.Effect<
@@ -89,16 +91,17 @@ const layer = Layer.effect(
     const store = yield* SessionStore.Service
     const registry = yield* Tool.Service
 
-    const resolveModel = Effect.fn("SessionContext.resolveModel")(function* (session: SessionSchema.Info) {
-      if (session.model) return yield* models.resolve(session, model.available)
-      const agent = yield* agents.select(session.agent)
-      return yield* models.resolve(session, model.available, agent.info)
-    })
+    const resolveModel = (
+      session: SessionSchema.Info,
+      request: { readonly kind: SessionRequestKind; readonly agent: Agent.ID },
+    ) => models.resolve(session, model.available, request)
 
     const selectTitle = Effect.fn("SessionContext.selectTitle")(function* (session: SessionSchema.Info) {
       const agent = yield* agents.get(Agent.ID.make("title"))
       if (!agent) return
-      const primary = yield* resolveModel(session).pipe(Effect.orElseSucceed(() => undefined))
+      const primary = yield* resolveModel(session, { kind: "title", agent: agent.id }).pipe(
+        Effect.orElseSucceed(() => undefined),
+      )
       const candidate = yield* Effect.gen(function* () {
         if (agent.model) {
           const info = yield* model.get(agent.model.providerID, agent.model.id)
@@ -114,14 +117,17 @@ const layer = Layer.effect(
       })
       const preferred =
         candidate &&
-        (yield* resolveModel({
-          ...session,
-          model: Model.Ref.make({
-            providerID: candidate.info.providerID,
-            id: candidate.info.id,
-            ...(candidate.variant ? { variant: candidate.variant } : {}),
-          }),
-        }).pipe(Effect.orElseSucceed(() => undefined)))
+        (yield* resolveModel(
+          {
+            ...session,
+            model: Model.Ref.make({
+              providerID: candidate.info.providerID,
+              id: candidate.info.id,
+              ...(candidate.variant ? { variant: candidate.variant } : {}),
+            }),
+          },
+          { kind: "title", agent: agent.id },
+        ).pipe(Effect.orElseSucceed(() => undefined)))
       const selected = preferred ?? primary
       if (!selected) return
       return { agent, primary, selected }
@@ -170,7 +176,7 @@ const layer = Layer.effect(
     })
 
     const load = Effect.fn("SessionContext.load")(function* (selection: Selection) {
-      const model = yield* resolveModel(selection.session)
+      const model = yield* resolveModel(selection.session, { kind: "primary", agent: selection.agent.id })
       const history = yield* SessionHistory.entriesForRunner(
         db,
         selection.session.id,

@@ -477,9 +477,15 @@ describe("SubagentTool", () => {
           expect(child.model).toBeUndefined()
           const models = yield* Model.Service.pipe(Effect.provide(locations.get(parent.location)))
           const runner = yield* SessionRunnerModel.Service.pipe(Effect.provide(locations.get(parent.location)))
-          expect((yield* runner.resolve(child, models.available)).ref.id).toBe(Model.ID.make("initial"))
+          expect(
+            (yield* runner.resolve(child, models.available, { kind: "primary", agent: Agent.ID.make("explore") })).ref
+              .id,
+          ).toBe(Model.ID.make("initial"))
           yield* models.transform((editor) => editor.default.set(Provider.ID.make("test"), Model.ID.make("later")))
-          expect((yield* runner.resolve(child, models.available)).ref.id).toBe(Model.ID.make("later"))
+          expect(
+            (yield* runner.resolve(child, models.available, { kind: "primary", agent: Agent.ID.make("explore") })).ref
+              .id,
+          ).toBe(Model.ID.make("later"))
           expect((yield* sessions.get(child.id)).model).toBeUndefined()
           expect((yield* sessions.get(parent.id)).model).toBeUndefined()
         }),
