@@ -2,6 +2,18 @@
 
 Release notes for OpenCode V2, newest first.
 
+## v2.2.6-shuv.3 — 2026-11-09
+
+Shuvcode maintenance release on the same upstream v2.2.6 base as 2.2.6-shuv.2.
+
+### Bug fixes
+
+- Bound `run --worktree` lookup to 30 seconds and creation to 120 seconds, with clear timeout errors instead of hanging during setup. Prompt execution and event streaming remain unbounded. ([#480](https://github.com/shuv1337/shuvcode/pull/480))
+- Preserve per-call headers for the experimental Evaluation/System One provider. Include missing permission-cancellation and subagent-preparation events in OpenAPI, and isolate release smoke tests from host configuration. ([#480](https://github.com/shuv1337/shuvcode/pull/480))
+- Show malformed configuration errors with the file path, line and column in TUI toasts, Status and CLI diagnostics. Unclosed objects point to their opening line; blank configuration files are accepted as `{}`. ([#481](https://github.com/shuv1337/shuvcode/pull/481))
+- Keep configuration failures targeted: `mcp list`, `models` and `debug config` fail on configuration errors, while `run` fails only when an entire configuration file was ignored. Authentication commands warn and continue so configuration problems do not block sign-in. ([#481](https://github.com/shuv1337/shuvcode/pull/481))
+- Make `mcp list` wait for MCP registration and report when MCP configuration loading is disabled rather than silently showing an empty list. ([#481](https://github.com/shuv1337/shuvcode/pull/481))
+
 ## v2.2.6-shuv.2 — 2026-11-09
 
 Shuvcode sync of upstream `dev` at `a5fda7ee1347eb3bb1227724e0ad8cdc091ad7e3`: 140 commits since the v2.2.6 sync pin `64f2403ffa`. The latest upstream release remains v2.2.6.
