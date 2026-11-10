@@ -13,6 +13,8 @@ import { Updater } from "../src/services/updater"
 import { testEffect } from "../../core/test/lib/effect"
 
 const it = testEffect(NodeServices.layer)
+const hostPackage = `shuvcode-${process.platform === "win32" ? "windows" : process.platform}-${process.arch}`
+const hostCommand = process.platform === "win32" ? "shuvcode.exe" : "shuvcode"
 
 declare const OPENCODE_CLI_NAME: string | undefined
 
@@ -100,7 +102,16 @@ function fixture(
               return Effect.succeed({
                 command: command.command,
                 exitCode: 0,
-                stdout: Buffer.alloc(0),
+                stdout: Buffer.from(
+                  args[0] === "pm" && args[1] === "bin"
+                    ? global.bin
+                    : args[0] === "--version"
+                      ? `shuvcode v${commands
+                          .flat()
+                          .findLast((arg) => arg.startsWith(`${name}@`))
+                          ?.slice(name.length + 1)}\n`
+                      : "",
+                ),
                 stderr: Buffer.alloc(0),
                 stdoutTruncated: false,
                 stderrTruncated: false,
@@ -143,6 +154,7 @@ installs.forEach(({ method, command }) => {
   it.live(`bun isolates and removes its install cache after exit ${exitCode}`, () =>
     Effect.gen(function* () {
       const test = yield* fixture((command) => {
+        if (command.args[0] !== "install") return {}
         expect(command.command).toBe("bun")
         expect(existsSync(command.args[4])).toBe(true)
         return { exitCode, stderr: Buffer.from("bun install failed") }
@@ -151,7 +163,22 @@ installs.forEach(({ method, command }) => {
       const cache = test.commands[0]?.[5]
       expect(cache).toStartWith(path.join(test.global.cache, "update-"))
       expect(test.commands).toEqual([
-        ["bun", "install", "--global", "--trust", "--cache-dir", cache, "shuvcode@2.3.4-beta.1"],
+        [
+          "bun",
+          "install",
+          "--global",
+          "--trust",
+          "--cache-dir",
+          cache,
+          "shuvcode@2.3.4-beta.1",
+          `${hostPackage}@2.3.4-beta.1`,
+        ],
+        ...(exitCode === 0
+          ? [
+              ["bun", "pm", "bin", "-g"],
+              [path.join(test.global.bin, hostCommand), "--version"],
+            ]
+          : []),
       ])
       expect(yield* test.fs.readDirectory(test.global.cache)).toEqual([])
       expect(result._tag).toBe(exitCode === 0 ? "None" : "Some")
@@ -164,9 +191,57 @@ it.live("bun ignores install cache cleanup failures", () =>
   Effect.gen(function* () {
     const test = yield* fixture(() => ({}), "shuvcode", true)
     yield* test.updater.upgrade("bun", "v2.3.4-beta.1")
-    expect(test.commands).toHaveLength(1)
+    expect(test.commands).toHaveLength(3)
   }),
 )
+;["shuvcode-darwin-arm64", "shuvcode-linux-x64-baseline-musl"].forEach((platform) => {
+  it.live(`bun requires and verifies the matching ${platform} package`, () =>
+    Effect.gen(function* () {
+      const test = yield* fixture(() => ({}), "shuvcode", false, { name: platform })
+      yield* test.updater.upgrade("bun", "2.2.7-shuv.1")
+      expect(test.commands[0].slice(-2)).toEqual(["shuvcode@2.2.7-shuv.1", `${platform}@2.2.7-shuv.1`])
+      expect(test.commands.slice(1)).toEqual([
+        ["bun", "pm", "bin", "-g"],
+        [path.join(test.global.bin, hostCommand), "--version"],
+      ])
+    }),
+  )
+})
+;[
+  {
+    name: "missing platform package",
+    result: { exitCode: 1, stderr: Buffer.from("Failed to find Shuvcode binary package") },
+  },
+  { name: "stale binary", result: { stdout: Buffer.from("shuvcode v2.2.6-shuv.1") } },
+  { name: "missing executable", result: { error: new AppProcess.AppProcessError({ command: "shuvcode" }) } },
+].forEach(({ name, result }) => {
+  it.live(`bun does not report success after installing a ${name}`, () =>
+    Effect.gen(function* () {
+      const test = yield* fixture((command) => (command.args[0] === "--version" ? result : {}), "shuvcode", false, {
+        name: "shuvcode-darwin-arm64",
+      })
+      const error = yield* test.updater.upgrade("bun", "2.2.7-shuv.1").pipe(Effect.flip)
+      expect(error).toBeInstanceOf(Updater.UpgradeError)
+      expect(error.message).toContain("Bun did not provide a working shuvcode-darwin-arm64@2.2.7-shuv.1")
+      if (!(error instanceof Updater.UpgradeError)) return
+      expect(error.title).toBe("Shuvcode upgrade verification failed")
+      expect(error.command).toBe(
+        "bun install --global --trust shuvcode@2.2.7-shuv.1 shuvcode-darwin-arm64@2.2.7-shuv.1",
+      )
+      expect(yield* test.fs.readDirectory(test.global.cache)).toEqual([])
+    }),
+  )
+})
+
+it.live("bun rejects an unavailable global bin directory instead of checking PATH", () =>
+  Effect.gen(function* () {
+    const test = yield* fixture((command) => (command.args[0] === "pm" ? { stdout: Buffer.alloc(0) } : {}))
+    const error = yield* test.updater.upgrade("bun", "2.2.7-shuv.1").pipe(Effect.flip)
+    expect(error.message).toContain("absolute global bin directory")
+    expect(test.commands).toHaveLength(2)
+  }),
+)
+
 test("fork supports only package managers, not a curl installer", () => {
   expect(Updater.methods).toEqual(["npm", "pnpm", "bun", "yarn"])
 })
@@ -298,7 +373,7 @@ windows("windows keeps a second link to the running binary in the cache while th
     yield* test.fs.writeFileString(path.join(test.global.cache, "shuvcode-upgrade-999999999-dead.exe"), "exited")
     yield* test.fs.writeFileString(path.join(test.global.cache, "shuvcode-service-4-aa.exe"), "inaccessible")
     yield* test.updater.upgrade("bun", "2.3.4")
-    expect(test.commands).toHaveLength(1)
+    expect(test.commands).toHaveLength(3)
     // The installed path never disappears; the extra link is released and only dead ones are swept.
     expect(yield* test.fs.readFileString(test.executable)).toBe("binary")
     expect(links(test.global.cache)).toEqual(["shuvcode-service-4-aa.exe"])
@@ -347,7 +422,7 @@ windows("windows leaves a source checkout's runtime alone", () =>
     }, "not-shuvcode")
     layout.cache = test.global.cache
     yield* test.updater.upgrade("bun", "2.3.4")
-    expect(test.commands).toHaveLength(1)
+    expect(test.commands).toHaveLength(3)
   }),
 )
 
@@ -392,9 +467,10 @@ if (typeof OPENCODE_CLI_NAME === "string" && OPENCODE_CLI_NAME === "shuvcode-nod
   it.live("Node distribution resolves the published npm package", () =>
     Effect.gen(function* () {
       const test = yield* fixture(
-        (command) => ({
-          stdout: Buffer.from(command.command === "npm" ? "shuvcode-node@2.3.4" : ""),
-        }),
+        (command) =>
+          command.args[0] === "list" || command.args[1] === "list" || command.args[1] === "ls"
+            ? { stdout: Buffer.from(command.command === "npm" ? "shuvcode-node@2.3.4" : "") }
+            : {},
         "shuvcode-node",
       )
       expect(yield* test.updater.method()).toBe("npm")
@@ -407,6 +483,15 @@ if (typeof OPENCODE_CLI_NAME === "string" && OPENCODE_CLI_NAME === "shuvcode-nod
         ["yarn", "global", "list"],
         ["npm", "install", "--global", "--allow-scripts=shuvcode-node", "shuvcode-node@2.3.4"],
         ["pnpm", "add", "--global", "--allow-build=shuvcode-node", "shuvcode-node@2.3.4"],
+      ])
+      yield* test.updater.upgrade("bun", "v2.3.4")
+      expect(test.commands[6].slice(-2)).toEqual([
+        "shuvcode-node@2.3.4",
+        `${hostPackage.replace("shuvcode-", "shuvcode-node-")}@2.3.4`,
+      ])
+      expect(test.commands.at(-1)).toEqual([
+        path.join(test.global.bin, process.platform === "win32" ? "shuvcode-node.exe" : "shuvcode-node"),
+        "--version",
       ])
     }),
   )

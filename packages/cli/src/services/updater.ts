@@ -153,15 +153,16 @@ const make = Effect.gen(function* () {
   const appProcess = yield* AppProcess.Service
   const flock = yield* EffectFlock.Service
   const installedVersion = yield* Ref.make(OPENCODE_VERSION)
-  const installedPackage = yield* Effect.gen(function* () {
+  const installed = yield* Effect.gen(function* () {
     const executable = yield* fs.realPath(process.execPath)
     const directory = path.dirname(path.dirname(executable))
     const manifest: Manifest = yield* fs
       .readFileString(path.join(directory, "package.json"))
       .pipe(Effect.flatMap((text) => Effect.try(() => JSON.parse(text))))
     // Source invocations run inside Bun or Node, which may themselves be npm packages.
-    return installedPackageName(executable, manifest)
+    return { name: installedPackageName(executable, manifest), manifest: manifest.name }
   }).pipe(Effect.orElseSucceed(() => undefined))
+  const installedPackage = installed?.name
 
   const readPolicy = Effect.fnUntraced(function* () {
     const values = yield* Effect.forEach(["config.json", "opencode.json", "opencode.jsonc"], (name) =>
@@ -356,11 +357,52 @@ const make = Effect.gen(function* () {
           // Bun does not prune old versions from its shared package cache.
           yield* fs.makeDirectory(global.cache, { recursive: true })
           const cache = yield* temporaryDirectory("update-")
+          // Optional dependencies can be skipped even when Bun reports success. Make
+          // the running platform a required, version-pinned global dependency instead.
+          // Preserve baseline/musl variants from the running binary's manifest.
+          const platform =
+            installed?.name && platformPackage.test(installed.manifest)
+              ? installed.manifest.replace(installed.name, targetPackage)
+              : `${targetPackage}-${process.platform === "win32" ? "windows" : process.platform}-${process.arch}`
+          const binaryTarget = `${platform}@${version}`
+          const command = ["bun", "install", "--global", "--trust", target, binaryTarget]
           return yield* retaining(
-            runUpgrade({
-              method,
-              command: ["bun", "install", "--global", "--trust", "--cache-dir", cache, target],
-              displayCommand: ["bun", "install", "--global", "--trust", target],
+            Effect.gen(function* () {
+              yield* runUpgrade({
+                method,
+                command: ["bun", "install", "--global", "--trust", "--cache-dir", cache, target, binaryTarget],
+                displayCommand: command,
+              })
+              const failure = (detail: string) =>
+                new UpgradeError({
+                  title: "Shuvcode upgrade verification failed",
+                  detail: `Bun did not provide a working ${binaryTarget}. ${detail}`,
+                  command: command.join(" "),
+                  retry: "Run the command above to reinstall both packages, then run shuvcode --version.",
+                })
+              // Resolve Bun's own bin directory, not a different shuvcode on PATH.
+              // The launcher checks the platform package version and binary before
+              // --version proves that the newly installed executable can actually run.
+              yield* Effect.gen(function* () {
+                const bin = yield* exec(["bun", "pm", "bin", "-g"])
+                if (bin.code !== 0) return yield* Effect.fail(new Error(resultDetail(bin)))
+                if (!path.isAbsolute(bin.stdout.trim()))
+                  return yield* Effect.fail(new Error("Bun did not report an absolute global bin directory."))
+                const executable = path.join(
+                  bin.stdout.trim(),
+                  `${targetPackage}${process.platform === "win32" ? ".exe" : ""}`,
+                )
+                const result = yield* exec([executable, "--version"])
+                if (result.code !== 0) return yield* Effect.fail(new Error(resultDetail(result)))
+                const actual = stripVTControlCharacters(result.stdout)
+                  .trim()
+                  .replace(/^shuvcode(?:-node)?\s+/, "")
+                  .replace(/^v/, "")
+                if (actual !== version)
+                  return yield* Effect.fail(
+                    new Error(`Expected version ${version}, received ${actual || "no version"}.`),
+                  )
+              }).pipe(Effect.mapError((cause) => failure(errorDetail(cause))))
             }),
           )
         }
