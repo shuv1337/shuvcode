@@ -156,6 +156,7 @@ export const layer = (options?: Options) =>
       const decodeOptions = { errors: "all", onExcessProperty: "ignore" } as const
       const decodeInfo = Schema.decodeUnknownOption(Info, decodeOptions)
       const parseInfo = Effect.fn("Config.parseInfo")(function* (text: string, source: string, original = text) {
+        if (!text.trim()) return { info: new Info({}) }
         const errors: ParseError[] = []
         const input: unknown = parse(text, errors, { allowTrailingComma: true })
         const diagnostics: Diagnostic[] = []

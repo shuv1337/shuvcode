@@ -1220,7 +1220,7 @@ describe("Config", () => {
           await fs.mkdir(global, { recursive: true })
           await fs.mkdir(project, { recursive: true })
           await fs.writeFile(path.join(global, "opencode.json"), "null")
-          await fs.writeFile(path.join(project, "opencode.json"), "")
+          await fs.writeFile(path.join(project, "opencode.json"), "[")
           await fs.writeFile(malformed, '{ "credential": "file-secret"')
         })
         const integrationID = Integration.ID.make("https://invalid.example.com")
@@ -1277,7 +1277,7 @@ describe("Config", () => {
           Effect.provide(
             testLayer(project, global, project, undefined, undefined, credentialNode, wellknownNode, {
               file: malformed,
-              content: "",
+              content: "[",
             }),
           ),
         )
@@ -2206,6 +2206,24 @@ describe("Config", () => {
       ),
     ),
   )
+
+  for (const text of ["", " \t\r\n "]) {
+    it.live(`treats blank config as an empty object: ${JSON.stringify(text)}`, () =>
+      withTempDir((tmp) =>
+        Effect.gen(function* () {
+          const file = path.join(tmp.path, "opencode.json")
+          yield* Effect.promise(() => fs.writeFile(file, text))
+          yield* Effect.gen(function* () {
+            const config = yield* Config.Service
+            const document = (yield* config.entries()).find((entry) => entry.type === "document" && entry.path === file)
+            if (document?.type !== "document") throw new Error("missing config document")
+            expect(document.info).toEqual(new Info({}))
+            expect(document.experimental?.diagnostics ?? []).toEqual([])
+          }).pipe(Effect.provide(testLayer(tmp.path)))
+        }),
+      ),
+    )
+  }
 
   for (const [name, text, message, line, column] of [
     ["JSON", '{\n  "mcp": { "servers": {} }\n  "agents": {}\n}', "CommaExpected", 3, 3],
