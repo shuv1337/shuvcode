@@ -86,7 +86,7 @@ test.each([{ args: ["models"] }, { args: ["debug", "config"] }, { args: ["run", 
                 diagnostics: [
                   {
                     source: "/config/opencode.jsonc",
-                    path: "$.snapshots",
+                    path: input.args[0] === "run" ? "$" : "$.snapshots",
                     line: 2,
                     column: 16,
                     message: "Skipped invalid setting: Expected boolean",
@@ -95,6 +95,8 @@ test.each([{ args: ["models"] }, { args: ["debug", "config"] }, { args: ["run", 
               },
             },
           ])
+        if (route === "/api/plugin") return Response.json({ location: { directory: root.path }, data: [active] })
+        if (route === "/api/model") return Response.json({ location: { directory: root.path }, data: [] })
         return new Response(null, { status: 500 })
       },
     })
@@ -123,7 +125,11 @@ test.each([{ args: ["models"] }, { args: ["debug", "config"] }, { args: ["run", 
     expect(stderr).toContain("/config/opencode.jsonc:2:16")
     expect(stderr).toContain("Expected boolean")
     expect(code).toBe(1)
-    expect(requests).toEqual(["/api/info", "/api/config"])
+    expect(requests).toEqual(
+      input.args[0] === "models"
+        ? ["/api/info", "/api/config", "/api/plugin", "/api/model"]
+        : ["/api/info", "/api/config"],
+    )
     if (input.args[0] === "run") expect(JSON.parse(stdout).type).toBe("error")
     if (input.args[0] === "debug") expect(JSON.parse(stdout)[0].experimental.diagnostics).toHaveLength(1)
   },
@@ -136,7 +142,13 @@ test.each([
   ],
   ["empty", "{}"],
   ["malformed", '{\n  "mcp": {\n}'],
-  ["schema", '{\n  "snapshots": "private-secret"\n}'],
+  [
+    "schema",
+    JSON.stringify({
+      snapshots: "private-secret",
+      mcp: { servers: { fixture: { type: "local", command: ["not-executed"], disabled: true } } },
+    }),
+  ],
 ] as const)("mcp list reports %s config on a cold standalone server", async (kind, content) => {
   await using root = await tmpdir()
   const file = path.join(root.path, "config", "opencode.json")
@@ -165,5 +177,6 @@ test.each([
   expect(stderr).toContain(kind === "malformed" ? "CloseBraceExpected" : "Expected boolean")
   expect(stderr).not.toContain("private-secret")
   expect(code).toBe(1)
-  expect(stdout).not.toContain("No MCP servers configured")
+  expect(stdout).toContain(kind === "schema" ? "fixture" : "No MCP servers configured")
+  if (kind === "schema") expect(stdout).toContain("disabled")
 })

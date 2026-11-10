@@ -88,7 +88,8 @@ async function execute(input: RunCommandInput, prepared: Prepared, endpoint: End
   const setup = withRunSetupDeadlines(client)
   const explicit = parseRunModel(input.model)
   const location = { directory: prepared.directory }
-  await requireConfig(setup, location.directory, signal)
+  if (!(await requireConfig(setup, location.directory, signal, "file")))
+    throw new Error("Cannot run with an ignored configuration file")
   const worktree =
     input.worktree === undefined
       ? undefined
@@ -120,7 +121,11 @@ async function execute(input: RunCommandInput, prepared: Prepared, endpoint: End
     return undefined
   })
   if (!target) return
-  if (target.location.directory !== location.directory) await requireConfig(setup, target.location.directory, signal)
+  if (
+    target.location.directory !== location.directory &&
+    !(await requireConfig(setup, target.location.directory, signal, "file"))
+  )
+    throw new Error("Cannot run with an ignored configuration file")
   const title =
     !target.resume && input.title !== undefined
       ? input.title || prepared.message.slice(0, 50) + (prepared.message.length > 50 ? "..." : "")

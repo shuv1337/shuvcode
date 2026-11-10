@@ -4,9 +4,12 @@ import { requireConfig } from "./config-diagnostics"
 
 // A cold Location answers reads before its config MCP plugin has registered the servers.
 // Wait on the client, not in the server handler, and never call an unfinished catalog "unconfigured".
-export const waitForMcp = (client: OpenCodeClient, directory: string) =>
+export const waitForMcp = (client: OpenCodeClient, directory: string, fail: "never" | "any" = "never") =>
   Effect.gen(function* () {
-    yield* Effect.tryPromise({ try: (signal) => requireConfig(client, directory, signal), catch: (cause) => cause })
+    yield* Effect.tryPromise({
+      try: (signal) => requireConfig(client, directory, signal, fail),
+      catch: (cause) => cause,
+    })
     const plugins = yield* Effect.tryPromise((signal) =>
       client.plugin.list({ location: { directory } }, { signal }),
     ).pipe(

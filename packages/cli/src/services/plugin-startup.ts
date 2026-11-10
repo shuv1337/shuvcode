@@ -4,8 +4,8 @@ import { requireConfig } from "./config-diagnostics"
 
 // Catalog reads return whatever is loaded, and a cold Location lists no plugins until its first activation.
 // One-shot commands read once and exit, so they give that activation a moment before reading.
-export const waitForPlugins = (client: OpenCodeClient, directory: string) =>
-  Effect.tryPromise({ try: (signal) => requireConfig(client, directory, signal), catch: (cause) => cause }).pipe(
+export const waitForPlugins = (client: OpenCodeClient, directory: string, fail: "never" | "any" = "never") =>
+  Effect.tryPromise({ try: (signal) => requireConfig(client, directory, signal, fail), catch: (cause) => cause }).pipe(
     Effect.andThen(waitForActivation(client, directory)),
   )
 
