@@ -348,7 +348,7 @@ describe("ConfigNormalize", () => {
       {
         kind: "invalid",
         path: ["permission", "bash", "0"],
-        message: "skipped malformed recognized value",
+        message: expect.stringContaining("Skipped invalid setting"),
       },
     ])
     expect(JSON.stringify(result.diagnostics)).not.toContain("TOPSECRET")

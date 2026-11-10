@@ -352,6 +352,7 @@ function authServer(fetch: (request: Request, url: URL) => Response | Promise<Re
       const url = new URL(request.url)
       requests?.push(url.pathname)
       if (url.pathname === "/api/info") return status()
+      if (url.pathname === "/api/config") return Response.json([])
       if (url.pathname === "/api/model/default") return Response.json(located(null))
       return fetch(request, url)
     },

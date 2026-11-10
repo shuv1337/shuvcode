@@ -22,6 +22,7 @@ describe("isolated run setup", () => {
   })
 
   const stalls = [
+    { route: "GET /api/config", phase: "Checking configuration", args: [] },
     { route: "GET /api/location", phase: "Looking up location", args: [] },
     { route: "POST /api/session", phase: "Creating session", args: [] },
     { route: `GET /api/session/${sessionID}`, phase: "Resolving session", args: ["--session", sessionID] },
@@ -223,6 +224,7 @@ async function start(options: { stall?: string; body?: boolean; duration?: numbe
       }
       if (options.pendingPermission && url.pathname.endsWith("/reply")) return new Promise<Response>(() => {})
       if (url.pathname === "/api/info") return Response.json({ version: "local" })
+      if (url.pathname === "/api/config") return Response.json([])
       if (url.pathname === "/api/location")
         return Response.json({ directory: root, project: { id: "project", directory: root, canonical: root } })
       if (route === "GET /api/session") return Response.json({ data: [session], cursor: {} })

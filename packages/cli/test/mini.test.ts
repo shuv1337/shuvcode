@@ -164,6 +164,7 @@ describe("mini command", () => {
             urls: [],
             paths: { tmp: "/tmp/opencode" },
           })
+        if (url.pathname === "/api/config") return Response.json([])
         if (url.pathname === "/api/location")
           return Response.json({ directory: process.cwd(), project: { id: "global", directory: process.cwd() } })
         if (url.pathname === "/api/session") {
@@ -204,6 +205,7 @@ describe("mini command", () => {
     const server = Bun.serve({
       port: 0,
       fetch(request) {
+        if (new URL(request.url).pathname === "/api/config") return Response.json([])
         if (new URL(request.url).pathname === "/api/session") return new Response("boom", { status: 500 })
         return Response.json({
           version: "incompatible",

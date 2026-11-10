@@ -34,6 +34,7 @@ import { withEnv } from "../fixture/env"
 import { location } from "../fixture/location"
 import { tmpdir, withTempDir } from "../fixture/tmpdir"
 import { testEffect } from "../lib/effect"
+import { advance } from "../lib/clock"
 
 const it = testEffect(Layer.empty)
 const itWithPermissions = process.platform === "win32" || process.getuid?.() === 0 ? it.live.skip : it.live
@@ -2206,6 +2207,82 @@ describe("Config", () => {
     ),
   )
 
+  for (const [name, text, message, line, column] of [
+    ["JSON", '{\n  "mcp": { "servers": {} }\n  "agents": {}\n}', "CommaExpected", 3, 3],
+    ["JSONC", '{\n  // config\n  "mcp": {\n}', "CloseBraceExpected", 4, 2],
+    ["schema", '{\n  "snapshots": "private-secret", "shell": "bash"\n}', "Expected boolean", 2, 16],
+  ] as const) {
+    it.live(`retains actionable, redacted ${name} diagnostics in config entries`, () =>
+      withTempDir((tmp) =>
+        Effect.gen(function* () {
+          const file = path.join(tmp.path, name === "JSONC" ? "opencode.jsonc" : "opencode.json")
+          yield* Effect.promise(() => fs.writeFile(file, text))
+          yield* Effect.gen(function* () {
+            const config = yield* Config.Service
+            const entries = yield* config.entries()
+            const document = entries.find((entry) => entry.type === "document" && entry.path === file)
+            if (document?.type !== "document") throw new Error("missing config document")
+            expect(document.experimental?.diagnostics).toHaveLength(1)
+            expect(document.experimental?.diagnostics?.[0]).toMatchObject({
+              source: file,
+              line,
+              column,
+              message: expect.stringContaining(message),
+            })
+            expect(JSON.stringify(document.experimental)).not.toContain("private-secret")
+            expect(document.info.shell).toBe(name === "schema" ? "bash" : undefined)
+          }).pipe(Effect.provide(testLayer(tmp.path)))
+        }),
+      ),
+    )
+  }
+
+  it.effect("publishes diagnostic-only changes and clears them after repair or deletion", () =>
+    withTempDir((tmp) =>
+      Effect.gen(function* () {
+        const file = path.join(tmp.path, "opencode.json")
+        yield* Effect.promise(() => fs.writeFile(file, "{"))
+        yield* Effect.gen(function* () {
+          const config = yield* Config.Service
+          const watcher = yield* Watcher.Test
+          const bus = yield* Bus.Service
+          const updates: unknown[] = []
+          yield* bus.subscribe(Event.Updated).pipe(
+            Stream.runForEach((event) => Effect.sync(() => updates.push(event))),
+            Effect.forkScoped({ startImmediately: true }),
+          )
+          const errors = () =>
+            config
+              .entries()
+              .pipe(
+                Effect.map((entries) =>
+                  entries.flatMap((entry) =>
+                    entry.type === "document" ? (entry.experimental?.diagnostics ?? []) : [],
+                  ),
+                ),
+              )
+          expect((yield* errors())[0]?.line).toBe(1)
+          yield* Effect.promise(() => fs.writeFile(file, "{\n"))
+          yield* watcher.emit({ type: "update", path: file })
+          yield* advance(() => updates.length >= 1)
+          expect((yield* errors())[0]?.line).toBe(2)
+          yield* Effect.promise(() => fs.writeFile(file, "{}"))
+          yield* watcher.emit({ type: "update", path: file })
+          yield* advance(() => updates.length >= 2)
+          expect(yield* errors()).toEqual([])
+          yield* Effect.promise(() => fs.writeFile(file, "{"))
+          yield* watcher.emit({ type: "update", path: file })
+          yield* advance(() => updates.length >= 3)
+          expect(yield* errors()).toHaveLength(1)
+          yield* Effect.promise(() => fs.unlink(file))
+          yield* watcher.emit({ type: "delete", path: file })
+          yield* advance(() => updates.length >= 4)
+          expect(yield* errors()).toEqual([])
+        }).pipe(Effect.provide(testLayer(tmp.path)))
+      }),
+    ),
+  )
+
   it.live("ignores an invalid file while loading valid config values", () =>
     Effect.acquireDisposable(Effect.promise(() => tmpdir())).pipe(
       Effect.flatMap((tmp) =>
@@ -2221,7 +2298,14 @@ describe("Config", () => {
             const watcher = yield* Watcher.Test
             const documents = (yield* config.entries()).filter((entry) => entry.type === "document")
 
-            expect(documents.map((document) => document.info.$schema)).toEqual(["base"])
+            expect(documents.map((document) => document.info.$schema)).toEqual(["base", undefined])
+            expect(documents[1]?.experimental?.diagnostics?.[0]).toMatchObject({
+              source: path.join(tmp.path, "opencode.jsonc"),
+              path: "$",
+              line: 1,
+              column: 3,
+              message: expect.stringContaining("File ignored"),
+            })
             expect(yield* watcher.subscriptions()).toContainEqual({
               path: tmp.path,
               type: "entries",
