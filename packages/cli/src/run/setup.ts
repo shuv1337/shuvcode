@@ -52,7 +52,16 @@ export function withRunSetupDeadlines(client: OpenCodeClient) {
     },
     worktree: {
       ...client.worktree,
-      create: bounded("Creating worktree", client.worktree.create),
+      create: (input, options) =>
+        runSetupRequest(
+          "Creating worktree",
+          (signal) => client.worktree.create(input, { ...options, signal }),
+          options,
+          RUN_ADMISSION_TIMEOUT_MS,
+        ).catch((error) => {
+          if (!(error instanceof RunSetupTimeoutError)) throw error
+          throw new RunSetupTimeoutError(`${error.message}; the worktree may already exist. Check before retrying.`)
+        }),
     },
     model: {
       ...client.model,

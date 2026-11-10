@@ -15,6 +15,15 @@ Compared #473's merge `76d5ab2b35` with its first parent and the baseline above.
 
 No feature flag: these are regression fixes, tests, documentation, and generated-document reconciliation.
 
+## Worktree setup deadline
+
+Worktree creation reuses the 120-second `RUN_ADMISSION_TIMEOUT_MS` limit rather than the normal
+30-second setup RPC limit. The server runs `git worktree add`, saves the record, and runs the project's
+`commands.start` (for example, `bun install`) before replying, so creation needs time for project setup.
+A client timeout interrupts the handler but does not roll back the worktree or saved record. The timeout
+therefore warns that the worktree may already exist and asks the user to check before retrying; a blind retry
+can create a suffixed worktree such as `<name>-2`. Creation is not retried automatically.
+
 ## Evaluation header contract
 
 Use top-level `headers: Record<string, string>` on `Evaluation.request` / `Evaluation.run`.

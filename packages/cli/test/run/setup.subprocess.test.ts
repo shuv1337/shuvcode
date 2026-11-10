@@ -51,7 +51,12 @@ describe("isolated run setup", () => {
           expect(result.code).toBe(1)
           expect(result.stderr).toContain(stall.phase)
           const admitting = stall.phase === "Admitting prompt"
-          expect(result.stderr).toContain(`timed out after ${(admitting ? admissionTimeout : setupTimeout) / 1000}s`)
+          const creatingWorktree = stall.route === "POST /api/worktree"
+          expect(result.stderr).toContain(
+            `timed out after ${(admitting || creatingWorktree ? admissionTimeout : setupTimeout) / 1000}s`,
+          )
+          if (creatingWorktree)
+            expect(result.stderr).toContain("the worktree may already exist. Check before retrying.")
           expect(result.stderr).toContain("Reading stdin until EOF")
           expect(fixture.requests.filter((request) => request.route === stall.route)).toHaveLength(1)
           expect(
