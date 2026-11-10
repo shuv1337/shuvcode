@@ -13,10 +13,10 @@ Shuvcode sync through upstream v2.2.7, plus the following `dev` site update at `
 - Add OpenAI, Google and Vertex embedding protocols. Direct `@opencode/ai` users must replace `response.image` with `response.images[0]`.
 - Console watches are guarded by the `console_watches` flag, off in releases.
 
-### Fork preservation and known divergence
+### Fork preservation and managed policy
 
 - Retain the Claude CLI identity, configuration diagnostics and headless CLI configuration-loading fixes from #478, #481 and #483, along with all existing fork identity, publishing and provider-hiding protections.
-- **The upstream notes below describe upstream behavior.** Shuvcode still does not wait for plugin activation on server endpoints, including model/provider, generation, voice and web search. The managed-policy-wait resolution from #484 is unchanged pending its separate review; early requests may observe/use a provider before managed policy removes it.
+- Keep upstream #63040's bounded plugin-readiness wait on `model.list`, `model.default`, `provider.list`, `generate.*`, `voice.*` and `websearch.query`: wait up to 5 seconds, then return 503 if activation has not completed. This prevents these endpoints from exposing or using providers before managed policy is applied. Other catalog reads retain their non-waiting behavior.
 - The upstream Claude Agent SDK provider remains hidden and unregistered. Its upstream fixes do not enable it in Shuvcode.
 
 ## v2.2.7 — 2026-11-10
