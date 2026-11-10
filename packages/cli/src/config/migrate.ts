@@ -1,6 +1,6 @@
 export * as ConfigMigration from "./migrate"
 
-import { TuiConfigV1 } from "@opencode/tui/config/v1"
+import { TuiConfigV1Schema } from "@opencode/tui/config/v1/schema"
 import { TuiKeybind } from "@opencode/tui/config/v1/keybind"
 import { Definitions } from "@opencode/tui/config/keybind"
 import { Effect, FileSystem, Option, Schema } from "effect"
@@ -9,7 +9,7 @@ import { applyEdits, createScanner, modify, parse, parseTree, type Node, type Pa
 import path from "path"
 import { Info, SchemaURL } from "./schema"
 
-const decodeV1 = Schema.decodeUnknownOption(TuiConfigV1.Info)
+const decodeV1 = Schema.decodeUnknownOption(TuiConfigV1Schema.Info)
 const decodeInfo = Schema.decodeUnknownOption(Info)
 const decodeRecord = Schema.decodeUnknownOption(Schema.Record(Schema.String, Schema.Any))
 const LegacyKeybindTargets = new Set<string>(Object.values(TuiKeybind.CommandMap))
@@ -157,7 +157,7 @@ function findComma(text: string, start: number, end: number) {
   }
 }
 
-export function migrateV1(legacy: TuiConfigV1.Info | undefined, kv: Record<string, any>): Info {
+export function migrateV1(legacy: TuiConfigV1Schema.Info | undefined, kv: Record<string, any>): Info {
   const plugins = [
     ...(legacy?.plugin?.map((plugin) =>
       typeof plugin === "string" ? plugin : { package: plugin[0], options: plugin[1] },
