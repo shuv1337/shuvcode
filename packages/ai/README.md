@@ -1625,7 +1625,7 @@ Request options in order of stability:
 1. **Portable knobs** — `maxTokens`, `temperature`, `topP`, `topK`, `frequencyPenalty`, `presencePenalty`, `seed` and `stop`, at the top level of a text request. `GENERATION_KEYS` lists them.
 2. **`promptCacheKey`** — stable cache affinity lowered by every protocol that supports it.
 3. **`providerOptions: { ... }`** — flat options inferred from the selected model (OpenAI `store`, Anthropic `thinking`, Gemini `thinkingConfig`, OpenRouter routing).
-4. **`http: { body, headers, query }`** — last-resort serializable overlays merged into the final HTTP request. Reach for this only when a stable typed path doesn't yet exist.
+4. **`headers` and `http: { body, query, encoding }`** — last-resort transport overrides. Headers belong at the request top level, not inside `http`. Reach for these only when a stable typed path doesn't yet exist.
 
 Route/provider defaults are overridden by request-level values for each axis.
 
@@ -1640,6 +1640,12 @@ ai.request({
   },
 })
 ```
+
+### Experimental Evaluation headers
+
+`Evaluation.request(...)` and `Evaluation.run(...)` from `@opencode/ai/experimental` accept top-level `headers: Record<string, string>`. The System One route merges configuration headers first, then per-call headers (case-insensitively), and applies authentication last. A configured bearer credential therefore replaces an `authorization` override; `Auth.none` preserves it. The JSON request body sets `content-type: application/json`.
+
+The historical `http.headers` input is unsupported; migrate it to top-level `headers`. It is not part of `HttpOptions` or the Evaluation HTTP-options schema and is not forwarded. The same top-level header API is used by the newer `ai.decision.generate(...)` API.
 
 ## Routes
 

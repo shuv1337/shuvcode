@@ -36,7 +36,7 @@ export async function runSetupRequest<T>(
   }
 }
 
-/** Bounds the session-target resolution RPCs; pass the unbounded client to execution. */
+/** Bounds worktree creation and session-target resolution RPCs; pass the unbounded client to execution. */
 export function withRunSetupDeadlines(client: OpenCodeClient) {
   const bounded =
     <A, B>(phase: string, request: (input: A, options?: RequestOptions) => Promise<B>) =>
@@ -49,6 +49,19 @@ export function withRunSetupDeadlines(client: OpenCodeClient) {
       ...client.location,
       get: (input, options) =>
         runSetupRequest("Looking up location", (signal) => client.location.get(input, { ...options, signal }), options),
+    },
+    worktree: {
+      ...client.worktree,
+      create: (input, options) =>
+        runSetupRequest(
+          "Creating worktree",
+          (signal) => client.worktree.create(input, { ...options, signal }),
+          options,
+          RUN_ADMISSION_TIMEOUT_MS,
+        ).catch((error) => {
+          if (!(error instanceof RunSetupTimeoutError)) throw error
+          throw new RunSetupTimeoutError(`${error.message}; the worktree may already exist. Check before retrying.`)
+        }),
     },
     model: {
       ...client.model,

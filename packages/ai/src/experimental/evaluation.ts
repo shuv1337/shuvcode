@@ -169,6 +169,8 @@ export class EvaluationRequest extends Schema.Class<EvaluationRequest>("Evaluati
   state: EvaluationInput,
   questions: EvaluationQuestions,
   options: Schema.optional(Schema.Record(Schema.String, Schema.Unknown)),
+  /** Overrides configuration headers; authentication is applied last. Use this instead of legacy http.headers. */
+  headers: Schema.optional(Schema.Record(Schema.String, Schema.String)),
   http: Schema.optional(HttpOptionsSchema),
 }) {
   declare protected readonly _EvaluationRequest: void

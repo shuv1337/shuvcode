@@ -91,7 +91,7 @@ async function execute(input: RunCommandInput, prepared: Prepared, endpoint: End
     input.worktree === undefined
       ? undefined
       : await createWorktreeLocation({
-          client,
+          client: setup,
           location,
           name: input.worktree === true ? undefined : input.worktree,
         })

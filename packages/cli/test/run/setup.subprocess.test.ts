@@ -23,6 +23,8 @@ describe("isolated run setup", () => {
 
   const stalls = [
     { route: "GET /api/location", phase: "Looking up location", args: [] },
+    { route: "GET /api/location", phase: "Looking up location", args: ["--worktree"] },
+    { route: "POST /api/worktree", phase: "Creating worktree", args: ["--worktree", "fixture"] },
     { route: "POST /api/session", phase: "Creating session", args: [] },
     { route: `GET /api/session/${sessionID}`, phase: "Resolving session", args: ["--session", sessionID] },
     { route: "GET /api/session", phase: "Looking up sessions", args: ["--continue"] },
@@ -39,7 +41,7 @@ describe("isolated run setup", () => {
   ]
   for (const stall of stalls) {
     test(
-      `${stall.phase} aborts without retrying or replacing the session`,
+      `${stall.phase}${stall.args.includes("--worktree") ? " with --worktree" : ""} aborts without retrying or replacing the session`,
       async () => {
         const fixture = await start({ stall: stall.route })
         try {
@@ -49,7 +51,12 @@ describe("isolated run setup", () => {
           expect(result.code).toBe(1)
           expect(result.stderr).toContain(stall.phase)
           const admitting = stall.phase === "Admitting prompt"
-          expect(result.stderr).toContain(`timed out after ${(admitting ? admissionTimeout : setupTimeout) / 1000}s`)
+          const creatingWorktree = stall.route === "POST /api/worktree"
+          expect(result.stderr).toContain(
+            `timed out after ${(admitting || creatingWorktree ? admissionTimeout : setupTimeout) / 1000}s`,
+          )
+          if (creatingWorktree)
+            expect(result.stderr).toContain("the worktree may already exist. Check before retrying.")
           expect(result.stderr).toContain("Reading stdin until EOF")
           expect(fixture.requests.filter((request) => request.route === stall.route)).toHaveLength(1)
           expect(
