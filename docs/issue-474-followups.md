@@ -26,6 +26,10 @@ can create a suffixed worktree such as `<name>-2`. Creation is not retried autom
 
 ## Evaluation header contract
 
+Evaluation and System One are fork-only APIs. Upstream removed them in #58758 (`097a93e511`) in favour of
+Decision; this fork intentionally retains them for `jev.systemOne` (#397). Preserve this fork contract during
+future upstream syncs rather than treating it as accidental drift.
+
 Use top-level `headers: Record<string, string>` on `Evaluation.request` / `Evaluation.run`.
 System One applies configuration headers, then case-insensitive per-call overrides, then authentication.
 This follows the existing text/media request pipeline: bearer authentication replaces an authorization override;
