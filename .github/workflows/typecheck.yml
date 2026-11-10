@@ -1,6 +1,6 @@
 name: typecheck
 
-# Pull requests get typecheck only; the full test suite runs for releases (see test.yml).
+# Pull requests get typecheck and CLI config smoke tests; the full suite runs for releases (see test.yml).
 # Merges to integration-v2 were already typechecked on their pull request.
 on:
   pull_request:
@@ -27,6 +27,12 @@ jobs:
         with:
           bun-version: "1.4.4"
           install-flags: --frozen-lockfile
+
+      # These spawn the source CLI outside the workspace, without its TUI preload. Typechecking alone
+      # cannot catch accidental JSX/runtime dependencies in headless configuration loading.
+      - name: Test headless CLI configuration
+        working-directory: packages/cli
+        run: GITHUB_ACTIONS=false bun run test test/mcp-list.test.ts test/auth-config.test.ts
 
       - name: Typecheck each package
         run: |

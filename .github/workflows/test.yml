@@ -1,7 +1,7 @@
 name: test
 
 # The full suite runs only for releases: publish.yml calls it before publishing, and a pushed
-# v* tag runs it too. Pull requests and merges to integration-v2 get typecheck.yml only.
+# v* tag runs it too. Pull requests get typecheck.yml, including CLI config smoke tests.
 on:
   push:
     tags:
