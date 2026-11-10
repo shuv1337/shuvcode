@@ -16,7 +16,7 @@ const active: PluginInfo = {
   state: { status: "active" },
 }
 
-it.effect("waits for the config MCP plugin, not just any loaded plugin", () =>
+it.effect("waits for initial plugin activation before checking MCP", () =>
   Effect.gen(function* () {
     let reads = 0
     const client = OpenCode.make({
@@ -27,7 +27,7 @@ it.effect("waits for the config MCP plugin, not just any loaded plugin", () =>
           reads++
           return Response.json({
             location: { directory: "/fixture" },
-            data: reads === 1 ? [{ ...active, id: "opencode.config.agent" }] : [active],
+            data: reads === 1 ? [] : [active],
           })
         },
         { preconnect: fetch.preconnect },
@@ -37,6 +37,31 @@ it.effect("waits for the config MCP plugin, not just any loaded plugin", () =>
     yield* TestClock.adjust("25 millis")
     yield* Fiber.join(fiber)
     expect(reads).toBe(2)
+  }),
+)
+
+it.effect("reports disabled MCP config loading without waiting or retrying", () =>
+  Effect.gen(function* () {
+    let reads = 0
+    const client = OpenCode.make({
+      baseUrl: "http://fixture",
+      fetch: Object.assign(
+        async (request: RequestInfo | URL) => {
+          if (new URL(new Request(request).url).pathname === "/api/config") return Response.json([])
+          reads++
+          return Response.json({
+            location: { directory: "/fixture" },
+            data: [{ ...active, id: "opencode.config.agent" }],
+          })
+        },
+        { preconnect: fetch.preconnect },
+      ),
+    })
+    // No clock adjustment: a disabled plugin must fail immediately, not exhaust the startup deadline.
+    const result = yield* waitForMcp(client, "/fixture").pipe(Effect.result)
+    expect(result._tag).toBe("Failure")
+    if (result._tag === "Failure") expect(String(result.failure)).toContain("loading is disabled")
+    expect(reads).toBe(1)
   }),
 )
 

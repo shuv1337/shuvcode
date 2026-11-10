@@ -14,12 +14,19 @@ export const waitForMcp = (client: OpenCodeClient, directory: string, fail: "nev
       client.plugin.list({ location: { directory } }, { signal }),
     ).pipe(
       Effect.repeat({
-        until: (plugins) => plugins.data.some((plugin) => plugin.id === "opencode.config.mcp"),
+        until: (plugins) => plugins.data.length > 0,
         schedule: Schedule.spaced("25 millis").pipe(Schedule.upTo({ duration: "5 seconds" })),
       }),
     )
     const plugin = plugins.data.find((plugin) => plugin.id === "opencode.config.mcp")
-    if (!plugin) return yield* Effect.fail(new Error("MCP configuration is still loading; try again shortly."))
+    if (!plugin)
+      return yield* Effect.fail(
+        new Error(
+          plugins.data.length
+            ? "MCP configuration loading is disabled."
+            : "MCP configuration is still loading; try again shortly.",
+        ),
+      )
     if (plugin.state.status === "failed")
       return yield* Effect.fail(new Error(`Failed to load MCP configuration: ${plugin.state.error}`))
   })
