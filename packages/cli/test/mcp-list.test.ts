@@ -130,7 +130,8 @@ test.each([{ args: ["models"] }, { args: ["debug", "config"] }, { args: ["run", 
         ? ["/api/info", "/api/config", "/api/plugin", "/api/model"]
         : ["/api/info", "/api/config"],
     )
-    if (input.args[0] === "run") expect(JSON.parse(stdout).type).toBe("error")
+    expect(stderr).not.toMatch(/\n\s+at /)
+    if (input.args[0] === "run") expect(stdout).toBe("")
     if (input.args[0] === "debug") expect(JSON.parse(stdout)[0].experimental.diagnostics).toHaveLength(1)
   },
 )
@@ -176,6 +177,7 @@ test.each([
   expect(stderr).toContain(file)
   expect(stderr).toContain(kind === "malformed" ? "CloseBraceExpected" : "Expected boolean")
   expect(stderr).not.toContain("private-secret")
+  expect(stderr).not.toMatch(/\n\s+at /)
   expect(code).toBe(1)
   expect(stdout).toContain(kind === "schema" ? "fixture" : "No MCP servers configured")
   if (kind === "schema") expect(stdout).toContain("disabled")
