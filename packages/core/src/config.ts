@@ -244,15 +244,13 @@ export const layer = (options?: Options) =>
         // Logging out drops the saved remote config, so the source supplies nothing until a fresh fetch succeeds.
         if (!variables) return yield* wellknown.clearCached(entry.origin).pipe(Effect.as([]))
         // A failed refresh keeps the last resolved config so remote providers and allowlists do not disappear.
-        const configs = yield* wellknown
-          .resolve(entry, variables)
-          .pipe(
-            Effect.catch((error) =>
-              Effect.logWarning("failed to load wellknown config", { source: entry.origin, error }).pipe(
-                Effect.andThen(wellknown.cached(entry.origin)),
-              ),
+        const configs = yield* wellknown.resolve(entry, variables).pipe(
+          Effect.catch((error) =>
+            Effect.logWarning("failed to load wellknown config", { source: entry.origin, error }).pipe(
+              Effect.andThen(wellknown.cached(entry.origin)),
             ),
-          )
+          ),
+        )
         return yield* Effect.forEach(configs, (config) =>
           ConfigVariable.substitute({
             type: "virtual",
