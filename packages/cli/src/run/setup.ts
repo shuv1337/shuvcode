@@ -36,7 +36,7 @@ export async function runSetupRequest<T>(
   }
 }
 
-/** Bounds the session-target resolution RPCs; pass the unbounded client to execution. */
+/** Bounds worktree creation and session-target resolution RPCs; pass the unbounded client to execution. */
 export function withRunSetupDeadlines(client: OpenCodeClient) {
   const bounded =
     <A, B>(phase: string, request: (input: A, options?: RequestOptions) => Promise<B>) =>
