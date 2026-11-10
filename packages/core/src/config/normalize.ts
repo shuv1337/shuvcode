@@ -816,7 +816,9 @@ function invalidSchema(path: string[], diagnostics: Diagnostic[], issue: SchemaI
   diagnostics.push({
     kind: "invalid",
     path,
-    message: `Skipped invalid setting: ${errors.map((error) => `${error.path?.map(String).join(".") || "$"}: ${error.message}`).join("; ")}`,
+    message: `Skipped invalid setting: ${errors
+      .map((error) => (error.path?.length ? `${error.path.map(String).join(".")}: ${error.message}` : error.message))
+      .join("; ")}`,
   })
 }
 

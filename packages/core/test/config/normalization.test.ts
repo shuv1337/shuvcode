@@ -340,6 +340,15 @@ describe("ConfigNormalize", () => {
     })
   })
 
+  test("uses readable expectations without an empty root path prefix", () => {
+    expect(normalized({ snapshots: "invalid" }).diagnostics[0]?.message).toBe(
+      "Skipped invalid setting: Expected boolean",
+    )
+    expect(normalized({ permission: "invalid" }).diagnostics[0]?.message).toBe(
+      'Skipped invalid setting: Expected "ask", "allow", or "deny"',
+    )
+  })
+
   test("redacts permission resource keys from invalid diagnostics", () => {
     const result = normalized({
       permission: { bash: { "curl -H Authorization:Bearer TOPSECRET *": "bogus" } },
@@ -348,7 +357,7 @@ describe("ConfigNormalize", () => {
       {
         kind: "invalid",
         path: ["permission", "bash", "0"],
-        message: expect.stringContaining("Skipped invalid setting"),
+        message: 'Skipped invalid setting: Expected "ask", "allow", or "deny"',
       },
     ])
     expect(JSON.stringify(result.diagnostics)).not.toContain("TOPSECRET")
