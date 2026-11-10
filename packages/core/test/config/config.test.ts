@@ -2211,6 +2211,7 @@ describe("Config", () => {
     ["JSON", '{\n  "mcp": { "servers": {} }\n  "agents": {}\n}', "CommaExpected", 3, 3],
     ["JSONC", '{\n  // config\n  "mcp": {\n}', "CloseBraceExpected", 4, 2],
     ["schema", '{\n  "snapshots": "private-secret", "shell": "bash"\n}', "Expected boolean", 2, 16],
+    ["array", '{\n  "instructions": [false]\n}', "Expected string", 2, 20],
   ] as const) {
     it.live(`retains actionable, redacted ${name} diagnostics in config entries`, () =>
       withTempDir((tmp) =>
@@ -2236,6 +2237,31 @@ describe("Config", () => {
       ),
     )
   }
+
+  it.live("reports positions in the original file before substitutions", () =>
+    withTempDir((tmp) =>
+      Effect.gen(function* () {
+        const text = '{"shell":"{file:shell.txt}", "snapshots":123}'
+        yield* Effect.promise(() =>
+          Promise.all([
+            fs.writeFile(path.join(tmp.path, "opencode.json"), text),
+            fs.writeFile(path.join(tmp.path, "shell.txt"), "/a/long/path/that/changes/the/expanded/column/bash"),
+          ]),
+        )
+        yield* Effect.gen(function* () {
+          const config = yield* Config.Service
+          const entries = yield* config.entries()
+          const document = entries.find((entry) => entry.type === "document")
+          if (document?.type !== "document") throw new Error("missing config document")
+          expect(document.experimental?.diagnostics?.[0]).toMatchObject({
+            path: "$.snapshots",
+            line: 1,
+            column: text.indexOf("123") + 1,
+          })
+        }).pipe(Effect.provide(testLayer(tmp.path)))
+      }),
+    ),
+  )
 
   it.effect("publishes diagnostic-only changes and clears them after repair or deletion", () =>
     withTempDir((tmp) =>

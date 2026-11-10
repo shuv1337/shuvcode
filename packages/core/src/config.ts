@@ -143,13 +143,15 @@ export const layer = (options?: Options) =>
       const updateLock = Semaphore.makeUnsafe(1)
       const decodeOptions = { errors: "all", onExcessProperty: "ignore" } as const
       const decodeInfo = Schema.decodeUnknownOption(Info, decodeOptions)
-      const parseInfo = Effect.fn("Config.parseInfo")(function* (text: string, source: string) {
+      const parseInfo = Effect.fn("Config.parseInfo")(function* (text: string, source: string, original = text) {
         const errors: ParseError[] = []
         const input: unknown = parse(text, errors, { allowTrailingComma: true })
         const diagnostics: Diagnostic[] = []
-        const tree = errors.length ? undefined : parseTree(text, [], { allowTrailingComma: true })
+        const sourceErrors: ParseError[] = []
+        // Positions refer to the user's file, not the expanded environment/file substitutions.
+        const tree = parseTree(original, sourceErrors, { allowTrailingComma: true })
         const report = (field: readonly string[], message: string, offset?: number) => {
-          const lines = offset === undefined ? undefined : text.slice(0, offset).split(/\r\n|\r|\n/)
+          const lines = offset === undefined ? undefined : original.slice(0, offset).split(/\r\n|\r|\n/)
           diagnostics.push({
             source,
             path: field[0] === "$" ? "$" : `$.${field.join(".")}`,
@@ -161,7 +163,7 @@ export const layer = (options?: Options) =>
           report(
             ["$"],
             `File ignored: ${printParseErrorCode(errors[0]!.error)} (malformed JSON or JSONC)`,
-            errors[0]!.offset,
+            sourceErrors[0]?.offset,
           )
           yield* Effect.logWarning("configuration normalization diagnostic", {
             ...diagnostics[0],
@@ -176,7 +178,13 @@ export const layer = (options?: Options) =>
         yield* Effect.forEach(result.diagnostics, (diagnostic) => {
           const invalid = result.type === "rejected" || diagnostic.kind === "invalid"
           if (invalid) {
-            const node = diagnostic.path[0] === "$" ? tree : tree && findNodeAtLocation(tree, [...diagnostic.path])
+            const node =
+              diagnostic.path[0] === "$"
+                ? tree
+                : diagnostic.path.reduce(
+                    (node, key) => node && findNodeAtLocation(node, [node.type === "array" ? Number(key) : key]),
+                    tree,
+                  )
             report(diagnostic.path, diagnostic.message, node?.offset)
           }
           const log = invalid ? Effect.logWarning : Effect.logDebug
@@ -203,7 +211,7 @@ export const layer = (options?: Options) =>
         const text = yield* fs.readFileStringSafe(filepath)
         if (text === undefined) return
         const substituted = yield* ConfigVariable.substitute({ type: "path", path: filepath, text })
-        const document = yield* parseInfo(substituted, filepath)
+        const document = yield* parseInfo(substituted, filepath, text)
         return new Document({ type: "document", path: AbsolutePath.make(filepath), ...document })
       })
 
