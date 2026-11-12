@@ -22,22 +22,38 @@ function fixture(
   respond: (command: {
     readonly command: string
     readonly args: ReadonlyArray<string>
+    readonly path?: string
   }) => Partial<AppProcess.RunResult> & {
     error?: AppProcess.AppProcessError
   } = () => ({}),
   name = "shuvcode",
   failCleanup = false,
   manifest: Updater.Manifest = { name, bin: { shuvcode: "bin/shuvcode" } },
+  layout?: "prefix" | "platform-prefix" | "volta" | "mise",
 ) {
   return Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem
     const spawner = yield* ChildProcessSpawner.ChildProcessSpawner
     const root = yield* fs.makeTempDirectoryScoped({ prefix: "opencode-updater-" })
     const execPath = process.execPath
-    const executable = path.join(root, "package", "bin", "shuvcode")
+    const directory =
+      layout === "prefix"
+        ? path.join(root, "lib", "node_modules", name)
+        : layout === "platform-prefix"
+          ? path.join(root, "lib", "node_modules", name, "node_modules", manifest.name)
+          : layout === "volta"
+            ? path.join(root, "tools", "image", "packages", name)
+            : layout === "mise"
+              ? path.join(root, "installs", `npm-${name}`, "1.0.0", "lib", "node_modules", name)
+              : path.join(root, "package")
+    const executable = path.join(directory, "bin", "shuvcode")
     yield* fs.makeDirectory(path.dirname(executable), { recursive: true })
     yield* fs.writeFileString(executable, "binary")
-    yield* fs.writeFileString(path.join(root, "package", "package.json"), JSON.stringify(manifest))
+    yield* fs.writeFileString(path.join(directory, "package.json"), JSON.stringify(manifest))
+    if (layout === "prefix" || layout === "platform-prefix") {
+      yield* fs.makeDirectory(path.join(root, "bin"), { recursive: true })
+      yield* fs.writeFileString(path.join(root, "bin", "npm"), "npm")
+    }
     // The updater uses global fetch; scope this replacement to each install test.
     yield* Effect.acquireRelease(
       Effect.sync(() =>
@@ -97,7 +113,7 @@ function fixture(
               if (command._tag !== "StandardCommand") return Effect.die("Unexpected piped install command")
               const args = command.args.map(String)
               commands.push([command.command, ...args])
-              const result = respond({ command: command.command, args })
+              const result = respond({ command: command.command, args, path: command.options.env?.PATH?.toString() })
               if (result.error) return Effect.fail(result.error)
               return Effect.succeed({
                 command: command.command,
@@ -122,12 +138,87 @@ function fixture(
         }),
       ),
     )
-    return { updater, commands, global, fs, executable }
+    return { updater, commands, global, fs, executable, root }
   })
 }
 
 const windows = process.platform === "win32" ? it.live : it.live.skip
 const unix = process.platform === "win32" ? it.live.skip : it.live
+
+unix("npm updates and removes the running copy through its owning prefix", () =>
+  Effect.gen(function* () {
+    const paths: Array<string | undefined> = []
+    const test = yield* fixture(
+      (command) => {
+        if (command.command.endsWith(`${path.sep}npm`)) {
+          paths.push(command.path)
+          return { stdout: Buffer.from("shuvcode") }
+        }
+        return {}
+      },
+      "shuvcode",
+      false,
+      undefined,
+      "prefix",
+    )
+    expect(yield* test.updater.method()).toBe("npm")
+    yield* test.updater.upgrade("npm", "2.2.7-shuv.1")
+    expect(test.commands).toContainEqual([
+      path.join(test.root, "bin", "npm"),
+      "install",
+      "--global",
+      "--prefix",
+      test.root,
+      "--allow-scripts=shuvcode",
+      "--force",
+      "shuvcode@2.2.7-shuv.1",
+    ])
+    expect(test.updater.removal("npm")?.command).toEqual([
+      path.join(test.root, "bin", "npm"),
+      "uninstall",
+      "--global",
+      "--prefix",
+      test.root,
+      "shuvcode",
+    ])
+    expect(paths).toHaveLength(2)
+    expect(paths.every((value) => value?.startsWith(`${path.join(test.root, "bin")}${path.delimiter}`))).toBe(true)
+  }),
+)
+unix("npm locates the owning prefix through the fork's nested native platform package", () =>
+  Effect.gen(function* () {
+    const test = yield* fixture(
+      () => ({ stdout: Buffer.from("shuvcode") }),
+      "shuvcode",
+      false,
+      { name: hostPackage },
+      "platform-prefix",
+    )
+    expect(yield* test.updater.method()).toBe("npm")
+    yield* test.updater.upgrade("npm", "2.2.7-shuv.1")
+    expect(test.commands.at(-1)).toEqual([
+      path.join(test.root, "bin", "npm"),
+      "install",
+      "--global",
+      "--prefix",
+      test.root,
+      "--allow-scripts=shuvcode",
+      "--force",
+      "shuvcode@2.2.7-shuv.1",
+    ])
+  }),
+)
+;(["volta", "mise"] as const).forEach((layout) => {
+  it.live(`leaves ${layout}-managed installations to their owner`, () =>
+    Effect.gen(function* () {
+      const test = yield* fixture(() => ({}), "shuvcode", false, undefined, layout)
+      expect(yield* test.updater.method()).toBeUndefined()
+      const error = yield* test.updater.managed("2.2.7-shuv.1")
+      expect(error?.command).toBe(`${layout === "volta" ? "volta install " : "mise use -g npm:"}shuvcode@2.2.7-shuv.1`)
+      expect(test.commands).toEqual([])
+    }),
+  )
+})
 
 const installs = [
   {

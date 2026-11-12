@@ -12,9 +12,7 @@
 // and reconnect, then continue from live deltas using the same
 // projected-prefix dedup the parent transport uses.
 //
-// Per-child interruption uses `v2.session.interrupt(childID)`. Per-child
-// backgrounding is intentionally absent: subagent jobs block the parent
-// session, so only whole-session `v2.session.background(parentID)` exists.
+// Per-child interruption uses `v2.session.interrupt(childID)`.
 import type {
   EventSubscribeOutput,
   OpenCodeClient,
@@ -106,7 +104,6 @@ type ChildState = {
   label: string
   description: string
   status: FooterSubagentTab["status"]
-  background: boolean
   title?: string
   lastUpdatedAt: number
   frames: Frame[]
@@ -196,7 +193,6 @@ function tab(child: ChildState): FooterSubagentTab {
     label: child.label,
     description: child.description || child.title || "",
     status: child.status,
-    background: child.background ? true : undefined,
     title: child.title,
   }
 }
@@ -234,7 +230,6 @@ export function createSubagentTracker(input: SubagentTrackerInput): SubagentTrac
       label: FALLBACK_LABEL,
       description: "",
       status: "running",
-      background: false,
       lastUpdatedAt: 0,
       frames: [],
       fragments: createFragmentReconciler(),
@@ -287,7 +282,6 @@ export function createSubagentTracker(input: SubagentTrackerInput): SubagentTrac
     if (agent) child.label = Locale.titlecase(agent)
     const description = text(meta.description)
     if (description) child.description = description
-    if (meta.background === true) child.background = true
   }
 
   const userFrame = (child: ChildState, messageID: string, prompt: Pick<SessionMessageUser, "text" | "files">) => {
@@ -944,7 +938,6 @@ export function createSubagentTracker(input: SubagentTrackerInput): SubagentTrac
     const child = admitChild(found.sessionID)
     if (!child) return
     applyMeta(child, record(tool.state.input))
-    if (tool.state.status === "completed" && found.running) child.background = true
     if (child.status === "running") {
       const running = found.running && (!active || found.sessionID in active)
       child.status = running ? "running" : "completed"
@@ -990,10 +983,7 @@ export function createSubagentTracker(input: SubagentTrackerInput): SubagentTrac
       const child = admitChild(found.sessionID)
       if (!child) return
       applyMeta(child, pending)
-      if (event.type === "session.tool.success" && found.running) {
-        child.background = true
-        child.status = "running"
-      }
+      if (event.type === "session.tool.success" && found.running) child.status = "running"
       if (event.type === "session.tool.success" && !found.running && child.status === "running")
         child.status = "completed"
       touch(child, event.created)

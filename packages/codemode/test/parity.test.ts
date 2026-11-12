@@ -1732,7 +1732,7 @@ describe("Date components convert through ToPrimitive", () => {
         const d = new Date(NaN)
         const result = d.setDate({ valueOf() { d.setTime(0); return 1 } })
         const y = new Date(NaN)
-        return [Number.isNaN(result), d.getTime(), y.setFullYear(2020) === Date.UTC(2020, 0, 1) - y.getTimezoneOffset() * 60000]
+        return [Number.isNaN(result), d.getTime(), y.setFullYear(2020) === Date.UTC(2020, 0, 1) + y.getTimezoneOffset() * 60000]
       `),
     ).toEqual([true, 0, true])
   })

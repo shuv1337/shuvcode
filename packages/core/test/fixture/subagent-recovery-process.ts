@@ -3,7 +3,7 @@ import { appendFile } from "node:fs/promises"
 import { Deferred, Effect, Layer, Stream } from "effect"
 import { AppNodeBuilder } from "@opencode/core/effect/app-node-builder"
 import { LayerNode } from "@opencode/util/effect/layer-node"
-import { makeGlobalNode, makeLocationNode } from "@opencode/util/effect/app-node"
+import { makeLocationNode } from "@opencode/util/effect/app-node"
 import { Global } from "@opencode/util/global"
 import { AbsolutePath } from "@opencode/core/schema"
 import { Agent } from "@opencode/core/agent"
@@ -27,8 +27,8 @@ import { SessionRestart } from "@opencode/core/session/execution/restart"
 import { SessionInbox } from "@opencode/core/session/inbox"
 import { SessionMessage } from "@opencode/core/session/message"
 import { SessionRunnerModel } from "@opencode/core/session/runner/model"
-import { SessionRunCoordinator } from "@opencode/core/session/run-coordinator"
-import type { SessionRunner } from "@opencode/core/session/runner/index"
+import { SessionRunner } from "@opencode/core/session/runner/index"
+import { SessionRunnerLLM } from "@opencode/core/session/runner/llm"
 import { SessionStore } from "@opencode/core/session/store"
 import { SubagentJob } from "@opencode/core/session/subagent-job"
 import { SubagentRecovery } from "@opencode/core/session/subagent-recovery"
@@ -53,28 +53,16 @@ const boundary = phase?.replace(/^background-/, "")
 
 const releaseChild = Deferred.makeUnsafe<void>()
 
-const executionNode = makeGlobalNode({
-  service: SessionExecution.Service,
+const runnerNode = makeLocationNode({
+  service: SessionRunner.Service,
   layer: Layer.effect(
-    SessionExecution.Service,
+    SessionRunner.Service,
     Effect.gen(function* () {
       const bus = yield* Bus.Service
       const store = yield* SessionStore.Service
-      const coordinator = yield* SessionRunCoordinator.make<Session.ID, SessionRunner.RunError>({
-        settled: (id, exit) => {
-          const outcome = SessionExecution.terminal(exit)
-          return outcome.type === "failed"
-            ? bus.publish(
-                SessionEvent.Execution.Failed,
-                { sessionID: id, error: outcome.error },
-                {
-                  commit: () => store.release(id),
-                },
-              )
-            : Effect.void
-        },
-        drain: (id) =>
-          id === parentID
+      return SessionRunner.Service.of({
+        drain: ({ sessionID: id }) =>
+          (id === parentID
             ? Effect.gen(function* () {
                 const states = (yield* store.context(id).pipe(Effect.orDie)).flatMap((message) =>
                   message.type === "assistant"
@@ -113,16 +101,8 @@ const executionNode = makeGlobalNode({
                   cost: Money.USD.zero,
                   tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
                 })
-                yield* bus.publish(SessionEvent.Execution.Succeeded, { sessionID: id })
-              }),
-      })
-      return SessionExecution.Service.of({
-        active: coordinator.active,
-        isActive: coordinator.isActive,
-        wake: coordinator.wake,
-        interrupt: () => Effect.succeed(false),
-        awaitIdle: coordinator.awaitIdle,
-        resume: coordinator.run,
+              })
+          ).pipe(Effect.as(SessionRunner.DrainResult.Complete())),
       })
     }),
   ),
@@ -179,7 +159,7 @@ const layer = AppNodeBuilder.build(
   [
     Database.node.replace(Database.layer({ path: "recovery.db" }).pipe(Layer.provide(globalLayer))),
     Bus.node.replace(Bus.configured({ persist: true })),
-    SessionExecution.node.replace(executionNode),
+    SessionRunnerLLM.node.replace(runnerNode),
     PluginSupervisor.node.replace(subagentPluginSupervisor),
     Global.node.replace(globalLayer),
     offlineModels,
@@ -273,7 +253,10 @@ const program = Effect.gen(function* () {
         }
         if (boundary === "settled" || boundary === "result") {
           yield* SessionInbox.promote((yield* Database.Service).db, bus, childID, "input")
-          yield* (yield* SessionExecution.Service).resume(childID)
+          yield* SessionRunner.Service.use((runner) => runner.drain({ sessionID: childID, force: true })).pipe(
+            Effect.provide(location),
+          )
+          yield* bus.publish(SessionEvent.Execution.Succeeded, { sessionID: childID })
           if (boundary === "result")
             yield* bus.publish(SessionEvent.Tool.Success, {
               sessionID: parentID,
@@ -317,7 +300,7 @@ const program = Effect.gen(function* () {
     yield* Effect.sleep("100 millis")
     yield* Deferred.succeed(releaseChild, undefined)
   }
-  if (["ambiguous", "unprepared", "exhausted", "cancelled", "cancelled-pending"].includes(phase ?? "")) {
+  if (["ambiguous", "unprepared", "exhausted", "cancelled-pending"].includes(phase ?? "")) {
     yield* Effect.repeat(Effect.sleep("10 millis").pipe(Effect.andThen(sessions.get(parentID))), {
       until: (parent) => parent.outcome === "failed",
     }).pipe(Effect.timeout("5 seconds"))
@@ -350,10 +333,11 @@ const program = Effect.gen(function* () {
         message.content.some((tool) => tool.type === "tool" && tool.state.status === "completed"),
     },
   ).pipe(Effect.timeout("5 seconds"))
-  if (isBackground && boundary !== "result")
+  if ((isBackground || boundary === "cancelled") && boundary !== "result")
     yield* Effect.repeat(Effect.sleep("10 millis").pipe(Effect.andThen(sessions.inbox(parentID))), {
       until: (inbox) => inbox.some((item) => item.type === "synthetic" && item.payload.metadata?.source === "subagent"),
     }).pipe(Effect.timeout("5 seconds"))
+  yield* sessions.wait(childID)
   const first = yield* sessions.message({ sessionID: parentID, messageID: assistantID })
   yield* restart.resumeSuspendedSessions
   const second = yield* sessions.message({ sessionID: parentID, messageID: assistantID })
@@ -369,11 +353,12 @@ const program = Effect.gen(function* () {
     ? (yield* Effect.promise(() => Bun.file(path.join(root, "parent-drains")).text())).trim().split("\n")
     : []
   const events = yield* Stream.runCollect(sessions.log({ sessionID: parentID, follow: false }))
-  const notices = isBackground
-    ? (yield* sessions.inbox(parentID)).filter(
-        (item) => item.type === "synthetic" && item.payload.metadata?.source === "subagent",
-      )
-    : []
+  const notices =
+    isBackground || boundary === "cancelled"
+      ? (yield* sessions.inbox(parentID)).filter(
+          (item) => item.type === "synthetic" && item.payload.metadata?.source === "subagent",
+        )
+      : []
   const notice = notices[0]
   console.log(
     JSON.stringify({
@@ -394,8 +379,8 @@ const program = Effect.gen(function* () {
         (event) => event.type === "session.tool.success" && event.data.id === "call-recovery",
       ).length,
       ...(phase === "prompted" ? { parentDrains: [...new Set(parentDrains)] } : {}),
-      ...(isBackground && boundary !== "result" ? { notices: notices.length } : {}),
-      ...(isBackground && boundary === "cancelled"
+      ...((isBackground || boundary === "cancelled") && boundary !== "result" ? { notices: notices.length } : {}),
+      ...(boundary === "cancelled"
         ? { noticeState: notice?.type === "synthetic" ? notice.payload.metadata?.state : undefined }
         : {}),
     }),

@@ -73,7 +73,7 @@ jobs:
         run: |
           # OpenCode infra trees stay in the repo but are outside fork CI.
           # The runners have four vCPUs, and each Bun test process performs its own concurrent work.
-          GITHUB_ACTIONS=false bun turbo test --concurrency=3 --filter='!@opencode/desktop' --filter='!@opencode/update'
+          GITHUB_ACTIONS=false bun turbo test --concurrency=3 --filter='!@opencode/desktop' --filter='!@opencode/update' --filter='!@opencode/data-*'
 
       - name: Verify published codemode package
         working-directory: packages/codemode

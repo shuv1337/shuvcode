@@ -9,7 +9,7 @@ import { AppRoot } from "~/app"
 import { dir, pageLocale, strip, tag } from "~/lib/language"
 import type { StaticPass } from "~/lib/page-data"
 import { sourceLogo } from "~/lib/source-logo"
-import { staticPath } from "./routes"
+import { matches, staticPath } from "./routes"
 import {
   cardMorphKey,
   clearCardMorph,
@@ -24,12 +24,35 @@ import { cardTiming } from "~/component/site/products"
 type Middleware = ReturnType<typeof createMiddleware>[number]
 type PageModule = { default: Component; id$$?: string }
 
-// The page routes' modules, by path (`/changelog/:tag`; an index route's ends in a slash, `/brand/`), as
-// SolidStart's router loads them.
-const pages = fileRoutes as { path: string; page?: boolean; $component?: { import: () => Promise<PageModule> } }[]
+// The file routes, by path (`/changelog/:tag`; an index route's ends in a slash, `/brand/`), as
+// SolidStart's router loads them: the pages' modules, and the API routes' handlers by method (`$GET`).
+const pages = fileRoutes as {
+  path: string
+  page?: boolean
+  $component?: { import: () => Promise<PageModule> }
+  [handler: string]: unknown
+}[]
+
+/** Whether an API route or a server function (SolidStart's /_server) answers a request, not a page. A HEAD
+ * request is answered by the route's GET handler. */
+const answered = (path: string, method: string) =>
+  path.startsWith("/_server") ||
+  pages.some(
+    (route) =>
+      !route.page && (route[`$${method}`] || (method === "HEAD" && route.$GET)) && matches(route.path, path),
+  )
+
+/** The methods an address takes: an API route's handlers (HEAD with GET), else a page's GET and HEAD. */
+const allowed = (path: string) => {
+  const methods = pages
+    .filter((route) => !route.page && matches(route.path, path))
+    .flatMap((route) => Object.keys(route).flatMap((key) => (/^\$[A-Z]+$/.test(key) ? [key.slice(1)] : [])))
+  return [...new Set(methods.includes("GET") || !methods.length ? [...methods, "GET", "HEAD"] : methods)].join(", ")
+}
 
 /**
- * Production only: the static routes (routes.ts) as plain HTML with no hydration. The page renders
+ * Production only: the static routes (routes.ts) as plain HTML with no hydration, and the not-found
+ * page (`[...404].tsx`, with its 404 status) for every address no route answers. The page renders
  * with the same components, providers and head tags as the hydrated app, inside NoHydration and
  * synchronously (renderToString), so the HTML has no hydration keys and no serialized data, and the
  * page loads one script of its own (src/client/entry.ts) instead of the app. Its data (the status
@@ -38,15 +61,25 @@ const pages = fileRoutes as { path: string; page?: boolean; $component?: { impor
  */
 export const staticPages: Middleware = async (_event, next) => {
   const event = getRequestEvent()
-  if (import.meta.env.DEV || !event || (event.request.method !== "GET" && event.request.method !== "HEAD"))
-    return next()
+  if (import.meta.env.DEV || !event) return next()
   const url = new URL(event.request.url)
-  const pattern = staticPath(strip(url.pathname))
+  const path = strip(url.pathname)
+  // Pages only answer GET and HEAD. A method nothing handles gets a 405 listing the methods the address takes,
+  // not the app's document, whose scripts production no longer ships.
+  if (event.request.method !== "GET" && event.request.method !== "HEAD")
+    return answered(path, event.request.method)
+      ? next()
+      : new Response(null, { status: 405, headers: { Allow: allowed(path) } })
+  const pattern = staticPath(path) ?? (answered(path, event.request.method) ? undefined : "/*404")
   const load =
     pattern && pages.find((route) => route.page && route.path.replace(/(.)\/$/, "$1") === pattern)?.$component?.import
   if (!load) return next()
   const page = await load()
-  const styles = stylesheets(["src/entry-client.tsx", page.id$$ ?? ""])
+  const shell = stylesheets(["src/entry-client.tsx"])
+  const own = stylesheets([page.id$$ ?? ""]).filter((file) => !shell.includes(file))
+  // The not-found page has no frame: its own stylesheet copies what it needs of the shell's
+  // (arcade3d/not-found-page.css).
+  const styles = pattern === "/*404" ? own : [...shell, ...own]
   const pass: StaticPass = { collect: true, pending: [], values: [], next: 0 }
   event.locals.staticPass = pass
   // HttpStatusCode (the changelog's missing releases) keeps its status only on a completed render.

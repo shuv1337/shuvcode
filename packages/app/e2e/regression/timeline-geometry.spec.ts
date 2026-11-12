@@ -776,6 +776,14 @@ async function scrollsBehindComposerRegion(
             },
             time: { created: 2 },
           },
+          // Subagents are already background work; only a blocking shell offers the move hint.
+          {
+            type: "tool",
+            id: "call_running_shell",
+            name: "shell",
+            state: { status: "running", input: { command: "sleep 120" }, metadata: {} },
+            time: { created: 2 },
+          },
           { type: "text", id: "prt_timeline_end", text: "The last answer ends above the composer region." },
         ],
         time: { created: 2 },
