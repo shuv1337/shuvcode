@@ -55,5 +55,5 @@ cp -R "$src/v0/workers/default/bundle" "$output/workers/default/bundle"
 cf="$release/cf/node_modules/.bin/cf"
 [ -x "$cf" ] || die "Install the pinned cf CLI first: npm ci --ignore-scripts in .github/release/cf"
 
-cd "$work"
+cd "$work" || exit 1
 "$cf" deploy --prebuilt --mode "$mode" "${args[@]}"

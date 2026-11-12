@@ -39,5 +39,5 @@ cp "$target" "$work/wrangler.json"
 wrangler="$release/wrangler/node_modules/.bin/wrangler"
 [ -x "$wrangler" ] || die "Install the pinned wrangler CLI first: npm ci --ignore-scripts in .github/release/wrangler"
 
-cd "$work"
+cd "$work" || exit 1
 "$wrangler" deploy --config wrangler.json --no-bundle

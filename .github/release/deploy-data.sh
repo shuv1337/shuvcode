@@ -80,7 +80,7 @@ cp "$secrets" "$work/sync-secrets.json"
 cf="$release/cf/node_modules/.bin/cf"
 [ -x "$cf" ] || die "Install the pinned cf CLI first: npm ci --ignore-scripts in .github/release/cf"
 
-cd "$work"
+cd "$work" || exit 1
 "$cf" deploy --prebuilt --mode "$mode" --worker "$(jq -r .name "$target/og.json")"
 "$cf" deploy --prebuilt --mode "$mode" --worker "$(jq -r .name "$target/sync.json")" --secrets-file "$work/sync-secrets.json"
 "$cf" deploy --prebuilt --mode "$mode" --worker "$(jq -r .name "$target/default.json")" --secrets-file "$work/default-secrets.json"
