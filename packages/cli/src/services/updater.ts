@@ -97,6 +97,7 @@ export interface Interface {
   readonly check: () => Effect.Effect<CheckResult | undefined, Error>
   readonly apply: (version: string) => Effect.Effect<void, Error>
   readonly method: () => Effect.Effect<Method | undefined>
+  readonly managed: (version?: string) => Effect.Effect<UpgradeError | undefined, Error>
   readonly latest: () => Effect.Effect<string, Error>
   readonly upgrade: (method: Method, version: string) => Effect.Effect<void, Error>
   readonly removal: (
@@ -160,9 +161,38 @@ const make = Effect.gen(function* () {
       .readFileString(path.join(directory, "package.json"))
       .pipe(Effect.flatMap((text) => Effect.try(() => JSON.parse(text))))
     // Source invocations run inside Bun or Node, which may themselves be npm packages.
-    return { name: installedPackageName(executable, manifest), manifest: manifest.name }
+    return { name: installedPackageName(executable, manifest), manifest: manifest.name, executable }
   }).pipe(Effect.orElseSucceed(() => undefined))
   const installedPackage = installed?.name
+  const executable = installed?.executable ?? process.execPath
+  // Volta packages (tools/image/packages) and mise's npm backend (installs/npm-<name>) keep their own record of the
+  // installed version, so updating the copy in place would leave it stale. npm globals under a Volta or mise Node
+  // (tools/image/node, installs/node) are ordinary npm installs.
+  const installedOwner = !installedPackage
+    ? undefined
+    : /[\\/]tools[\\/]image[\\/]packages[\\/]/.test(executable)
+      ? { name: "Volta", command: "volta install " }
+      : /[\\/]installs[\\/]npm-[^\\/]+[\\/]/.test(executable)
+        ? { name: "mise", command: "mise use -g npm:" }
+        : undefined
+  // npm keeps global packages in <prefix>/lib/node_modules on POSIX. The npm on PATH may belong to another Node
+  // install (fnm, nvm, mise) or prefix, so target the prefix that owns the running binary. Windows uses
+  // <prefix>\node_modules, which Bun and pnpm global installs share, so it keeps the npm on PATH.
+  const packageDirectory = path.dirname(path.dirname(executable))
+  // The fork executable may live in a nested optional platform package rather
+  // than the launcher package. Its validated identity still belongs to this prefix.
+  const npmModules = packageDirectory.indexOf("/lib/node_modules/")
+  const npmPrefix =
+    installedPackage && !installedOwner && process.platform !== "win32" && npmModules >= 0
+      ? packageDirectory.slice(0, npmModules) || "/"
+      : undefined
+  const npmPrefixArgs = npmPrefix ? ["--prefix", npmPrefix] : []
+  const npmBin = npmPrefix ? path.join(npmPrefix, "bin") : undefined
+  const prefixNpm =
+    npmBin && (yield* fs.exists(path.join(npmBin, "npm")).pipe(Effect.orElseSucceed(() => false)))
+      ? path.join(npmBin, "npm")
+      : undefined
+  const npm = prefixNpm ?? "npm"
 
   const readPolicy = Effect.fnUntraced(function* () {
     const values = yield* Effect.forEach(["config.json", "opencode.json", "opencode.jsonc"], (name) =>
@@ -174,9 +204,13 @@ const make = Effect.gen(function* () {
     return values.findLast((value) => value !== undefined) ?? "notify"
   })
 
-  const exec = Effect.fnUntraced(function* (command: string[], timeout: Duration.Input = "10 seconds") {
+  const exec = Effect.fnUntraced(function* (command: string[], timeout: Duration.Input = "30 seconds") {
+    const options =
+      command[0] === prefixNpm
+        ? { env: { PATH: [npmBin, process.env.PATH].filter(Boolean).join(path.delimiter) }, extendEnv: true }
+        : undefined
     return yield* appProcess
-      .run(ChildProcess.make(command[0], command.slice(1)), {
+      .run(ChildProcess.make(command[0], command.slice(1), options), {
         timeout,
         maxOutputBytes: 100_000,
         maxErrorBytes: 100_000,
@@ -191,9 +225,9 @@ const make = Effect.gen(function* () {
   })
 
   const method = Effect.fnUntraced(function* () {
-    if (!installedPackage) return
+    if (!installedPackage || installedOwner) return
     const checks: ReadonlyArray<{ method: Method; command: string[] }> = [
-      { method: "npm", command: ["npm", "list", "-g", "--depth=0", installedPackage] },
+      { method: "npm", command: [npm, "list", "-g", "--depth=0", ...npmPrefixArgs, installedPackage] },
       { method: "pnpm", command: ["pnpm", "list", "-g", "--depth=0", installedPackage] },
       { method: "bun", command: ["bun", "pm", "ls", "-g"] },
       { method: "yarn", command: ["yarn", "global", "list"] },
@@ -213,7 +247,7 @@ const make = Effect.gen(function* () {
   const removal = (method: Method) => {
     if (!installedPackage) return undefined
     const commands = {
-      npm: ["npm", "uninstall", "--global", installedPackage],
+      npm: [npm, "uninstall", "--global", ...npmPrefixArgs, installedPackage],
       pnpm: ["pnpm", "remove", "--global", installedPackage],
       bun: ["bun", "remove", "--global", installedPackage],
       yarn: ["yarn", "global", "remove", installedPackage],
@@ -272,6 +306,24 @@ const make = Effect.gen(function* () {
   })
 
   const latest = () => release().pipe(Effect.map((data) => data.version))
+
+  const managedError = (owner: { name: string; command: string }, target: string) =>
+    new UpgradeError({
+      title: `Shuvcode is managed by ${owner.name}`,
+      detail: `This copy was installed with ${owner.name}, which keeps its own record of the installed version, so Shuvcode won't update it directly.`,
+      command: `${owner.command}${target}`,
+      retry: "Run the command above, then restart Shuvcode.",
+    })
+
+  const managedMessage = (error: UpgradeError) => `${error.title}. Update it with ${error.command}`
+
+  const managed = Effect.fnUntraced(function* (input?: string) {
+    if (!installedOwner) return
+    if (input !== undefined && !parseReleaseVersion(input))
+      return yield* Effect.fail(new Error(`Invalid version: ${input}`))
+    const data = yield* release()
+    return managedError(installedOwner, `${data.package}@${input?.trim().replace(/^v/, "") ?? data.version}`)
+  })
 
   const temporaryDirectory = (prefix: string) =>
     Effect.acquireRelease(fs.makeTempDirectory({ directory: global.cache, prefix }), (directory) =>
@@ -333,9 +385,10 @@ const make = Effect.gen(function* () {
     const commands: Record<Exclude<Method, "bun">, string[]> = {
       // Keep the old package: uninstalling it can unlink the replacement command.
       npm: [
-        "npm",
+        npm,
         "install",
         "--global",
+        ...npmPrefixArgs,
         `--allow-scripts=${targetPackage}`,
         ...((OPENCODE_ARTIFACT === "cli" &&
           !installedPackage?.endsWith("-node") &&
@@ -469,7 +522,9 @@ const make = Effect.gen(function* () {
   })
 
   const apply = Effect.fn("cli.updater.apply")(function* (version: string) {
-    if (!(yield* install(version))) return yield* Effect.fail(new Error("Installation method not found"))
+    if (yield* install(version)) return
+    const error = yield* managed(version)
+    return yield* Effect.fail(new Error(error ? managedMessage(error) : "Installation method not found"))
   })
 
   const check = Effect.fn("cli.updater.check")(function* () {
@@ -478,6 +533,10 @@ const make = Effect.gen(function* () {
         type: "unavailable" as const,
         message: "This build runs from a source checkout. Use an installed Shuvcode release to check for updates.",
       }
+    if (installedOwner) {
+      const error = yield* managed()
+      if (error) return { type: "unavailable" as const, message: managedMessage(error) }
+    }
     const version = yield* latest()
     if (!parseReleaseVersion(version)) return yield* Effect.fail(new Error(`Invalid version: ${version}`))
     const current = yield* Ref.get(installedVersion)
@@ -502,7 +561,7 @@ const make = Effect.gen(function* () {
     Effect.catch((error) => Effect.logWarning("update check failed", { error }).pipe(Effect.as(undefined))),
   )
 
-  return Service.of({ run, check, apply, method, latest, upgrade, removal })
+  return Service.of({ run, check, apply, method, managed, latest, upgrade, removal })
 })
 
 export const layer = Layer.effect(Service, make)

@@ -39,7 +39,7 @@ jobs:
           bun -e '
           const glob = new Bun.Glob("**/package.json")
           // OpenCode infra trees stay in the repo but are outside fork CI (plan decision 14).
-          const ignored = ["packages/console/", "packages/web/", "packages/enterprise/", "packages/stats/", "packages/desktop/", "services/"]
+          const ignored = ["packages/console/", "packages/web/", "packages/enterprise/", "packages/stats/", "packages/data/", "packages/desktop/", "services/"]
           const dirs = []
           for await (const file of glob.scan(".")) {
             if (file === "package.json" || file.includes("node_modules") || file.split("/").includes("dist")) continue

@@ -2,6 +2,17 @@
 
 Release notes for OpenCode V2, newest first.
 
+## Unreleased
+
+Sync upstream `dev` from `3b04ec6f59` through `101776024c` (121 commits), preserving Shuvcode identity and bundled integrations.
+
+- Subagents now always run in the background and report each idle boundary. Preserve durable fork admission/recovery identities and guards against replaying ambiguous tool effects.
+- Run shell commands through the process daemon across server handoffs; timeout-to-background remains experimental (`shell_timeout_background`).
+- Add experimental MCP Events (`mcp_events`), freeform tool input and Google/LM Studio decision models; retain completed work when retrying failed streams. Code Mode now uses only its VM engine.
+- Include upstream app sidebar/timeline experiments, OpenTUI 0.8.4 and live plugin themes.
+- Update npm installs through their owning prefix and explain Volta/mise-managed updates without restoring upstream installers. Retain explicit Bun platform-package installation and executable verification from #486.
+- Retain isolated server/application test environments from #485, fork configuration diagnostics, the headless CLI schema split and hidden Claude Agent SDK filtering.
+
 ## v2.2.7-shuv.1 — Unreleased
 
 Shuvcode sync through upstream v2.2.7, plus the following `dev` site update at `3b04ec6f59`. The upstream release commit `fedc6f208a` contains version metadata and the upstream notes below; the fork's CLI release floor is `2.2.7-shuv.1`. This prepares a release without publishing it.
