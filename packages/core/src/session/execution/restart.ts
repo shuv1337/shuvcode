@@ -428,13 +428,7 @@ export const layer = (options?: Options) =>
       ) {
         const operation = SubagentRecovery.prepared(tool)
         if (!operation) return
-        // Older prepared records explicitly selected foreground/background delivery.
-        const decoded = Schema.decodeUnknownOption(
-          Schema.Struct({
-            ...SubagentTool.Input.fields,
-            background: Schema.optional(Schema.Boolean),
-          }),
-        )(tool.state.input)
+        const decoded = Schema.decodeUnknownOption(SubagentTool.Input)(tool.state.input)
         if (Option.isNone(decoded)) return yield* Effect.die(new Error(`Invalid prepared subagent input: ${tool.id}`))
         const input = decoded.value
         const previous = yield* store.get(operation.childSessionID)
@@ -484,17 +478,6 @@ export const layer = (options?: Options) =>
             assistantMessageID,
             id: tool.id,
             error: { type: "aborted", message: `Subagent recovery stopped (sessionID: ${child.id})` },
-            metadata: { sessionID: child.id },
-            executed: false,
-          })
-          return false
-        }
-        if (!input.background && (settled?.status === "failed" || settled?.status === "interrupted")) {
-          yield* bus.publish(SessionEvent.Tool.Failed, {
-            sessionID,
-            assistantMessageID,
-            id: tool.id,
-            error: { type: "aborted", message: `Subagent ${settled.status} (sessionID: ${child.id})` },
             metadata: { sessionID: child.id },
             executed: false,
           })
@@ -701,6 +684,8 @@ export const layer = (options?: Options) =>
           // Prepared recoveries own their parent before admission, but must not launch
           // children until the other suspended roots have charged their restart budgets.
           const recoveryReady = yield* Deferred.make<void>()
+          // A failed sweep must also release the parent owners waiting at this barrier.
+          yield* Effect.addFinalizer(() => Deferred.succeed(recoveryReady, undefined))
           const recovering = new Set<SessionSchema.ID>()
           for (const sessionID of yield* store.listSuspended()) {
             const calls = (yield* store.context(sessionID).pipe(Effect.orDie)).flatMap((message) =>

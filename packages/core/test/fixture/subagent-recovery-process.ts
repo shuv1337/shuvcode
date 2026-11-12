@@ -300,7 +300,7 @@ const program = Effect.gen(function* () {
     yield* Effect.sleep("100 millis")
     yield* Deferred.succeed(releaseChild, undefined)
   }
-  if (["ambiguous", "unprepared", "exhausted", "cancelled", "cancelled-pending"].includes(phase ?? "")) {
+  if (["ambiguous", "unprepared", "exhausted", "cancelled-pending"].includes(phase ?? "")) {
     yield* Effect.repeat(Effect.sleep("10 millis").pipe(Effect.andThen(sessions.get(parentID))), {
       until: (parent) => parent.outcome === "failed",
     }).pipe(Effect.timeout("5 seconds"))
@@ -333,7 +333,7 @@ const program = Effect.gen(function* () {
         message.content.some((tool) => tool.type === "tool" && tool.state.status === "completed"),
     },
   ).pipe(Effect.timeout("5 seconds"))
-  if (isBackground && boundary !== "result")
+  if ((isBackground || boundary === "cancelled") && boundary !== "result")
     yield* Effect.repeat(Effect.sleep("10 millis").pipe(Effect.andThen(sessions.inbox(parentID))), {
       until: (inbox) => inbox.some((item) => item.type === "synthetic" && item.payload.metadata?.source === "subagent"),
     }).pipe(Effect.timeout("5 seconds"))
@@ -353,11 +353,12 @@ const program = Effect.gen(function* () {
     ? (yield* Effect.promise(() => Bun.file(path.join(root, "parent-drains")).text())).trim().split("\n")
     : []
   const events = yield* Stream.runCollect(sessions.log({ sessionID: parentID, follow: false }))
-  const notices = isBackground
-    ? (yield* sessions.inbox(parentID)).filter(
-        (item) => item.type === "synthetic" && item.payload.metadata?.source === "subagent",
-      )
-    : []
+  const notices =
+    isBackground || boundary === "cancelled"
+      ? (yield* sessions.inbox(parentID)).filter(
+          (item) => item.type === "synthetic" && item.payload.metadata?.source === "subagent",
+        )
+      : []
   const notice = notices[0]
   console.log(
     JSON.stringify({
@@ -378,8 +379,8 @@ const program = Effect.gen(function* () {
         (event) => event.type === "session.tool.success" && event.data.id === "call-recovery",
       ).length,
       ...(phase === "prompted" ? { parentDrains: [...new Set(parentDrains)] } : {}),
-      ...(isBackground && boundary !== "result" ? { notices: notices.length } : {}),
-      ...(isBackground && boundary === "cancelled"
+      ...((isBackground || boundary === "cancelled") && boundary !== "result" ? { notices: notices.length } : {}),
+      ...(boundary === "cancelled"
         ? { noticeState: notice?.type === "synthetic" ? notice.payload.metadata?.state : undefined }
         : {}),
     }),

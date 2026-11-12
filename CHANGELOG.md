@@ -2,7 +2,7 @@
 
 Release notes for OpenCode V2, newest first.
 
-## Unreleased
+## v2.2.7-shuv.1 — Unreleased
 
 Sync upstream `dev` from `3b04ec6f59` through `101776024c` (121 commits), preserving Shuvcode identity and bundled integrations.
 
@@ -13,7 +13,7 @@ Sync upstream `dev` from `3b04ec6f59` through `101776024c` (121 commits), preser
 - Update npm installs through their owning prefix and explain Volta/mise-managed updates without restoring upstream installers. Retain explicit Bun platform-package installation and executable verification from #486.
 - Retain isolated server/application test environments from #485, fork configuration diagnostics, the headless CLI schema split and hidden Claude Agent SDK filtering.
 
-## v2.2.7-shuv.1 — Unreleased
+### Previous sync
 
 Shuvcode sync through upstream v2.2.7, plus the following `dev` site update at `3b04ec6f59`. The upstream release commit `fedc6f208a` contains version metadata and the upstream notes below; the fork's CLI release floor is `2.2.7-shuv.1`. This prepares a release without publishing it.
 

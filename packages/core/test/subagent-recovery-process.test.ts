@@ -66,7 +66,7 @@ describe("confirmed subagent recovery after process death", () => {
       })
       expect(new TextDecoder().decode(recovery.stderr)).not.toContain("Error")
       expect(recovery.exitCode).toBe(0)
-      const unsafe = ["ambiguous", "unprepared", "exhausted", "cancelled", "cancelled-pending"].includes(phase)
+      const unsafe = ["ambiguous", "unprepared", "exhausted", "cancelled-pending"].includes(phase)
       const line = new TextDecoder()
         .decode(recovery.stdout)
         .split("\n")
@@ -84,13 +84,13 @@ describe("confirmed subagent recovery after process death", () => {
       expect(JSON.parse(line)).toEqual({
         childCount: 1,
         admissionCount: 1,
-        childRuns: phase === "background-cancelled" ? 0 : 1,
+        childRuns: phase.endsWith("cancelled") ? 0 : 1,
         first: ["completed"],
         second: ["completed"],
         results: 1,
         ...(phase === "prompted" ? { parentDrains: ["completed"] } : {}),
-        ...(phase.startsWith("background-") ? { notices: 1 } : {}),
-        ...(phase === "background-cancelled" ? { noticeState: "cancelled" } : {}),
+        ...(phase.startsWith("background-") || phase === "cancelled" ? { notices: 1 } : {}),
+        ...(phase.endsWith("cancelled") ? { noticeState: "cancelled" } : {}),
       })
     }, 30_000)
   }

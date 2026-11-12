@@ -61,7 +61,9 @@ test("keeps the parent title anchored when opening a subagent", async ({ page })
     // Measuring before then can read the detached heading, whose empty bounds put the start at 0.
     const card = page.locator(`a[href="${sessionHref(childID)}"]`)
     await expect(card).toBeVisible()
-    const start = await titleInlineStart(page.locator("[data-session-title]").getByRole("heading", { name: parentTitle }))
+    const start = await titleInlineStart(
+      page.locator("[data-session-title]").getByRole("heading", { name: parentTitle }),
+    )
 
     await card.click()
     await expectSessionTitle(page, taskDescription)
@@ -78,43 +80,52 @@ test("keeps the parent title anchored when opening a subagent", async ({ page })
   }
 })
 
-test("navigates from a running subagent card without a background control", async ({ page }) => {
-  const runningChildID = "ses_running_child"
-  await setupTimeline(page, {
-    settings: { timelineDetail: { ...timelinePresets[2].value, subagents: { placement: "separate" } } },
-    sessionMessages: [
-      { id: "msg_user", type: "user", text: "Run it", time: { created: 1 } },
-      {
-        id: "msg_assistant",
-        type: "assistant",
-        agent: "build",
-        model: { id: "model", providerID: "provider" },
-        content: [
-          {
-            type: "tool",
-            id: "call_subagent",
-            name: "subagent",
-            state: {
-              status: "completed",
-              input: { description: "Inspect code" },
-              metadata: { status: "running", sessionID: runningChildID },
-              content: [{ type: "text", text: "The subagent is working in the background." }],
+for (const entry of ["card", "activity menu"] as const) {
+  test(`navigates from a running subagent ${entry} without a background control`, async ({ page }) => {
+    const runningChildID = "ses_running_child"
+    await setupTimeline(page, {
+      settings: { timelineDetail: { ...timelinePresets[2].value, subagents: { placement: "separate" } } },
+      sessionMessages: [
+        { id: "msg_user", type: "user", text: "Run it", time: { created: 1 } },
+        {
+          id: "msg_assistant",
+          type: "assistant",
+          agent: "build",
+          model: { id: "model", providerID: "provider" },
+          content: [
+            {
+              type: "tool",
+              id: "call_subagent",
+              name: "subagent",
+              state: {
+                status: "completed",
+                input: { description: "Inspect code" },
+                metadata: { status: "running", sessionID: runningChildID },
+                content: [{ type: "text", text: "The subagent is working in the background." }],
+              },
+              time: { created: 2, completed: 3 },
             },
-            time: { created: 2, completed: 3 },
-          },
-        ],
-        time: { created: 2 },
-      },
-    ],
-    sessions: [session(), session({ id: runningChildID, parentID: sessionID, title: "Sleep for 5 minutes" })],
-    sessionStatus: { [sessionID]: { type: "busy" }, [runningChildID]: { type: "busy" } },
+          ],
+          time: { created: 2 },
+        },
+      ],
+      sessions: [session(), session({ id: runningChildID, parentID: sessionID, title: "Sleep for 5 minutes" })],
+      sessionStatus: { [sessionID]: { type: "busy" }, [runningChildID]: { type: "busy" } },
+    })
+    const hint = page.getByRole("button", { name: /move running work to the background/i })
+    await expect(hint).toHaveCount(0)
+    if (entry === "card") await page.locator('[data-component="task-tool-card"]').click()
+    if (entry === "activity menu") {
+      await page.getByRole("button", { name: "1 subagent", exact: true }).click()
+      await page
+        .getByRole("menu", { name: "1 subagent", exact: true })
+        .getByRole("menuitem", { name: /Inspect code/ })
+        .click()
+    }
+    await expect(page).toHaveURL(new RegExp(`/session/${runningChildID}$`))
+    await expect(hint).toHaveCount(0)
   })
-  const hint = page.getByRole("button", { name: /move running work to the background/i })
-  await expect(hint).toHaveCount(0)
-  await page.locator('[data-component="task-tool-card"]').click()
-  await expect(page).toHaveURL(new RegExp(`/session/${runningChildID}$`))
-  await expect(hint).toHaveCount(0)
-})
+}
 
 test("opens a directly linked nested subagent in its root session tab", async ({ page }) => {
   await setup(page, undefined, 1)
