@@ -2218,9 +2218,7 @@ describe("SessionRunnerLLM", () => {
     expect(userTexts(last)).toEqual(["First", "Fourth"])
     expect(last.system.map((part) => part.text).join("\n")).not.toContain("Entered mode")
     // Clients still see every message; only the model context hides the stale update.
-    expect((yield* s.messages).filter((message) => message.type === "system")).toMatchObject([
-      { text: "Entered mode" },
-    ])
+    expect((yield* s.messages).filter((message) => message.type === "system")).toMatchObject([{ text: "Entered mode" }])
   })
 
   scenario("uses the selected model family prompt when the agent does not override it", function* (s) {
@@ -5256,6 +5254,36 @@ describe("SessionRunnerLLM", () => {
       },
     )
   }
+
+  scenario("keeps a stopped nested prepared subtree out of recovery owners", function* (s) {
+    const seeded = yield* seedPreparedRecovery(s, true)
+    const restart = yield* SessionRestart.Service
+    const execution = yield* SessionExecution.Service
+    const jobs = yield* Job.Service
+    yield* restart.resumeSuspendedSessions
+    yield* execution.awaitIdle(seeded.parent)
+    yield* execution.awaitIdle(seeded.child)
+    yield* execution.awaitIdle(seeded.grandchild)
+
+    expect(s.requests).toHaveLength(0)
+    expect(yield* jobs.get(seeded.grandchild)).toBeUndefined()
+    expect((yield* s.session.get(seeded.child)).outcome).toBe("failed")
+    expect(
+      (yield* s.session.messages({ sessionID: seeded.child })).filter(
+        (message) => message.type === "synthetic" && message.metadata?.notice === "restart",
+      ),
+    ).toHaveLength(0)
+    const parent = yield* s.session.message({ sessionID: seeded.parent, messageID: seeded.assistantMessageID })
+    expect(
+      parent?.type === "assistant" ? parent.content.find((item) => item.type === "tool")?.state.status : undefined,
+    ).toBe("error")
+
+    // A later sweep must not adopt the stopped subtree's remaining claims as direct work.
+    yield* restart.resumeSuspendedSessions
+    yield* execution.awaitIdle(seeded.grandchild)
+    expect(s.requests).toHaveLength(0)
+    expect(yield* jobs.get(seeded.grandchild)).toBeUndefined()
+  })
 
   scenario("stops nested ambiguous effects before a recovered background child drains", function* (s) {
     const seeded = yield* seedPreparedRecovery(s, true, true)

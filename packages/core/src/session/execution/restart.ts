@@ -700,6 +700,8 @@ export const layer = (options?: Options) =>
           yield* Effect.addFinalizer(() => Deferred.succeed(recoveryReady, undefined))
           const recovering = new Set<SessionSchema.ID>()
           for (const sessionID of yield* store.listSuspended()) {
+            // The prepared parent owns this subtree, regardless of claim iteration order.
+            if (preparedChildren.has(sessionID)) continue
             const calls = (yield* store.context(sessionID).pipe(Effect.orDie)).flatMap((message) =>
               message.type === "assistant"
                 ? message.content.flatMap((tool) => {
