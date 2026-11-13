@@ -1,6 +1,7 @@
 name: typecheck
 
-# Pull requests get typecheck and CLI config smoke tests; the full suite runs for releases (see test.yml).
+# Every pull request gets typecheck and CLI config smoke tests. The full suite (test.yml) runs for
+# releases and for sync, release and `full-tests`-labelled pull requests.
 # Merges to integration-v2 were already typechecked on their pull request.
 on:
   pull_request:

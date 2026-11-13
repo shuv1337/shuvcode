@@ -1,13 +1,28 @@
 name: test
 
-# The full suite runs only for releases: publish.yml calls it before publishing, and a pushed
-# v* tag runs it too. Pull requests get typecheck.yml, including CLI config smoke tests.
+# The full suite gates releases: publish.yml calls it before publishing, and a pushed v* tag runs
+# it too. Pull requests run it only when they are sync or release PRs (title starting with
+# `chore(sync)` or `chore(release)`, or the `upstream-sync` label) or carry the opt-in `full-tests`
+# label, so publish never finds their failures first. Every pull request gets typecheck.yml.
 on:
   push:
     tags:
       - "v*"
+  pull_request:
+    types: [opened, synchronize, reopened, edited, labeled]
   workflow_call:
   workflow_dispatch:
+
+concurrency:
+  # Only pull requests share a group, so a release's suite is never cancelled by another run. Under
+  # workflow_call `github` is the caller's (publish.yml runs on workflow_dispatch), and the `test-`
+  # prefix keeps this group apart from the caller's.
+  #
+  # Every event on a gated PR restarts its suite, description edits and unrelated labels included.
+  # Skipping those events would hide results: a PR's checks and branch protection use only the
+  # newest `unit` and `e2e` check runs, and a skipped run would replace the suite before it.
+  group: ${{ github.event_name == 'pull_request' && format('test-pr-{0}', github.event.pull_request.number) || format('test-run-{0}', github.run_id) }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
@@ -19,6 +34,13 @@ env:
 jobs:
   unit:
     name: unit
+    # Always true outside pull_request, including workflow_call, where event_name is the caller's.
+    if: &full-suite >-
+      github.event_name != 'pull_request'
+      || startsWith(github.event.pull_request.title, 'chore(sync)')
+      || startsWith(github.event.pull_request.title, 'chore(release)')
+      || contains(github.event.pull_request.labels.*.name, 'upstream-sync')
+      || contains(github.event.pull_request.labels.*.name, 'full-tests')
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -83,8 +105,10 @@ jobs:
       # and its @opencode/core depends on private, source-only @shuvcode/* plugins that have no
       # packable build, so `bun turbo verify:package --filter=@opencode/sdk` cannot pass here.
 
+      # Not always(): a superseded PR run would keep building after cancellation and hold the
+      # concurrency group, delaying its replacement by up to these timeouts.
       - name: Verify compiled service lifecycle
-        if: always()
+        if: ${{ !cancelled() }}
         timeout-minutes: 10
         working-directory: packages/cli
         run: |
@@ -92,13 +116,13 @@ jobs:
           bun run script/service-smoke.ts
 
       - name: Setup Node build runtime
-        if: always()
+        if: ${{ !cancelled() }}
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: "26.4.0"
 
       - name: Verify Node build
-        if: always()
+        if: ${{ !cancelled() }}
         timeout-minutes: 15
         working-directory: packages/cli
         run: |
@@ -111,6 +135,7 @@ jobs:
 
   e2e:
     name: e2e
+    if: *full-suite
     runs-on: ubuntu-latest
     env:
       PLAYWRIGHT_BROWSERS_PATH: ${{ github.workspace }}/.playwright-browsers
