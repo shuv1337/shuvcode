@@ -416,9 +416,11 @@ const stalledPermissionCommand = Effect.fnUntraced(function* (
         pid,
         process: pid === undefined ? undefined : yield* processState(pid),
         tail: info
-          ? yield* Effect.tryPromise(() => Bun.file(info.file).slice(-500).text()).pipe(
-              Effect.orElseSucceed(() => undefined),
-            )
+          ? yield* Effect.tryPromise(() => {
+              // A negative slice reads nothing here: the size is unknown until it is asked for.
+              const file = Bun.file(info.file)
+              return file.slice(Math.max(0, file.size - 500)).text()
+            }).pipe(Effect.orElseSucceed(() => undefined))
           : undefined,
       }
     }),
