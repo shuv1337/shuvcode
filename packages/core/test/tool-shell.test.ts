@@ -37,7 +37,7 @@ import { PluginSupervisor } from "@opencode/core/plugin/supervisor"
 import { Shell } from "@opencode/core/shell"
 import { ShellSelect } from "@opencode/core/shell/select"
 import { ShellResult } from "@opencode/core/shell/result"
-import { ID } from "@opencode/schema/shell"
+import { Event, ID } from "@opencode/schema/shell"
 import { ShellTool } from "@opencode/core/tool/plugin/shell"
 import { ToolOutput } from "@opencode/core/tool-output"
 import { Tool } from "@opencode/core/tool"
@@ -333,70 +333,115 @@ const withScanner = <A, E, R>(
     }),
   )
 
-// The timeout catches a hung permission flow, not slowness: PowerShell commands on loaded Windows runners have exceeded 5s.
+// The timeout catches a hung permission flow or shell command, not slowness: PowerShell commands on loaded Windows
+// runners have exceeded 5s.
+const permissionCommandTimeout = Duration.seconds(15)
+
 const runPermissionCommand = (
   registry: Tool.Interface,
   command: string,
   marker: string,
   replies: ReadonlyArray<Permission.Reply>,
 ) =>
-  Effect.gen(function* () {
-    const permission = yield* Permission.Service
-    const bus = yield* Bus.Service
-    const queue = yield* Queue.unbounded<Permission.Request>()
-    yield* bus.subscribe(Permission.Event.Asked).pipe(
-      Stream.runForEach((event) => Queue.offer(queue, event.data)),
-      Effect.forkScoped({ startImmediately: true }),
-    )
-    const execution = yield* executeTool(registry, call({ command }, `call-${Permission.ID.create()}`)).pipe(
-      Effect.forkScoped,
-    )
-    const requests = yield* Effect.forEach(replies, (reply) =>
-      Effect.gen(function* () {
-        const request = yield* Queue.take(queue)
-        expect(yield* permission.forSession(sessionID)).toEqual([request])
-        expect(yield* Effect.promise(() => Bun.file(marker).exists())).toBe(false)
-        yield* permission.reply({ requestID: request.id, reply })
-        return request
+  Effect.suspend(() => {
+    const started = Date.now()
+    const shells: Array<{ id: string; event: string; exit?: number; ms: number }> = []
+    return Effect.gen(function* () {
+      const permission = yield* Permission.Service
+      const bus = yield* Bus.Service
+      const queue = yield* Queue.unbounded<Permission.Request>()
+      yield* bus.subscribe(Permission.Event.Asked).pipe(
+        Stream.runForEach((event) => Queue.offer(queue, event.data)),
+        Effect.forkScoped({ startImmediately: true }),
+      )
+      yield* Stream.merge(
+        bus
+          .subscribe(Event.Created)
+          .pipe(Stream.map((event) => ({ id: event.data.info.id, event: "created", ms: Date.now() - started }))),
+        bus.subscribe(Event.Exited).pipe(
+          Stream.map((event) => ({
+            id: event.data.id,
+            event: event.data.status,
+            exit: event.data.exit,
+            ms: Date.now() - started,
+          })),
+        ),
+      ).pipe(
+        Stream.runForEach((event) => Effect.sync(() => shells.push(event))),
+        Effect.forkScoped({ startImmediately: true }),
+      )
+      const execution = yield* executeTool(registry, call({ command }, `call-${Permission.ID.create()}`)).pipe(
+        Effect.forkScoped,
+      )
+      const requests = yield* Effect.forEach(replies, (reply) =>
+        Effect.gen(function* () {
+          const request = yield* Queue.take(queue)
+          expect(yield* permission.forSession(sessionID)).toEqual([request])
+          expect(yield* Effect.promise(() => Bun.file(marker).exists())).toBe(false)
+          yield* permission.reply({ requestID: request.id, reply })
+          return request
+        }),
+      )
+      const exit = yield* Fiber.await(execution)
+      expect(yield* permission.list()).toEqual([])
+      expect(yield* Queue.size(queue)).toBe(0)
+      return { exit, requests }
+    }).pipe(
+      // Inside the scope, so the report sees the call while it is still stuck rather than after it was interrupted.
+      Effect.timeoutOrElse({
+        duration: permissionCommandTimeout,
+        orElse: () => stalledPermissionCommand(command, shells),
       }),
+      Effect.scoped,
     )
-    const exit = yield* Fiber.await(execution)
-    expect(yield* permission.list()).toEqual([])
-    expect(yield* Queue.size(queue)).toBe(0)
-    return { exit, requests }
-  }).pipe(
-    // Inside the scope, so the report sees the call while it is still stuck rather than after it was interrupted.
-    Effect.timeoutOrElse({ duration: Duration.seconds(15), orElse: () => stalledPermissionCommand(command) }),
-    Effect.scoped,
-  )
+  })
 
-const stalledPermissionCommand = Effect.fnUntraced(function* (command: string) {
+// No shell events means the call stalled before spawning; an exited command with a running job stalled in the job.
+const stalledPermissionCommand = Effect.fnUntraced(function* (
+  command: string,
+  shells: ReadonlyArray<{ id: string; event: string; exit?: number; ms: number }>,
+) {
   const permission = yield* Permission.Service
   const shell = yield* Shell.Service
+  const jobs = yield* Job.Service
   const pending = (yield* permission.list()).map((request) => request.resources)
-  const running = yield* Effect.forEach(yield* shell.list(), (info) =>
+  const commands = yield* Effect.forEach(new Set(shells.map((event) => event.id)), (id) =>
     Effect.gen(function* () {
-      const pid = info.pid
+      const info = yield* shell.get(ID.make(id)).pipe(Effect.orElseSucceed(() => undefined))
+      const pid = info?.pid
       return {
-        shell: info.shell,
+        id,
+        status: info?.status,
+        job: (yield* jobs.get(id))?.status,
         pid,
-        // A running command whose process is gone never had its exit observed.
-        alive:
-          pid === undefined
-            ? undefined
-            : yield* Effect.try(() => process.kill(pid, 0)).pipe(Effect.orElseSucceed(() => false)),
-        elapsedMs: Date.now() - info.time.started,
-        output: yield* shell.output(info.id).pipe(
-          Effect.map((page) => page.output.slice(-500)),
-          Effect.orElseSucceed(() => undefined),
-        ),
+        process: pid === undefined ? undefined : yield* processState(pid),
+        tail: info
+          ? yield* Effect.tryPromise(() => Bun.file(info.file).slice(-500).text()).pipe(
+              Effect.orElseSucceed(() => undefined),
+            )
+          : undefined,
       }
     }),
   )
-  return yield* Effect.fail(
-    new Error(`${JSON.stringify(command)} did not settle within 15s: ${JSON.stringify({ pending, running })}`),
-  )
+  const report = `${JSON.stringify(command)} did not settle within ${Duration.format(permissionCommandTimeout)}: ${JSON.stringify({ pending, shells, commands })}`
+  // Logged as well, in case interrupting the stuck call blocks the scope from closing.
+  yield* Effect.logError(report)
+  return yield* Effect.fail(new Error(report))
 })
+
+// `ps` shows a zombie (Z) whose exit was never reaped and a process stuck on I/O (D); `kill(pid, 0)` succeeds for both.
+const processState = (pid: number) =>
+  isWindows
+    ? Effect.try(() => process.kill(pid, 0)).pipe(
+        Effect.as("running"),
+        Effect.orElseSucceed(() => "gone"),
+      )
+    : Effect.sync(
+        () =>
+          Bun.spawnSync(["ps", "-o", "stat=,wchan=", "-p", String(pid)])
+            .stdout.toString()
+            .trim() || "gone",
+      )
 
 describe("ShellTool scanner permissions", () => {
   const test = isWindows || !Bun.which("sh") ? permissionIt.live.skip : permissionIt.live
