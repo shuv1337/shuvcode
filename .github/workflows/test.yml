@@ -105,8 +105,10 @@ jobs:
       # and its @opencode/core depends on private, source-only @shuvcode/* plugins that have no
       # packable build, so `bun turbo verify:package --filter=@opencode/sdk` cannot pass here.
 
+      # Not always(): a superseded PR run would keep building after cancellation and hold the
+      # concurrency group, delaying its replacement by up to these timeouts.
       - name: Verify compiled service lifecycle
-        if: always()
+        if: ${{ !cancelled() }}
         timeout-minutes: 10
         working-directory: packages/cli
         run: |
@@ -114,13 +116,13 @@ jobs:
           bun run script/service-smoke.ts
 
       - name: Setup Node build runtime
-        if: always()
+        if: ${{ !cancelled() }}
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: "26.4.0"
 
       - name: Verify Node build
-        if: always()
+        if: ${{ !cancelled() }}
         timeout-minutes: 15
         working-directory: packages/cli
         run: |
