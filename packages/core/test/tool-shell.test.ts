@@ -2313,13 +2313,14 @@ describe("ShellTool", () => {
 
 describe("ShellTool stopped", () => {
   // Runs a foreground call the way a session step does, then stops it as the user does (through `cancel`), or
-  // interrupts it as a server shutdown does.
+  // interrupts it as a server shutdown does. It stops once the command has written `outputBytes`: bash's stdout is
+  // line-buffered, so a multi-line printf arrives in several writes, and stopping after the first loses the rest.
   const stopCall = (
     registry: Tool.Interface,
     command: string,
     id: string,
     how: "cancel" | "interrupt",
-    waitForOutput = true,
+    outputBytes = 1,
   ) =>
     Effect.gen(function* () {
       const shell = yield* Shell.Service
@@ -2334,7 +2335,7 @@ describe("ShellTool stopped", () => {
         cancel: Deferred.await(cancel),
       }).pipe(Effect.forkChild({ startImmediately: true }))
       const shellID = ID.make(yield* Deferred.await(started))
-      while (waitForOutput && (yield* shell.output(shellID, { cursor: Number.MAX_SAFE_INTEGER })).size === 0)
+      while ((yield* shell.output(shellID, { cursor: Number.MAX_SAFE_INTEGER })).size < outputBytes)
         yield* Effect.sleep(Duration.millis(10))
       if (how === "cancel") yield* Deferred.succeed(cancel, undefined)
       if (how === "interrupt") yield* Fiber.interrupt(fiber)
@@ -2358,6 +2359,7 @@ describe("ShellTool stopped", () => {
                 : "printf 'first\\nsecond\\n'; sleep 60",
               "call-stopped",
               "cancel",
+              "first\nsecond\n".length,
             )
             const info = yield* shell.get(shellID)
             expect(info.status).toBe("killed")
@@ -2406,7 +2408,7 @@ describe("ShellTool stopped", () => {
       return withSession(tmp.path, (registry) =>
         Effect.gen(function* () {
           const shell = yield* Shell.Service
-          const { shellID, result } = yield* stopCall(registry, idleCommand, "call-silent", "cancel", false)
+          const { shellID, result } = yield* stopCall(registry, idleCommand, "call-silent", "cancel", 0)
           const info = yield* shell.get(shellID)
           expect(result?.error?.message).toBe(
             `[no output; output file: ${info.file}]\n\nCommand interrupted by the user (shell ID: ${shellID}).`,
@@ -2583,7 +2585,7 @@ describe("ShellTool stopped", () => {
       reset()
       return withSession(tmp.path, (registry) =>
         Effect.gen(function* () {
-          const { shellID } = yield* stopCall(registry, idleCommand, "call-recorded", "interrupt", false)
+          const { shellID } = yield* stopCall(registry, idleCommand, "call-recorded", "interrupt", 0)
           const request = fake?.requests.find((item) => item.op === "create_pipe")
           expect(request?.metadata).toMatchObject({
             id: shellID,
