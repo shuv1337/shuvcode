@@ -767,24 +767,16 @@ async function scrollsBehindComposerRegion(
         content: [
           {
             type: "tool",
-            id: "call_running_subagent",
-            name: "subagent",
+            id: "call_blocking_shell",
+            name: "shell",
             state: {
               status: "running",
-              input: { description: "Trace frame budget", agent: "explore" },
-              metadata: { sessionID: "ses_running_subagent" },
+              input: { command: "bun test" },
+              metadata: {},
             },
             time: { created: 2 },
           },
-          // Subagents are already background work; only a blocking shell offers the move hint.
-          {
-            type: "tool",
-            id: "call_running_shell",
-            name: "shell",
-            state: { status: "running", input: { command: "sleep 120" }, metadata: {} },
-            time: { created: 2 },
-          },
-          { type: "text", id: "prt_timeline_end", text: "The last answer ends above the composer region." },
+          { type: "text", text: "The last answer ends above the composer region." },
         ],
         time: { created: 2 },
       },

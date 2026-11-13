@@ -905,8 +905,8 @@ describe("ShellTool", () => {
           }).pipe(Effect.timeout("3 seconds"))
           expect(result.status).toBe("completed")
           expect(JSON.parse(result.output.output)).toEqual([
-            { output: "one", exit: 0, truncated: false, status: "completed" },
-            { output: "two", exit: 0, truncated: false, status: "completed" },
+            { output: "one", exitCode: 0, wallTimeSeconds: expect.any(Number) },
+            { output: "two", exitCode: 0, wallTimeSeconds: expect.any(Number) },
           ])
         }),
       )
@@ -1365,7 +1365,16 @@ describe("ShellTool", () => {
         ).pipe(
           Effect.andThen((settled) =>
             Effect.sync(() => {
-              expect(settled.metadata).toMatchObject({ exit: 3, truncated: true })
+              expect(settled.metadata).toMatchObject({
+                exit: 3,
+                truncated: true,
+              })
+              expect(settled.output).toEqual({
+                output: expect.stringContaining(`full output saved to ${settled.output.outputPath}]`),
+                outputPath: expect.any(String),
+                exitCode: 3,
+                wallTimeSeconds: expect.any(Number),
+              })
               expect(settled.content).toEqual([
                 Expected.text(
                   expect.stringMatching(
@@ -1394,6 +1403,11 @@ describe("ShellTool", () => {
           Effect.andThen((settled) =>
             Effect.sync(() => {
               expect(settled.metadata).toMatchObject({ timeout: true })
+              expect(settled.output).not.toHaveProperty("timeout")
+              expect(settled.output).toMatchObject({
+                exitCode: settled.metadata?.exit ?? null,
+              })
+              if (!isWindows) expect(settled.output.signal).toBe("SIGTERM")
               expect(settled.content).toEqual([
                 { type: "text", text: "server starting" },
                 Expected.text(
@@ -1434,8 +1448,21 @@ describe("ShellTool", () => {
             const info = yield* shell.get(id)
             expect(result.status).toBe("completed")
             expect(info.pid).toBeGreaterThan(0)
-            expect(result.metadata).toMatchObject({ status: "running", shellID: id, pid: info.pid, truncated: false })
-            expect(result.output).toMatchObject({ shellID: id, pid: info.pid })
+            expect(result.metadata).toMatchObject({
+              status: "running",
+              shellID: id,
+              pid: info.pid,
+              truncated: false,
+            })
+            expect(result.output).toEqual({
+              shellID: id,
+              pid: info.pid,
+              outputPath: info.file,
+              exitCode: null,
+              output: expect.any(String),
+              wallTimeSeconds: expect.any(Number),
+            })
+            expect(result.output.wallTimeSeconds).toBeGreaterThanOrEqual(0.01)
             expect(result.metadata).not.toHaveProperty("timeout")
             expect(result.content?.[0]).toEqual({
               type: "text",
@@ -1445,10 +1472,20 @@ describe("ShellTool", () => {
             expect((yield* shell.list()).map((item) => item.id)).toEqual([id])
 
             yield* Effect.promise(() => Bun.write(path.join(tmp.path, "release"), ""))
-            expect(yield* shell.wait(id)).toMatchObject({ status: "exited", exit: 0, pid: info.pid })
+            const finished = yield* shell.wait(id)
+            expect(finished).toMatchObject({
+              status: "exited",
+              exit: 0,
+              pid: info.pid,
+            })
             expect(yield* Queue.take(notices)).toMatchObject({
               text: expect.stringContaining("xxxxxx"),
-              metadata: { source: "shell", shellID: id, state: "completed", exit: 0 },
+              metadata: {
+                source: "shell",
+                shellID: id,
+                state: "completed",
+                exit: 0,
+              },
             })
             expect(yield* Queue.size(notices)).toBe(0)
             expect(yield* shell.list()).toEqual([])
@@ -1507,22 +1544,32 @@ describe("ShellTool", () => {
     }),
   )
 
-  it.live("keeps timeout zero as an unbounded foreground wait", () =>
+  it.effect("treats a foreground timeout of zero as the default timeout with timeout backgrounding enabled", () =>
     withTempDir((tmp) => {
       reset()
       return withSession(
         tmp.path,
         (registry) =>
           Effect.gen(function* () {
-            const result = yield* executeTool(registry, call({ command: bodyExitCommand, timeout: 0 }))
-            expect(result.metadata).toMatchObject({ status: "completed", exit: 7 })
-            expect(result.metadata).not.toHaveProperty("timeout")
-            expect(result.content).toEqual([
-              { type: "text", text: "body" },
-              { type: "text", text: "Exit code: 7" },
-            ])
-            const jobs = yield* Job.Service
-            expect(yield* jobs.runningBackground).toEqual([])
+            const running = yield* executeTool(
+              registry,
+              call({ command: progressOverflowCommand(0, "release"), timeout: 0 }, "call-zero-timeout"),
+            ).pipe(Effect.forkScoped({ startImmediately: true }))
+            // The wait starts only after the command spawns, so keep advancing the clock until the call returns.
+            const result = yield* Fiber.join(running).pipe(
+              Effect.raceFirst(
+                Effect.forever(Effect.promise(() => Bun.sleep(20)).pipe(Effect.andThen(TestClock.adjust("2 minutes")))),
+              ),
+            )
+            expect(result.content?.[0]).toMatchObject({
+              type: "text",
+              text: expect.stringContaining("did not finish within its timeout of 120 seconds"),
+            })
+            const id = ID.make(String(result.metadata?.shellID))
+            const shell = yield* Shell.Service
+            expect((yield* shell.get(id)).status).toBe("running")
+            yield* Effect.promise(() => Bun.write(path.join(tmp.path, "release"), ""))
+            expect(yield* shell.wait(id)).toMatchObject({ status: "exited", exit: 0 })
           }),
         true,
       )
@@ -1571,23 +1618,17 @@ describe("ShellTool", () => {
     }),
   )
 
-  it.effect("ignores explicit background timeouts with timeout backgrounding enabled", () =>
+  it.live("stops a background command when its explicit timeout expires with timeout backgrounding enabled", () =>
     withTempDir((tmp) => {
       reset()
       return withSession(
         tmp.path,
         (registry) =>
           Effect.gen(function* () {
-            const result = yield* executeTool(
-              registry,
-              call({ command: progressOverflowCommand(0, "release"), background: true, timeout: 10 }),
-            )
+            const result = yield* executeTool(registry, call({ command: idleCommand, background: true, timeout: 50 }))
             const id = ID.make(String(result.metadata?.shellID))
             const shell = yield* Shell.Service
-            yield* TestClock.adjust("1 second")
-            expect((yield* shell.get(id)).status).toBe("running")
-            yield* Effect.promise(() => Bun.write(path.join(tmp.path, "release"), ""))
-            expect(yield* shell.wait(id)).toMatchObject({ status: "exited", exit: 0 })
+            expect((yield* shell.wait(id)).status).toBe("timeout")
           }),
         true,
       )

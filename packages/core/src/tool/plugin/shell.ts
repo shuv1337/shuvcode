@@ -6,7 +6,7 @@ import type { SessionHooks } from "@opencode/plugin/effect/session"
 import type { ShellCreateBefore } from "@opencode/plugin/effect/shell"
 import type { Shell as ShellSchema } from "@opencode/schema/shell"
 import type { Tool } from "@opencode/schema/tool"
-import { Deferred, Effect, Fiber, Option, Schema } from "effect"
+import { Clock, Deferred, Effect, Fiber, Option, Schema, Struct } from "effect"
 import { Environment } from "../../environment/index.js"
 import { Job } from "../../job.js"
 import { FileAccess } from "../../file-access.js"
@@ -51,38 +51,43 @@ const description = (shell?: string, autoBackground = false) =>
     "Background commands return immediately, and you will be notified when they complete.",
   ].join(" ")
 
-export const Input = Schema.Struct({
-  command: Schema.String.annotate({ description: "Shell command string to execute" }),
-  workdir: Schema.optionalKey(Schema.String).annotate({
-    description:
-      "Working directory to execute the command in. Defaults to the current working directory. When possible, avoid changing directories in the command and set the working directory here instead.",
-  }),
-  timeout: Schema.optionalKey(NonNegativeInt).annotate({
-    description: `Timeout in milliseconds. Set to 0 to disable the timeout. Defaults to ${DEFAULT_TIMEOUT_MS} for foreground commands. Background commands have no timeout by default.`,
-  }),
-  background: Schema.optionalKey(Schema.Boolean).annotate({
-    description:
-      "Run the command in the background and return immediately (useful for dev servers and long-running builds). You do not need to use '&' at the end of the command when using this parameter. You will be notified when it completes. DO NOT poll for completion.",
-  }),
-})
+const input = (autoBackground: boolean) =>
+  Schema.Struct({
+    command: Schema.String.annotate({ description: "Shell command string to execute" }),
+    workdir: Schema.optionalKey(Schema.String).annotate({
+      description:
+        "Working directory to execute the command in. Defaults to the current working directory. When possible, avoid changing directories in the command and set the working directory here instead.",
+    }),
+    timeout: Schema.optionalKey(NonNegativeInt).annotate({
+      description: autoBackground
+        ? `Optional timeout in milliseconds (default ${DEFAULT_TIMEOUT_MS}). When it expires, a foreground command moves to the background and a background command is stopped.`
+        : `Timeout in milliseconds. Set to 0 to disable the timeout. Defaults to ${DEFAULT_TIMEOUT_MS} for foreground commands. Background commands have no timeout by default.`,
+    }),
+    background: Schema.optionalKey(Schema.Boolean).annotate({
+      description:
+        "Run the command in the background and return immediately (useful for dev servers and long-running builds). You do not need to use '&' at the end of the command when using this parameter. You will be notified when it completes. DO NOT poll for completion.",
+    }),
+  })
+
+export const Input = input(false)
 
 const StructuredOutput = Schema.Struct({
-  exit: Schema.optionalKey(Schema.Number),
+  output: Schema.String,
+  exitCode: Schema.NullOr(Schema.Number),
+  wallTimeSeconds: Schema.Number,
+  outputPath: Schema.optionalKey(Schema.String),
   signal: Schema.optionalKey(Schema.String),
   shellID: Schema.optionalKey(Schema.String),
   pid: Schema.optionalKey(NonNegativeInt),
-  truncated: Schema.Boolean,
-  timeout: Schema.optionalKey(Schema.Boolean),
-  killed: Schema.optionalKey(Schema.String),
 })
 
-const Output = Schema.Struct({
-  ...StructuredOutput.fields,
-  output: Schema.String,
-  status: Schema.optionalKey(Schema.Literals(["completed", "running"])),
-})
-
-type Output = typeof Output.Type
+type Output = ReturnType<typeof ShellResult.output> & {
+  status: "completed" | "running"
+  wallTimeSeconds: number
+  outputPath?: string
+  shellID?: string
+  pid?: number
+}
 
 const resultMessages = (output: Output, timeout?: number) => {
   const notice = output.status === "running" ? BACKGROUND_INSTRUCTION : ShellResult.notice(output, timeout)
@@ -91,8 +96,14 @@ const resultMessages = (output: Output, timeout?: number) => {
 
 const toolResult = (output: Output, timeout?: number) => {
   return {
-    output,
-    content: resultMessages(output, timeout).map((text) => ({ type: "text" as const, text })),
+    output: {
+      ...Struct.omit(output, ["exit", "status", "truncated", "timeout", "killed"]),
+      exitCode: output.exit ?? null,
+    },
+    content: resultMessages(output, timeout).map((text) => ({
+      type: "text" as const,
+      text,
+    })),
     metadata: {
       status: output.status,
       ...ShellResult.metadata(output),
@@ -102,8 +113,10 @@ const toolResult = (output: Output, timeout?: number) => {
   }
 }
 
-const backgroundResult = (info: ShellResult.Result["info"], timeout?: number) => ({
-  output: [
+const wallTimeSeconds = (time: ShellSchema.Time, end: number) => Math.max(0, end - time.started) / 1_000
+
+const backgroundText = (info: ShellSchema.Info, timeout?: number) =>
+  [
     `Command moved to the background (shell ID: ${info.id}).`,
     ...(info.pid === undefined ? [] : [`PID: ${info.pid}`]),
     `Output is streaming to: ${info.file}`,
@@ -113,8 +126,13 @@ const backgroundResult = (info: ShellResult.Result["info"], timeout?: number) =>
           "",
           `The command did not finish within its timeout of ${timeout / 1_000} seconds and was moved to the background. Do not start another copy while it is running.`,
         ]),
-  ].join("\n"),
+  ].join("\n")
+
+const backgroundResult = (info: ShellSchema.Info, now: number, timeout?: number) => ({
+  output: backgroundText(info, timeout),
+  wallTimeSeconds: wallTimeSeconds(info.time, now),
   shellID: info.id,
+  outputPath: info.file,
   ...(info.pid === undefined ? {} : { pid: info.pid }),
   truncated: false,
   status: "running" as const,
@@ -186,7 +204,13 @@ const startJob = Effect.fnUntraced(function* (
     run: Effect.gen(function* () {
       const result = yield* shell.result(info)
       if (!result.capture) return yield* new Shell.NotFoundError({ id: info.id })
-      return { ...ShellResult.output(result), status: "completed" as const }
+      const completed = result.info.time.completed ?? (yield* Clock.currentTimeMillis)
+      return {
+        ...ShellResult.output(result),
+        status: "completed" as const,
+        wallTimeSeconds: wallTimeSeconds(result.info.time, completed),
+        ...(result.capture.truncated ? { outputPath: result.info.file } : {}),
+      }
     }).pipe(
       Effect.tap((output) => Deferred.succeed(settled, output)),
       Effect.map((output) => resultMessages(output, input.timeout?.()).join("\n\n")),
@@ -204,15 +228,20 @@ const startJob = Effect.fnUntraced(function* (
 
 /** The tool result of a call whose command moved to the background. */
 export const backgroundToolResult = (info: ShellSchema.Info) => {
-  const result = toolResult(backgroundResult(info))
   // Narrowed to what a backgrounded command reports, so it can be published as is.
   const metadata = {
     shellID: info.id,
     status: "running" as const,
-    truncated: result.metadata.truncated,
+    truncated: false,
     ...(info.pid === undefined ? {} : { pid: info.pid }),
   }
-  return { content: result.content, metadata }
+  return {
+    content: [backgroundText(info), BACKGROUND_INSTRUCTION].map((text) => ({
+      type: "text" as const,
+      text,
+    })),
+    metadata,
+  }
 }
 
 /**
@@ -327,10 +356,15 @@ export const Plugin = {
           name,
           options: { codemode: false },
           description: description(undefined, autoBackground),
-          input: Input,
-          output: Output,
+          input: input(autoBackground),
+          output: StructuredOutput,
           execute: (input, context) => {
-            const timeout = input.background === true ? (input.timeout ?? 0) : (input.timeout ?? DEFAULT_TIMEOUT_MS)
+            // With timeout backgrounding, a foreground timeout of 0 falls back to the default so a call can't block
+            // until the command exits.
+            const foreground = autoBackground
+              ? input.timeout || DEFAULT_TIMEOUT_MS
+              : (input.timeout ?? DEFAULT_TIMEOUT_MS)
+            const timeout = input.background === true ? (input.timeout ?? 0) : foreground
             let finalTimeout = timeout
             // Uninterruptible from spawning to blocking, so an interrupt cannot orphan a started command.
             return Effect.uninterruptibleMask((restore) =>
@@ -379,7 +413,8 @@ export const Plugin = {
                             ),
                           ),
                         )
-                        if (autoBackground) invocation.timeout = 0
+                        // A foreground timeout moves the command to the background instead of stopping it.
+                        if (autoBackground && input.background !== true) invocation.timeout = 0
                       }),
                   )
                   yield* context.progress({ shellID: info.id })
@@ -395,7 +430,7 @@ export const Plugin = {
                   if (input.background === true) {
                     yield* jobs.background(job.id)
                     yield* notifyWhenDone(context.sessionID, job.id, info.id, info.command, settled)
-                    return backgroundResult(info)
+                    return backgroundResult(info, yield* Clock.currentTimeMillis)
                   }
 
                   const waiting = jobs.block({ id: job.id, sessionID: context.sessionID })
@@ -436,7 +471,7 @@ export const Plugin = {
                     const elapsed = "timedOut" in result ? finalTimeout : undefined
                     finalTimeout = 0
                     yield* notifyWhenDone(context.sessionID, job.id, info.id, info.command, settled)
-                    return backgroundResult(info, elapsed)
+                    return backgroundResult(info, yield* Clock.currentTimeMillis, elapsed)
                   }
                   if (result?.info.status === "error")
                     return yield* Effect.fail(new Error(result.info.error ?? "Command failed"))
