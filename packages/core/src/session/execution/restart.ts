@@ -368,13 +368,12 @@ export const layer = (options?: Options) =>
           })
           return false
         }
-        // Defer the start until every suspended root has counted its attempt; a fast
+        // Defer the start until every suspended session has counted its attempt; a fast
         // resumed child settling in Phase 1 would wake its parent past that budget.
         return true
       })
 
-      // Foreground children are not returned by listSuspended. Until nested
-      // prepared calls can be coordinated before their own drain, stop the
+      // Until nested prepared calls can be coordinated before their own drain, stop the
       // entire in-flight subtree rather than let settleStaleToolCalls turn a
       // possibly executed effect into a retryable model-visible tool error.
       const stopStaleChild = Effect.fnUntraced(function* (sessionID: SessionSchema.ID): Effect.fn.Return<boolean> {
@@ -425,6 +424,7 @@ export const layer = (options?: Options) =>
         sessionID: SessionSchema.ID,
         assistantMessageID: SessionMessage.ID,
         tool: SessionMessage.AssistantTool,
+        ambiguous: ReadonlySet<SessionSchema.ID>,
       ) {
         const operation = SubagentRecovery.prepared(tool)
         if (!operation) return
@@ -472,7 +472,9 @@ export const layer = (options?: Options) =>
           resume: false,
         })
         const settled = yield* SubagentRecovery.settled(sessions, child.id, operation.inboxID)
-        if (!settled && (yield* stopStaleChild(child.id))) {
+        // The direct-claim sweep may already have failed this child's ambiguous tool.
+        // That failure must stop the prepared parent too, not look like an ordinary result.
+        if (ambiguous.has(child.id) || (!settled && (yield* stopStaleChild(child.id)))) {
           yield* bus.publish(SessionEvent.Tool.Failed, {
             sessionID,
             assistantMessageID,
@@ -543,11 +545,23 @@ export const layer = (options?: Options) =>
         resumeSuspendedSessions: Effect.gen(function* () {
           const active = yield* execution.active
           const pending = yield* jobs.pendingBackground
-          const children = pending.flatMap((background) =>
-            background.status === "running" && background.recovery.kind === "subagent"
-              ? [background.recovery.childSessionID]
-              : [],
+          const children = new Set(
+            pending.flatMap((background) =>
+              background.status === "running" && background.recovery.kind === "subagent"
+                ? [background.recovery.childSessionID]
+                : [],
+            ),
           )
+          yield* store.releaseOrphanedChildClaims()
+          // Job.cancel persists the cancellation before interrupting the execution. A crash
+          // in between leaves its claim behind. Settlement writes a formatted error to the
+          // outbox atomically with release; such an older report can coexist with a new claim.
+          for (const { status, recovery, error } of pending) {
+            if (status !== "cancelled" || recovery.kind !== "subagent" || error !== undefined) continue
+            if (!active.has(recovery.childSessionID) && !children.has(recovery.childSessionID)) {
+              yield* store.release(recovery.childSessionID)
+            }
+          }
           // Early notices wait for recovery's accounting, including Sessions that exhaust their budget.
           const suspended = new Set(
             [...(yield* store.listSuspended()), ...children].filter((sessionID) => !active.has(sessionID)),
@@ -561,7 +575,7 @@ export const layer = (options?: Options) =>
               suspended.clear()
             }),
           )
-          // Hold notice wakes until every suspended root has counted its attempt, so a woken
+          // Hold notice wakes until every suspended session has counted its attempt, so a woken
           // child cannot settle mid-sweep and wake its parent past that budget.
           const notices: Notices = {
             synthetic: (input) =>
@@ -575,7 +589,6 @@ export const layer = (options?: Options) =>
                 Effect.uninterruptible,
               ),
           }
-          yield* store.releaseChildClaims(children)
           const recoverable = Effect.fnUntraced(function* (background: Job.Background) {
             return (yield* jobs.get(background.id))?.status !== "running"
           })
@@ -614,7 +627,7 @@ export const layer = (options?: Options) =>
                   )
                 : [],
             )
-            const nested = children.includes(sessionID)
+            const nested = children.has(sessionID)
               ? yield* Effect.forEach(calls, (call) => {
                   const operation = SubagentRecovery.prepared(call.tool)
                   return operation
@@ -668,7 +681,6 @@ export const layer = (options?: Options) =>
               { commit: () => store.release(sessionID) },
             )
           }
-          yield* store.releaseChildClaims([...children, ...preparedChildren])
           const resumable: ResumableSubagent[] = []
           yield* Effect.forEach(
             pending,
@@ -688,6 +700,8 @@ export const layer = (options?: Options) =>
           yield* Effect.addFinalizer(() => Deferred.succeed(recoveryReady, undefined))
           const recovering = new Set<SessionSchema.ID>()
           for (const sessionID of yield* store.listSuspended()) {
+            // The prepared parent owns this subtree, regardless of claim iteration order.
+            if (preparedChildren.has(sessionID)) continue
             const calls = (yield* store.context(sessionID).pipe(Effect.orDie)).flatMap((message) =>
               message.type === "assistant"
                 ? message.content.flatMap((tool) => {
@@ -718,7 +732,7 @@ export const layer = (options?: Options) =>
                   }
                   yield* Deferred.await(recoveryReady)
                   for (const [index, call] of calls.entries()) {
-                    const recovered = yield* recoverPreparedCall(sessionID, call.messageID, call.tool).pipe(
+                    const recovered = yield* recoverPreparedCall(sessionID, call.messageID, call.tool, ambiguous).pipe(
                       Effect.catchCause((cause) =>
                         Cause.hasInterruptsOnly(cause)
                           ? Effect.interrupt
@@ -752,14 +766,23 @@ export const layer = (options?: Options) =>
             yield* Deferred.await(counted)
           }
 
-          // Count every suspended root's attempt before a resumed child can settle and wake it.
+          // A directly driven child can also settle and wake its parent. Account for every
+          // claimed execution before starting any of them, leaving running jobs to SubagentJob.
           const resumed = yield* execution.active
-          yield* Effect.forEach(
+          const direct = yield* Effect.filter(
             (yield* store.listSuspended()).filter(
-              (sessionID) => !resumed.has(sessionID) && !recovering.has(sessionID) && !preparedInFlight.has(sessionID),
+              (sessionID) =>
+                !resumed.has(sessionID) &&
+                !children.has(sessionID) &&
+                !preparedChildren.has(sessionID) &&
+                !recovering.has(sessionID) &&
+                !preparedInFlight.has(sessionID),
             ),
+            prepareResume,
+          )
+          yield* Effect.forEach(
+            direct,
             Effect.fnUntraced(function* (sessionID) {
-              if (!(yield* prepareResume(sessionID))) return
               suspended.delete(sessionID)
               yield* execution.resume(sessionID).pipe(Effect.ignore, Effect.forkIn(scope))
             }),

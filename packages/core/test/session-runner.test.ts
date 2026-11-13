@@ -15,6 +15,7 @@ import {
   InvalidRequestError,
   RateLimitError,
   UnknownProviderError,
+  type UserMessage,
 } from "@opencode/ai/effect"
 import { OpenAIChat } from "@opencode/ai/protocols/openai-chat"
 import { AnthropicMessages, OpenAIResponses } from "@opencode/ai/protocols"
@@ -1326,6 +1327,51 @@ describe("SessionRunnerLLM", () => {
     expect(s.executions).toEqual(["renamed"])
   })
 
+  scenario("passes stored message metadata to the context hook but not to the model request", function* (s) {
+    const hooks = yield* PluginHooks.Service
+    yield* hooks.register("session", "prompt", (event) =>
+      Effect.sync(() => {
+        event.metadata = { canary: { context: ["CANARY-TOKEN"] } }
+      }),
+    )
+    yield* hooks.register("session", "context", (event) =>
+      Effect.sync(() => {
+        // Mirrors JavaScript plugins, which edit the payload in place.
+        for (const message of event.messages) {
+          const canary = message.metadata?.canary as { context: string[] } | undefined
+          if (message.role !== "user" || canary === undefined) continue
+          ;(message.content as Array<UserMessage["content"][number]>).unshift(Message.text(canary.context.join("\n")))
+        }
+      }),
+    )
+    yield* s.llm.push(TestLLM.text("Done", "text-done"))
+
+    yield* s.runPrompt("Start")
+
+    expect(s.requests[0]?.messages.at(-1)?.content).toEqual([Message.text("CANARY-TOKEN"), Message.text("Start")])
+    expect(s.requests[0]?.messages.some((message) => Object.hasOwn(message, "metadata"))).toBe(false)
+    const compiled = yield* compileRequest(s.requests[0]!)
+    expect(JSON.stringify(compiled.body)).toContain("CANARY-TOKEN")
+    expect(JSON.stringify(compiled.body)).not.toContain('"metadata"')
+  })
+
+  scenario("keeps context hook edits to messages without stored metadata", function* (s) {
+    const hooks = yield* PluginHooks.Service
+    yield* hooks.register("session", "context", (event) =>
+      Effect.sync(() => {
+        for (const message of event.messages) {
+          if (message.role !== "user" || message.metadata !== undefined) continue
+          ;(message.content as Array<UserMessage["content"][number]>).unshift(Message.text("EDITED"))
+        }
+      }),
+    )
+    yield* s.llm.push(TestLLM.text("Done", "text-done"))
+
+    yield* s.runPrompt("Start")
+
+    expect(s.requests[0]?.messages.at(-1)?.content).toEqual([Message.text("EDITED"), Message.text("Start")])
+  })
+
   for (const resume of [false, true]) {
     scenario(
       `continues instead of going idle when a session idle hook admits input (resume: ${resume})`,
@@ -2149,6 +2195,30 @@ describe("SessionRunnerLLM", () => {
     yield* s.runPrompt("Fourth")
 
     expect(s.requests.at(-1)?.system.map((part) => part.text)).toEqual([defaultSystem, fakeIdentity, "Latest context"])
+    // The surviving "Changed context" update predates the fresh baseline and would contradict it.
+    expect(messageRoles(s.requests.at(-1))).toEqual(["user", "user"])
+    expect((yield* s.context).some((message) => message.type === "system")).toBe(false)
+  })
+
+  scenario("hides an update a revert left behind once the source is removed", function* (s) {
+    s.systemRemoved = true
+    yield* s.runPrompt("First")
+    s.systemRemoved = false
+    s.systemBaseline = "Entered mode"
+    const second = yield* s.runPrompt("Second")
+    s.systemRemoved = true
+    yield* s.runPrompt("Third")
+
+    // The removal is delivered with "Third"; the "Entered mode" update survives before "Second".
+    yield* s.bus.publish(SessionEvent.RevertEvent.Committed, { sessionID, to: second.id })
+    yield* s.runPrompt("Fourth")
+
+    const last = s.requests.at(-1)!
+    expect(systemTexts(last)).toEqual([])
+    expect(userTexts(last)).toEqual(["First", "Fourth"])
+    expect(last.system.map((part) => part.text).join("\n")).not.toContain("Entered mode")
+    // Clients still see every message; only the model context hides the stale update.
+    expect((yield* s.messages).filter((message) => message.type === "system")).toMatchObject([{ text: "Entered mode" }])
   })
 
   scenario("uses the selected model family prompt when the agent does not override it", function* (s) {
@@ -5184,6 +5254,36 @@ describe("SessionRunnerLLM", () => {
       },
     )
   }
+
+  scenario("keeps a stopped nested prepared subtree out of recovery owners", function* (s) {
+    const seeded = yield* seedPreparedRecovery(s, true)
+    const restart = yield* SessionRestart.Service
+    const execution = yield* SessionExecution.Service
+    const jobs = yield* Job.Service
+    yield* restart.resumeSuspendedSessions
+    yield* execution.awaitIdle(seeded.parent)
+    yield* execution.awaitIdle(seeded.child)
+    yield* execution.awaitIdle(seeded.grandchild)
+
+    expect(s.requests).toHaveLength(0)
+    expect(yield* jobs.get(seeded.grandchild)).toBeUndefined()
+    expect((yield* s.session.get(seeded.child)).outcome).toBe("failed")
+    expect(
+      (yield* s.session.messages({ sessionID: seeded.child })).filter(
+        (message) => message.type === "synthetic" && message.metadata?.notice === "restart",
+      ),
+    ).toHaveLength(0)
+    const parent = yield* s.session.message({ sessionID: seeded.parent, messageID: seeded.assistantMessageID })
+    expect(
+      parent?.type === "assistant" ? parent.content.find((item) => item.type === "tool")?.state.status : undefined,
+    ).toBe("error")
+
+    // A later sweep must not adopt the stopped subtree's remaining claims as direct work.
+    yield* restart.resumeSuspendedSessions
+    yield* execution.awaitIdle(seeded.grandchild)
+    expect(s.requests).toHaveLength(0)
+    expect(yield* jobs.get(seeded.grandchild)).toBeUndefined()
+  })
 
   scenario("stops nested ambiguous effects before a recovered background child drains", function* (s) {
     const seeded = yield* seedPreparedRecovery(s, true, true)
