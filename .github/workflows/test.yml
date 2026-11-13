@@ -1,13 +1,32 @@
 name: test
 
-# The full suite runs only for releases: publish.yml calls it before publishing, and a pushed
-# v* tag runs it too. Pull requests get typecheck.yml, including CLI config smoke tests.
+# The full suite gates releases: publish.yml calls it before publishing, and a pushed v* tag runs
+# it too. Pull requests run it only when they are sync or release PRs (title starting with
+# `chore(sync)` or `chore(release)`, or the `upstream-sync` label) or carry the opt-in `full-tests`
+# label, so publish never finds their failures first. Every pull request gets typecheck.yml.
 on:
   push:
     tags:
       - "v*"
+  pull_request:
+    types: [opened, synchronize, reopened, edited, labeled]
   workflow_call:
   workflow_dispatch:
+
+concurrency:
+  # A new commit, title or base change, or gating label restarts a PR's suite. Description edits
+  # and other labels take a group of their own, so they never cancel a running suite. Non-PR runs
+  # are never grouped; under workflow_call `github` is the caller's (publish.yml runs on
+  # workflow_dispatch), and the `test-` prefix keeps this group apart from the caller's.
+  group: >-
+    ${{
+      github.event_name == 'pull_request'
+      && (github.event.action != 'edited' || github.event.changes.title || github.event.changes.base)
+      && (github.event.action != 'labeled' || contains(fromJSON('["full-tests", "upstream-sync"]'), github.event.label.name))
+      && format('test-pr-{0}', github.event.pull_request.number)
+      || format('test-run-{0}', github.run_id)
+    }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
@@ -19,6 +38,20 @@ env:
 jobs:
   unit:
     name: unit
+    # Always true outside pull_request, including workflow_call, where event_name is the caller's.
+    # For pull requests, mirrors the concurrency group's restart rule and the gate in the header.
+    if: &full-suite >-
+      github.event_name != 'pull_request'
+      || (
+        (github.event.action != 'edited' || github.event.changes.title || github.event.changes.base)
+        && (github.event.action != 'labeled' || contains(fromJSON('["full-tests", "upstream-sync"]'), github.event.label.name))
+        && (
+          startsWith(github.event.pull_request.title, 'chore(sync)')
+          || startsWith(github.event.pull_request.title, 'chore(release)')
+          || contains(github.event.pull_request.labels.*.name, 'upstream-sync')
+          || contains(github.event.pull_request.labels.*.name, 'full-tests')
+        )
+      )
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -111,6 +144,7 @@ jobs:
 
   e2e:
     name: e2e
+    if: *full-suite
     runs-on: ubuntu-latest
     env:
       PLAYWRIGHT_BROWSERS_PATH: ${{ github.workspace }}/.playwright-browsers

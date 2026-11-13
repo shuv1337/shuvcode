@@ -249,7 +249,9 @@ implementations against the new tree. Do not copy scarred whole files.
   scripts must not depend on `git branch --show-current`; the jj workspace
   has no `.git`, so set `OPENCODE_CHANNEL` explicitly.
 - Fork CI: `publish.yml`, `test.yml` (Linux only until a Windows runner is
-  proven), `typecheck.yml` (per-package, per AGENTS.md),
+  proven; also runs on `chore(sync)` / `chore(release)` PRs and PRs labelled
+  `upstream-sync` or `full-tests`), `typecheck.yml` (per-package, per
+  AGENTS.md; every PR),
   `notify-discord.yml` as `workflow_call` (GitHub does not fire
   `on: release` for `GITHUB_TOKEN` publishes)
 - Boundary: bin `shuvcode`, `Global.app === "shuvcode"`, port `0x1337`
