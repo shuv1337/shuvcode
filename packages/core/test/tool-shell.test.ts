@@ -364,7 +364,39 @@ const runPermissionCommand = (
     expect(yield* permission.list()).toEqual([])
     expect(yield* Queue.size(queue)).toBe(0)
     return { exit, requests }
-  }).pipe(Effect.scoped, Effect.timeout(Duration.seconds(15)))
+  }).pipe(
+    // Inside the scope, so the report sees the call while it is still stuck rather than after it was interrupted.
+    Effect.timeoutOrElse({ duration: Duration.seconds(15), orElse: () => stalledPermissionCommand(command) }),
+    Effect.scoped,
+  )
+
+const stalledPermissionCommand = Effect.fnUntraced(function* (command: string) {
+  const permission = yield* Permission.Service
+  const shell = yield* Shell.Service
+  const pending = (yield* permission.list()).map((request) => request.resources)
+  const running = yield* Effect.forEach(yield* shell.list(), (info) =>
+    Effect.gen(function* () {
+      const pid = info.pid
+      return {
+        shell: info.shell,
+        pid,
+        // A running command whose process is gone never had its exit observed.
+        alive:
+          pid === undefined
+            ? undefined
+            : yield* Effect.try(() => process.kill(pid, 0)).pipe(Effect.orElseSucceed(() => false)),
+        elapsedMs: Date.now() - info.time.started,
+        output: yield* shell.output(info.id).pipe(
+          Effect.map((page) => page.output.slice(-500)),
+          Effect.orElseSucceed(() => undefined),
+        ),
+      }
+    }),
+  )
+  return yield* Effect.fail(
+    new Error(`${JSON.stringify(command)} did not settle within 15s: ${JSON.stringify({ pending, running })}`),
+  )
+})
 
 describe("ShellTool scanner permissions", () => {
   const test = isWindows || !Bun.which("sh") ? permissionIt.live.skip : permissionIt.live
