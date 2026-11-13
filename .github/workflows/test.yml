@@ -68,12 +68,46 @@ jobs:
             turbo-${{ runner.os }}-${{ hashFiles('turbo.json', '**/package.json') }}-
             turbo-${{ runner.os }}-
 
+      - name: Diagnose pwsh cold start
+        run: |
+          command -v pwsh; ls -la "$(readlink -f "$(command -v pwsh)")"
+          du -sh /opt/microsoft/powershell/7 /usr/local/share/powershell/Modules 2>/dev/null || true
+          for i in 1 2 3; do
+            h=$(mktemp -d)
+            s=$(date +%s%N)
+            HOME=$h XDG_CACHE_HOME=$h/.cache XDG_DATA_HOME=$h/.local/share pwsh -NoLogo -NoProfile -NonInteractive -Command 'Write-Output "$(Write-Output hello)"'
+            echo "fresh-home pwsh run $i: $(( ($(date +%s%N)-s)/1000000 ))ms"
+          done
+
       - name: Run unit tests
         timeout-minutes: 20
         run: |
-          # OpenCode infra trees stay in the repo but are outside fork CI.
-          # The runners have four vCPUs, and each Bun test process performs its own concurrent work.
-          GITHUB_ACTIONS=false bun turbo test --concurrency=3 --filter='!@opencode/desktop' --filter='!@opencode/update' --filter='!@opencode/data-*'
+          (
+            while true; do
+              h=$(mktemp -d)
+              s=$(date +%s%N)
+              HOME=$h XDG_CACHE_HOME=$h/.cache XDG_DATA_HOME=$h/.local/share timeout 60 pwsh -NoLogo -NoProfile -NonInteractive -Command 'Write-Output "$(Write-Output hello)"' >/dev/null
+              echo "$(date +%T) $(( ($(date +%s%N)-s)/1000000 ))ms load=$(cut -d' ' -f1-3 /proc/loadavg)" >> /tmp/pwsh-samples.txt
+              rm -rf "$h"
+              sleep 3
+            done
+          ) &
+          sampler=$!
+          GITHUB_ACTIONS=false bun turbo test --concurrency=3 --filter='!@opencode/desktop' --filter='!@opencode/update' || status=$?
+          kill $sampler || true
+          sort -t' ' -k2 -n -r /tmp/pwsh-samples.txt | head -15
+          echo "samples: $(wc -l < /tmp/pwsh-samples.txt)"
+          exit ${status:-0}
+
+      - name: Diagnose PowerShell test timings
+        if: always()
+        working-directory: packages/core
+        run: |
+          h=$(mktemp -d)
+          for i in 1 2 3; do
+            h=$(mktemp -d)
+            HOME=$h XDG_CACHE_HOME=$h/.cache XDG_DATA_HOME=$h/.local/share XDG_CONFIG_HOME=$h/.config XDG_STATE_HOME=$h/.local/state TMPDIR=/tmp bun test --timeout=30000 test/tool-shell.test.ts -t PowerShell 2>&1 | grep -E '\((pass|fail)\)|^ *[0-9]+ (pass|fail)'
+          done --filter='!@opencode/data-*'
 
       - name: Verify published codemode package
         working-directory: packages/codemode
