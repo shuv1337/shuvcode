@@ -57,7 +57,7 @@ jobs:
       - name: Install ffmpeg and ripgrep
         run: |
           sudo apt-get update
-          sudo apt-get install --yes ffmpeg ripgrep
+          sudo apt-get install --yes ffmpeg ripgrep strace
 
       - name: Cache Turbo
         uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
@@ -71,42 +71,46 @@ jobs:
       - name: Run unit tests
         timeout-minutes: 20
         run: |
-          sample() {
-            h=$(mktemp -d)
-            s=$(date +%s%N)
-            HOME=$h XDG_CACHE_HOME=$h/.cache XDG_DATA_HOME=$h/.local/share XDG_CONFIG_HOME=$h/.config timeout 60 pwsh -NoLogo -NoProfile -NonInteractive -Command 'Write-Output "$(Write-Output hello)"' >/dev/null
-            echo "$(date +%T) $1 $(( ($(date +%s%N)-s)/1000000 ))ms load=$(cut -d' ' -f1-3 /proc/loadavg)" >> /tmp/pwsh-samples.txt
-            rm -rf "$h"
-          }
+          # OpenCode infra trees stay in the repo but are outside fork CI.
+          # The runners have four vCPUs, and each Bun test process performs its own concurrent work.
+          mkdir -p /tmp/pwsh-diag
           (
-            sleep 45
-            sample first-on-vm
-            i=0
+            n=0
             while true; do
-              sleep 4
-              i=$((i+1))
-              if [ $((i % 5)) -eq 0 ]; then sync; sudo sysctl -q vm.drop_caches=3; sample cold-cache; else sample warm; fi
+              n=$((n+1))
+              h=$(mktemp -d)
+              s=$(date +%s%N)
+              HOME=$h XDG_CACHE_HOME=$h/.cache XDG_DATA_HOME=$h/.local/share TMPDIR=$h timeout 120 strace -f -tt -T -e trace=connect,sendto,openat,read,write,epoll_wait,poll,ppoll,clone3,exit_group -o /tmp/pwsh-diag/st-$n.txt pwsh -NoLogo -NoProfile -NonInteractive -Command 'Write-Output "$(Write-Output hello)"' >/dev/null
+              ms=$(( ($(date +%s%N)-s)/1000000 ))
+              ls=$(date +%s%N); logger -t pwsh-diag "sample $n"; lms=$(( ($(date +%s%N)-ls)/1000000 ))
+              echo "$(date +%T) n=$n pwsh=${ms}ms logger=${lms}ms load=$(cut -d' ' -f1 /proc/loadavg)" >> /tmp/pwsh-diag/samples.txt
+              [ $ms -lt 2500 ] && rm -f /tmp/pwsh-diag/st-$n.txt
+              rm -rf "$h"
+              sleep 2
             done
           ) &
           sampler=$!
+          (
+            sleep 40
+            cd packages/core
+            h=$(mktemp -d)
+            HOME=$h XDG_CACHE_HOME=$h/.cache XDG_DATA_HOME=$h/.local/share XDG_CONFIG_HOME=$h/.config XDG_STATE_HOME=$h/.local/state bun test --timeout=60000 --rerun-each 60 test/tool-shell.test.ts -t PowerShell > /tmp/pwsh-diag/rerun.txt 2>&1
+            echo "rerun exit $?" >> /tmp/pwsh-diag/rerun.txt
+          ) &
+          rerun=$!
           GITHUB_ACTIONS=false bun turbo test --concurrency=3 --filter='!@opencode/desktop' --filter='!@opencode/update' --filter='!@opencode/data-*' || status=$?
           kill $sampler || true
-          cat /tmp/pwsh-samples.txt
-          for kind in first-on-vm cold-cache warm; do
-            grep " $kind " /tmp/pwsh-samples.txt | awk -v k=$kind '{gsub("ms","",$3); n++; t+=$3; if ($3>m) m=$3} END {printf "%s: n=%d mean=%dms max=%dms\n", k, n, t/n, m}'
+          wait $rerun || true
+          echo "== samples (slowest)"; sort -t= -k3 -n -r /tmp/pwsh-diag/samples.txt | head -12; echo "count: $(wc -l < /tmp/pwsh-diag/samples.txt)"
+          echo "== logger slowest"; sed 's/.*logger=\([0-9]*\)ms.*/\1/' /tmp/pwsh-diag/samples.txt | sort -n | tail -3
+          echo "== rerun"; grep -E '^\(fail\)| pass$| fail$|rerun exit' /tmp/pwsh-diag/rerun.txt; grep -oE 'PowerShell: .*\[[0-9.]+ms\]' /tmp/pwsh-diag/rerun.txt | grep -oE '[0-9.]+ms\]$' | tr -d 'ms]' | sort -n | tail -5
+          for f in /tmp/pwsh-diag/st-*.txt; do
+            [ -e "$f" ] || continue
+            echo "== slow trace $f: syscalls over 0.3s"
+            awk 'match($0, /<([0-9.]+)>$/, m) && m[1] > 0.3' "$f" | cut -c1-220 | head -20
+            echo "-- first/last lines"; head -2 "$f" | cut -c1-160; tail -2 "$f" | cut -c1-160
           done
           exit ${status:-0}
-
-      - name: Diagnose PowerShell test timings
-        if: always()
-        working-directory: packages/core
-        run: |
-          for kind in cold-cache warm; do
-            if [ $kind = cold-cache ]; then sync; sudo sysctl -q vm.drop_caches=3; fi
-            h=$(mktemp -d)
-            echo "== $kind"
-            HOME=$h XDG_CACHE_HOME=$h/.cache XDG_DATA_HOME=$h/.local/share XDG_CONFIG_HOME=$h/.config XDG_STATE_HOME=$h/.local/state bun test --timeout=30000 test/tool-shell.test.ts -t PowerShell 2>&1 | grep -E '\((pass|fail)\)|^ *[0-9]+ (pass|fail)' || true
-          done
 
       - name: Verify published codemode package
         working-directory: packages/codemode
