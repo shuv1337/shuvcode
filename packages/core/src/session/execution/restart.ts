@@ -424,6 +424,7 @@ export const layer = (options?: Options) =>
         sessionID: SessionSchema.ID,
         assistantMessageID: SessionMessage.ID,
         tool: SessionMessage.AssistantTool,
+        ambiguous: ReadonlySet<SessionSchema.ID>,
       ) {
         const operation = SubagentRecovery.prepared(tool)
         if (!operation) return
@@ -471,7 +472,9 @@ export const layer = (options?: Options) =>
           resume: false,
         })
         const settled = yield* SubagentRecovery.settled(sessions, child.id, operation.inboxID)
-        if (!settled && (yield* stopStaleChild(child.id))) {
+        // The direct-claim sweep may already have failed this child's ambiguous tool.
+        // That failure must stop the prepared parent too, not look like an ordinary result.
+        if (ambiguous.has(child.id) || (!settled && (yield* stopStaleChild(child.id)))) {
           yield* bus.publish(SessionEvent.Tool.Failed, {
             sessionID,
             assistantMessageID,
@@ -727,7 +730,7 @@ export const layer = (options?: Options) =>
                   }
                   yield* Deferred.await(recoveryReady)
                   for (const [index, call] of calls.entries()) {
-                    const recovered = yield* recoverPreparedCall(sessionID, call.messageID, call.tool).pipe(
+                    const recovered = yield* recoverPreparedCall(sessionID, call.messageID, call.tool, ambiguous).pipe(
                       Effect.catchCause((cause) =>
                         Cause.hasInterruptsOnly(cause)
                           ? Effect.interrupt
