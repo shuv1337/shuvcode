@@ -56,6 +56,8 @@ jobs:
       - name: Build Bun CLI packages
         run: bun packages/cli/script/build.ts
         env:
+          # Anonymous GitHub API calls share a 60/hour per-IP limit on hosted runners; a full build makes ~25.
+          GH_TOKEN: ${{ github.token }}
           BUN_COMPILE_RELEASE: bun-v1.4.4
           OPENCODE_VERSION: ${{ env.OPENCODE_VERSION }}
           OPENCODE_CHANNEL: ${{ env.OPENCODE_CHANNEL }}
