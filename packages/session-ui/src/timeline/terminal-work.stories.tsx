@@ -4,6 +4,7 @@ import { createEffect, createMemo, createSignal, Show } from "solid-js"
 import { createStore } from "solid-js/store"
 import { DataProvider } from "../context/data"
 import { SessionShellMessage } from "../tools/tool-renderer"
+import { ShellMessage } from "../timeline-next/tools/shell"
 import { CurrentSessionProviders, CurrentSessionTimelineStory } from "../storybook/current-session-story"
 import {
   STORY_TIME,
@@ -71,9 +72,14 @@ export const UserCommandCompleted = {
 }
 
 export const LiveUserCommand = {
-  args: { outcome: "exited", output: true, expanded: true },
+  args: { outcome: "exited", output: true, expanded: true, next: false },
   argTypes: { outcome: { control: "select", options: ["exited", "nonzero", "timeout", "killed"] } },
-  render: (args: { outcome: "exited" | "nonzero" | "timeout" | "killed"; output: boolean; expanded: boolean }) => {
+  render: (args: {
+    outcome: "exited" | "nonzero" | "timeout" | "killed"
+    output: boolean
+    expanded: boolean
+    next: boolean
+  }) => {
     const [stats, setStats] = createStore({ reads: 0 })
 
     const [message, setMessage] = createSignal<SessionMessageShell>({
@@ -138,7 +144,9 @@ export const LiveUserCommand = {
             }
           }}
         >
-          <SessionShellMessage message={message()} defaultOpen={args.expanded} />
+          <Show when={args.next} fallback={<SessionShellMessage message={message()} defaultOpen={args.expanded} />}>
+            <ShellMessage message={message()} />
+          </Show>
         </DataProvider>
       </section>
     )

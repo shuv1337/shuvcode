@@ -78,6 +78,7 @@ export function ShellTool(props: ToolProps) {
 function ShellCard(props: ToolProps) {
   const i18n = useI18n()
   const run = shellRun(props)
+  const outcome = createMemo(() => shellOutcome(props.metadata, i18n))
 
   run.follow()
 
@@ -95,6 +96,7 @@ function ShellCard(props: ToolProps) {
       >
         <ConsoleOutput command={run.view().command} output={run.view().output} />
       </Show>
+      <Show when={outcome()}>{(value) => <Badge variant={value().tone}>{value().label}</Badge>}</Show>
     </div>
   )
 }

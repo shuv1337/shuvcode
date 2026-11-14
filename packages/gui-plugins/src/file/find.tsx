@@ -275,21 +275,20 @@ const decodeFrameMessage = Schema.decodeUnknownOption(
 
 /** Every case-insensitive occurrence of `query` in the text under `root`, in reading order. */
 function documentRanges(root: HTMLElement, query: string) {
-  const needle = query.toLowerCase()
+  // Matching the original text keeps Unicode case folding from shifting DOM offsets.
+  const needle = new RegExp(query.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "giu")
   const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT)
   const ranges: Range[] = []
 
   for (let node = walker.nextNode(); node; node = walker.nextNode()) {
     if (!(node instanceof Text)) continue
-    const hay = node.data.toLowerCase()
-
     // Text the preview hides, such as a diagram's source, can't be shown as a match.
-    if (!hay.includes(needle) || !node.parentElement?.checkVisibility()) continue
+    if (!node.parentElement?.checkVisibility()) continue
 
-    for (let at = hay.indexOf(needle); at !== -1; at = hay.indexOf(needle, at + needle.length)) {
+    for (const match of node.data.matchAll(needle)) {
       const range = document.createRange()
-      range.setStart(node, at)
-      range.setEnd(node, at + needle.length)
+      range.setStart(node, match.index)
+      range.setEnd(node, match.index + match[0].length)
       ranges.push(range)
     }
   }
@@ -324,20 +323,18 @@ function frameFind(channel: string) {
 
     if (data.op !== "search") return
     const query = String(data.query)
-    const needle = query.toLowerCase()
+    const needle = new RegExp(query.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "giu")
     const ranges: Range[] = []
     const walker = document.createTreeWalker(document.body ?? document.documentElement, NodeFilter.SHOW_TEXT)
 
-    for (let node = walker.nextNode(); node && needle; node = walker.nextNode()) {
+    for (let node = walker.nextNode(); node && query; node = walker.nextNode()) {
       if (!(node instanceof Text)) continue
-      const hay = node.data.toLowerCase()
+      if (!node.parentElement?.checkVisibility()) continue
 
-      if (!hay.includes(needle) || !node.parentElement?.checkVisibility()) continue
-
-      for (let at = hay.indexOf(needle); at !== -1; at = hay.indexOf(needle, at + needle.length)) {
+      for (const match of node.data.matchAll(needle)) {
         const range = document.createRange()
-        range.setStart(node, at)
-        range.setEnd(node, at + needle.length)
+        range.setStart(node, match.index)
+        range.setEnd(node, match.index + match[0].length)
         ranges.push(range)
       }
     }

@@ -56,6 +56,23 @@ for (const [id, output] of [
   })
 }
 
+for (const [outcome, label] of [
+  ["nonzero", "Exit 1"],
+  ["timeout", "Timed out"],
+  ["killed", "Stopped"],
+]) {
+  story(`shows the new timeline's user-shell ${outcome} outcome without output`, async ({ mount }) => {
+    const root = await mount("current-session-terminal-work--live-user-command", {
+      args: { next: true, outcome, output: false },
+    })
+    const shell = root.locator('[data-component="session-shell-message"]')
+    await expect(shell).not.toContainText(label)
+    await root.getByRole("button", { name: "Complete command", exact: true }).click()
+    await expect(shell.getByText(label, { exact: true })).toBeVisible()
+    await expect(shell).toContainText("printf ready")
+  })
+}
+
 story("copies the shell command and its output separately", async ({ mount, page }) => {
   const root = await mount("current-session-terminal-work--expanded-shell")
   const shell = root.locator('[data-component="bash-output"]')
