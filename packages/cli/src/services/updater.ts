@@ -533,10 +533,6 @@ const make = Effect.gen(function* () {
         type: "unavailable" as const,
         message: "This build runs from a source checkout. Use an installed Shuvcode release to check for updates.",
       }
-    if (installedOwner) {
-      const error = yield* managed()
-      if (error) return { type: "unavailable" as const, message: managedMessage(error) }
-    }
     const version = yield* latest()
     if (!parseReleaseVersion(version)) return yield* Effect.fail(new Error(`Invalid version: ${version}`))
     const current = yield* Ref.get(installedVersion)
@@ -546,6 +542,11 @@ const make = Effect.gen(function* () {
         ? undefined
         : { type: "installed" as const, version: current }
     }
+    if (installedOwner)
+      return {
+        type: "unavailable" as const,
+        message: managedMessage(managedError(installedOwner, `${packageName}@${version}`)),
+      }
     return { type: "available" as const, version }
   })
 

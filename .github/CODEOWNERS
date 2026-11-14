@@ -1,3 +1,5 @@
-# CI and releases. Release jobs that hold secrets run only .github/workflows/release.yml and .github/release/,
-# which makes this path the release security boundary. It is the only path that needs a code owner review.
-/.github/ @thdxr
+# Fork CI and release workflow ownership. publish.yml gates CLI package publishing on typecheck.yml and
+# test.yml, runs packages/cli/script/ code, and attaches GPT-Live helper assets. Upstream infrastructure
+# deploy paths remain in the tree but are outside fork CI/publishing; .github/ is not the whole release boundary.
+# Required code owner approval is a separate repository ruleset/branch-protection setting.
+/.github/ @shuv1337
