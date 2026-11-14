@@ -1,5 +1,8 @@
 name: test
 
+# NONMERGE issue #493 probe: one manual dispatch on pwsh-hosted-probe, four fresh VMs.
+# All diagnostic behavior below is confined to that event/ref; never release from this branch.
+
 # The full suite gates releases: publish.yml calls it before publishing, and a pushed v* tag runs
 # it too. Pull requests run it only when they are sync or release PRs (title starting with
 # `chore(sync)` or `chore(release)`, or the `upstream-sync` label) or carry the opt-in `full-tests`
@@ -30,17 +33,22 @@ permissions:
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+  PWSH_HOSTED_PROBE: ${{ github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/pwsh-hosted-probe' }}
 
 jobs:
   unit:
     name: unit
     # Always true outside pull_request, including workflow_call, where event_name is the caller's.
-    if: &full-suite >-
+    if: >-
       github.event_name != 'pull_request'
       || startsWith(github.event.pull_request.title, 'chore(sync)')
       || startsWith(github.event.pull_request.title, 'chore(release)')
       || contains(github.event.pull_request.labels.*.name, 'upstream-sync')
       || contains(github.event.pull_request.labels.*.name, 'full-tests')
+    strategy:
+      fail-fast: false
+      matrix:
+        attempt: ${{ fromJSON(github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/pwsh-hosted-probe' && '[1,2,3,4]' || '[1]') }}
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -90,14 +98,54 @@ jobs:
             turbo-${{ runner.os }}-${{ hashFiles('turbo.json', '**/package.json') }}-
             turbo-${{ runner.os }}-
 
+      - name: Record hosted probe pins without launching PowerShell
+        if: env.PWSH_HOSTED_PROBE == 'true'
+        run: |
+          mkdir -p "$RUNNER_TEMP/pwsh-493"
+          {
+            printf 'run=%s attempt=%s matrix=%s\n' "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT" '${{ matrix.attempt }}'
+            TZ=America/Los_Angeles date --iso-8601=seconds
+            git rev-parse HEAD
+            git rev-parse HEAD:packages/core HEAD:packages/util HEAD:bun.lock
+            printf 'image=%s version=%s runner=%s/%s\n' "$ImageOS" "$ImageVersion" "$RUNNER_OS" "$RUNNER_ARCH"
+            uname -srmo
+            printf 'vcpus='; nproc
+            node --version
+            bun --version
+            dpkg-query -W powershell ffmpeg ripgrep
+            command -v node bun pwsh
+            readlink -f "$(command -v pwsh)"
+            sha256sum "$(command -v bun)" "$(command -v pwsh)" bun.lock
+            printf 'No probe warmup: PowerShell version read from dpkg, not pwsh.\n'
+          } | tee "$RUNNER_TEMP/pwsh-493/pins.log"
+
       - name: Run unit tests
+        if: env.PWSH_HOSTED_PROBE != 'true'
         timeout-minutes: 20
         run: |
           # OpenCode infra trees stay in the repo but are outside fork CI.
           # The runners have four vCPUs, and each Bun test process performs its own concurrent work.
           GITHUB_ACTIONS=false bun turbo test --concurrency=3 --filter='!@opencode/desktop' --filter='!@opencode/update' --filter='!@opencode/data-*'
 
+      - name: Run uncached hosted probe unit tests
+        if: env.PWSH_HOSTED_PROBE == 'true'
+        timeout-minutes: 20
+        run: |
+          # Stream #491's in-scope timeout report even if the failing task never finishes teardown.
+          # bash -eo pipefail preserves Turbo's failure through tee; no retries or case filtering.
+          GITHUB_ACTIONS=false bun turbo test --concurrency=3 --force --log-order=stream --filter='!@opencode/desktop' --filter='!@opencode/update' --filter='!@opencode/data-*' 2>&1 | tee "$RUNNER_TEMP/pwsh-493/unit.log"
+
+      - name: Upload hosted probe evidence
+        if: always() && env.PWSH_HOSTED_PROBE == 'true'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: pwsh-493-${{ github.run_id }}-${{ github.run_attempt }}-${{ matrix.attempt }}
+          path: ${{ runner.temp }}/pwsh-493
+          if-no-files-found: warn
+          retention-days: 14
+
       - name: Verify published codemode package
+        if: env.PWSH_HOSTED_PROBE != 'true'
         working-directory: packages/codemode
         run: bun run script/publish.ts --dry-run
 
@@ -108,7 +156,7 @@ jobs:
       # Not always(): a superseded PR run would keep building after cancellation and hold the
       # concurrency group, delaying its replacement by up to these timeouts.
       - name: Verify compiled service lifecycle
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && env.PWSH_HOSTED_PROBE != 'true' }}
         timeout-minutes: 10
         working-directory: packages/cli
         run: |
@@ -116,13 +164,13 @@ jobs:
           bun run script/service-smoke.ts
 
       - name: Setup Node build runtime
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && env.PWSH_HOSTED_PROBE != 'true' }}
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: "26.4.0"
 
       - name: Verify Node build
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && env.PWSH_HOSTED_PROBE != 'true' }}
         timeout-minutes: 15
         working-directory: packages/cli
         run: |
@@ -130,12 +178,19 @@ jobs:
           bun run script/service-smoke.ts --node
 
       - name: Check generated client
+        if: env.PWSH_HOSTED_PROBE != 'true'
         working-directory: packages/client
         run: bun run check:generated
 
   e2e:
     name: e2e
-    if: *full-suite
+    if: >-
+      !(github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/pwsh-hosted-probe')
+      && (github.event_name != 'pull_request'
+      || startsWith(github.event.pull_request.title, 'chore(sync)')
+      || startsWith(github.event.pull_request.title, 'chore(release)')
+      || contains(github.event.pull_request.labels.*.name, 'upstream-sync')
+      || contains(github.event.pull_request.labels.*.name, 'full-tests'))
     runs-on: ubuntu-latest
     env:
       PLAYWRIGHT_BROWSERS_PATH: ${{ github.workspace }}/.playwright-browsers
