@@ -2,6 +2,33 @@
 
 Release notes for OpenCode V2, newest first.
 
+## v2.3.0-shuv.2 — 2026-11-13
+
+Maintenance release on upstream v2.3.0, syncing `dev` from `73abe63ac2` through `cbe71595e1` (40 commits) as [#494](https://github.com/shuv1337/shuvcode/pull/494). The latest upstream release remains v2.3.0.
+
+### Shell timeouts
+
+- Upstream graduated and removed the `shell_timeout_background` flag. A foreground shell command that reaches its timeout now moves to the background instead of being stopped; you are notified when it finishes, so there is no need to poll.
+- The foreground default is still 120 seconds. For a foreground call, `timeout: 0` falls back to that default rather than waiting indefinitely. An explicit timeout on a `background: true` call stops the command when it expires, while a background call without a timeout keeps running until it finishes.
+
+### Read tool
+
+- Small text files now honor the default read limits (2,000 lines and 50 KB) instead of returning the whole file; over-limit files page from the start with a continuation offset.
+- Paged reads keep a single blank line, and `limit: 0` fails with a clear error instead of returning an empty page.
+- Both six-byte GIF signatures are recognized, and a bitmap header is required before `BM` bytes count as an image, so text files starting with `BM` stay readable.
+
+### App
+
+- Preview find matches the original text with escaped, case-insensitive Unicode patterns, so highlights stay aligned for characters whose case folding changes length.
+- New timeline direct shell messages show nonzero-exit, timeout and stopped outcomes again, including commands that produced no output.
+
+### Also included
+
+- The New timeline keeps message metadata visible, orders subagent rows inside grouped activity, and tidies questions, moves, compaction and shells.
+- The connect dialog sign-in steps are clearer; tooltips dismiss when their trigger is pressed, and submenus switch without blinking.
+- OpenCode Go sessions no longer show a zero cost, and the TUI assistant footer drops the `ttft` field.
+- Retains Shuvcode identity, npm-only updates and guarded publishing, the hidden Claude Agent SDK provider, and the #490-#492 sync/release CI fixes.
+
 ## v2.3.0-shuv.1 — 2026-11-13
 
 Sync upstream v2.3.0 (`a6b15d33da`), 70 commits after the #487 pin `101776024c`.
