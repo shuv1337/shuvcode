@@ -5,12 +5,13 @@ import { Global } from "@opencode/util/global"
 import { AppProcess } from "@opencode/util/process"
 import { expect, spyOn, test } from "bun:test"
 import { Effect, FileSystem, Layer, PlatformError, Stream } from "effect"
-import { OPENCODE_CHANNEL } from "../src/version"
+import { OPENCODE_CHANNEL, OPENCODE_LOCAL, OPENCODE_VERSION } from "../src/version"
 import { ChildProcessSpawner } from "effect/process"
 import { existsSync, readdirSync, readFileSync } from "node:fs"
 import path from "node:path"
 import { Updater } from "../src/services/updater"
 import { testEffect } from "../../core/test/lib/effect"
+import { isolatedEnv } from "./fixture/environment"
 
 const it = testEffect(NodeServices.layer)
 const hostPackage = `shuvcode-${process.platform === "win32" ? "windows" : process.platform}-${process.arch}`
@@ -30,6 +31,7 @@ function fixture(
   failCleanup = false,
   manifest: Updater.Manifest = { name, bin: { shuvcode: "bin/shuvcode" } },
   layout?: "prefix" | "platform-prefix" | "volta" | "mise",
+  registry = { version: "2.3.4", status: 200 },
 ) {
   return Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem
@@ -55,13 +57,13 @@ function fixture(
       yield* fs.writeFileString(path.join(root, "bin", "npm"), "npm")
     }
     // The updater uses global fetch; scope this replacement to each install test.
-    yield* Effect.acquireRelease(
+    const request = yield* Effect.acquireRelease(
       Effect.sync(() =>
         spyOn(globalThis, "fetch").mockImplementation(
           Object.assign(
             async (input: string | URL | Request) => {
               expect(input).toBe(`https://registry.npmjs.org/${name}/${encodeURIComponent(OPENCODE_CHANNEL)}`)
-              return Response.json({ version: "2.3.4" })
+              return Response.json({ version: registry.version }, { status: registry.status })
             },
             { preconnect: fetch.preconnect },
           ),
@@ -138,7 +140,7 @@ function fixture(
         }),
       ),
     )
-    return { updater, commands, global, fs, executable, root }
+    return { updater, commands, global, fs, executable, root, request }
   })
 }
 
@@ -219,6 +221,87 @@ unix("npm locates the owning prefix through the fork's nested native platform pa
     }),
   )
 })
+;[
+  { name: "shuvcode", channel: "latest" },
+  { name: "shuvcode-node", channel: "latest" },
+  { name: "shuvcode", channel: "local" },
+].forEach(({ name, channel }) => {
+  it.live(`checks ${name} updates on the ${channel} channel`, () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem
+      const root = yield* fs.makeTempDirectoryScoped({ prefix: "opencode-updater-check-" })
+      const child = Bun.spawn(
+        [
+          process.execPath,
+          "test",
+          import.meta.path,
+          "--define",
+          'OPENCODE_VERSION="2.3.4"',
+          "--define",
+          `OPENCODE_CLI_NAME=${JSON.stringify(name)}`,
+          "--define",
+          `OPENCODE_CHANNEL=${JSON.stringify(channel)}`,
+          "--test-name-pattern",
+          "^update check respects ",
+        ],
+        {
+          cwd: path.join(import.meta.dir, ".."),
+          stdout: "ignore",
+          stderr: "pipe",
+          env: isolatedEnv(root, { BUN_RUNTIME_TRANSPILER_CACHE_PATH: "0" }),
+        },
+      )
+      const [code, stderr] = yield* Effect.promise(() => Promise.all([child.exited, new Response(child.stderr).text()]))
+      expect(code, stderr).toBe(0)
+      expect(stderr).toContain("3 pass")
+    }),
+  )
+})
+
+if (OPENCODE_VERSION === "2.3.4") {
+  ;(
+    [
+      { layout: undefined, owner: undefined, command: undefined },
+      { layout: "volta", owner: "Volta", command: "volta install " },
+      { layout: "mise", owner: "mise", command: "mise use -g npm:" },
+    ] as const
+  ).forEach(({ layout, owner, command }) => {
+    it.live(`update check respects ${layout ?? "unmanaged"} installation state`, () =>
+      Effect.gen(function* () {
+        const registry = { version: "2.3.4", status: 200 }
+        const test = yield* fixture(() => ({}), Updater.packageName, false, undefined, layout, registry)
+        if (OPENCODE_LOCAL) {
+          expect(yield* test.updater.check()).toEqual({
+            type: "unavailable",
+            message: "This build runs from a source checkout. Use an installed Shuvcode release to check for updates.",
+          })
+          expect(test.request).not.toHaveBeenCalled()
+          expect(test.commands).toEqual([])
+          return
+        }
+        expect(yield* test.updater.check()).toBeUndefined()
+        expect(test.request).toHaveBeenCalledTimes(1)
+        registry.version = "2.3.5"
+        expect(yield* test.updater.check()).toEqual(
+          owner
+            ? {
+                type: "unavailable",
+                message: `Shuvcode is managed by ${owner}. Update it with ${command}${Updater.packageName}@2.3.5`,
+              }
+            : { type: "available", version: "2.3.5" },
+        )
+        expect(test.request).toHaveBeenCalledTimes(2)
+        registry.version = "invalid"
+        expect((yield* test.updater.check().pipe(Effect.flip)).message).toBe("Invalid version: invalid")
+        registry.status = 503
+        const error = yield* test.updater.check().pipe(Effect.flip)
+        expect(error).toBeInstanceOf(Updater.UpgradeError)
+        expect(error.message).toBe("The npm registry returned HTTP 503.")
+        expect(test.commands).toEqual([])
+      }),
+    )
+  })
+}
 
 const installs = [
   {
