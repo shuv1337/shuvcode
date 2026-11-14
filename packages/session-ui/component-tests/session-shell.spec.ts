@@ -56,6 +56,22 @@ for (const [id, output] of [
   })
 }
 
+for (const [outcome, label] of [
+  ["nonzero", "Exit 1"],
+  ["timeout", "Timed out"],
+  ["killed", "Stopped"],
+]) {
+  story(`shows the new timeline's user-shell ${outcome} outcome without output`, async ({ mount }) => {
+    const root = await mount("timeline-next-user-command--live-command", { args: { outcome, output: false } })
+    const shell = root.locator('[data-component="session-shell-message"]')
+    await expect(shell).not.toContainText(label)
+    await root.getByRole("button", { name: "Complete command", exact: true }).click()
+    await expect(shell.getByText(label, { exact: true })).toBeVisible()
+    await expect(shell).toContainText("printf ready")
+    await expect(shell.locator('[data-slot="bash-result"]')).toHaveCount(0)
+  })
+}
+
 story("copies the shell command and its output separately", async ({ mount, page }) => {
   const root = await mount("current-session-terminal-work--expanded-shell")
   const shell = root.locator('[data-component="bash-output"]')
@@ -86,6 +102,8 @@ story("keeps Copied for two seconds after the latest click", async ({ mount, pag
   // The first click's reset falls due here, while the second click's feedback still runs.
   await page.clock.runFor(900)
   await expect(result.getByRole("button", { name: "Copied" })).toBeVisible()
+  await expect(page.getByRole("tooltip", { name: "Copied" })).toBeVisible()
   await page.clock.runFor(1_200)
   await expect(result.getByRole("button", { name: "Copy output", exact: true })).toBeVisible()
+  await expect(page.getByRole("tooltip")).toBeHidden()
 })

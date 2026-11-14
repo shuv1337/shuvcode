@@ -49,7 +49,8 @@ export type Request = VideoRequest<VideoModel<GoogleVideoOptions>>
 // 2. Token and response schemas
 // ---------------------------------------------------------------------------
 
-export const Token = Schema.Struct({ interactionID: Schema.String })
+/** The provider's job ID; it is all a later status, result or cancel call needs. */
+export const Token = Schema.String
 export type Token = Schema.Schema.Type<typeof Token>
 
 const Content = Schema.Struct({
@@ -128,11 +129,6 @@ const task = (request: Request) => {
 const fromRequest = Effect.fn("GoogleInteractionsVideo.fromRequest")(function* (request: Request) {
   if (request.end !== undefined && request.start === undefined)
     return yield* route.unsupported("video.end", `${route.name} reads a lone image as the start frame; send start too`)
-  if (request.sound === false)
-    return yield* route.unsupported(
-      "video.sound",
-      `${route.name} always generates audio and has no option to turn it off`,
-    )
   const media = yield* Effect.forEach(
     [request.start, request.end, ...(request.references ?? [])].filter(
       (asset): asset is Media.Asset => asset !== undefined,
@@ -168,7 +164,7 @@ const fromRequest = Effect.fn("GoogleInteractionsVideo.fromRequest")(function* (
 // ---------------------------------------------------------------------------
 
 const decodeStart = route.decodeStarted(Interaction, (value) => ({
-  token: { interactionID: value.id },
+  token: value.id,
   snapshot: { id: value.id, status: MediaProtocol.status(STATUS, value.status) },
 }))
 
@@ -179,7 +175,7 @@ const decodeStatus = Effect.fn("GoogleInteractionsVideo.decodeStatus")(function*
   context: MediaProtocol.PollContext<Token>,
 ) {
   const output = yield* decodeInteraction(response)
-  return { id: context.token.interactionID, status: MediaProtocol.status(STATUS, output.value.status) }
+  return { id: context.token, status: MediaProtocol.status(STATUS, output.value.status) }
 })
 
 const decodeResult = Effect.fn("GoogleInteractionsVideo.decodeResult")(function* (
@@ -189,7 +185,7 @@ const decodeResult = Effect.fn("GoogleInteractionsVideo.decodeResult")(function*
   const output = yield* decodeInteraction(response)
   const decoded = output.value
   const status = MediaProtocol.status(STATUS, decoded.status)
-  if (status === "running") return yield* output.pending(context.token.interactionID)
+  if (status === "running") return yield* output.pending(context.token)
   const errors = decoded.errors ?? []
   const codes = errors.flatMap((error) => {
     const code = errorCode(error.code)
@@ -197,7 +193,7 @@ const decodeResult = Effect.fn("GoogleInteractionsVideo.decodeResult")(function*
   })
   const messages = errors.flatMap((error) => (error.message?.trim() ? [error.message.trim()] : []))
   if (status === "cancelled")
-    return yield* output.ended("cancelled", `${route.name} interaction ${context.token.interactionID} was cancelled`)
+    return yield* output.ended("cancelled", `${route.name} interaction ${context.token} was cancelled`)
   if (status === "failed") {
     const message = `${route.name} generation failed${codes.length === 0 ? "" : ` (${codes.join(", ")})`}${messages.length === 0 ? "" : `: ${messages.join("\n")}`}`
     if (codes.some((code) => code === "CONTENT_BLOCKED" || GeminiGenerateContent.contentFiltered(code)))
@@ -250,7 +246,7 @@ const decodeResult = Effect.fn("GoogleInteractionsVideo.decodeResult")(function*
 // 7. Protocol and route
 // ---------------------------------------------------------------------------
 
-const interactionPath = (token: Token) => `${PATH}/${token.interactionID}`
+const interactionPath = (token: Token) => `${PATH}/${encodeURIComponent(token)}`
 
 export const protocol = MediaProtocol.queued<Request, VideoResponse, Token>(route, {
   token: Token,
@@ -261,7 +257,7 @@ export const protocol = MediaProtocol.queued<Request, VideoResponse, Token>(rout
 })
 
 export const model = (input: MediaRoute.ModelInput) =>
-  VideoModel.fromRoute<GoogleVideoOptions, Token>({ protocol, baseURL: DEFAULT_BASE_URL, path: PATH }, input)
+  VideoModel.fromRoute<GoogleVideoOptions>({ protocol, baseURL: DEFAULT_BASE_URL, path: PATH }, input)
 
 export const GoogleInteractionsVideo = {
   protocol,
