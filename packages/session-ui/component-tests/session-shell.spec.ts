@@ -62,14 +62,13 @@ for (const [outcome, label] of [
   ["killed", "Stopped"],
 ]) {
   story(`shows the new timeline's user-shell ${outcome} outcome without output`, async ({ mount }) => {
-    const root = await mount("current-session-terminal-work--live-user-command", {
-      args: { next: true, outcome, output: false },
-    })
+    const root = await mount("timeline-next-user-command--live-command", { args: { outcome, output: false } })
     const shell = root.locator('[data-component="session-shell-message"]')
     await expect(shell).not.toContainText(label)
     await root.getByRole("button", { name: "Complete command", exact: true }).click()
     await expect(shell.getByText(label, { exact: true })).toBeVisible()
     await expect(shell).toContainText("printf ready")
+    await expect(shell.locator('[data-slot="bash-result"]')).toHaveCount(0)
   })
 }
 
