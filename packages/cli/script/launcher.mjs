@@ -56,36 +56,35 @@ function supportsAvx2() {
 
 function isMusl() {
   if (platform !== "linux") return false
-  try {
-    if (fs.existsSync("/etc/alpine-release")) return true
-    const result = childProcess.spawnSync("ldd", ["--version"], { encoding: "utf8" })
-    return `${result.stdout || ""}${result.stderr || ""}`.toLowerCase().includes("musl")
-  } catch {
-    return false
-  }
+  if (fs.existsSync("/etc/alpine-release")) return true
+  const result = childProcess.spawnSync("ldd", ["--version"], { encoding: "utf8", timeout: 1500 })
+  const output = `${result.stdout || ""}${result.stderr || ""}`.toLowerCase()
+  if (output.includes("musl")) return true
+  if (output.includes("glibc") || output.includes("gnu libc")) return false
+  return !process.report?.getReport?.()?.header?.glibcVersionRuntime
 }
 
 function packageNames() {
   const baseline = arch === "x64" && !supportsAvx2()
-  const names =
-    platform === "linux"
-      ? isMusl()
-        ? arch === "x64"
-          ? baseline
-            ? [`${base}-baseline-musl`, `${base}-musl`, `${base}-baseline`, base]
-            : [`${base}-musl`, `${base}-baseline-musl`, base, `${base}-baseline`]
-          : [`${base}-musl`, base]
-        : arch === "x64"
-          ? baseline
-            ? [`${base}-baseline`, base, `${base}-baseline-musl`, `${base}-musl`]
-            : [base, `${base}-baseline`, `${base}-musl`, `${base}-baseline-musl`]
-          : [base, `${base}-musl`]
-      : arch === "x64"
-        ? baseline
-          ? [`${base}-baseline`, base]
-          : [base, `${base}-baseline`]
-        : [base]
-  return names.filter((name) => dependencies[name])
+  const musl = platform === "linux" && isMusl()
+  // A binary built for the other libc fails at exec time with a loader error, so never fall back across libc.
+  const names = musl
+    ? arch === "x64"
+      ? baseline
+        ? [`${base}-baseline-musl`, `${base}-musl`]
+        : [`${base}-musl`, `${base}-baseline-musl`]
+      : [`${base}-musl`]
+    : arch === "x64"
+      ? baseline
+        ? [`${base}-baseline`, base]
+        : [base, `${base}-baseline`]
+      : [base]
+  const candidates = names.filter((name) => dependencies[name])
+  if (candidates.length === 0)
+    fail(
+      `${packageJson.name}@${packageJson.version} does not provide a ${platform === "linux" ? `Linux ${musl ? "musl" : "glibc"}` : platform} binary for ${arch}.`,
+    )
+  return candidates
 }
 
 function resolveBinary(name) {
@@ -94,7 +93,9 @@ function resolveBinary(name) {
   // which would silently run the previous release under the new launcher.
   const version = JSON.parse(fs.readFileSync(packagePath, "utf8")).version
   if (version !== dependencies[name]) {
-    const error = new Error(`${name} is ${version}, expected ${dependencies[name]}`)
+    const error = new Error(
+      `${name} is ${version}, expected ${dependencies[name]}. Reinstall ${packageJson.name}@${packageJson.version}.`,
+    )
     error.code = "STALE_PLATFORM_BINARY"
     throw error
   }
@@ -109,23 +110,30 @@ function fail(message) {
 }
 
 const names = packageNames()
-const binary = (() => {
-  try {
-    return names.reduce((result, name) => {
-      if (result) return result
-      try {
-        return resolveBinary(name)
-      } catch (error) {
-        if (error && error.code === "STALE_PLATFORM_BINARY") throw error
-        return undefined
-      }
-    }, undefined)
-  } catch (error) {
-    fail(error instanceof Error ? error.message : String(error))
-  }
-})()
+// A stale candidate (for example one hoisted into a parent node_modules) only fails the launch
+// when no other compatible candidate resolves at the expected version.
+const resolved = names.reduce(
+  (result, name) => {
+    if (result.binary) return result
+    try {
+      return { ...result, binary: resolveBinary(name) }
+    } catch (error) {
+      if (error && error.code === "STALE_PLATFORM_BINARY") return { ...result, stale: result.stale ?? error }
+      if (error && error.code === "MODULE_NOT_FOUND") return result
+      return { ...result, broken: result.broken ?? error }
+    }
+  },
+  { binary: undefined, stale: undefined, broken: undefined },
+)
 
-if (!binary) fail(`Failed to find Shuvcode binary package. Reinstall ${packageJson.name}.`)
+if (!resolved.binary && resolved.stale) fail(resolved.stale.message)
+if (!resolved.binary && resolved.broken)
+  fail(`${resolved.broken.message}. Reinstall ${packageJson.name}@${packageJson.version}.`)
+if (!resolved.binary)
+  fail(
+    `Missing platform binary package ${names[0]}@${dependencies[names[0]]}. Reinstall ${packageJson.name}@${packageJson.version}.`,
+  )
+const binary = resolved.binary
 
 const result = childProcess.spawnSync(binary, process.argv.slice(2), {
   stdio: "inherit",
