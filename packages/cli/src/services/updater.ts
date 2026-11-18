@@ -2,7 +2,7 @@ import { Global } from "@opencode/util/global"
 import { AppProcess } from "@opencode/util/process"
 import { EffectFlock } from "@opencode/util/effect-flock"
 import { OPENCODE_ARTIFACT, OPENCODE_CHANNEL, OPENCODE_LOCAL, OPENCODE_VERSION } from "../version"
-import { Context, Duration, Effect, FileSystem, Layer, Ref } from "effect"
+import { Context, Duration, Effect, FileSystem, Layer, Option, Ref, Schema } from "effect"
 import { ChildProcess } from "effect/process"
 import { parse, type ParseError } from "jsonc-parser"
 import path from "node:path"
@@ -118,6 +118,10 @@ export interface Manifest {
 // only knows about the wrapper package that pulled it in.
 const platformPackage = /^(shuvcode(?:-node)?)-(?:darwin|linux|windows)-(?:x64|arm64|arm)(?:-baseline)?(?:-musl)?$/
 
+const decodePlatformMetadata = Schema.decodeUnknownOption(
+  Schema.fromJsonString(Schema.Struct({ dist: Schema.Struct({ tarball: Schema.String }) })),
+)
+
 export function installedPackageName(executable: string, manifest: Manifest): string | undefined {
   const directory = path.dirname(path.dirname(executable))
   if (/^shuvcode(?:-node)?$/.test(manifest.name)) {
@@ -205,8 +209,9 @@ const make = Effect.gen(function* () {
   })
 
   const exec = Effect.fnUntraced(function* (command: string[], timeout: Duration.Input = "30 seconds") {
+    // npm and the launchers it links run under the Node in the same prefix, which may not be on PATH.
     const options =
-      command[0] === prefixNpm
+      npmBin && path.dirname(command[0]) === npmBin
         ? { env: { PATH: [npmBin, process.env.PATH].filter(Boolean).join(path.delimiter) }, extendEnv: true }
         : undefined
     return yield* appProcess
@@ -307,6 +312,88 @@ const make = Effect.gen(function* () {
 
   const latest = () => release().pipe(Effect.map((data) => data.version))
 
+  // Preserve baseline/musl variants from the running binary's manifest.
+  const resolveTargetPlatform = (targetPackage: string) =>
+    installed?.name && platformPackage.test(installed.manifest)
+      ? installed.manifest.replace(installed.name, targetPackage)
+      : `${targetPackage}-${process.platform === "win32" ? "windows" : process.platform}-${process.arch}`
+
+  // npm may serve a wrapper's dist-tag before this platform's package or archive. Installing then
+  // leaves the wrapper without a binary, so check both before touching the installation.
+  const verifyPlatformAvailable = Effect.fnUntraced(function* (platform: string, version: string) {
+    const request = (url: string, method: "GET" | "HEAD") =>
+      Effect.tryPromise({
+        try: (signal) =>
+          fetch(url, {
+            method,
+            headers: { "User-Agent": `shuvcode/${OPENCODE_VERSION}`, "Cache-Control": "no-cache" },
+            signal: AbortSignal.any([signal, AbortSignal.timeout(10_000)]),
+          }),
+        catch: (cause) =>
+          new UpgradeError(
+            {
+              title: "Could not check for Shuvcode updates",
+              detail: errorDetail(cause),
+              retry: "Check your network, then run shuvcode upgrade again.",
+            },
+            { cause },
+          ),
+      })
+    const notReady = (detail: string) =>
+      new UpgradeError({
+        title: "Shuvcode update is not ready for this platform yet",
+        detail,
+        retry:
+          "Wait a few minutes for npm to finish publishing all platform packages, then run shuvcode upgrade again.",
+      })
+    const cancelBody = (res: Response) =>
+      Effect.promise(() => res.body?.cancel() ?? Promise.resolve()).pipe(Effect.ignore)
+    const response = yield* request(
+      `https://registry.npmjs.org/${encodeURIComponent(platform)}/${encodeURIComponent(version)}`,
+      "GET",
+    )
+    if (response.status !== 200) {
+      yield* cancelBody(response)
+      return yield* Effect.fail(
+        notReady(`The npm registry returned HTTP ${response.status} for ${platform}@${version}.`),
+      )
+    }
+    const text = yield* Effect.tryPromise({
+      try: () => response.text(),
+      catch: (cause) =>
+        new UpgradeError(
+          {
+            title: "Could not check for Shuvcode updates",
+            detail: errorDetail(cause),
+            retry: "Check your network, then run shuvcode upgrade again.",
+          },
+          { cause },
+        ),
+    })
+    const tarball = Option.getOrUndefined(decodePlatformMetadata(text))?.dist.tarball
+    if (!tarball?.startsWith("https://"))
+      return yield* Effect.fail(
+        notReady(`The npm registry metadata for ${platform}@${version} is missing its binary archive URL.`),
+      )
+    const tarballResponse = yield* request(tarball, "HEAD")
+    yield* cancelBody(tarballResponse)
+    if (tarballResponse.status !== 200)
+      return yield* Effect.fail(
+        notReady(`The platform binary archive for ${platform}@${version} returned HTTP ${tarballResponse.status}.`),
+      )
+  })
+
+  const checkVersion = Effect.fnUntraced(function* (executable: string, version: string) {
+    const result = yield* exec([executable, "--version"])
+    if (result.code !== 0) return yield* Effect.fail(new Error(resultDetail(result)))
+    const actual = stripVTControlCharacters(result.stdout)
+      .trim()
+      .replace(/^shuvcode(?:-node)?\s+/, "")
+      .replace(/^v/, "")
+    if (actual !== version)
+      return yield* Effect.fail(new Error(`Expected version ${version}, received ${actual || "no version"}.`))
+  })
+
   const managedError = (owner: { name: string; command: string }, target: string) =>
     new UpgradeError({
       title: `Shuvcode is managed by ${owner.name}`,
@@ -382,6 +469,8 @@ const make = Effect.gen(function* () {
     if (installedPackage && targetPackage !== installedPackage && (method === "pnpm" || method === "yarn")) {
       return yield* Effect.fail(new Error(`Reinstall ${target} with ${method} to migrate from ${installedPackage}.`))
     }
+    const platform = resolveTargetPlatform(targetPackage)
+    yield* verifyPlatformAvailable(platform, version)
     const commands: Record<Exclude<Method, "bun">, string[]> = {
       // Keep the old package: uninstalling it can unlink the replacement command.
       npm: [
@@ -412,11 +501,6 @@ const make = Effect.gen(function* () {
           const cache = yield* temporaryDirectory("update-")
           // Optional dependencies can be skipped even when Bun reports success. Make
           // the running platform a required, version-pinned global dependency instead.
-          // Preserve baseline/musl variants from the running binary's manifest.
-          const platform =
-            installed?.name && platformPackage.test(installed.manifest)
-              ? installed.manifest.replace(installed.name, targetPackage)
-              : `${targetPackage}-${process.platform === "win32" ? "windows" : process.platform}-${process.arch}`
           const binaryTarget = `${platform}@${version}`
           const command = ["bun", "install", "--global", "--trust", target, binaryTarget]
           return yield* retaining(
@@ -441,25 +525,29 @@ const make = Effect.gen(function* () {
                 if (bin.code !== 0) return yield* Effect.fail(new Error(resultDetail(bin)))
                 if (!path.isAbsolute(bin.stdout.trim()))
                   return yield* Effect.fail(new Error("Bun did not report an absolute global bin directory."))
-                const executable = path.join(
-                  bin.stdout.trim(),
-                  `${targetPackage}${process.platform === "win32" ? ".exe" : ""}`,
+                yield* checkVersion(
+                  path.join(bin.stdout.trim(), `${targetPackage}${process.platform === "win32" ? ".exe" : ""}`),
+                  version,
                 )
-                const result = yield* exec([executable, "--version"])
-                if (result.code !== 0) return yield* Effect.fail(new Error(resultDetail(result)))
-                const actual = stripVTControlCharacters(result.stdout)
-                  .trim()
-                  .replace(/^shuvcode(?:-node)?\s+/, "")
-                  .replace(/^v/, "")
-                if (actual !== version)
-                  return yield* Effect.fail(
-                    new Error(`Expected version ${version}, received ${actual || "no version"}.`),
-                  )
               }).pipe(Effect.mapError((cause) => failure(errorDetail(cause))))
             }),
           )
         }
-        return yield* retaining(runUpgrade({ method, command: commands[method] }))
+        yield* retaining(runUpgrade({ method, command: commands[method] }))
+        // npm can also skip a platform package and still exit 0. With a known owning prefix,
+        // run the linked command there so the launcher proves the new binary runs.
+        if (method !== "npm" || !npmBin) return
+        yield* checkVersion(path.join(npmBin, targetPackage), version).pipe(
+          Effect.mapError(
+            (cause) =>
+              new UpgradeError({
+                title: "Shuvcode upgrade verification failed",
+                detail: `npm did not provide a working ${platform}@${version}. ${errorDetail(cause)}`,
+                command: commands.npm.join(" "),
+                retry: "Run the command above to reinstall Shuvcode, then run shuvcode --version.",
+              }),
+          ),
+        )
       }),
     ).pipe(
       Effect.mapError((cause) =>

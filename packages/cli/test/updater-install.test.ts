@@ -31,7 +31,10 @@ function fixture(
   failCleanup = false,
   manifest: Updater.Manifest = { name, bin: { shuvcode: "bin/shuvcode" } },
   layout?: "prefix" | "platform-prefix" | "volta" | "mise",
-  registry = { version: "2.3.4", status: 200 },
+  registry: { version: string; status: number; platformStatus?: number; tarballStatus?: number } = {
+    version: "2.3.4",
+    status: 200,
+  },
 ) {
   return Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem
@@ -61,9 +64,28 @@ function fixture(
       Effect.sync(() =>
         spyOn(globalThis, "fetch").mockImplementation(
           Object.assign(
-            async (input: string | URL | Request) => {
-              expect(input).toBe(`https://registry.npmjs.org/${name}/${encodeURIComponent(OPENCODE_CHANNEL)}`)
-              return Response.json({ version: registry.version }, { status: registry.status })
+            async (input: string | URL | Request, init?: RequestInit) => {
+              const url = String(input)
+              if (url === `https://registry.npmjs.org/${name}/${encodeURIComponent(OPENCODE_CHANNEL)}`)
+                return Response.json({ version: registry.version }, { status: registry.status })
+              const archive = /^https:\/\/registry\.npmjs\.org\/([^/]+)\/-\/\1-([^/]+)\.tgz$/.exec(url)
+              if (archive && init?.method === "HEAD")
+                return new Response(null, { status: registry.tarballStatus ?? 200 })
+              const platform = /^https:\/\/registry\.npmjs\.org\/([^/]+)\/([^/]+)$/.exec(url)
+              if (platform && (init?.method ?? "GET") === "GET") {
+                const packageName = decodeURIComponent(platform[1])
+                const version = decodeURIComponent(platform[2])
+                return Response.json(
+                  {
+                    version,
+                    dist: {
+                      tarball: `https://registry.npmjs.org/${packageName}/-/${packageName}-${version}.tgz`,
+                    },
+                  },
+                  { status: registry.platformStatus ?? 200 },
+                )
+              }
+              throw new Error(`Unexpected request: ${init?.method ?? "GET"} ${url}`)
             },
             { preconnect: fetch.preconnect },
           ),
@@ -183,6 +205,7 @@ unix("npm updates and removes the running copy through its owning prefix", () =>
       test.root,
       "shuvcode",
     ])
+    expect(test.commands.at(-1)).toEqual([path.join(test.root, "bin", "shuvcode"), "--version"])
     expect(paths).toHaveLength(2)
     expect(paths.every((value) => value?.startsWith(`${path.join(test.root, "bin")}${path.delimiter}`))).toBe(true)
   }),
@@ -190,7 +213,7 @@ unix("npm updates and removes the running copy through its owning prefix", () =>
 unix("npm locates the owning prefix through the fork's nested native platform package", () =>
   Effect.gen(function* () {
     const test = yield* fixture(
-      () => ({ stdout: Buffer.from("shuvcode") }),
+      (command) => (command.args[0] === "--version" ? {} : { stdout: Buffer.from("shuvcode") }),
       "shuvcode",
       false,
       { name: hostPackage },
@@ -198,18 +221,75 @@ unix("npm locates the owning prefix through the fork's nested native platform pa
     )
     expect(yield* test.updater.method()).toBe("npm")
     yield* test.updater.upgrade("npm", "2.2.7-shuv.1")
-    expect(test.commands.at(-1)).toEqual([
-      path.join(test.root, "bin", "npm"),
-      "install",
-      "--global",
-      "--prefix",
-      test.root,
-      "--allow-scripts=shuvcode",
-      "--force",
-      "shuvcode@2.2.7-shuv.1",
+    expect(test.commands.slice(-2)).toEqual([
+      [
+        path.join(test.root, "bin", "npm"),
+        "install",
+        "--global",
+        "--prefix",
+        test.root,
+        "--allow-scripts=shuvcode",
+        "--force",
+        "shuvcode@2.2.7-shuv.1",
+      ],
+      [path.join(test.root, "bin", "shuvcode"), "--version"],
     ])
   }),
 )
+;[
+  { name: "a stale version", result: { stdout: Buffer.from("shuvcode v2.2.6-shuv.1\n") } },
+  { name: "a failing launcher", result: { exitCode: 1, stderr: Buffer.from("Missing platform binary package") } },
+].forEach(({ name, result }) => {
+  unix(`npm does not report success when the owning prefix runs ${name}`, () =>
+    Effect.gen(function* () {
+      const test = yield* fixture(
+        (command) => (command.args[0] === "--version" ? result : {}),
+        "shuvcode",
+        false,
+        undefined,
+        "prefix",
+      )
+      const error = yield* test.updater.upgrade("npm", "2.2.7-shuv.1").pipe(Effect.flip)
+      expect(error).toBeInstanceOf(Updater.UpgradeError)
+      if (!(error instanceof Updater.UpgradeError)) return
+      expect(error.title).toBe("Shuvcode upgrade verification failed")
+      expect(error.detail).toStartWith(`npm did not provide a working ${hostPackage}@2.2.7-shuv.1. `)
+      expect(error.command).toBe(
+        `${path.join(test.root, "bin", "npm")} install --global --prefix ${test.root} --allow-scripts=shuvcode --force shuvcode@2.2.7-shuv.1`,
+      )
+      expect(test.commands.at(-1)).toEqual([path.join(test.root, "bin", "shuvcode"), "--version"])
+    }),
+  )
+})
+;[
+  { name: "platform package", registry: { platformStatus: 404 }, detail: "The npm registry returned HTTP 404 for" },
+  {
+    name: "platform archive",
+    registry: { tarballStatus: 404 },
+    detail: "The platform binary archive for",
+  },
+].forEach(({ name, registry, detail }) => {
+  it.live(`every method stops before installing while the ${name} is not served`, () =>
+    Effect.gen(function* () {
+      const test = yield* fixture(() => ({}), "shuvcode", false, undefined, undefined, {
+        version: "2.3.4",
+        status: 200,
+        ...registry,
+      })
+      yield* Effect.forEach(Updater.methods, (method) =>
+        Effect.gen(function* () {
+          const error = yield* test.updater.upgrade(method, "2.3.5").pipe(Effect.flip)
+          expect(error).toBeInstanceOf(Updater.UpgradeError)
+          if (!(error instanceof Updater.UpgradeError)) return
+          expect(error.title).toBe("Shuvcode update is not ready for this platform yet")
+          expect(error.detail).toStartWith(`${detail} ${hostPackage}@2.3.5`)
+        }),
+      )
+      expect(test.commands).toEqual([])
+      expect(yield* test.fs.exists(test.global.cache)).toBe(false)
+    }),
+  )
+})
 ;(["volta", "mise"] as const).forEach((layout) => {
   it.live(`leaves ${layout}-managed installations to their owner`, () =>
     Effect.gen(function* () {

@@ -176,10 +176,13 @@ jobs:
           path: ${{ runner.temp }}/gpt-live-host/
           if-no-files-found: error
 
-  publish:
+  # Wrappers pin every platform package as an exact optional dependency. Publish the platform
+  # packages first and wait until npm serves all of them, so no install can resolve a wrapper
+  # whose binaries are missing. The wrapper tarballs are built here and published unchanged later.
+  stage-npm:
     if: github.repository == 'shuv1337/shuvcode'
     permissions:
-      contents: write
+      contents: read
       id-token: write
     needs:
       - typecheck
@@ -188,7 +191,118 @@ jobs:
       - build-node-cli
       - build-gpt-live-helper
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      - uses: ./.github/actions/setup-bun
+        with:
+          bun-version: "1.4.4"
+          install-flags: --frozen-lockfile
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: "24"
+
+      - name: Install npm with trusted publishing support
+        run: npm install --global npm@11.5.1
+
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: shuvcode-cli
+          path: packages/cli/dist
+
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: shuvcode-node-cli
+          path: packages/cli/dist/node
+
+      - name: Publish platform packages and pack wrappers
+        run: bun packages/cli/script/publish.ts --phase=platforms --pack-wrappers="$RUNNER_TEMP/shuvcode-wrappers"
+        env:
+          OPENCODE_VERSION: ${{ env.OPENCODE_VERSION }}
+          OPENCODE_CHANNEL: ${{ env.OPENCODE_CHANNEL }}
+          OPENCODE_RELEASE: ${{ env.OPENCODE_RELEASE }}
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: shuvcode-wrappers
+          path: ${{ runner.temp }}/shuvcode-wrappers/*.tgz
+          if-no-files-found: error
+
+  # Install the staged wrappers from their tarballs, so the platform packages come from the
+  # registry exactly as a user's install would fetch them.
+  smoke-npm:
+    if: github.repository == 'shuv1337/shuvcode'
+    name: smoke-npm ${{ matrix.label }}
+    needs:
+      - stage-npm
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - label: linux-arm64-glibc
+            os: ubuntu-22.04-arm
+            bun_pkg: shuvcode-linux-arm64
+            node_pkg: shuvcode-node-linux-arm64
+          - label: linux-x64-glibc
+            os: ubuntu-latest
+            bun_pkg: shuvcode-linux-x64
+            node_pkg: shuvcode-node-linux-x64
+    steps:
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: "24"
+
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: shuvcode-wrappers
+          path: ${{ runner.temp }}/shuvcode-wrappers
+
+      - name: Smoke install staged shuvcode and shuvcode-node
+        shell: bash
+        env:
+          VERSION: ${{ inputs.version }}
+          BUN_PKG: ${{ matrix.bun_pkg }}
+          NODE_PKG: ${{ matrix.node_pkg }}
+        run: |
+          set -euo pipefail
+          expected="${VERSION#v}"
+          npm install --global --prefix "$RUNNER_TEMP/prefix-bun" --cache "$RUNNER_TEMP/cache-bun" \
+            "$RUNNER_TEMP/shuvcode-wrappers/shuvcode-${VERSION}.tgz"
+          test -f "$RUNNER_TEMP/prefix-bun/lib/node_modules/shuvcode/node_modules/${BUN_PKG}/package.json"
+          actual="$("$RUNNER_TEMP/prefix-bun/bin/shuvcode" --version)"
+          actual="${actual#shuvcode }"
+          test "${actual#v}" = "$expected"
+          help="$("$RUNNER_TEMP/prefix-bun/bin/shuvcode" serve --help 2>&1)"
+          grep -q -- --stdio <<<"$help"
+
+          npm install --global --prefix "$RUNNER_TEMP/prefix-node" --cache "$RUNNER_TEMP/cache-node" \
+            "$RUNNER_TEMP/shuvcode-wrappers/shuvcode-node-${VERSION}.tgz"
+          test -f "$RUNNER_TEMP/prefix-node/lib/node_modules/shuvcode-node/node_modules/${NODE_PKG}/package.json"
+          actual="$("$RUNNER_TEMP/prefix-node/bin/shuvcode-node" --version)"
+          actual="${actual#shuvcode-node }"
+          test "${actual#v}" = "$expected"
+          help="$("$RUNNER_TEMP/prefix-node/bin/shuvcode-node" serve --help 2>&1)"
+          grep -q -- --stdio <<<"$help"
+
+  publish:
+    if: github.repository == 'shuv1337/shuvcode'
+    permissions:
+      contents: write
+      id-token: write
+    needs:
+      - stage-npm
+      - smoke-npm
+      - build-cli
+      - build-node-cli
+      - build-gpt-live-helper
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
 
@@ -217,12 +331,47 @@ jobs:
           name: shuvcode-node-cli
           path: packages/cli/dist/node
 
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: shuvcode-wrappers
+          path: ${{ runner.temp }}/shuvcode-wrappers
+
       - name: Publish npm packages
-        run: bun packages/cli/script/publish.ts
+        run: bun packages/cli/script/publish.ts --phase=wrappers --wrappers-dir="$RUNNER_TEMP/shuvcode-wrappers"
         env:
           OPENCODE_VERSION: ${{ env.OPENCODE_VERSION }}
           OPENCODE_CHANNEL: ${{ env.OPENCODE_CHANNEL }}
           OPENCODE_RELEASE: ${{ env.OPENCODE_RELEASE }}
+
+      - name: Verify published dist-tag install
+        shell: bash
+        env:
+          CHANNEL: ${{ env.OPENCODE_CHANNEL }}
+          VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          expected="${VERSION#v}"
+          for attempt in 1 2 3 4 5 6; do
+            prefix="$RUNNER_TEMP/prefix-live-$attempt"
+            cache="$RUNNER_TEMP/cache-live-$attempt"
+            if npm install --global --prefer-online --prefix "$prefix" --cache "$cache" "shuvcode@${CHANNEL}" "shuvcode-node@${CHANNEL}" &&
+              bun_actual="$("$prefix/bin/shuvcode" --version)" &&
+              node_actual="$("$prefix/bin/shuvcode-node" --version)"; then
+              bun_actual="${bun_actual#shuvcode }"
+              node_actual="${node_actual#shuvcode-node }"
+              if [ "${bun_actual#v}" = "$expected" ] && [ "${node_actual#v}" = "$expected" ]; then
+                exit 0
+              fi
+              echo "Attempt ${attempt}: got shuvcode=${bun_actual}, shuvcode-node=${node_actual}; expected ${expected}"
+            else
+              echo "Attempt ${attempt}: live dist-tag install check failed"
+            fi
+            if [ "$attempt" -eq 6 ]; then
+              echo "Timed out waiting for live dist-tag install of ${expected}" >&2
+              exit 1
+            fi
+            sleep 15
+          done
 
       - name: Package GitHub release archives
         run: |
