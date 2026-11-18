@@ -217,8 +217,14 @@ describe("GoogleAntigravityWire", () => {
     expect(enums.get("gemini-3.8-flash-high")).toBe("MODEL_PLACEHOLDER_M318")
   })
 
-  test("suppresses every shipped Carbon and Hydrogen variant from their disabled catalog entries", () => {
+  test("suppresses every shipped Neon, Carbon and Hydrogen variant from their disabled catalog entries", () => {
     const disabled = GoogleAntigravityWire.disabledModelsFrom([
+      {
+        id: "gemini-4-neon-disabled",
+        modelEnum: "MODEL_PLACEHOLDER_M536",
+        provider: "MODEL_PROVIDER_GOOGLE",
+        disabled: true,
+      },
       {
         id: "gemini-4-carbon-disabled",
         modelEnum: "MODEL_PLACEHOLDER_M670",
@@ -234,26 +240,34 @@ describe("GoogleAntigravityWire", () => {
     ])
     const gemini4 = GoogleAntigravityWire.shippedModels
       .map((model) => model.id)
-      .filter((id) => id.startsWith("gemini-4-carbon-") || id.startsWith("gemini-4-hydrogen-"))
-    expect(gemini4).toHaveLength(7)
+      .filter(
+        (id) =>
+          id.startsWith("gemini-4-neon-") || id.startsWith("gemini-4-carbon-") || id.startsWith("gemini-4-hydrogen-"),
+      )
+    expect(gemini4).toHaveLength(11)
     expect(gemini4.filter((id) => !disabled.has(id))).toEqual([])
     expect(disabled.has("gemini-4-argon-high")).toBe(false)
   })
 
   test("ships the Gemini 4 and gemini-3.8-flash variants with authoritative enums and forwards IDs unchanged", () => {
     const ids = GoogleAntigravityWire.shippedModels.map((model) => model.id)
+    expect(ids).not.toContain("gemini-4-neon")
     expect(ids).not.toContain("gemini-4-argon")
     expect(ids).not.toContain("gemini-4-carbon")
     expect(ids).not.toContain("gemini-4-hydrogen")
     expect(
       Object.fromEntries(
-        ["carbon", "hydrogen"].flatMap((family) =>
+        ["neon", "carbon", "hydrogen"].flatMap((family) =>
           ids
             .filter((id) => id.startsWith(`gemini-4-${family}-`))
             .map((id) => [id, GoogleAntigravityWire.modelEnumDefaults.get(id)]),
         ),
       ),
     ).toEqual({
+      "gemini-4-neon-xhigh": "MODEL_PLACEHOLDER_M535",
+      "gemini-4-neon-high": "MODEL_PLACEHOLDER_M532",
+      "gemini-4-neon-medium": "MODEL_PLACEHOLDER_M533",
+      "gemini-4-neon-low": "MODEL_PLACEHOLDER_M534",
       "gemini-4-carbon-high": "MODEL_PLACEHOLDER_M427",
       "gemini-4-carbon-medium": "MODEL_PLACEHOLDER_M437",
       "gemini-4-carbon-low": "MODEL_PLACEHOLDER_M438",
@@ -270,6 +284,10 @@ describe("GoogleAntigravityWire", () => {
     expect(GoogleAntigravityWire.modelEnumDefaults.get("gemini-3.8-flash-medium")).toBe("MODEL_PLACEHOLDER_M319")
     expect(GoogleAntigravityWire.modelEnumDefaults.get("gemini-3.8-flash-low")).toBe("MODEL_PLACEHOLDER_M320")
     for (const [model, level] of [
+      ["gemini-4-neon-xhigh", "xhigh"],
+      ["gemini-4-neon-high", "high"],
+      ["gemini-4-neon-medium", "medium"],
+      ["gemini-4-neon-low", "low"],
       ["gemini-4-argon-high", "high"],
       ["gemini-4-argon-medium", "medium"],
       ["gemini-4-argon-low", "low"],
