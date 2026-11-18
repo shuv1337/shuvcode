@@ -21,6 +21,10 @@ export type ShippedModel = {
 }
 
 export const shippedModels: readonly ShippedModel[] = [
+  { id: "gemini-4-neon-xhigh", name: "Gemini 4 Neon (XHigh)", modelEnum: "MODEL_PLACEHOLDER_M535" },
+  { id: "gemini-4-neon-high", name: "Gemini 4 Neon (High)", modelEnum: "MODEL_PLACEHOLDER_M532" },
+  { id: "gemini-4-neon-medium", name: "Gemini 4 Neon (Medium)", modelEnum: "MODEL_PLACEHOLDER_M533" },
+  { id: "gemini-4-neon-low", name: "Gemini 4 Neon (Low)", modelEnum: "MODEL_PLACEHOLDER_M534" },
   { id: "gemini-4-carbon-high", name: "Gemini 4 Carbon (High)", modelEnum: "MODEL_PLACEHOLDER_M427" },
   { id: "gemini-4-carbon-medium", name: "Gemini 4 Carbon (Medium)", modelEnum: "MODEL_PLACEHOLDER_M437" },
   { id: "gemini-4-carbon-low", name: "Gemini 4 Carbon (Low)", modelEnum: "MODEL_PLACEHOLDER_M438" },
