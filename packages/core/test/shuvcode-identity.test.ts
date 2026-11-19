@@ -63,13 +63,13 @@ const expectedShuvcodeTools = [
   "artifact_delete",
   "list_mcp_resources",
   "read_mcp_resource",
-  "watch_mcp_event",
+  "list_mcp_events",
 ] as const
 
 const expectedMcpPermissions = {
   shuvcode_list_mcp_resources: "opencode_list_mcp_resources",
   shuvcode_read_mcp_resource: "opencode_read_mcp_resource",
-  shuvcode_watch_mcp_event: "opencode_watch_mcp_event",
+  shuvcode_list_mcp_events: "opencode_list_mcp_events",
 } as const
 
 const forbiddenAutomationTools = [
@@ -120,6 +120,7 @@ const npmLayer = Layer.succeed(
     resolve: (name) => Effect.succeed({ directory: "", name }),
     check: () => Effect.succeed(false),
     update: (name) => Effect.succeed({ directory: "", name }),
+    reject: () => Effect.succeed(false),
     which: () => Effect.undefined,
   }),
 )
@@ -133,6 +134,7 @@ const generateLayer = Layer.succeed(
     video: {
       start: () => Effect.die("unused"),
       status: () => Effect.die("unused"),
+      cancel: () => Effect.die("unused"),
       result: () => Effect.die("unused"),
     },
   }),
@@ -214,13 +216,21 @@ describe("shuvcode fork identity", () => {
         model: Model.Ref.make({ providerID: Provider.ID.make("test"), id: Model.ID.make("gpt-5") }),
         system: [SystemPart.make(SessionSystemPrompt.make(["shell", "write", "edit"]))],
         messages: [],
-        tools: {},
+        tools: { execute: { description: "execute", input: {} } },
         options: {},
       }
       yield* hooks.trigger("session", "context", event)
       const combinedSystem = event.system.map((part) => part.text).join("\n")
       expect(combinedSystem).toContain("tools.shuvcode.session_move")
       expect(combinedSystem).not.toContain("tools.opencode")
+
+      const direct: SessionHooks["context"] = {
+        ...event,
+        system: [],
+        tools: { shuvcode_session_move: { description: "move", input: {} } },
+      }
+      yield* hooks.trigger("session", "context", direct)
+      expect(direct.system.map((part) => part.text).join("\n")).toContain("`shuvcode_session_move`")
     }),
   )
 
