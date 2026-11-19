@@ -96,6 +96,7 @@ const client = Layer.mock(LLMClient.Service)({
 })
 const resolvedRequests: Array<Parameters<SessionRunnerModel.Interface["resolve"]>[2]> = []
 const models = Layer.mock(SessionRunnerModel.Service)({
+  select: (session) => Effect.fail(new SessionRunnerModel.ModelNotSelectedError({ sessionID: session.id })),
   resolve: (_session, _available, request) =>
     Effect.sync(() => resolvedRequests.push(request)).pipe(
       Effect.as(

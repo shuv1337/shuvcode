@@ -36,6 +36,13 @@ export type Error = ModelNotSelectedError | ModelUnavailableError | ModelResolve
 export type Resolved = ModelResolver.Resolved
 
 export interface Interface {
+  readonly select: (
+    session: SessionSchema.Info,
+    available: () => Effect.Effect<ReadonlyArray<Model.Info>>,
+  ) => Effect.Effect<
+    { readonly info: Model.Info; readonly variant: Model.VariantID | undefined },
+    ModelNotSelectedError | ModelUnavailableError
+  >
   /**
    * Resolves the Session model, then the selected agent's configured model, then the catalog default.
    * Availability is sampled lazily for each explicitly selected model resolution.
@@ -105,6 +112,7 @@ const layer = Layer.effect(
       return yield* new ModelNotSelectedError({ sessionID: session.id })
     })
     return Service.of({
+      select,
       resolve: Effect.fn("SessionRunnerModel.resolve")(function* (session, available, request) {
         const selected = yield* select(session, available)
         const ref = Model.Ref.make({
