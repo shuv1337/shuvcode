@@ -46,8 +46,6 @@ import { permissionLayer } from "./lib/permission"
 import { codeModeListings } from "./lib/tool"
 
 const expectedShuvcodeTools = [
-  "session_rename",
-  "session_move",
   "worktree_create",
   "worktree_list",
   "worktree_remove",
@@ -66,6 +64,8 @@ const expectedShuvcodeTools = [
   "list_mcp_events",
 ] as const
 
+const expectedSessionTools = ["move", "rename"] as const
+
 const expectedMcpPermissions = {
   shuvcode_list_mcp_resources: "opencode_list_mcp_resources",
   shuvcode_read_mcp_resource: "opencode_read_mcp_resource",
@@ -77,8 +77,8 @@ const forbiddenAutomationTools = [
   "shuvcode.automation_pause",
   "shuvcode.automation_resume",
   "shuvcode.automation_delete",
-  "shuvcode.session_move",
-  "shuvcode.session_rename",
+  "shuvcode.session.move",
+  "shuvcode.session.rename",
   "shuvcode.worktree_create",
   "shuvcode.worktree_remove",
 ] as const
@@ -187,10 +187,12 @@ describe("shuvcode fork identity", () => {
       yield* plugins.activate([...internal.pre, ...internal.post])
 
       const registered = yield* toolService.list()
-      expect(registered.filter((tool) => tool.options?.namespace === "opencode")).toEqual([])
+      expect(registered.filter((tool) => tool.options?.namespace?.startsWith("opencode"))).toEqual([])
 
       const shuvcodeTools = registered.filter((tool) => tool.options?.namespace === "shuvcode")
       expect(shuvcodeTools.map((tool) => tool.name).toSorted()).toEqual([...expectedShuvcodeTools].toSorted())
+      const sessionTools = registered.filter((tool) => tool.options?.namespace === "shuvcode.session")
+      expect(sessionTools.map((tool) => tool.name).toSorted()).toEqual([...expectedSessionTools])
 
       for (const [toolID, expectedPermission] of Object.entries(expectedMcpPermissions)) {
         const tool = registered.find((item) => item.id === toolID)
@@ -202,10 +204,15 @@ describe("shuvcode fork identity", () => {
       expect(snapshot.codeModeCatalog).toBeDefined()
       const summary = CodeModeCatalog.summarize(snapshot.codeModeCatalog!, { budget: Infinity })
       const namespaceNames = summary.namespaces.map((namespace) => namespace.name)
-      expect(namespaceNames).not.toContain("opencode")
+      expect(namespaceNames.filter((name) => name.startsWith("opencode"))).toEqual([])
       expect(namespaceNames).toContain("shuvcode")
       const catalogPaths = codeModeListings(snapshot.codeModeCatalog!).map((entry) => entry.path)
-      expect(catalogPaths).toEqual(expect.arrayContaining(expectedShuvcodeTools.map((name) => `shuvcode.${name}`)))
+      expect(catalogPaths).toEqual(
+        expect.arrayContaining([
+          ...expectedShuvcodeTools.map((name) => `shuvcode.${name}`),
+          ...expectedSessionTools.map((name) => `shuvcode.session.${name}`),
+        ]),
+      )
 
       const session = yield* sessions.create({
         location: Location.Ref.make({ directory: location.directory }),
@@ -221,7 +228,7 @@ describe("shuvcode fork identity", () => {
       }
       yield* hooks.trigger("session", "context", event)
       const combinedSystem = event.system.map((part) => part.text).join("\n")
-      expect(combinedSystem).toContain("tools.shuvcode.session_move")
+      expect(combinedSystem).toContain("tools.shuvcode.session.move")
       expect(combinedSystem).not.toContain("tools.opencode")
 
       const direct: SessionHooks["context"] = {

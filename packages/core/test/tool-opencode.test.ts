@@ -327,7 +327,7 @@ worktreeIt.live("asks external_directory before session_move leaves the project,
 
     approvals.assertions.length = 0
     approvals.rejectExternal = true
-    expect(yield* call("session_move", { directory: outside.path })).toMatchObject({
+    expect(yield* call("session.move", { directory: outside.path })).toMatchObject({
       content: [{ type: "text", text: "Stay in the project" }],
       metadata: { error: true },
     })
@@ -337,7 +337,7 @@ worktreeIt.live("asks external_directory before session_move leaves the project,
     expect((yield* sessions.get(session.id)).location.directory).toBe(location.directory)
 
     approvals.assertions.length = 0
-    expect(yield* run("session_move", { directory: outside.path })).toEqual({
+    expect(yield* run("session.move", { directory: outside.path })).toEqual({
       sessionID: session.id,
       directory: outside.path,
     })
@@ -346,7 +346,7 @@ worktreeIt.live("asks external_directory before session_move leaves the project,
     const worktree = path.join(parent.path, "task")
     expect(yield* run("worktree_create", { name: "task" })).toEqual({ directory: worktree })
     approvals.assertions.length = 0
-    expect(yield* run("session_move", { directory: worktree })).toEqual({ sessionID: session.id, directory: worktree })
+    expect(yield* run("session.move", { directory: worktree })).toEqual({ sessionID: session.id, directory: worktree })
     expect(external()).toEqual([])
   }),
 )

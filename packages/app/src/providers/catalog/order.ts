@@ -14,7 +14,7 @@ export const popularProviders = [
 ]
 
 // Connect dialog group order. Matches the TUI priority list.
-export const connectPopular = ["opencode", "opencode-go", "openai", "github-copilot", "anthropic", "google"]
+export const connectPopular = ["opencode-go", "opencode", "openai", "github-copilot", "anthropic", "google"]
 
 // App catalogs that call these helpers omit the upstream Claude Agent id.
 // Other list surfaces call isHiddenProvider themselves.
