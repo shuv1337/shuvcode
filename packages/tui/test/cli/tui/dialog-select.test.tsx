@@ -387,7 +387,7 @@ test("uses the base text color for the search cursor under new designs", async (
     () => {},
     () => {},
     undefined,
-    { theme: { name: "opencode" }, experimental: { "new-designs": true } },
+    { theme: { name: "opencode-classic" }, experimental: { "new-designs": true } },
   )
 
   try {

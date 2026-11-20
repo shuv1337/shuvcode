@@ -87,7 +87,7 @@ test.each([
     stderr: "ignore",
   })
   await child.exited
-  const directory = path.join(root.path, "data", "opencode", "log")
+  const directory = path.join(root.path, "data", Global.app, "log")
   const log = (
     await Promise.all((await fs.readdir(directory)).map((file) => Bun.file(path.join(directory, file)).text()))
   ).join("")

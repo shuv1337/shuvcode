@@ -783,7 +783,14 @@ export function Prompt(props: PromptProps) {
         data: { skill: unwrap(part) },
       })),
       ...(prompt.terminal
-        ? [{ mention: prompt.terminal.mention, ref: { type: "terminal" as const, index: 0 }, styleId: fileStyleId }]
+        ? [
+            {
+              mention: prompt.terminal.mention,
+              ref: { type: "terminal" as const, index: 0 },
+              styleId: fileStyleId,
+              data: undefined,
+            },
+          ]
         : []),
       ...prompt.pasted.map((part, index) => ({
         mention: part.source,
