@@ -1,792 +1,410 @@
-import { expect, test } from "bun:test"
-import { Cause, Deferred, Effect, Exit, Fiber, Option, Queue, Stream } from "effect"
-import { TestClock } from "effect/testing"
-import type { Context } from "@opencode/plugin/effect/plugin"
-import { AbsolutePath } from "@opencode/schema/schema"
-import { Agent } from "@opencode/schema/agent"
-import { Session } from "@opencode/schema/session"
-import { SessionMessage } from "@opencode/schema/session-message"
+import { describe, expect, test } from "bun:test"
+import { hostname, tmpdir } from "node:os"
+import { mkdir, mkdtemp, realpath, rm, symlink, writeFile } from "node:fs/promises"
+import { join } from "node:path"
+import type { PermissionEvaluation } from "@opencode/plugin/effect/permission"
+import type { Permission } from "@opencode/schema/permission"
 import { Tool } from "@opencode/schema/tool"
+import { Effect, Fiber, Schedule, Stream } from "effect"
 import { BrowserConnection } from "../src/connection.js"
-import { BrowserTools } from "../src/tools.js"
 import { Browser } from "../src/rpc.js"
+import { BrowserTools } from "../src/tools.js"
 
-// Papercut pc_dfda6c59c814: a disconnected session must fail before a browser workflow
-// with a recovery path, and a later attachment must be able to run page operations.
+type Rule = Permission.Rule
+type SessionRow = { id: string; agent: string; parentID?: string; permissions?: Rule[]; location: { directory: string } }
+type Control = { type: string; connectionID: string; requestID?: string }
+type AssertCall = { action: string; resources: readonly string[] }
+type ToolDefinition = { name: string; options?: { namespace?: string }; execute: (input: object, tool: Tool.Context) => Effect.Effect<unknown, Tool.Error> }
 
-const directory = AbsolutePath.make("/tmp/shuvcode-browser-preflight")
-const sessionID = Session.ID.make("ses_browser_preflight")
-interface Call {
-  error(type: string, message: string): never
-}
+const grant: Rule[] = [
+  { action: "browser", resource: "*", effect: "allow" },
+  { action: "skill", resource: "browser", effect: "allow" },
+]
+const rule = (resource: string, effect: Rule["effect"], action = "browser"): Rule => ({ action, resource, effect })
+const tabID = Browser.TabID.make(`tab_${"1".repeat(8)}-1111-1111-1111-${"1".repeat(12)}`)
+const tab = { id: tabID, url: "https://example.com/", title: "Example", loading: false, canGoBack: false, canGoForward: false, generation: 1 }
 
-const call: Call = {
-  error: (type, message) => {
-    throw new Error(`${type}: ${message}`)
-  },
-}
+/**
+ * The plugin context the browser plugin uses, with an in-memory session store, storage and stand-in desktop: it
+ * answers every command it is sent with `answer` and counts them. Permission asserts are recorded and decided by
+ * `deny`.
+ */
+function plugin(input: {
+  directory: string
+  agents?: Record<string, Rule[]>
+  sessions?: SessionRow[]
+  storage?: Record<string, unknown>
+  deny?: (call: AssertCall) => string | undefined
+  answer?: unknown
+}) {
+  const sessions = new Map((input.sessions ?? []).map((row) => [row.id, { ...row }]))
+  const storage = new Map(Object.entries(input.storage ?? {}))
+  const hooks: ((event: PermissionEvaluation) => Effect.Effect<void>)[] = []
+  const prompts: ((event: { sessionID: string }) => Effect.Effect<void>)[] = []
+  const tools: ToolDefinition[] = []
+  const asserts: AssertCall[] = []
+  const controls: Control[] = []
+  const agents = Object.entries(input.agents ?? { build: [] }).map(([id, permissions]) => ({ id, permissions: [...permissions] }))
+  const rpc: { handlers?: Record<string, (input: object, call: object) => Effect.Effect<unknown, unknown>> } = {}
+  const call = { error: (code: string, message: string) => new Error(`${code}: ${message}`) }
 
-const tabID = Browser.TabID.make("tab_11111111-1111-4111-8111-111111111111")
-const tab = {
-  id: tabID,
-  url: "https://example.com/",
-  title: "Example",
-  loading: false,
-  canGoBack: false,
-  canGoForward: false,
-  generation: 1,
-}
-const state = { tabs: [tab], focusedTabID: tabID }
-
-type Control = Browser.Control
-
-interface Desktop {
-  attach(
-    input: { sessionID: Session.ID; connectionID: string; version: 4 },
-    call: Call,
-  ): Effect.Effect<"closed" | "replaced", unknown>
-  state(
-    input: { sessionID: Session.ID; connectionID: string; state: Browser.State },
-    call: Call,
-  ): Effect.Effect<void, unknown>
-  command(
-    input: { sessionID: Session.ID; connectionID: string; requestID: string },
-    call: Call,
-  ): Effect.Effect<Browser.Command, unknown>
-  result(
-    input: { sessionID: Session.ID; connectionID: string; requestID: string; outcome: Browser.Outcome },
-    call: Call,
-  ): Effect.Effect<void, unknown>
-}
-
-const toolContext: Tool.Context = {
-  sessionID,
-  agent: Agent.ID.make("build"),
-  messageID: SessionMessage.ID.make("msg_browser_preflight"),
-  id: Tool.CallID.make("call_browser_preflight"),
-  progress: () => Effect.void,
-}
-
-const open = Effect.gen(function* () {
-  const events = yield* Queue.unbounded<Control>()
-  const sessionEvents = yield* Queue.unbounded<{ type: string; data: { sessionID: Session.ID } }>()
-  const tools = new Map<string, Tool.Info>()
-  let permissions: { action: string; resource: string; effect: "allow" | "deny" | "ask" }[] = []
-  let desktop: Desktop | undefined
   const ctx = {
-    location: { directory },
-    agent: {
-      transform: () => Effect.succeed({ dispose: Effect.void }),
-    },
-    event: { subscribe: () => Stream.fromQueue(sessionEvents) },
-    session: {
-      get: () => Effect.succeed({ location: { directory }, permissions }),
-      update: (input: { permissions: typeof permissions }) =>
-        Effect.sync(() => {
-          permissions = input.permissions
+    agent: { transform: (fn: (editor: { list: () => typeof agents }) => void) => Effect.sync(() => fn({ list: () => agents })) },
+    permission: {
+      hook: (_name: "evaluate", hook: (event: PermissionEvaluation) => Effect.Effect<void>) => Effect.sync(() => void hooks.push(hook)),
+      assert: (request: AssertCall) =>
+        Effect.suspend(() => {
+          asserts.push({ action: request.action, resources: request.resources })
+          const denied = input.deny?.(request)
+
+          return denied ? Effect.fail(new Tool.Error({ message: denied })) : Effect.void
         }),
     },
+    session: {
+      get: (request: { sessionID: string }) => {
+        const row = sessions.get(request.sessionID)
+
+        return row ? Effect.succeed(row) : Effect.fail(new Error(`Session not found: ${request.sessionID}`))
+      },
+      update: (request: { sessionID: string; permissions?: Rule[] }) =>
+        Effect.sync(() => {
+          const row = sessions.get(request.sessionID)
+
+          if (row) row.permissions = request.permissions
+        }),
+      hook: (_name: "prompt", hook: (event: { sessionID: string }) => Effect.Effect<void>) => Effect.sync(() => void prompts.push(hook)),
+    },
+    storage: {
+      scan: (request: { prefix: string }) =>
+        Effect.sync(() => ({ entries: [...storage].filter(([key]) => key.startsWith(request.prefix)).map(([key, value]) => ({ key, value })) })),
+      set: (key: string, value: unknown) => Effect.sync(() => void storage.set(key, value)),
+      remove: (key: string) => Effect.sync(() => void storage.delete(key)),
+    },
+    location: { directory: input.directory, project: { directory: input.directory } },
     rpc: {
-      register: (_definition: unknown, handlers: Desktop) => {
-        desktop = handlers
-        return Effect.succeed({
-          events: {
-            emit: (_name: string, data: Control) => Queue.offer(events, data).pipe(Effect.asVoid),
-          },
-          dispose: Effect.void,
-        })
-      },
+      register: (_definition: unknown, handlers: NonNullable<typeof rpc.handlers>) =>
+        Effect.sync(() => {
+          rpc.handlers = handlers
+
+          return {
+            events: {
+              emit: (_name: "control", control: Control) =>
+                Effect.sync(() => {
+                  controls.push(control)
+
+                  // The desktop asks for the command and answers it, after the plugin's step releases its lock.
+                  if (control.type === "command")
+                    void Effect.runPromise(
+                      handlers.result(
+                        { sessionID: [...sessions.keys()][0], connectionID: control.connectionID, requestID: control.requestID, outcome: { type: "success", result: { value: input.answer ?? { tabs: [], focusedTabID: null }, files: [] } } },
+                        call,
+                      ),
+                    ).catch(() => undefined)
+                }),
+            },
+          }
+        }),
     },
+    event: { subscribe: () => Stream.empty },
+    skill: { transform: () => Effect.void },
     tool: {
-      transform: (apply: (editor: { namespace(input: unknown): void; add(tool: Tool.Info): void }) => void) => {
-        apply({
-          namespace: () => undefined,
-          add: (tool) => {
-            const namespace = tool.options?.namespace
-            tools.set(namespace === undefined ? tool.name : `${namespace}.${tool.name}`, tool)
-          },
-        })
-        return Effect.succeed({ dispose: Effect.void })
-      },
+      transform: (fn: (editor: { namespace: () => void; add: (tool: ToolDefinition) => void }) => void) =>
+        Effect.sync(() => fn({ namespace: () => undefined, add: (tool) => void tools.push(tool) })),
     },
-    skill: {
-      transform: (apply: (editor: { add(info: unknown): void }) => void) => {
-        apply({ add: () => undefined })
-        return Effect.succeed({ dispose: Effect.void })
-      },
-    },
-  } as unknown as Pick<Context, "agent" | "rpc" | "session" | "location" | "event" | "tool" | "skill">
-  const connection = yield* BrowserConnection.make(ctx)
-  yield* BrowserTools.register(ctx, connection)
-  const methods = desktop
-  if (!methods) return yield* Effect.die(new Error("Browser RPC was not registered"))
-
-  const take = (type: Control["type"], connectionID: string) =>
-    Effect.gen(function* () {
-      const skipped: Control[] = []
-      while (true) {
-        const event = yield* Queue.take(events)
-        if (event.type === type && event.connectionID === connectionID) {
-          for (const item of skipped) yield* Queue.offer(events, item)
-          return event
-        }
-        skipped.push(event)
-      }
-    }).pipe(
-      Effect.timeoutOrElse({
-        duration: "2 seconds",
-        orElse: () => Effect.die(new Error(`timed out waiting for browser ${type}`)),
-      }),
-    )
-
-  const connect = (connectionID: string) =>
-    Effect.gen(function* () {
-      const fiber = yield* methods
-        .attach({ sessionID, connectionID, version: 4 }, call)
-        .pipe(Effect.forkScoped({ startImmediately: true }))
-      yield* take("attached", connectionID)
-      return fiber
-    })
-
-  const invoke = (name: string, input: object) => {
-    const tool = tools.get(name)
-    if (!tool) return Effect.die(new Error(`missing browser tool ${name}`))
-    return tool.execute(input, toolContext)
   }
 
-  const end = (type: "session.deleted" | "session.moved") =>
-    Queue.offer(sessionEvents, { type, data: { sessionID } }).pipe(Effect.asVoid)
+  // SAFETY: the plugin calls only the members above while it is made, attached and run.
+  const context = ctx as unknown as Parameters<typeof BrowserConnection.make>[0] & Parameters<typeof BrowserTools.register>[0]
 
-  return { events, methods, connect, invoke, take, connection, end }
-})
+  return {
+    context,
+    sessions,
+    storage,
+    asserts,
+    commands: () => controls.filter((control) => control.type === "command").length,
+    evaluate: (event: PermissionEvaluation) => Effect.forEach(hooks, (hook) => hook(event), { discard: true }).pipe(Effect.as(event)),
+    prompt: (sessionID: string) => Effect.forEach(prompts, (hook) => hook({ sessionID }), { discard: true }),
+    /** Attaches a desktop to `sessionID` and reports one open tab; interrupting the fiber detaches it. */
+    attach: (sessionID: string) =>
+      Effect.gen(function* () {
+        const connectionID = crypto.randomUUID()
+        const attached = yield* Effect.forkChild(rpc.handlers!.attach({ sessionID, connectionID, version: 4 }, call), { startImmediately: true })
+        yield* Effect.suspend(() => (controls.some((control) => control.type === "attached" && control.connectionID === connectionID) ? Effect.void : Effect.fail("not attached"))).pipe(
+          Effect.retry(Schedule.spaced("5 millis")),
+          Effect.timeout("5 seconds"),
+        )
+        yield* rpc.handlers!.state({ sessionID, connectionID, state: { tabs: [tab], focusedTabID: tabID } }, call)
 
-const recovery = (message: string) => {
-  expect(message).toContain("[browser.disconnected]")
-  expect(message).toContain("desktop app")
-  expect(message).toContain("browser.status")
-  expect(message).toContain("browser.tabs.list")
-  expect(message).toContain("Shuvgeist")
-  expect(message).toContain("HTTP or curl")
-  expect(message).toContain("rendered UI")
+        return attached
+      }),
+    /** Runs browser.<operation> as `agent` would, through the plugin's own executor. */
+    run: (operation: string, args: object, sessionID: string, agent = "build") => {
+      const separator = operation.lastIndexOf(".")
+      const namespace = separator < 0 ? "browser" : `browser.${operation.slice(0, separator)}`
+      const found = tools.find((tool) => tool.name === operation.slice(separator + 1) && tool.options?.namespace === namespace)
+
+      if (!found) return Effect.die(new Error(`browser.${operation} is not registered`))
+      // SAFETY: the executor reads only these fields of the call's context.
+      const tool = { sessionID, agent, messageID: "msg_test", id: `call_${crypto.randomUUID()}`, progress: () => Effect.void } as unknown as Tool.Context
+
+      return found.execute(args, tool)
+    },
+  }
 }
 
-const message = (exit: Exit.Exit<unknown, unknown>) => {
-  if (Exit.isSuccess(exit)) return `succeeded: ${JSON.stringify(exit.value)}`
-  const error = Cause.squash(exit.cause)
-  if (error instanceof Tool.Error) return error.message
-  return `unexpected failure: ${error instanceof Error ? error.message : String(error)}`
+const session = (id: string, directory: string, extra: Partial<SessionRow> = {}): SessionRow => ({ id, agent: "build", location: { directory }, ...extra })
+
+const until = (check: () => boolean) =>
+  Effect.suspend(() => (check() ? Effect.void : Effect.fail("not yet"))).pipe(Effect.retry(Schedule.spaced("5 millis")), Effect.timeout("5 seconds"))
+
+// An attached session's grant makes core resolve every browser call to allow, so the plugin's `evaluate` hook is what
+// applies the agent's own rules. When it cannot read them, the grant must not decide alone.
+test("a browser call is refused when the session's rules cannot be read", async () => {
+  const fake = plugin({ directory: "/workspace" })
+  const evaluated = await Effect.runPromise(
+    Effect.gen(function* () {
+      yield* BrowserConnection.make(fake.context)
+
+      // SAFETY: the hook passes the ID to `session.get` and reads nothing of it.
+      return yield* fake.evaluate({ sessionID: "ses_unreadable" as PermissionEvaluation["sessionID"], action: "browser", resources: ["tabs.list"], effect: "allow" })
+    }).pipe(Effect.scoped),
+  )
+
+  expect(evaluated.effect).toBe("deny")
+  expect(evaluated.message).toBe("Browser permissions could not be read; no action ran.")
+})
+
+// The agent's rules from config and its definition, then the session's own rules without the grant, decide; the
+// grant alone allows. The hook only ever refuses: an ask rule leaves the call allowed.
+describe("the evaluate hook", () => {
+  const cases: ReadonlyArray<{
+    name: string
+    agents?: Record<string, Rule[]>
+    session?: Rule[]
+    agent?: string
+    action?: string
+    resources?: string[]
+    effect: "allow" | "deny"
+  }> = [
+    { name: "no rules", effect: "allow" },
+    { name: "the whole browser denied", agents: { build: [rule("*", "deny")] }, effect: "deny" },
+    { name: "one operation denied, that operation", agents: { build: [rule("tabs.open", "deny")] }, resources: ["tabs.open"], effect: "deny" },
+    { name: "one operation denied, another operation", agents: { build: [rule("tabs.open", "deny")] }, resources: ["tabs.list"], effect: "allow" },
+    { name: "an operation pattern denied", agents: { build: [rule("tabs.*", "deny")] }, resources: ["tabs.list"], effect: "deny" },
+    { name: "every tool denied", agents: { build: [rule("*", "deny", "*")] }, effect: "deny" },
+    { name: "every tool denied, the browser allowed after", agents: { build: [rule("*", "deny", "*"), rule("*", "allow")] }, effect: "allow" },
+    { name: "an ask rule", agents: { build: [rule("*", "ask")] }, effect: "allow" },
+    { name: "a session rule denying the operation", session: [rule("tabs.list", "deny")], effect: "deny" },
+    { name: "a session rule denying it before the grant", session: [rule("*", "deny"), ...grant], effect: "deny" },
+    { name: "a subagent whose agent denies the browser", agents: { build: [], reviewer: [rule("*", "deny")] }, agent: "reviewer", effect: "deny" },
+    { name: "the parent agent beside that subagent", agents: { build: [], reviewer: [rule("*", "deny")] }, agent: "build", effect: "allow" },
+    { name: "an agent no config defines", agent: "ghost", effect: "deny" },
+    { name: "the file route, preview denied", agents: { build: [rule("preview", "deny")] }, resources: ["tabs.open", "preview"], effect: "deny" },
+    { name: "another action, the browser denied", agents: { build: [rule("*", "deny")] }, action: "read", effect: "allow" },
+  ]
+
+  test.each(cases)("$name: $effect", async (row) => {
+    const fake = plugin({ directory: "/workspace", agents: row.agents, sessions: [session("ses_a", "/workspace", { permissions: [...(row.session ?? []), ...grant] })] })
+    const evaluated = await Effect.runPromise(
+      Effect.gen(function* () {
+        yield* BrowserConnection.make(fake.context)
+
+        // SAFETY: test IDs; the hook reads the session through the fake store.
+        return yield* fake.evaluate({ sessionID: "ses_a" as PermissionEvaluation["sessionID"], agent: (row.agent ?? "build") as PermissionEvaluation["agent"], action: row.action ?? "browser", resources: row.resources ?? ["tabs.list"], effect: "allow" })
+      }).pipe(Effect.scoped),
+    )
+
+    expect(evaluated.effect).toBe(row.effect)
+
+    if (row.effect === "deny") expect(evaluated.message).toStartWith("[browser.denied]")
+  })
+
+  test("a deny another hook or core already made stays as it is", async () => {
+    const fake = plugin({ directory: "/workspace", sessions: [session("ses_a", "/workspace", { permissions: grant })] })
+    const evaluated = await Effect.runPromise(
+      Effect.gen(function* () {
+        yield* BrowserConnection.make(fake.context)
+
+        // SAFETY: test ID.
+        return yield* fake.evaluate({ sessionID: "ses_a" as PermissionEvaluation["sessionID"], action: "browser", resources: ["tabs.list"], effect: "deny", message: "Blocked by policy" })
+      }).pipe(Effect.scoped),
+    )
+
+    expect([evaluated.effect, evaluated.message]).toEqual(["deny", "Blocked by policy"])
+  })
+})
+
+// A workspace with a page, a text file, a folder, a hidden file, a link out of it and a file beside it.
+async function workspace() {
+  const temp = await realpath(await mkdtemp(join(tmpdir(), "browser-route-")))
+  const root = join(temp, "workspace")
+  const outside = join(temp, "outside")
+  await mkdir(join(root, "site"), { recursive: true })
+  await mkdir(outside)
+  await writeFile(join(root, "page.html"), "<p>page</p>")
+  await writeFile(join(root, "chart.svg"), "<svg/>")
+  await writeFile(join(outside, "secret.html"), "<p>secret</p>")
+  await writeFile(join(temp, "beside.html"), "<p>beside</p>")
+  await symlink(outside, join(root, "escape"), process.platform === "win32" ? "junction" : "dir")
+
+  return { root, outside, temp, [Symbol.asyncDispose]: () => rm(temp, { recursive: true, force: true }) }
 }
 
-test("preflight fails a disconnected browser tool with a recovery path", async () => {
-  await Effect.runPromise(
-    Effect.scoped(
-      Effect.gen(function* () {
-        const app = yield* open
-        const status = yield* app.invoke("browser.status", {})
-        expect(status.output).toMatchObject({
-          attached: false,
-          rendered: false,
-          tabs: [],
-          focusedTabID: null,
-        })
-        const guidance = status.output as { recovery: string }
-        recovery(guidance.recovery)
-        expect(status.content).toEqual([{ type: "text", text: guidance.recovery }])
+// The path forms of tabs.open and navigate, and uploads: each checked against its own operation and `preview`, and a
+// path that is not a file inside the workspace refused before the desktop hears of it.
+describe("the file route", () => {
+  const forms = (path: string): [string, object][] => [["tabs.open", { path }], ["navigate", { tabID, path }]]
 
-        const exit = yield* Effect.exit(
-          app.invoke("browser.tabs.open", { url: "https://example.com" }).pipe(Effect.timeout("1 second")),
-        )
-        const failure = message(exit)
-        recovery(failure)
-        expect(failure).toContain("Repeating browser actions while disconnected will not help")
-        const pathExit = yield* Effect.exit(app.invoke("browser.tabs.open", { url: "/tmp/page.html" }))
-        const pathFailure = message(pathExit)
-        recovery(pathFailure)
-        expect(pathFailure).not.toContain("Invalid browser URL")
-        expect(yield* Queue.size(app.events)).toBe(0)
-      }),
-    ),
-  )
-})
+  test("names its own operation and preview to the permission check, and shows a file inside the workspace", async () => {
+    await using dir = await workspace()
+    const fake = plugin({ directory: dir.root, sessions: [session("ses_a", dir.root)], answer: { path: "chart.svg" } })
 
-test("a disconnect before the desktop takes the command says the action did not run", async () => {
-  await Effect.runPromise(
-    Effect.scoped(
-      Effect.gen(function* () {
-        const app = yield* open
-        const attachment = yield* app.connect("desktop-a")
-        const pending = yield* app
-          .invoke("browser.tabs.open", { url: "https://example.com" })
-          .pipe(Effect.forkScoped({ startImmediately: true }))
-        yield* app.take("command", "desktop-a")
-        yield* Fiber.interrupt(attachment)
-        yield* Effect.yieldNow
-        expect(app.connection.waiting(sessionID)).toBe(1)
-        yield* TestClock.adjust(BrowserConnection.replayGrace)
-        const failure = message(yield* Effect.exit(Fiber.join(pending)))
-        recovery(failure)
-        expect(failure).toContain("did not run")
-        expect(failure).not.toContain("may already have run")
-        expect(app.connection.waiting(sessionID)).toBe(0)
-      }),
-    ).pipe(Effect.provide(TestClock.layer())),
-  )
-})
-
-test("a dropped connection reports that the action may have run and how to recover", async () => {
-  await Effect.runPromise(
-    Effect.scoped(
-      Effect.gen(function* () {
-        const app = yield* open
-        const attachment = yield* app.connect("desktop-a")
-        const pending = yield* app.invoke("browser.tabs.list", {}).pipe(Effect.forkScoped({ startImmediately: true }))
-        const event = yield* app.take("command", "desktop-a")
-        if (event.type !== "command") return yield* Effect.die(new Error("expected a browser command"))
-        yield* app.methods.command({ sessionID, connectionID: "desktop-a", requestID: event.requestID }, call)
-        yield* Fiber.interrupt(attachment)
-        const failure = message(yield* Effect.exit(Fiber.join(pending)))
-        recovery(failure)
-        expect(failure).toContain("may already have run")
-        expect(failure).toContain("browser.snapshot")
-        expect(failure).toContain("Do not repeat clicks")
-        expect(yield* Queue.size(app.events)).toBe(0)
-      }),
-    ),
-  )
-})
-
-test("a replacement runs an unretrieved command, and a later attachment can read the page", async () => {
-  await Effect.runPromise(
-    Effect.scoped(
-      Effect.gen(function* () {
-        const app = yield* open
-        yield* app.connect("desktop-a")
-        const pending = yield* app.invoke("browser.tabs.list", {}).pipe(Effect.forkScoped({ startImmediately: true }))
-        yield* app.take("command", "desktop-a")
-        const replaced = yield* app.connect("desktop-b")
-        const replayed = yield* app.take("command", "desktop-b")
-        if (replayed.type !== "command") return yield* Effect.die(new Error("expected the replayed command"))
-        const command = yield* app.methods.command(
-          { sessionID, connectionID: "desktop-b", requestID: replayed.requestID },
-          call,
-        )
-        expect(command.action.type).toBe("tabs.list")
-        yield* app.methods.result(
-          {
-            sessionID,
-            connectionID: "desktop-b",
-            requestID: replayed.requestID,
-            outcome: { type: "success", result: { value: { tabs: [], focusedTabID: null }, files: [] } },
-          },
-          call,
-        )
-        expect((yield* Fiber.join(pending)).output).toEqual({ tabs: [], focusedTabID: null })
-        yield* Fiber.interrupt(replaced)
-
-        const detached = yield* app.invoke("browser.status", {})
-        expect(detached.output).toMatchObject({ attached: false, rendered: false })
-        recovery((detached.output as { recovery: string }).recovery)
-
-        yield* app.connect("desktop-c")
-        yield* app.methods.state({ sessionID, connectionID: "desktop-c", state }, call)
-        const attached = yield* app.invoke("browser.status", {})
-        expect(attached.output).toMatchObject({
-          attached: true,
-          rendered: true,
-          connectionID: "desktop-c",
-          focusedTabID: tabID,
-          tabs: [tab],
-        })
-        expect((attached.output as { recovery: string }).recovery).toContain("not rendered UI verification")
-
-        const shot = yield* app
-          .invoke("browser.snapshot", { tabID })
-          .pipe(Effect.forkScoped({ startImmediately: true }))
-        const request = yield* app.take("command", "desktop-c")
-        if (request.type !== "command") return yield* Effect.die(new Error("expected a snapshot command"))
-        const action = yield* app.methods.command(
-          { sessionID, connectionID: "desktop-c", requestID: request.requestID },
-          call,
-        )
-        expect(action.action).toMatchObject({ type: "snapshot", tabID })
-        yield* app.methods.result(
-          {
-            sessionID,
-            connectionID: "desktop-c",
-            requestID: request.requestID,
-            outcome: {
-              type: "success",
-              result: { value: { tab, content: "Example heading", truncated: false }, files: [] },
-            },
-          },
-          call,
-        )
-        expect((yield* Fiber.join(shot)).output).toEqual({ tab, content: "Example heading", truncated: false })
-      }),
-    ),
-  )
-})
-
-const restored = { ...tab, generation: 7 }
-
-test("a replacement replays a tab command after the new desktop publishes its tabs", async () => {
-  await Effect.runPromise(
-    Effect.scoped(
-      Effect.gen(function* () {
-        const app = yield* open
-        yield* app.connect("desktop-a")
-        yield* app.methods.state({ sessionID, connectionID: "desktop-a", state }, call)
-        const pending = yield* app
-          .invoke("browser.snapshot", { tabID })
-          .pipe(Effect.forkScoped({ startImmediately: true }))
-        yield* app.take("command", "desktop-a")
-        yield* app.connect("desktop-b")
-        yield* app.methods.state(
-          { sessionID, connectionID: "desktop-b", state: { tabs: [restored], focusedTabID: tabID } },
-          call,
-        )
-        const replayed = yield* app.take("command", "desktop-b")
-        if (replayed.type !== "command") return yield* Effect.die(new Error("expected the replayed snapshot"))
-        const command = yield* app.methods.command(
-          { sessionID, connectionID: "desktop-b", requestID: replayed.requestID },
-          call,
-        )
-        expect(command.action).toMatchObject({ type: "snapshot", tabID })
-        expect(command.generation).toBe(restored.generation)
-        expect(command.target).toBeUndefined()
-        yield* app.methods.result(
-          {
-            sessionID,
-            connectionID: "desktop-b",
-            requestID: replayed.requestID,
-            outcome: {
-              type: "success",
-              result: { value: { tab: restored, content: "Restored heading", truncated: false }, files: [] },
-            },
-          },
-          call,
-        )
-        expect((yield* Fiber.join(pending)).output).toEqual({
-          tab: restored,
-          content: "Restored heading",
-          truncated: false,
-        })
-      }),
-    ),
-  )
-})
-
-test("closing the new desktop ends the tab-list wait", async () => {
-  await Effect.runPromise(
-    Effect.scoped(
-      Effect.gen(function* () {
-        const app = yield* open
-        yield* app.connect("desktop-a")
-        yield* app.methods.state({ sessionID, connectionID: "desktop-a", state }, call)
-        const pending = yield* app
-          .invoke("browser.snapshot", { tabID })
-          .pipe(Effect.forkScoped({ startImmediately: true }))
-        const settled = yield* Deferred.make<Exit.Exit<unknown, unknown>>()
-        yield* Effect.exit(Fiber.join(pending)).pipe(
-          Effect.flatMap((exit) => Deferred.succeed(settled, exit)),
-          Effect.forkScoped({ startImmediately: true }),
-        )
-        yield* app.take("command", "desktop-a")
-        const next = yield* app.connect("desktop-b")
-        yield* Fiber.interrupt(next)
-        yield* Effect.yieldNow
-        const ready = yield* Deferred.poll(settled)
-        if (Option.isNone(ready)) return yield* Effect.die(new Error("tab-list wait ignored the desktop closing"))
-        expect(message(yield* ready.value)).toContain("did not run")
-      }),
-    ).pipe(Effect.provide(TestClock.layer())),
-  )
-})
-
-test("an ordinary reconnect replays onto the new connection id", async () => {
-  await Effect.runPromise(
-    Effect.scoped(
-      Effect.gen(function* () {
-        const app = yield* open
-        const first = yield* app.connect("desktop-a")
-        const pending = yield* app.invoke("browser.tabs.list", {}).pipe(Effect.forkScoped({ startImmediately: true }))
-        yield* app.take("command", "desktop-a")
-        yield* Fiber.interrupt(first)
-        yield* app.connect("desktop-b")
-        const replayed = yield* app.take("command", "desktop-b")
-        if (replayed.type !== "command") return yield* Effect.die(new Error("expected the reconnected command"))
-        expect(replayed.connectionID).toBe("desktop-b")
-        yield* app.methods.command({ sessionID, connectionID: "desktop-b", requestID: replayed.requestID }, call)
-        yield* app.methods.result(
-          {
-            sessionID,
-            connectionID: "desktop-b",
-            requestID: replayed.requestID,
-            outcome: { type: "success", result: { value: { tabs: [], focusedTabID: null }, files: [] } },
-          },
-          call,
-        )
-        expect((yield* Fiber.join(pending)).output).toEqual({ tabs: [], focusedTabID: null })
-        expect(app.connection.waiting(sessionID)).toBe(0)
-      }),
-    ),
-  )
-})
-
-test("interrupting a reconnect wait removes it from the session", async () => {
-  await Effect.runPromise(
-    Effect.scoped(
-      Effect.gen(function* () {
-        const app = yield* open
-        const attachment = yield* app.connect("desktop-a")
-        const pending = yield* app.invoke("browser.tabs.list", {}).pipe(Effect.forkScoped({ startImmediately: true }))
-        yield* app.take("command", "desktop-a")
-        yield* Fiber.interrupt(attachment)
-        yield* Effect.yieldNow
-        expect(app.connection.waiting(sessionID)).toBe(1)
-        yield* Fiber.interrupt(pending)
-        expect(app.connection.waiting(sessionID)).toBe(0)
-      }),
-    ),
-  )
-})
-
-test("the command timeout removes a reconnect wait", async () => {
-  await Effect.runPromise(
-    Effect.scoped(
-      Effect.gen(function* () {
-        const app = yield* open
-        const attachment = yield* app.connect("desktop-a")
-        const pending = yield* app.invoke("browser.tabs.list", {}).pipe(Effect.forkScoped({ startImmediately: true }))
-        yield* app.take("command", "desktop-a")
-        yield* TestClock.adjust("59 seconds")
-        yield* Fiber.interrupt(attachment)
-        yield* Effect.yieldNow
-        expect(app.connection.waiting(sessionID)).toBe(1)
-        yield* TestClock.adjust("1 second")
-        const failure = message(yield* Effect.exit(Fiber.join(pending)))
-        expect(failure).toContain("[browser.timeout]")
-        expect(app.connection.waiting(sessionID)).toBe(0)
-      }),
-    ).pipe(Effect.provide(TestClock.layer())),
-  )
-})
-
-for (const type of ["session.deleted", "session.moved"] as const) {
-  test(`${type} drops reconnect waits`, async () => {
     await Effect.runPromise(
-      Effect.scoped(
-        Effect.gen(function* () {
-          const app = yield* open
-          const attachment = yield* app.connect("desktop-a")
-          const pending = yield* app.invoke("browser.tabs.list", {}).pipe(Effect.forkScoped({ startImmediately: true }))
-          yield* app.take("command", "desktop-a")
-          yield* Fiber.interrupt(attachment)
-          yield* Effect.yieldNow
-          expect(app.connection.waiting(sessionID)).toBe(1)
-          yield* app.end(type)
-          yield* Effect.yieldNow
-          expect(app.connection.waiting(sessionID)).toBe(0)
-          expect(app.connection.retired(sessionID)).toBe(true)
-          const failure = message(yield* Effect.exit(Fiber.join(pending)))
-          expect(failure).toContain("did not run")
-        }),
-      ),
+      Effect.gen(function* () {
+        yield* BrowserConnection.make(fake.context).pipe(Effect.flatMap((connection) => BrowserTools.register(fake.context, connection)))
+        yield* fake.attach("ses_a")
+        const shown = yield* fake.run("tabs.open", { path: "chart.svg" }, "ses_a")
+        expect(shown).toMatchObject({ output: { path: "chart.svg", shown: "file" } })
+        yield* fake.run("navigate", { tabID, path: "chart.svg" }, "ses_a").pipe(Effect.exit)
+      }).pipe(Effect.scoped),
+    )
+
+    expect(fake.asserts.filter((call) => call.action === "browser").map((call) => call.resources)).toEqual([["tabs.open", "preview"], ["navigate", "preview"]])
+    expect(fake.commands()).toBe(1)
+  })
+
+  test.each([
+    ["preview", "[browser.denied] Showing a workspace file in the browser (permission browser.preview) is denied"],
+    ["tabs.open", "[browser.denied] browser.tabs.open is denied"],
+  ])("a deny of %s refuses tabs.open({ path }) and sends nothing", async (operation, message) => {
+    await using dir = await workspace()
+    const fake = plugin({ directory: dir.root, agents: { build: [rule(operation, "deny")] }, sessions: [session("ses_a", dir.root)] })
+    const error = await Effect.runPromise(
+      Effect.gen(function* () {
+        yield* BrowserConnection.make(fake.context).pipe(Effect.flatMap((connection) => BrowserTools.register(fake.context, connection)))
+        yield* fake.attach("ses_a")
+
+        return yield* fake.run("tabs.open", { path: "page.html" }, "ses_a").pipe(Effect.flip)
+      }).pipe(Effect.scoped),
+    )
+
+    expect(error.message).toStartWith(message)
+    expect(fake.commands()).toBe(0)
+  })
+
+  test("refuses what is not a file inside the workspace, with its code, and sends nothing", async () => {
+    await using dir = await workspace()
+    const fake = plugin({ directory: dir.root, sessions: [session("ses_a", dir.root)] })
+    const rows: [string, string][] = [
+      ["missing.html", "file_not_found"],
+      ["site", "is_directory"],
+      ["../beside.html", "outside_workspace"],
+      [join(dir.temp, "beside.html"), "outside_workspace"],
+      ["escape/secret.html", "outside_workspace"],
+      ["workspace://ses_other/page.html", "outside_workspace"],
+      ["site/\u0001.html", "invalid_path"],
+    ]
+    const codes = await Effect.runPromise(
+      Effect.gen(function* () {
+        yield* BrowserConnection.make(fake.context).pipe(Effect.flatMap((connection) => BrowserTools.register(fake.context, connection)))
+        yield* fake.attach("ses_a")
+
+        return yield* Effect.forEach(rows.flatMap(([path]) => forms(path)), ([operation, args]) =>
+          fake.run(operation, args, "ses_a").pipe(Effect.flip, Effect.map((error) => error.metadata?.code)),
+        )
+      }).pipe(Effect.scoped),
+    )
+
+    expect(codes).toEqual(rows.flatMap(([, code]) => [code, code]))
+    expect(fake.commands()).toBe(0)
+  })
+
+  test("an upload needs read permission for the file, and external_directory outside the workspace, before anything is sent", async () => {
+    await using dir = await workspace()
+    await writeFile(join(dir.root, "blocked.txt"), "blocked")
+    const fake = plugin({
+      directory: dir.root,
+      sessions: [session("ses_a", dir.root)],
+      deny: (call) =>
+        (call.action === "read" && call.resources.includes("blocked.txt")) || call.action === "external_directory" ? `Permission denied: ${call.action}` : undefined,
+    })
+    const messages = await Effect.runPromise(
+      Effect.gen(function* () {
+        yield* BrowserConnection.make(fake.context).pipe(Effect.flatMap((connection) => BrowserTools.register(fake.context, connection)))
+        yield* fake.attach("ses_a")
+
+        return yield* Effect.forEach(["blocked.txt", join(dir.temp, "beside.html")], (path) =>
+          fake.run("files.upload", { tabID, ref: "e1", paths: [path] }, "ses_a").pipe(Effect.flip, Effect.map((error) => error.message)),
+        )
+      }).pipe(Effect.scoped),
+    )
+
+    expect(messages).toEqual(["Permission denied: read", "Permission denied: external_directory"])
+    expect(fake.commands()).toBe(0)
+  })
+})
+
+// No process has this ID: it is odd, so not a Windows process ID, and above Linux's and macOS's limits.
+const exited = 4_194_305
+
+describe("grants", () => {
+  test("startup revokes only the grants this location's servers left behind", async () => {
+    const owner = (pid: number, host = hostname(), directory = "/workspace") => ({ host, pid, location: { directory } })
+    const fake = plugin({
+      directory: "/workspace",
+      sessions: ["ses_dead", "ses_live", "ses_remote", "ses_elsewhere"].map((id) => session(id, "/workspace", { permissions: [rule("*", "deny", "bash"), ...grant] })),
+      storage: {
+        "grant:ses_dead": owner(exited),
+        "grant:ses_live": owner(process.pid),
+        "grant:ses_remote": owner(exited, "other-host"),
+        "grant:ses_elsewhere": owner(exited, hostname(), "/other"),
+      },
+    })
+
+    await Effect.runPromise(BrowserConnection.reconcileStaleGrants(fake.context))
+
+    expect([...fake.sessions.values()].map((row) => [row.id, row.permissions?.length])).toEqual([["ses_dead", 1], ["ses_live", 3], ["ses_remote", 3], ["ses_elsewhere", 3]])
+    expect(fake.sessions.get("ses_dead")?.permissions).toEqual([rule("*", "deny", "bash")])
+    expect([...fake.storage.keys()]).toEqual(["grant:ses_live", "grant:ses_remote", "grant:ses_elsewhere"])
+  })
+
+  test("attaching grants the session, and detaching revokes it and forgets its owner", async () => {
+    const fake = plugin({ directory: "/workspace", sessions: [session("ses_a", "/workspace", { permissions: [rule("*", "deny", "bash")] })] })
+
+    await Effect.runPromise(
+      Effect.gen(function* () {
+        yield* BrowserConnection.make(fake.context)
+        const attached = yield* fake.attach("ses_a")
+        expect(fake.sessions.get("ses_a")?.permissions).toEqual([rule("*", "deny", "bash"), ...grant])
+        expect(fake.storage.get("grant:ses_a")).toMatchObject({ pid: process.pid })
+
+        yield* Fiber.interrupt(attached)
+        yield* until(() => !fake.storage.has("grant:ses_a"))
+        expect(fake.sessions.get("ses_a")?.permissions).toEqual([rule("*", "deny", "bash")])
+      }).pipe(Effect.scoped),
     )
   })
-}
 
-for (const type of ["session.deleted", "session.moved"] as const) {
-  test(`${type} fails an untaken command while the desktop is still attached`, async () => {
+  test("a subagent's session loses the grant it inherited when its first prompt is admitted; one with its own attachment keeps it", async () => {
+    const fake = plugin({
+      directory: "/workspace",
+      sessions: [
+        session("ses_parent", "/workspace"),
+        session("ses_child", "/workspace", { agent: "general", parentID: "ses_parent", permissions: grant }),
+        session("ses_viewed", "/workspace", { agent: "general", parentID: "ses_parent" }),
+      ],
+    })
+
     await Effect.runPromise(
-      Effect.scoped(
-        Effect.gen(function* () {
-          const app = yield* open
-          yield* app.connect("desktop-a")
-          const pending = yield* app.invoke("browser.tabs.list", {}).pipe(Effect.forkScoped({ startImmediately: true }))
-          const settled = yield* Deferred.make<Exit.Exit<unknown, unknown>>()
-          yield* Effect.exit(Fiber.join(pending)).pipe(
-            Effect.flatMap((exit) => Deferred.succeed(settled, exit)),
-            Effect.forkScoped({ startImmediately: true }),
-          )
-          // Seen by the desktop, but not retrieved, so the close reaches adopt.
-          yield* app.take("command", "desktop-a")
-          yield* app.end(type)
-          yield* Effect.yieldNow
-          const ready = yield* Deferred.poll(settled)
-          if (Option.isNone(ready)) return yield* Effect.die(new Error("command waited after the session ended"))
-          const failure = message(yield* ready.value)
-          expect(failure).toContain("did not run")
-          expect(failure).not.toContain("may already have run")
-          expect(app.connection.waiting(sessionID)).toBe(0)
-          // The ban outlives the handler, so this command cannot be replayed onto a later attach.
-          expect(app.connection.retired(sessionID)).toBe(true)
-          const again = yield* app.connect("desktop-b")
-          yield* Effect.yieldNow
-          const replayed: string[] = []
-          let queued = yield* Queue.poll(app.events)
-          while (Option.isSome(queued)) {
-            if (queued.value.type === "command") replayed.push(queued.value.connectionID)
-            queued = yield* Queue.poll(app.events)
-          }
-          expect(replayed).toEqual([])
-          const next = yield* app.invoke("browser.tabs.list", {}).pipe(Effect.forkScoped({ startImmediately: true }))
-          const nextSettled = yield* Deferred.make<Exit.Exit<unknown, unknown>>()
-          yield* Effect.exit(Fiber.join(next)).pipe(
-            Effect.flatMap((exit) => Deferred.succeed(nextSettled, exit)),
-            Effect.forkScoped({ startImmediately: true }),
-          )
-          yield* app.take("command", "desktop-b")
-          yield* Fiber.interrupt(again)
-          yield* Effect.yieldNow
-          const dropped = yield* Deferred.poll(nextSettled)
-          if (Option.isNone(dropped)) return yield* Effect.die(new Error("re-attach drop waited out the ban"))
-          expect(message(yield* dropped.value)).toContain("did not run")
-          expect(app.connection.waiting(sessionID)).toBe(0)
-        }),
-      ).pipe(Effect.provide(TestClock.layer())),
+      Effect.gen(function* () {
+        yield* BrowserConnection.make(fake.context)
+        yield* fake.attach("ses_viewed")
+        yield* fake.prompt("ses_child")
+        yield* fake.prompt("ses_viewed")
+        // Read before the plugin's disposal, which revokes every attachment's grant.
+        expect(fake.sessions.get("ses_child")?.permissions).toEqual([])
+        expect(fake.sessions.get("ses_viewed")?.permissions).toEqual(grant)
+      }).pipe(Effect.scoped),
     )
   })
-}
-
-test("a later delete extends the ban started by a move", async () => {
-  await Effect.runPromise(
-    Effect.scoped(
-      Effect.gen(function* () {
-        const app = yield* open
-        yield* app.connect("desktop-a")
-        const pending = yield* app.invoke("browser.tabs.list", {}).pipe(Effect.forkScoped({ startImmediately: true }))
-        yield* app.take("command", "desktop-a")
-        yield* app.end("session.moved")
-        yield* Effect.yieldNow
-        expect(message(yield* Effect.exit(Fiber.join(pending)))).toContain("did not run")
-        expect(app.connection.waiting(sessionID)).toBe(0)
-        yield* TestClock.adjust("1 second")
-        yield* app.end("session.deleted")
-        yield* Effect.yieldNow
-        yield* TestClock.adjust("1 second")
-        yield* Effect.yieldNow
-        expect(app.connection.retired(sessionID)).toBe(true)
-        yield* TestClock.adjust("1 second")
-        yield* Effect.yieldNow
-        expect(app.connection.retired(sessionID)).toBe(false)
-      }),
-    ).pipe(Effect.provide(TestClock.layer())),
-  )
-})
-
-test("a close that already has the result keeps that result", async () => {
-  await Effect.runPromise(
-    Effect.scoped(
-      Effect.gen(function* () {
-        const app = yield* open
-        const attachment = yield* app.connect("desktop-a")
-        const pending = yield* app.invoke("browser.tabs.list", {}).pipe(Effect.forkScoped({ startImmediately: true }))
-        const event = yield* app.take("command", "desktop-a")
-        if (event.type !== "command") return yield* Effect.die(new Error("expected a browser command"))
-        yield* app.methods.command({ sessionID, connectionID: "desktop-a", requestID: event.requestID }, call)
-        yield* app.methods.result(
-          {
-            sessionID,
-            connectionID: "desktop-a",
-            requestID: event.requestID,
-            outcome: { type: "success", result: { value: { tabs: [tab], focusedTabID: tabID }, files: [] } },
-          },
-          call,
-        )
-        yield* Fiber.interrupt(attachment)
-        expect((yield* Fiber.join(pending)).output).toEqual({ tabs: [tab], focusedTabID: tabID })
-      }),
-    ),
-  )
-})
-
-test("cancelling a replay cancels the command on the new desktop", async () => {
-  await Effect.runPromise(
-    Effect.scoped(
-      Effect.gen(function* () {
-        const app = yield* open
-        yield* app.connect("desktop-a")
-        yield* app.methods.state({ sessionID, connectionID: "desktop-a", state }, call)
-        const pending = yield* app
-          .invoke("browser.snapshot", { tabID })
-          .pipe(Effect.forkScoped({ startImmediately: true }))
-        yield* app.take("command", "desktop-a")
-        yield* app.connect("desktop-b")
-        yield* app.methods.state(
-          { sessionID, connectionID: "desktop-b", state: { tabs: [restored], focusedTabID: tabID } },
-          call,
-        )
-        const replayed = yield* app.take("command", "desktop-b")
-        if (replayed.type !== "command") return yield* Effect.die(new Error("expected the replayed snapshot"))
-        yield* Fiber.interrupt(pending)
-        const cancel = yield* app.take("cancel", "desktop-b")
-        if (cancel.type !== "cancel") return yield* Effect.die(new Error("expected a cancel"))
-        expect(cancel.requestID).toBe(replayed.requestID)
-      }),
-    ),
-  )
-})
-
-test("a replay that never finishes times out and cancels the new command", async () => {
-  await Effect.runPromise(
-    Effect.scoped(
-      Effect.gen(function* () {
-        const app = yield* open
-        yield* app.connect("desktop-a")
-        yield* app.methods.state({ sessionID, connectionID: "desktop-a", state }, call)
-        const pending = yield* app
-          .invoke("browser.snapshot", { tabID })
-          .pipe(Effect.forkScoped({ startImmediately: true }))
-        yield* app.take("command", "desktop-a")
-        yield* app.connect("desktop-b")
-        yield* app.methods.state(
-          { sessionID, connectionID: "desktop-b", state: { tabs: [restored], focusedTabID: tabID } },
-          call,
-        )
-        const replayed = yield* app.take("command", "desktop-b")
-        if (replayed.type !== "command") return yield* Effect.die(new Error("expected the replayed snapshot"))
-        yield* TestClock.adjust("60 seconds")
-        const failure = message(yield* Effect.exit(Fiber.join(pending)))
-        expect(failure).toContain("[browser.timeout]")
-        expect(failure).toContain("browser.snapshot")
-        const cancel = yield* app.take("cancel", "desktop-b")
-        if (cancel.type !== "cancel") return yield* Effect.die(new Error("expected a cancel"))
-        expect(cancel.requestID).toBe(replayed.requestID)
-      }),
-    ).pipe(Effect.provide(TestClock.layer())),
-  )
-})
-
-const approved = { resources: ["https://example.com/"], key: "tab-1" }
-const changed = { resources: ["https://example.com/"], key: "tab-2" }
-const click = { type: "click" as const, tabID, ref: Browser.Ref.make("e1") }
-
-test("a replay re-inspects an approved target and drops the action when it changed", async () => {
-  await Effect.runPromise(
-    Effect.scoped(
-      Effect.gen(function* () {
-        const app = yield* open
-        yield* app.connect("desktop-a")
-        yield* app.methods.state({ sessionID, connectionID: "desktop-a", state }, call)
-        const aimed = yield* app.connection.target(sessionID, click)
-        const pending = yield* aimed.request([], approved).pipe(Effect.forkScoped({ startImmediately: true }))
-        yield* app.take("command", "desktop-a")
-        yield* app.connect("desktop-b")
-        yield* app.methods.state(
-          { sessionID, connectionID: "desktop-b", state: { tabs: [restored], focusedTabID: tabID } },
-          call,
-        )
-        const replayed = yield* app.take("command", "desktop-b")
-        if (replayed.type !== "command") return yield* Effect.die(new Error("expected a re-inspect"))
-        const command = yield* app.methods.command(
-          { sessionID, connectionID: "desktop-b", requestID: replayed.requestID },
-          call,
-        )
-        expect(command.inspect).toBe(true)
-        expect(command.target).toBeUndefined()
-        expect(command.generation).toBe(restored.generation)
-        yield* app.methods.result(
-          {
-            sessionID,
-            connectionID: "desktop-b",
-            requestID: replayed.requestID,
-            outcome: { type: "success", result: { value: changed, files: [] } },
-          },
-          call,
-        )
-        const failure = message(yield* Effect.exit(Fiber.join(pending)))
-        expect(failure).toContain("did not run")
-        expect(yield* Queue.size(app.events)).toBe(0)
-      }),
-    ),
-  )
-})
-
-test("a replay runs an approved action when re-inspection still matches", async () => {
-  await Effect.runPromise(
-    Effect.scoped(
-      Effect.gen(function* () {
-        const app = yield* open
-        yield* app.connect("desktop-a")
-        yield* app.methods.state({ sessionID, connectionID: "desktop-a", state }, call)
-        const aimed = yield* app.connection.target(sessionID, click)
-        const pending = yield* aimed.request([], approved).pipe(Effect.forkScoped({ startImmediately: true }))
-        yield* app.take("command", "desktop-a")
-        yield* app.connect("desktop-b")
-        yield* app.methods.state(
-          { sessionID, connectionID: "desktop-b", state: { tabs: [restored], focusedTabID: tabID } },
-          call,
-        )
-        const inspect = yield* app.take("command", "desktop-b")
-        if (inspect.type !== "command") return yield* Effect.die(new Error("expected a re-inspect"))
-        yield* app.methods.command({ sessionID, connectionID: "desktop-b", requestID: inspect.requestID }, call)
-        yield* app.methods.result(
-          {
-            sessionID,
-            connectionID: "desktop-b",
-            requestID: inspect.requestID,
-            outcome: { type: "success", result: { value: approved, files: [] } },
-          },
-          call,
-        )
-        const replayed = yield* app.take("command", "desktop-b")
-        if (replayed.type !== "command") return yield* Effect.die(new Error("expected the approved click"))
-        const command = yield* app.methods.command(
-          { sessionID, connectionID: "desktop-b", requestID: replayed.requestID },
-          call,
-        )
-        expect(command.inspect).toBeUndefined()
-        expect(command.target).toEqual(approved)
-        expect(command.generation).toBe(restored.generation)
-        expect(command.action).toMatchObject(click)
-        yield* app.methods.result(
-          {
-            sessionID,
-            connectionID: "desktop-b",
-            requestID: replayed.requestID,
-            outcome: { type: "success", result: { value: restored, files: [] } },
-          },
-          call,
-        )
-        expect((yield* Fiber.join(pending)).value).toEqual(restored)
-      }),
-    ),
-  )
-})
-
-test("a failed re-inspection reports that the action did not run", async () => {
-  await Effect.runPromise(
-    Effect.scoped(
-      Effect.gen(function* () {
-        const app = yield* open
-        yield* app.connect("desktop-a")
-        yield* app.methods.state({ sessionID, connectionID: "desktop-a", state }, call)
-        const aimed = yield* app.connection.target(sessionID, click)
-        const pending = yield* aimed.request([], approved).pipe(Effect.forkScoped({ startImmediately: true }))
-        yield* app.take("command", "desktop-a")
-        yield* app.connect("desktop-b")
-        yield* app.methods.state(
-          { sessionID, connectionID: "desktop-b", state: { tabs: [restored], focusedTabID: tabID } },
-          call,
-        )
-        const inspect = yield* app.take("command", "desktop-b")
-        if (inspect.type !== "command") return yield* Effect.die(new Error("expected a re-inspect"))
-        yield* app.methods.command({ sessionID, connectionID: "desktop-b", requestID: inspect.requestID }, call)
-        yield* app.methods.result(
-          {
-            sessionID,
-            connectionID: "desktop-b",
-            requestID: inspect.requestID,
-            outcome: { type: "failure", code: "operation_failed", message: "inspect broke" },
-          },
-          call,
-        )
-        const failure = message(yield* Effect.exit(Fiber.join(pending)))
-        expect(failure).toContain("did not run")
-        expect(failure).not.toContain("inspect broke")
-        expect(app.connection.waiting(sessionID)).toBe(0)
-      }),
-    ),
-  )
 })

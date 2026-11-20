@@ -43,8 +43,8 @@ const FORBIDDEN_TOOLS = new Set([
   "shuvcode.automation_pause",
   "shuvcode.automation_resume",
   "shuvcode.automation_delete",
-  "shuvcode.session_move",
-  "shuvcode.session_rename",
+  "shuvcode.session.move",
+  "shuvcode.session.rename",
   "shuvcode.worktree_create",
   "shuvcode.worktree_remove",
 ])

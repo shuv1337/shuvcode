@@ -30,7 +30,7 @@ import { useExit } from "../../context/exit"
 import { expandPromptInputPastedText, realignPromptInputMentions } from "../../prompt/mention"
 import { parseSlashHead } from "../../prompt/parse"
 import { createStore, produce, unwrap } from "solid-js/store"
-import { emptyPrompt, usePromptHistory, type PromptInfo, type PromptPartRef } from "../../prompt/history"
+import { emptyPrompt, usePromptHistory, type ChipData, type PromptInfo, type PromptPartRef } from "../../prompt/history"
 import { registerComposer, saveDraft, takeDraft } from "./draft-stash"
 import { Skill } from "@opencode/schema/skill"
 import { computePromptTraits } from "../../prompt/traits"
@@ -162,14 +162,14 @@ function getEditorRangeLabel(selection: EditorSelection["ranges"][number]) {
 function formatEditorContext(selection: EditorSelection) {
   const selected = selection.ranges.filter(hasEditorRangeSelection)
   if (selected.length === 0)
-    return `<system-reminder>Note: The user opened the file "${selection.filePath}". This may or may not be relevant to the current task.</system-reminder>\n`
+    return `<system-update>Note: The user opened the file "${selection.filePath}". This may or may not be relevant to the current task.</system-update>\n`
 
   const ranges = selected.map((range, index) => {
     const prefix = selected.length > 1 ? `Selection ${index + 1}: ` : ""
     return `Note: The user selected ${prefix}${getEditorRangeLabel(range)} from "${selection.filePath}". \`\`\`${range.text}\`\`\`\n\n`
   })
 
-  return `<system-reminder>${ranges.join("\n")} This may or may not be relevant to the current task.</system-reminder>\n`
+  return `<system-update>${ranges.join("\n")} This may or may not be relevant to the current task.</system-update>\n`
 }
 
 function argumentSlash(input: string, commands: readonly KeymapCommand[]) {
@@ -343,13 +343,7 @@ export function Prompt(props: PromptProps) {
     if (directory !== (currentLocation.current?.directory ?? data.location.default().directory)) return
     if (!input || input.isDestroyed) return
     input.insertText(evt.data.text)
-    setTimeout(() => {
-      // setTimeout is a workaround and needs to be addressed properly
-      if (!input || input.isDestroyed) return
-      input.invalidateIntrinsicSize()
-      input.gotoBufferEnd()
-      renderer.requestRender()
-    }, 0)
+    input.gotoBufferEnd()
   })
 
   createEffect(() => {
@@ -597,22 +591,21 @@ export function Prompt(props: PromptProps) {
                 const start = input.cursorOffset
                 const end = start + measure(text)
                 input.insertText(text + " ")
+                const part = { id: Skill.ID.make(skill), mention: { start, end, text } }
                 const extmarkId = input.extmarks.create({
                   start,
                   end,
                   virtual: true,
                   styleId: skillStyleId,
                   typeId: promptPartTypeId,
+                  data: { skill: part } satisfies ChipData,
                 })
                 setStore(
                   produce((draft) => {
                     draft.prompt.text = input.plainText
                     const skills = (draft.prompt.skills ??= [])
                     const index = skills.length
-                    skills.push({
-                      id: Skill.ID.make(skill),
-                      mention: { start, end, text },
-                    })
+                    skills.push(part)
                     draft.extmarkToPart.set(extmarkId, { type: "skill", index })
                   }),
                 )
@@ -775,16 +768,19 @@ export function Prompt(props: PromptProps) {
         mention: part.mention,
         ref: { type: "file" as const, index },
         styleId: fileStyleId,
+        data: { file: unwrap(part) },
       })),
       ...(prompt.agents ?? []).map((part, index) => ({
         mention: part.mention,
         ref: { type: "agent" as const, index },
         styleId: agentStyleId,
+        data: { agent: unwrap(part) },
       })),
       ...(prompt.skills ?? []).map((part, index) => ({
         mention: part.mention,
         ref: { type: "skill" as const, index },
         styleId: skillStyleId,
+        data: { skill: unwrap(part) },
       })),
       ...(prompt.terminal
         ? [{ mention: prompt.terminal.mention, ref: { type: "terminal" as const, index: 0 }, styleId: fileStyleId }]
@@ -793,10 +789,11 @@ export function Prompt(props: PromptProps) {
         mention: part.source,
         ref: { type: "pasted" as const, index },
         styleId: pasteStyleId,
+        data: { pasted: part.text, label: part.source.text },
       })),
     ]
 
-    parts.forEach(({ mention, ref, styleId }) => {
+    parts.forEach(({ mention, ref, styleId, data }) => {
       if (mention?.text) {
         const extmarkId = input.extmarks.create({
           start: mention.start,
@@ -804,7 +801,7 @@ export function Prompt(props: PromptProps) {
           virtual: true,
           styleId,
           typeId: promptPartTypeId,
-          data: ref.type === "pasted" ? { pasted: prompt.pasted[ref.index].text, label: mention.text } : undefined,
+          data,
         })
         setStore("extmarkToPart", (map: Map<number, PromptPartRef>) => {
           const newMap = new Map(map)
@@ -813,6 +810,19 @@ export function Prompt(props: PromptProps) {
         })
       }
     })
+  }
+
+  // Undo restores a deleted chip's mark, with its data, after its part left the prompt.
+  function rebindChip(prompt: PromptInfo, data: ChipData | undefined): PromptPartRef | undefined {
+    const copy = <T extends { mention?: object }>(part: T) => ({
+      ...part,
+      mention: part.mention && { ...part.mention },
+    })
+    // A second chip for an attached file moves the first part's mention instead of adding one.
+    if (data?.file && !prompt.files?.some((file) => file.uri === data.file?.uri))
+      return { type: "file", index: (prompt.files ??= []).push(copy(data.file)) - 1 }
+    if (data?.agent) return { type: "agent", index: (prompt.agents ??= []).push(copy(data.agent)) - 1 }
+    if (data?.skill) return { type: "skill", index: (prompt.skills ??= []).push(copy(data.skill)) - 1 }
   }
 
   function syncExtmarksWithPromptParts() {
@@ -841,7 +851,7 @@ export function Prompt(props: PromptProps) {
             })
             continue
           }
-          const ref = draft.extmarkToPart.get(extmark.id)
+          const ref = draft.extmarkToPart.get(extmark.id) ?? rebindChip(draft.prompt, extmark.data)
           if (!ref) continue
           if (ref.type === "file") {
             const part = draft.prompt.files?.[ref.index]
@@ -888,16 +898,15 @@ export function Prompt(props: PromptProps) {
           if (index !== undefined) newMap.set(extmark, { type: "file", index })
         }
 
+        // Each content change syncs; replace a list only when its parts changed, so typing notifies no reader.
+        const same = <T,>(next: T[], prev: T[] | undefined) =>
+          next.length === (prev?.length ?? 0) && next.every((part, index) => part === prev?.[index])
         draft.extmarkToPart = newMap
-        if (
-          nextFiles.length !== draft.prompt.files?.length ||
-          nextFiles.some((file, index) => file !== draft.prompt.files?.[index])
-        )
-          draft.prompt.files = nextFiles
-        draft.prompt.agents = agents
-        draft.prompt.skills = skills
-        draft.prompt.pasted = pasted
-        draft.prompt.terminal = terminal
+        if (!same(nextFiles, draft.prompt.files)) draft.prompt.files = nextFiles
+        if (!same(agents, draft.prompt.agents)) draft.prompt.agents = agents
+        if (!same(skills, draft.prompt.skills)) draft.prompt.skills = skills
+        if (!same(pasted, draft.prompt.pasted)) draft.prompt.pasted = pasted
+        if (terminal !== draft.prompt.terminal) draft.prompt.terminal = terminal
       }),
     )
   }
@@ -1500,30 +1509,16 @@ export function Prompt(props: PromptProps) {
     }
 
     input.insertText(normalizedText)
-
-    setTimeout(() => {
-      if (!input || input.isDestroyed) return
-      input.invalidateIntrinsicSize()
-      renderer.requestRender()
-    }, 0)
   }
 
   function pasteAttachment(file: { filename?: string; uri: string; path?: string }) {
     const currentOffset = input.cursorOffset
     const extmarkStart = currentOffset
     const virtualText = promptAttachmentLabel(store.prompt.files, { uri: file.uri, name: file.filename })
-    const extmarkEnd = extmarkStart + virtualText.length
+    const extmarkEnd = extmarkStart + measure(virtualText)
     const textToInsert = virtualText + " "
 
     input.insertText(textToInsert)
-
-    const extmarkId = input.extmarks.create({
-      start: extmarkStart,
-      end: extmarkEnd,
-      virtual: true,
-      styleId: pasteStyleId,
-      typeId: promptPartTypeId,
-    })
 
     const part: NonNullable<PromptInfo["files"]>[number] = {
       uri: file.uri,
@@ -1535,6 +1530,15 @@ export function Prompt(props: PromptProps) {
         text: virtualText,
       },
     }
+    const extmarkId = input.extmarks.create({
+      start: extmarkStart,
+      end: extmarkEnd,
+      virtual: true,
+      styleId: pasteStyleId,
+      typeId: promptPartTypeId,
+      data: { file: part } satisfies ChipData,
+    })
+
     setStore(
       produce((draft) => {
         const files = (draft.prompt.files ??= [])
@@ -1866,11 +1870,6 @@ export function Prompt(props: PromptProps) {
                   promptPartTypeId = input.extmarks.registerType("prompt-part")
                 }
                 props.ref?.(ref)
-                setTimeout(() => {
-                  // setTimeout is a workaround and needs to be addressed properly
-                  if (!input || input.isDestroyed) return
-                  input.cursorColor = disabled() ? theme.background.raised.base : theme.text.base
-                }, 0)
               }}
               onMouseDown={(r: MouseEvent) => {
                 if (disabled()) {
