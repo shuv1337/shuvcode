@@ -212,14 +212,22 @@ export const register = Effect.fn("BrowserTools.register")(function* (
           "Report whether a desktop browser is attached before any browser workflow. attached is false until this session is open in the desktop app; then call this again. If the desktop app is unavailable, use Shuvgeist for rendered checks. HTTP or curl success is not rendered UI verification and must not be reported as UI QA. When attached, page operations use an exact returned tabID.",
         input: Schema.Struct({}),
         output: Status,
-        options: { namespace: "browser", permission: "browser.status", codemode: true, pinned: true },
-        execute: (_input, tool) => {
-          const status = connection.status(tool.sessionID)
-          return Effect.succeed({
-            output: status,
-            content: [{ type: "text" as const, text: status.recovery }],
-          })
-        },
+        options: { namespace: "browser", permission: "browser.status", codemode: { pinned: true } },
+        execute: (_input, tool) =>
+          Effect.gen(function* () {
+            yield* connection.refuse(tool, ["status", "tabs.list"])
+            const approved = yield* connection.authorize(tool, { type: "tabs.list" }, ["status", "tabs.list"])
+            if (!approved.connected)
+              return {
+                output: { attached: false, tabs: [], focusedTabID: null, rendered: false, recovery: approved.message },
+                content: [{ type: "text" as const, text: approved.message }],
+              }
+            const status = connection.status(tool.sessionID)
+            return {
+              output: status,
+              content: [{ type: "text" as const, text: status.recovery }],
+            }
+          }),
       })
       Browser.Operations.forEach((operation) => {
         const separator = operation.name.lastIndexOf(".")

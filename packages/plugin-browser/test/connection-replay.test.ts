@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test"
 import { Cause, Deferred, Effect, Exit, Fiber, Option, Queue, Stream } from "effect"
 import { TestClock } from "effect/testing"
+import type { PermissionEvaluation } from "@opencode/plugin/effect/permission"
 import type { Context } from "@opencode/plugin/effect/plugin"
 import { AbsolutePath } from "@opencode/schema/schema"
 import { Agent } from "@opencode/schema/agent"
@@ -65,106 +66,144 @@ const toolContext: Tool.Context = {
   progress: () => Effect.void,
 }
 
-const open = Effect.gen(function* () {
-  const events = yield* Queue.unbounded<Control>()
-  const sessionEvents = yield* Queue.unbounded<{ type: string; data: { sessionID: Session.ID } }>()
-  const tools = new Map<string, Tool.Info>()
-  let permissions: readonly Permission.Rule[] = []
-  const agents = [{ id: toolContext.agent, permissions: [] as Permission.Rule[] }]
-  let desktop: Desktop | undefined
-  const ctx = {
-    location: { directory },
-    agent: {
-      transform: (apply: (editor: { list: () => typeof agents }) => void) =>
-        Effect.sync(() => apply({ list: () => agents })),
-    },
-    permission: { hook: () => Effect.void, assert: () => Effect.void },
-    storage: { scan: () => Effect.succeed({ entries: [] }), set: () => Effect.void, remove: () => Effect.void },
-    event: { subscribe: () => Stream.fromQueue(sessionEvents) },
-    session: {
-      get: () => Effect.succeed({ id: sessionID, agent: toolContext.agent, location: { directory }, permissions }),
-      hook: () => Effect.void,
-      update: (input: { permissions: typeof permissions }) =>
-        Effect.sync(() => {
-          permissions = input.permissions
-        }),
-    },
-    rpc: {
-      register: (_definition: unknown, handlers: Desktop) => {
-        desktop = handlers
-        return Effect.succeed({
-          events: {
-            emit: (_name: string, data: Control) => Queue.offer(events, data).pipe(Effect.asVoid),
-          },
-          dispose: Effect.void,
-        })
-      },
-    },
-    tool: {
-      transform: (apply: (editor: { namespace(input: unknown): void; add(tool: Tool.Info): void }) => void) => {
-        apply({
-          namespace: () => undefined,
-          add: (tool) => {
-            const namespace = tool.options?.namespace
-            tools.set(namespace === undefined ? tool.name : `${namespace}.${tool.name}`, tool)
-          },
-        })
-        return Effect.succeed({ dispose: Effect.void })
-      },
-    },
-    skill: {
-      transform: (apply: (editor: { add(info: unknown): void }) => void) => {
-        apply({ add: () => undefined })
-        return Effect.succeed({ dispose: Effect.void })
-      },
-    },
-  } as unknown as Pick<
-    Context,
-    "agent" | "rpc" | "session" | "location" | "event" | "tool" | "skill" | "permission" | "storage"
-  >
-  const connection = yield* BrowserConnection.make(ctx)
-  yield* BrowserTools.register(ctx, connection)
-  const methods = desktop
-  if (!methods) return yield* Effect.die(new Error("Browser RPC was not registered"))
+type AssertCall = { readonly action: string; readonly resources: readonly string[] }
 
-  const take = (type: Control["type"], connectionID: string) =>
-    Effect.gen(function* () {
-      const skipped: Control[] = []
-      while (true) {
-        const event = yield* Queue.take(events)
-        if (event.type === type && event.connectionID === connectionID) {
-          for (const item of skipped) yield* Queue.offer(events, item)
-          return event
+const openWith = (options?: {
+  readonly agents?: Readonly<Record<string, readonly Permission.Rule[]>>
+  readonly evaluate?: (event: PermissionEvaluation) => Effect.Effect<void>
+}) =>
+  Effect.gen(function* () {
+    const events = yield* Queue.unbounded<Control>()
+    const sessionEvents = yield* Queue.unbounded<{ type: string; data: { sessionID: Session.ID } }>()
+    const tools = new Map<string, Tool.Info>()
+    const hooks: ((event: PermissionEvaluation) => Effect.Effect<void>)[] = []
+    if (options?.evaluate) hooks.push(options.evaluate)
+    const asserts: AssertCall[] = []
+    let permissions: readonly Permission.Rule[] = []
+    const agents = Object.entries(options?.agents ?? { [toolContext.agent]: [] }).map(([id, rules]) => ({
+      id: Agent.ID.make(id),
+      permissions: [...rules] as Permission.Rule[],
+    }))
+    let desktop: Desktop | undefined
+    const ctx = {
+      location: { directory },
+      agent: {
+        transform: (apply: (editor: { list: () => typeof agents }) => void) =>
+          Effect.sync(() => apply({ list: () => agents })),
+      },
+      permission: {
+        hook: (_name: "evaluate", hook: (event: PermissionEvaluation) => Effect.Effect<void>) =>
+          Effect.sync(() => {
+            hooks.push(hook)
+          }),
+        assert: (request: {
+          readonly sessionID: Session.ID
+          readonly agent?: Agent.ID
+          readonly action: string
+          readonly resources: readonly string[]
+        }) =>
+          Effect.gen(function* () {
+            asserts.push({ action: request.action, resources: request.resources })
+            const event: PermissionEvaluation = {
+              sessionID: request.sessionID,
+              agent: request.agent,
+              action: request.action,
+              resources: request.resources,
+              effect: "allow",
+            }
+            yield* Effect.forEach(hooks, (hook) => hook(event), { discard: true })
+            if (event.effect === "deny")
+              return yield* new Tool.Error({ message: event.message ?? "Permission denied" })
+          }),
+      },
+      storage: { scan: () => Effect.succeed({ entries: [] }), set: () => Effect.void, remove: () => Effect.void },
+      event: { subscribe: () => Stream.fromQueue(sessionEvents) },
+      session: {
+        get: () => Effect.succeed({ id: sessionID, agent: toolContext.agent, location: { directory }, permissions }),
+        hook: () => Effect.void,
+        update: (input: { permissions: typeof permissions }) =>
+          Effect.sync(() => {
+            permissions = input.permissions
+          }),
+      },
+      rpc: {
+        register: (_definition: unknown, handlers: Desktop) => {
+          desktop = handlers
+          return Effect.succeed({
+            events: {
+              emit: (_name: string, data: Control) => Queue.offer(events, data).pipe(Effect.asVoid),
+            },
+            dispose: Effect.void,
+          })
+        },
+      },
+      tool: {
+        transform: (apply: (editor: { namespace(input: unknown): void; add(tool: Tool.Info): void }) => void) => {
+          apply({
+            namespace: () => undefined,
+            add: (tool) => {
+              const namespace = tool.options?.namespace
+              tools.set(namespace === undefined ? tool.name : `${namespace}.${tool.name}`, tool)
+            },
+          })
+          return Effect.succeed({ dispose: Effect.void })
+        },
+      },
+      skill: {
+        transform: (apply: (editor: { add(info: unknown): void }) => void) => {
+          apply({ add: () => undefined })
+          return Effect.succeed({ dispose: Effect.void })
+        },
+      },
+    } as unknown as Pick<
+      Context,
+      "agent" | "rpc" | "session" | "location" | "event" | "tool" | "skill" | "permission" | "storage"
+    >
+    const connection = yield* BrowserConnection.make(ctx)
+    yield* BrowserTools.register(ctx, connection)
+    const methods = desktop
+    if (!methods) return yield* Effect.die(new Error("Browser RPC was not registered"))
+
+    const take = (type: Control["type"], connectionID: string) =>
+      Effect.gen(function* () {
+        const skipped: Control[] = []
+        while (true) {
+          const event = yield* Queue.take(events)
+          if (event.type === type && event.connectionID === connectionID) {
+            for (const item of skipped) yield* Queue.offer(events, item)
+            return event
+          }
+          skipped.push(event)
         }
-        skipped.push(event)
-      }
-    }).pipe(
-      Effect.timeoutOrElse({
-        duration: "2 seconds",
-        orElse: () => Effect.die(new Error(`timed out waiting for browser ${type}`)),
-      }),
-    )
+      }).pipe(
+        Effect.timeoutOrElse({
+          duration: "2 seconds",
+          orElse: () => Effect.die(new Error(`timed out waiting for browser ${type}`)),
+        }),
+      )
 
-  const connect = (connectionID: string) =>
-    Effect.gen(function* () {
-      const fiber = yield* methods
-        .attach({ sessionID, connectionID, version: 4 }, call)
-        .pipe(Effect.forkScoped({ startImmediately: true }))
-      yield* take("attached", connectionID)
-      return fiber
-    })
+    const connect = (connectionID: string) =>
+      Effect.gen(function* () {
+        const fiber = yield* methods
+          .attach({ sessionID, connectionID, version: 4 }, call)
+          .pipe(Effect.forkScoped({ startImmediately: true }))
+        yield* take("attached", connectionID)
+        return fiber
+      })
 
-  const invoke = (name: string, input: object) => {
-    const tool = tools.get(name)
-    if (!tool) return Effect.die(new Error(`missing browser tool ${name}`))
-    return tool.execute(input, toolContext)
-  }
+    const invoke = (name: string, input: object, agent = toolContext.agent) => {
+      const tool = tools.get(name)
+      if (!tool) return Effect.die(new Error(`missing browser tool ${name}`))
+      return tool.execute(input, { ...toolContext, agent })
+    }
 
-  const end = (type: "session.deleted" | "session.moved") =>
-    Queue.offer(sessionEvents, { type, data: { sessionID } }).pipe(Effect.asVoid)
+    const end = (type: "session.deleted" | "session.moved") =>
+      Queue.offer(sessionEvents, { type, data: { sessionID } }).pipe(Effect.asVoid)
 
-  return { events, methods, connect, invoke, take, connection, end }
-})
+    return { events, methods, connect, invoke, take, connection, end, asserts }
+  })
+
+const open = openWith()
 
 const recovery = (message: string) => {
   expect(message).toContain("desktop app")
@@ -825,6 +864,106 @@ test("a failed re-inspection reports that the action did not run", async () => {
         expect(failure).toContain("did not run")
         expect(failure).not.toContain("inspect broke")
         expect(app.connection.waiting(sessionID)).toBe(0)
+      }),
+    ),
+  )
+})
+
+test("browser.status refuses a browser-denied agent while detached without leaking attachment state", async () => {
+  await Effect.runPromise(
+    Effect.scoped(
+      Effect.gen(function* () {
+        const app = yield* openWith({
+          agents: { [toolContext.agent]: [{ action: "browser", resource: "*", effect: "deny" }] },
+        })
+        const failure = message(yield* Effect.exit(app.invoke("browser.status", {})))
+        expect(failure).toStartWith("[browser.denied]")
+        expect(failure).not.toContain("No browser is attached")
+        expect(failure).not.toContain("Shuvgeist")
+        expect(app.asserts).toEqual([])
+      }),
+    ),
+  )
+})
+
+for (const resource of ["*", "tabs.list", "status"] as const) {
+  test(`browser.status refuses browser ${resource} deny while attached without leaking tabs`, async () => {
+    await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const app = yield* openWith({
+            agents: { [toolContext.agent]: [{ action: "browser", resource, effect: "deny" }] },
+          })
+          yield* app.connect("desktop-a")
+          yield* app.methods.state({ sessionID, connectionID: "desktop-a", state }, call)
+          const failure = message(yield* Effect.exit(app.invoke("browser.status", {})))
+          expect(failure).toStartWith("[browser.denied]")
+          expect(failure).not.toContain(tabID)
+          expect(failure).not.toContain(tab.url)
+          expect(failure).not.toContain(tab.title)
+          expect(failure).not.toContain("desktop-a")
+          expect(app.asserts).toEqual([])
+        }),
+      ),
+    )
+  })
+}
+
+test("browser.status enforces a managed permission.evaluate deny when attached without leaking tabs", async () => {
+  await Effect.runPromise(
+    Effect.scoped(
+      Effect.gen(function* () {
+        const app = yield* openWith({
+          evaluate: (event) =>
+            Effect.sync(() => {
+              if (event.action !== "browser") return
+              event.effect = "deny"
+              event.message = "Blocked by managed policy"
+            }),
+        })
+        yield* app.connect("desktop-a")
+        yield* app.methods.state({ sessionID, connectionID: "desktop-a", state }, call)
+        const failure = message(yield* Effect.exit(app.invoke("browser.status", {})))
+        expect(failure).toBe("Blocked by managed policy")
+        expect(failure).not.toContain(tabID)
+        expect(failure).not.toContain(tab.url)
+        expect(failure).not.toContain(tab.title)
+        expect(failure).not.toContain("desktop-a")
+        expect(app.asserts).toEqual([{ action: "browser", resources: ["status", "tabs.list"] }])
+      }),
+    ),
+  )
+})
+
+test("browser.status reports detached recovery without prompting and attached tabs for an allowed agent", async () => {
+  await Effect.runPromise(
+    Effect.scoped(
+      Effect.gen(function* () {
+        const app = yield* open
+        const detached = yield* app.invoke("browser.status", {})
+        expect(detached.output).toMatchObject({
+          attached: false,
+          rendered: false,
+          tabs: [],
+          focusedTabID: null,
+        })
+        const guidance = detached.output as { recovery: string }
+        expect(guidance.recovery).toContain("No browser is attached")
+        recovery(guidance.recovery)
+        expect(detached.content).toEqual([{ type: "text", text: guidance.recovery }])
+        expect(app.asserts).toEqual([])
+
+        yield* app.connect("desktop-a")
+        yield* app.methods.state({ sessionID, connectionID: "desktop-a", state }, call)
+        const attached = yield* app.invoke("browser.status", {})
+        expect(attached.output).toMatchObject({
+          attached: true,
+          rendered: true,
+          connectionID: "desktop-a",
+          focusedTabID: tabID,
+          tabs: [tab],
+        })
+        expect(app.asserts).toEqual([{ action: "browser", resources: ["status", "tabs.list"] }])
       }),
     ),
   )
