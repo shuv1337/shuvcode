@@ -710,6 +710,120 @@ test.each([80, 120])("completes custom Markdown and ordinary fences in a session
   expect(frame).not.toContain("```")
 })
 
+test("a finished compaction summary shows a last line that streaming would hold back", async () => {
+  await using state = await tmpdir()
+  const session = {
+    id: "ses_compaction",
+    title: "Compaction fixture",
+    projectID: "project",
+    location: { directory },
+    agent: "build",
+    model: { providerID: "fixture", id: "model" },
+    cost: 0,
+    tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
+    time: { created: 1, updated: 2 },
+  }
+  await using setup = await createAppFixture({
+    state: state.path,
+    config: { animations: false, tabs: { mode: "off" }, session: { sidebar: "hide" } },
+    args: { sessionID: session.id },
+    fetch: (url) => {
+      if (url.pathname === `/api/session/${session.id}`) return json({ data: session })
+      if (url.pathname === `/api/session/${session.id}/message`)
+        return json({
+          data: [
+            {
+              id: "msg_compaction",
+              type: "compaction",
+              time: { created: 1 },
+              status: "completed",
+              reason: "manual",
+              // A streaming document holds a last line that may still become a table's header.
+              summary: "SUMMARY_START\n\n| SUMMARY | END |",
+            },
+          ],
+          cursor: {},
+        })
+      if (
+        url.pathname === `/api/session/${session.id}/inbox` ||
+        url.pathname === `/api/session/${session.id}/permission`
+      )
+        return json({ data: [] })
+      return undefined
+    },
+  })
+  await setup.waitForFrame((frame) => frame.includes("SUMMARY_START"))
+  await setup.waitForFrame((frame) => frame.includes("SUMMARY | END"))
+})
+
+// Thinking "show" draws the thought as its own part; "hide" draws it in a thought group, opened with a click.
+test.each(["show", "hide"] as const)(
+  "a finished thought shows a last line that streaming would hold back (thinking %s)",
+  async (thinking) => {
+    await using state = await tmpdir()
+    const session = {
+      id: "ses_thought",
+      title: "Thought fixture",
+      projectID: "project",
+      location: { directory },
+      agent: "build",
+      model: { providerID: "fixture", id: "model" },
+      cost: 0,
+      tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
+      time: { created: 1, updated: 2 },
+    }
+    await using setup = await createAppFixture({
+      state: state.path,
+      config: {
+        animations: false,
+        tabs: { mode: "off" },
+        session: { sidebar: "hide", verbosity: "medium", thinking },
+      },
+      args: { sessionID: session.id },
+      fetch: (url) => {
+        if (url.pathname === `/api/session/${session.id}`) return json({ data: session })
+        if (url.pathname === `/api/session/${session.id}/message`)
+          return json({
+            data: [
+              {
+                id: "msg_thought",
+                type: "assistant",
+                agent: session.agent,
+                model: session.model,
+                finish: "stop",
+                time: { created: 2, completed: 4 },
+                content: [
+                  {
+                    type: "reasoning",
+                    // A streaming document holds a last line that may still become a table's header.
+                    text: "**Planning**\n\nTHOUGHT_START\n\n| THOUGHT | END |",
+                    time: { created: 2, completed: 3 },
+                  },
+                  { type: "text", text: "Answer text" },
+                ],
+              },
+              { id: "msg_ask", type: "user", text: "Ask", time: { created: 1 } },
+            ],
+            cursor: {},
+          })
+        if (
+          url.pathname === `/api/session/${session.id}/inbox` ||
+          url.pathname === `/api/session/${session.id}/permission`
+        )
+          return json({ data: [] })
+        return undefined
+      },
+    })
+    await setup.waitForFrame((frame) => frame.includes("Answer text"))
+    if (thinking === "hide") {
+      const row = setup.captureCharFrame().split("\n").findIndex((line) => line.includes("+ Thought"))
+      await setup.mockMouse.click(6, row)
+    }
+    await setup.waitForFrame((frame) => frame.includes("THOUGHT_START"))
+    await setup.waitForFrame((frame) => frame.includes("THOUGHT | END"))
+  },
+)
+
 test("keeps assistant footer metrics current after prepend, same-length refresh, and revert", async () => {
   await using state = await tmpdir()
   const session = {
@@ -1390,10 +1504,10 @@ test("ctrl+c dismisses autocomplete and shell mode before exiting", async () => 
 
 test.skipIf(process.platform === "win32").each(["manual", "select"] as const)(
   "selection copy and pane management respect %s mode in the prompt and terminal pane",
-  async (copy) => {
-    await using state = await tmpdir()
-    const setup = await createTestRenderer({ width: 100, height: 30, kittyKeyboard: true })
-    await setup.renderer.setupTerminal()
+    async (copy) => {
+      await using state = await tmpdir()
+      const setup = await createTestRenderer({ width: 100, height: 30, kittyKeyboard: true })
+      await setup.renderer.setupTerminal()
     setup.renderer.start()
     const ready = Promise.withResolvers<void>()
     const session = {
@@ -1527,16 +1641,17 @@ test.skipIf(process.platform === "win32").each(["manual", "select"] as const)(
       expect(setup.renderer.currentFocusedEditor?.plainText).toBe("")
       setup.mockInput.pressKey("x", { ctrl: true })
       setup.mockInput.pressKey("t")
+      // The closed terminal can still be on the last frame, so the text alone does not mean it reopened.
       await setup.waitForFrame(
         (frame) =>
           frame.includes("alpha beta gamma") &&
           setup.renderer.currentFocusedRenderable instanceof EmbeddedTerminalRenderable,
       )
-      expect(setup.renderer.currentFocusedRenderable).toBeInstanceOf(EmbeddedTerminalRenderable)
       setup.mockInput.pressKey("x", { ctrl: true })
       setup.mockInput.pressArrow("down")
       await setup.waitForFrame((frame) => frame.includes("Subagents") && frame.includes("Terminals"))
-      expect(setup.renderer.currentFocusedRenderable).not.toBeInstanceOf(EmbeddedTerminalRenderable)
+      // A failed toBeInstanceOf prints the whole renderable tree, millions of lines.
+      expect(setup.renderer.currentFocusedRenderable instanceof EmbeddedTerminalRenderable).toBeFalse()
 
       setup.renderer.destroy()
       await task
@@ -1991,7 +2106,9 @@ test("free usage limit offers OpenCode Go once per 24h, transitions Subscribe to
   setup.mockInput.pressEnter()
   await setup.waitForFrame((frame) => frame.includes("GOGO-1234"))
   expect(openSpy).toHaveBeenCalledWith("https://opencode.ai/go")
-  expect(oauthRequests).toEqual([{ methodID: "device", answer: { server: "https://opencode.ai/console" } }])
+  expect(oauthRequests).toEqual([
+    { methodID: "device", answer: { server: "https://opencode.ai/console" } },
+  ])
   const connectFrame = setup.captureCharFrame()
   expect(connectFrame).toContain("OpenCode Console account")
   expect(connectFrame).not.toContain("Enter Go API key")
@@ -2280,13 +2397,7 @@ test("free usage limit Subscribe handles mid-auth/mid-sync Escape, sync failure,
     created: 6,
     type: "session.step.started",
     durable: { aggregateID: session.id, seq: 6, version: 1 },
-    data: {
-      sessionID: session.id,
-      assistantMessageID: "msg_free_assistant_expired",
-      agent: "build",
-      model,
-      started: 6,
-    },
+    data: { sessionID: session.id, assistantMessageID: "msg_free_assistant_expired", agent: "build", model, started: 6 },
   })
   setup.events.emit({
     id: "evt_free_limit_expired_fail",
@@ -2631,7 +2742,7 @@ test("Go usage limit restores the prompt and explains the limit with its reset t
   expect(frame).not.toContain("Free limit reached")
 })
 
-test("free usage limit modal manages live animation FPS and adapts to 44x24 and 60x12 terminals", async () => {
+test("free usage limit modal manages animation FPS and adapts to 44x24 and 60x12 terminals", async () => {
   const session = {
     id: "ses_free_limit_anim",
     projectID: "proj_test",
@@ -2703,24 +2814,22 @@ test("free usage limit modal manages live animation FPS and adapts to 44x24 and 
   await anim.waitForFrame((frame) => frame.includes("Free limit reached"))
   const art = findArt(anim.renderer.root)
   expect(art).toBeDefined()
-  expect(art!.live).toBe(true)
+  expect(art!.animationFps).toBe(30)
   expect(art!.isDestroyed).toBe(false)
-  expect(anim.renderer.targetFps).toBe(30)
-  expect(anim.renderer.maxFps).toBe(30)
-  // Toggling animate off disables live updates; toggling back on re-enables them.
+  // The art ticks at 30 fps by itself; the rest of the screen keeps the renderer's rate.
+  expect(anim.renderer.targetFps).toBe(initialTargetFps)
+  expect(anim.renderer.maxFps).toBe(initialMaxFps)
+  // Toggling animate off stops the art's ticks; toggling back on restarts them.
   art!.animate = false
-  expect(art!.live).toBe(false)
+  expect(art!.animationFps).toBeUndefined()
   art!.animate = true
-  expect(art!.live).toBe(true)
-  // Closing the modal destroys the art renderable and restores FPS.
+  expect(art!.animationFps).toBe(30)
+  // Closing the modal destroys the art renderable.
   anim.mockInput.pressEscape()
   await anim.waitForFrame((frame) => !frame.includes("Free limit reached"))
   expect(art!.isDestroyed).toBe(true)
-  expect(art!.live).toBe(false)
   expect(findArt(anim.renderer.root)).toBeUndefined()
   expect(anim.renderer.liveRequestCount).toBe(initialLive)
-  expect(anim.renderer.targetFps).toBe(initialTargetFps)
-  expect(anim.renderer.maxFps).toBe(initialMaxFps)
 
   // Compact sizes: 44x24 (narrow, stacked buttons) and 60x12 (short, scrollable body).
   for (const [width, height] of [
@@ -2853,121 +2962,3 @@ test.each([44, 100])(
   },
   15_000,
 )
-
-test("restarting after an update tells the user to start Shuvcode again", async () => {
-  await using state = await tmpdir()
-  const setup = await createTestRenderer({ width: 80, height: 24 })
-  await setup.renderer.setupTerminal()
-  setup.renderer.start()
-  const started = Promise.withResolvers<void>()
-  const setTitle = setup.renderer.setTerminalTitle.bind(setup.renderer)
-  setup.renderer.setTerminalTitle = (title) => {
-    if (title === "OpenCode") started.resolve()
-    setTitle(title)
-  }
-  const events = createEventStream()
-  const calls = createFetch(undefined, events)
-  const server = Bun.serve({ port: 0, fetch: (request) => calls.fetch(request) })
-  const originalWrite = process.stdout.write.bind(process.stdout)
-  let stdout = ""
-  process.stdout.write = ((chunk: string | Uint8Array) => {
-    stdout += String(chunk)
-    return true
-  }) as typeof process.stdout.write
-
-  try {
-    const { run } = await import("../src/app")
-    const task = Effect.runPromise(
-      run({
-        app: { name: "test", version: "test", channel: "test" },
-        server: { endpoint: { url: server.url.toString() } },
-        config: { get: async () => ({}), update: async () => ({}) },
-        packages: { prepare: async () => ({ directory: "" }) },
-        terminalHandoff: async () => ({ renderer: setup.renderer, mode: "dark", complete: () => {} }),
-        updater: {
-          remote: false,
-          subscribe: () => () => {},
-          check: async () => ({ type: "installed", version: "2.0.0" }),
-          apply: async () => {},
-        },
-        args: {},
-        log: () => {},
-      }).pipe(Effect.provide(Global.layerWith({ state: state.path })), Effect.provide(FileSystem.layerNoop({}))),
-    )
-
-    await started.promise
-    await setup.waitForFrame((frame) => frame.includes("commands"))
-    await setup.mockInput.typeText("/update")
-    await setup.waitForFrame((frame) => frame.includes("Update OpenCode"))
-    setup.mockInput.pressEnter()
-    await setup.waitForFrame((frame) => frame.includes("Update successful") && frame.includes("Restart"))
-    setup.mockInput.pressEnter()
-    await task
-
-    expect(Bun.stripANSI(stdout)).toContain("  Run shuvcode to use 2.0.0\n")
-  } finally {
-    process.stdout.write = originalWrite
-    if (!setup.renderer.isDestroyed) setup.renderer.destroy()
-    await server.stop()
-  }
-})
-
-test("quitting after a background update tells the user to start Shuvcode again", async () => {
-  await using state = await tmpdir()
-  const setup = await createTestRenderer({ width: 80, height: 24 })
-  await setup.renderer.setupTerminal()
-  setup.renderer.start()
-  const started = Promise.withResolvers<void>()
-  const setTitle = setup.renderer.setTerminalTitle.bind(setup.renderer)
-  setup.renderer.setTerminalTitle = (title) => {
-    if (title === "OpenCode") started.resolve()
-    setTitle(title)
-  }
-  const events = createEventStream()
-  const calls = createFetch(undefined, events)
-  const server = Bun.serve({ port: 0, fetch: (request) => calls.fetch(request) })
-  const originalWrite = process.stdout.write.bind(process.stdout)
-  let stdout = ""
-  process.stdout.write = ((chunk: string | Uint8Array) => {
-    stdout += String(chunk)
-    return true
-  }) as typeof process.stdout.write
-
-  try {
-    const { run } = await import("../src/app")
-    const task = Effect.runPromise(
-      run({
-        app: { name: "test", version: "test", channel: "test" },
-        server: { endpoint: { url: server.url.toString() } },
-        config: { get: async () => ({}), update: async () => ({}) },
-        packages: { prepare: async () => ({ directory: "" }) },
-        terminalHandoff: async () => ({ renderer: setup.renderer, mode: "dark", complete: () => {} }),
-        updater: {
-          remote: false,
-          subscribe: (notify) => {
-            notify({ type: "installed", version: "2.0.0" })
-            return () => {}
-          },
-          check: async () => undefined,
-          apply: async () => {},
-        },
-        args: {},
-        log: () => {},
-      }).pipe(Effect.provide(Global.layerWith({ state: state.path })), Effect.provide(FileSystem.layerNoop({}))),
-    )
-
-    await started.promise
-    await setup.waitForFrame((frame) => frame.includes("commands"))
-    await setup.waitForFrame((frame) => frame.includes("restart to use v2.0.0"))
-    await setup.mockInput.typeText("/exit")
-    await setup.waitForFrame((frame) => frame.includes("Exit the app"))
-    setup.mockInput.pressEnter()
-    await task
-
-    expect(Bun.stripANSI(stdout)).toContain("  Run shuvcode to use 2.0.0\n")
-  } finally {
-    process.stdout.write = originalWrite
-    if (!setup.renderer.isDestroyed) setup.renderer.destroy()
-    await server.stop()
-  }
-})

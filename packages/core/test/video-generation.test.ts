@@ -109,7 +109,11 @@ it.effect("keeps video jobs across restarts and forgets them a day after they fi
       expect(yield* settled(first.slow)).toMatchObject({ status: "completed" })
 
       yield* TestClock.adjust("25 hours")
-      yield* eventually(records, (page) => page.entries.length === 0)
+      // A poll already past its clock read when the day passes removes nothing, so keep advancing until one does.
+      yield* eventually(
+        TestClock.adjust("5 seconds").pipe(Effect.andThen(records)),
+        (page) => page.entries.length === 0,
+      )
       expect(yield* generations.get(first.job.id).pipe(Effect.flip)).toMatchObject({
         _tag: "VideoGeneration.NotFoundError",
       })
@@ -127,8 +131,7 @@ it.effect("waits for a job to finish and cancels a running one", () =>
       const slow = yield* generations.start({ model, prompt: "a snail" })
       const waiting = yield* generations.wait(done.id).pipe(Effect.forkChild({ startImmediately: true }))
       state.status.set("remote_1", { status: "completed" })
-      yield* settled(done.id)
-      // The waiter's next poll can still be asleep after the job record is settled.
+      // Advance until the waiter itself is done: it can read "running" and only then sleep, after the job finishes.
       yield* advance(() => waiting.pollUnsafe() !== undefined)
       expect(yield* Fiber.join(waiting)).toMatchObject({ id: done.id, status: "completed", blobs: [{}, {}] })
 

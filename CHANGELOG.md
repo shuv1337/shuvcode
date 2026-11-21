@@ -2,6 +2,41 @@
 
 Release notes for OpenCode V2, newest first.
 
+## v2.3.2-shuv.1 — 2026-11-20
+
+Syncs upstream `dev` through `a96327d3e8`: 104 commits beyond the dev pin in [#508](https://github.com/shuv1337/shuvcode/pull/508), or 159 dev commits plus the v2.3.2 release since v2.3.1.
+
+### Highlights
+
+- **New terminal designs and theme names.** The new OpenCode theme is now `opencode`, and the previous one is `opencode-classic`. Night Owl remains Shuvcode's default.
+- **Code Mode scripts** run on the psychoscript engine and get a two-minute foreground window before continuing in the background.
+- **Background work** appears as running work in the session, rather than looking finished while it is still active.
+- **Browser pane tools** gain clearer waits, file previews and safeguards for agent actions.
+- **Antigravity Gemini 4 Neon** is available on plans that include it.
+
+### Breaking changes
+
+- Code Mode session tools move to `tools.shuvcode.session.rename` and `tools.shuvcode.session.move`. The direct names (`shuvcode_session_rename`, `shuvcode_session_move`) and permission actions are unchanged.
+
+### Fork changes since v2.3.1-shuv.1
+
+- Antigravity fails once rather than retrying a 429 on nearly unused quota ([#503](https://github.com/shuv1337/shuvcode/pull/503)); Gemini 4 Neon was added in [#507](https://github.com/shuv1337/shuvcode/pull/507).
+- Model-facing tool namespaces and prompts use Shuvcode ([#504](https://github.com/shuv1337/shuvcode/pull/504)).
+- The npm release pipeline gates platform packages before publishing the top-level CLI ([#506](https://github.com/shuv1337/shuvcode/pull/506)).
+- Preserves Night Owl, browser status and reconnect grace (only unretrieved commands may replay), root-family permission prompts ([#429](https://github.com/shuv1337/shuvcode/pull/429)) and the hidden Claude Agent SDK provider.
+
+### Behavior and migration
+
+- The server no longer waits up to five seconds for managed-policy plugins (`ce7b4252d8`, included in #508). A cold Location may briefly list providers that policy will deny once the plugin loads.
+- `full_codemode` defaults on only in local/dev, not in release builds. When enabled, it hides `glob`, `grep` and `webfetch`.
+- Session parts are written to `session_part` by default; opt out with `experimental.part_rows: false`. This sync adds the additive machine and machine-key migrations. SQLite full-text search remains opt-in (`sqlite_fts`).
+- The TUI uses OpenTUI 0.9.4. Model context uses `<system-update>` and `<background-result>` for updates and completed background work.
+- Use `browser.tabs.open({ path })` instead of `browser.preview`. An unavailable browser now reports `[browser.not_attached]`; `[browser.disconnected]` still means the connection closed mid-call.
+
+### Rollback
+
+Roll back to `v2.3.1-shuv.4`, which already reads `session_part` rows and ignores the additive machine tables. No `v2.3.1-shuv.*` build can decode persisted `Job.Recovery` rows with `kind: "video"`: let video jobs finish or cancel them before rolling back.
+
 ## v2.3.2 — 2026-11-18
 
 ### Highlights

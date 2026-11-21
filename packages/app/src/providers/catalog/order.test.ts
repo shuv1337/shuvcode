@@ -4,6 +4,7 @@ import { connectPopular, omitHiddenProviderCatalog, popularProviders, withoutHid
 test("keeps Anthropic visible and drops Claude Agent from provider menus", () => {
   expect(popularProviders).toContain("anthropic")
   expect(connectPopular).toContain("anthropic")
+  expect(connectPopular.slice(0, 2)).toEqual(["opencode-go", "opencode"])
   expect(popularProviders).not.toContain("claude-agent")
   expect(connectPopular).not.toContain("claude-agent")
 

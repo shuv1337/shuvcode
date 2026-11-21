@@ -256,7 +256,7 @@ export const layer = (options?: Options) =>
           videos,
           blobs,
           fs,
-          environment,
+          files: environment.files,
           scope,
           notificationID: background.notificationID,
           sessionID: recovery.sessionID,

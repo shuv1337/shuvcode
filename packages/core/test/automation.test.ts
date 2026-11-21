@@ -1773,8 +1773,8 @@ describe("Automation", () => {
           "automation_pause",
           "automation_resume",
           "automation_delete",
-          "session_move",
-          "session_rename",
+          "session.move",
+          "session.rename",
           "worktree_create",
           "worktree_remove",
         ]) {
