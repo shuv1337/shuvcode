@@ -24,7 +24,7 @@ async function fixture() {
     access: `secret-access-${account}`,
     refresh: `secret-refresh-${account}`,
     expires: windowEnd + 600_000,
-    metadata: { email: `${account}@example.test`, projectId: "test-project", custom: { retained: true } },
+    metadata: { email: `${account}@example.test`, custom: { retained: true } },
   })
   const db = new Database(source)
   db.exec(
@@ -41,7 +41,7 @@ async function fixture() {
   )
   insert.run("claude-old", "anthropic", "Old Claude", JSON.stringify(oauth("anthropic", "old")), 1, 1)
   insert.run("claude-new", "anthropic", "New Claude", JSON.stringify(oauth("claude-pro-max", "new")), 0, 2)
-  insert.run("google", "google", "Google", JSON.stringify(oauth("google-ai-pro", "google")), null, 1)
+  insert.run("google", "google", "Google", JSON.stringify(oauth("google-solstice", "google")), null, 1)
   db.exec(
     "CREATE TABLE session_v2 (id TEXT); INSERT INTO session_v2 VALUES ('secret-source-session'); CREATE TABLE execution_claim (id TEXT); INSERT INTO execution_claim VALUES ('secret-source-claim')",
   )
@@ -120,7 +120,7 @@ test("imports typed credentials, metadata, all accounts and effective selection,
       metadata: { shuvcodeAuthImport: "access-only", custom: { retained: true } },
     })
     expect(String(row.value.type === "oauth" && row.value.methodID)).toBe(
-      row.integrationID === "anthropic" ? "claude-pro-max" : "google-ai-pro",
+      row.integrationID === "anthropic" ? "claude-pro-max" : "google-solstice",
     )
   }
   const db = new Database(join(input.target, "opencode.db"), { readonly: true })
@@ -220,10 +220,6 @@ for (const [name, sql] of [
     "relative seconds expiry",
     "UPDATE credential SET value=json_set(value,'$.expires',3600) WHERE integration_id='google'",
   ],
-  [
-    "missing project",
-    "UPDATE credential SET value=json_remove(value,'$.metadata.projectId') WHERE integration_id='google'",
-  ],
   ["invalid schema", "UPDATE credential SET value='secret-not-json' WHERE integration_id='google'"],
   ["missing access", "UPDATE credential SET value=json_set(value,'$.access','') WHERE integration_id='google'"],
 ])
@@ -265,51 +261,6 @@ test("rejects uncheckpointed source and invalid mappings and relative paths", as
   ])
     await expect(CredentialImport.run({ ...input, ...patch })).rejects.toBeInstanceOf(CredentialImport.ImportError)
   expect(await readdir(input.root)).toEqual(["source.db"])
-})
-
-test("legacy adapter accepts only complete absolute-expiry accounts and preserves activeIndex", async () => {
-  const input = await fixture()
-  mutate(input.source, "DELETE FROM credential WHERE integration_id='google'")
-  const legacyAccounts = join(input.root, "accounts.json")
-  await Bun.write(
-    legacyAccounts,
-    JSON.stringify({
-      activeIndex: 0,
-      accounts: [0, 1].map((index) => ({
-        email: `legacy${index}@example.test`,
-        refreshToken: "secret-refresh-never-copied",
-        accessToken: `secret-legacy-${index}`,
-        expires: input.windowEnd + 300_000,
-        projectId: "project",
-        metadata: { custom: 42 },
-      })),
-    }),
-  )
-  const before = await readFile(legacyAccounts)
-  await CredentialImport.run({ ...input, legacyAccounts })
-  const google = (await credentials(input.target)).filter((row) => row.integrationID === "google")
-  expect(google).toHaveLength(2)
-  expect(google.at(-1)?.label).toBe("legacy0@example.test")
-  expect(google[0]?.value).toMatchObject({
-    refresh: "",
-    metadata: { projectId: "project", custom: 42, shuvcodeAuthImport: "access-only" },
-  })
-  expect(await readFile(legacyAccounts)).toEqual(before)
-})
-
-test("refresh-only legacy account cannot trigger a refresh or publish an incomplete target", async () => {
-  const input = await fixture()
-  mutate(input.source, "DELETE FROM credential WHERE integration_id='google'")
-  const legacyAccounts = join(input.root, "accounts.json")
-  await Bun.write(
-    legacyAccounts,
-    JSON.stringify({
-      activeIndex: 0,
-      accounts: [{ refreshToken: "secret-refresh|project", email: "test@example.test" }],
-    }),
-  )
-  await expect(CredentialImport.run({ ...input, legacyAccounts })).rejects.toBeInstanceOf(CredentialImport.ImportError)
-  expect(await readdir(input.root)).not.toContain("target")
 })
 
 test("CLI prints only safe summary or fixed errors", async () => {

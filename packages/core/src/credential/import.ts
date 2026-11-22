@@ -16,7 +16,7 @@ const Mapping = Schema.Struct({
       Schema.String,
       Schema.Struct({
         integrationID: Provider,
-        methodID: Schema.optional(Schema.Literals(["claude-pro-max", "google-ai-pro"])),
+        methodID: Schema.optional(Schema.Literals(["claude-pro-max", "google-solstice"])),
       }),
     ),
   ),
@@ -32,7 +32,6 @@ const Options = Schema.Struct({
   source: Schema.String,
   target: Schema.String,
   windowEnd: Schema.Number,
-  legacyAccounts: Schema.optional(Schema.String),
   mapping: Schema.optional(Mapping),
   dryRun: Schema.optional(Schema.Boolean),
 })
@@ -47,18 +46,6 @@ const Row = Schema.Struct({
   value: Schema.String,
   active: Schema.NullOr(Schema.Literals([0, 1])),
   time_created: Schema.Number,
-})
-const Legacy = Schema.Struct({
-  activeIndex: Schema.Number,
-  accounts: Schema.Array(
-    Schema.Struct({
-      accessToken: Schema.String,
-      expires: Schema.Number,
-      projectId: Schema.String,
-      email: Schema.optional(Schema.String),
-      metadata: Schema.optional(Schema.Record(Schema.String, Schema.Unknown)),
-    }),
-  ),
 })
 const providers = ["openrouter", "anthropic", "google"] as const
 
@@ -81,8 +68,7 @@ export async function run(input: unknown) {
 
 async function perform(input: unknown) {
   const options = Schema.decodeUnknownSync(Options)(input)
-  if (![options.source, options.target, ...(options.legacyAccounts ? [options.legacyAccounts] : [])].every(isAbsolute))
-    throw new Error("paths")
+  if (![options.source, options.target].every(isAbsolute)) throw new Error("paths")
   if (!Number.isSafeInteger(options.windowEnd) || options.windowEnd < Date.now()) throw new Error("window")
   const target = resolve(options.target)
   if (await exists(target)) throw new Error("target")
@@ -120,7 +106,7 @@ async function perform(input: unknown) {
       value.type === "oauth" &&
       !(
         (integrationID === "anthropic" && (method === "anthropic" || method === "claude-pro-max")) ||
-        (integrationID === "google" && method === "google-ai-pro")
+        (integrationID === "google" && method === "google-solstice")
       )
     )
       throw new Error("method")
@@ -136,40 +122,6 @@ async function perform(input: unknown) {
       },
     ]
   })
-  // The database is authoritative; never overlay a second Google account store.
-  if (options.legacyAccounts) {
-    if (accounts.some((account) => account.integrationID === "google")) throw new Error("duplicate source")
-    const legacy = Schema.decodeUnknownSync(Schema.fromJsonString(Legacy))(
-      await readFile(options.legacyAccounts, "utf8"),
-    )
-    if (!Number.isInteger(legacy.activeIndex) || legacy.activeIndex < 0 || legacy.activeIndex >= legacy.accounts.length)
-      throw new Error("selection")
-    accounts.push(
-      ...legacy.accounts.map((account, index) => ({
-        sourceID: `legacy-google-${index}`,
-        integrationID: "google" as const,
-        label: account.email ?? `Google account ${index + 1}`,
-        value: accessOnly(
-          Credential.OAuth.make({
-            type: "oauth",
-            methodID: Integration.MethodID.make("google-ai-pro"),
-            access: account.accessToken,
-            refresh: "",
-            expires: account.expires,
-            metadata: {
-              ...account.metadata,
-              projectId: account.projectId,
-              ...(account.email ? { email: account.email } : {}),
-            },
-          }),
-          "google",
-          options.windowEnd,
-        ),
-        active: index === legacy.activeIndex ? (1 as const) : (0 as const),
-        created: index,
-      })),
-    )
-  }
   if (new Set(accounts.map((account) => account.sourceID)).size !== accounts.length) throw new Error("duplicates")
   const selections = providers.map((provider) => {
     const candidates = accounts.filter((account) => account.integrationID === provider)
@@ -240,11 +192,9 @@ async function perform(input: unknown) {
 function accessOnly(value: Credential.OAuth, provider: string, windowEnd: number) {
   if (!value.access.trim() || !Number.isSafeInteger(value.expires) || value.expires < windowEnd + 300_000)
     throw new Error("expiry")
-  if (provider === "google" && (typeof value.metadata?.projectId !== "string" || !value.metadata.projectId.trim()))
-    throw new Error("project")
   return Schema.decodeUnknownSync(Credential.OAuth)({
     ...value,
-    methodID: provider === "anthropic" ? "claude-pro-max" : "google-ai-pro",
+    methodID: provider === "anthropic" ? "claude-pro-max" : "google-solstice",
     refresh: "",
     metadata: { ...value.metadata, shuvcodeAuthImport: "access-only" },
   })

@@ -18,12 +18,15 @@ const forbidden = [
   "skia.darwin-",
   "skia.linux-",
   "skia.win32-",
+  "daily-cloudcode-pa.googleapis.com",
+  "antigravity/cli/",
 ]
 const bundledProviders = [
   "shuvcode.provider.claude",
   "claude-pro-max",
-  "opencode.provider.google-antigravity",
-  "google-ai-pro",
+  "shuvcode.provider.google-solstice",
+  "google-solstice",
+  "nous-device",
 ]
 const overlap = Math.max(...[...forbidden, ...bundledProviders].map((value) => value.length)) - 1
 

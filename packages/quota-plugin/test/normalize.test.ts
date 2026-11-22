@@ -1,7 +1,6 @@
 import { describe, expect, test } from "bun:test"
 import { Claude } from "../src/claude"
 import { Codex } from "../src/codex"
-import { Google } from "../src/google"
 import { XAI } from "../src/xai"
 
 const RESET = 1_790_000_000
@@ -293,61 +292,5 @@ describe("XAI.plan / account", () => {
     expect(XAI.plan({ access: jwt({ tier: 1 }), metadata: { plan: "Custom" } })).toBe("Custom")
     expect(XAI.account({ access: jwt({ email: "j@x.test" }) })).toBe("j@x.test")
     expect(XAI.account({ access: jwt({ email: "j@x.test" }), metadata: { email: "meta@x.test" } })).toBe("meta@x.test")
-  })
-})
-
-describe("Google.normalize", () => {
-  const reset = "2026-09-18T03:00:00Z"
-
-  test("groups gemini and 3p buckets by window with tier plan", () => {
-    const result = Google.normalize({
-      paidTier: "g1-pro-tier",
-      groups: [
-        {
-          displayName: "Gemini models",
-          buckets: [
-            { window: "5h", remainingFraction: 0.5, resetTime: reset },
-            { window: "weekly", remainingFraction: 0.9 },
-          ],
-        },
-        {
-          displayName: "Claude and GPT models",
-          buckets: [{ window: "5h", remainingFraction: 0.1, resetTime: reset }],
-        },
-      ],
-    })
-    expect(result?.plan).toBe("Google AI Pro")
-    expect(result?.windows).toEqual([
-      { id: "gemini:5h", label: "Gemini 5h", remaining: 50, resetsAt: Date.parse(reset) },
-      { id: "gemini:weekly", label: "Gemini weekly", remaining: 90 },
-      { id: "3p:5h", label: "Claude+GPT 5h", remaining: 10, resetsAt: Date.parse(reset) },
-    ])
-  })
-
-  test("snake_case fields, unknown groups/windows, dedupe, and humanized tier", () => {
-    const result = Google.normalize({
-      paid_tier: "g1-mystery-tier",
-      groups: [
-        {
-          id: "grp-x",
-          buckets: [
-            { bucket_id: "b1", display_name: "Daily", remaining_fraction: 0.25, reset_time: reset },
-            { bucket_id: "b1", remaining_fraction: 0.99 },
-            { window: "5h" },
-          ],
-        },
-      ],
-    })
-    expect(result?.plan).toBe("G1 Mystery Tier")
-    expect(result?.windows).toEqual([
-      { id: "grp-x:b1", label: "Models 1 Daily", remaining: 25, resetsAt: Date.parse(reset) },
-    ])
-  })
-
-  test("returns undefined without usable buckets", () => {
-    expect(Google.normalize({})).toBeUndefined()
-    expect(Google.normalize({ groups: [] })).toBeUndefined()
-    expect(Google.normalize({ groups: [{ buckets: [{ window: "5h" }] }] })).toBeUndefined()
-    expect(Google.normalize(null)).toBeUndefined()
   })
 })

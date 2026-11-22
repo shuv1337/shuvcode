@@ -142,7 +142,7 @@ const GeminiToolConfig = Schema.Struct({
   }),
 })
 
-const GeminiThinkingLevel = knownString<"minimal" | "low" | "medium" | "high">()
+const GeminiThinkingLevel = knownString<"minimal" | "low" | "medium" | "high" | "xhigh">()
 const GeminiThinkingConfig = Schema.Struct({
   thinkingBudget: Schema.optional(Schema.Number),
   includeThoughts: Schema.optional(Schema.Boolean),

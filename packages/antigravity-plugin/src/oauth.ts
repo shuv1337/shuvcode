@@ -1,66 +1,76 @@
-export * as GoogleAntigravityOAuth from "./oauth"
+export * as GoogleSolsticeOAuth from "./oauth"
 
 import { createHash, randomBytes } from "node:crypto"
 import { Credential, Integration } from "@opencode/plugin/effect"
 import { Option, Schema } from "effect"
+import {
+  type Fetch,
+  isVercelMitigated,
+  readBoundedText,
+  requestSignal,
+  sanitizeErrorCode,
+  validateAuthorizeURL,
+  validateHttpsOrLoopback,
+} from "./url"
 
-export const methodID = Integration.MethodID.make("google-ai-pro")
 export const integrationID = Integration.ID.make("google")
+export const methodID = Integration.MethodID.make("google-solstice")
+export const legacyMethodID = Integration.MethodID.make("google-ai-pro")
+export const callbackPath = "/gemini-auth/callback"
 
-/** Official Antigravity CLI client, extracted from `agy` 1.1.13. */
-export const clientID = "1071006060591-tmhssin2h21lcre235vtolojh4g403ep.apps.googleusercontent.com"
-const clientSecret = "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"
-export const callbackPort = 36742
-export const redirectURI = `http://localhost:${callbackPort}/oauth-callback`
-export const authorizeEndpoint = "https://accounts.google.com/o/oauth2/v2/auth"
-export const tokenEndpoint = "https://oauth2.googleapis.com/token"
-export const userInfoEndpoint = "https://www.googleapis.com/oauth2/v2/userinfo"
-export const cloudCodeEndpoint = "https://daily-cloudcode-pa.googleapis.com"
-export const scopes = [
-  "https://www.googleapis.com/auth/cloud-platform",
-  "https://www.googleapis.com/auth/userinfo.email",
-  "https://www.googleapis.com/auth/userinfo.profile",
-  "https://www.googleapis.com/auth/cclog",
-  "https://www.googleapis.com/auth/experimentsandconfigs",
-] as const
+const DEFAULT_TOKEN_TTL_SECONDS = 3600
 
-// Cloud Code gates model availability on the CLI version, including Argon.
-const cliVersion = "1.3.6"
+export type DeadGrantCode = "invalid_grant" | "unauthorized_client"
+export const DEAD_GRANT_ERRORS: ReadonlySet<string> = new Set(["invalid_grant", "unauthorized_client"])
+
+export class SolsticeGrantDeadError extends Error {
+  readonly _tag = "SolsticeGrantDeadError" as const
+  readonly code: DeadGrantCode
+  constructor(code: DeadGrantCode, message?: string) {
+    super(
+      message ??
+        `Google (Solstice) authorization was revoked or expired (${code}). Reconnect Google (Solstice) in /connect.`,
+    )
+    this.name = "SolsticeGrantDeadError"
+    this.code = code
+  }
+}
+
+export class NousAuthRequiredError extends Error {
+  readonly _tag = "NousAuthRequiredError" as const
+  constructor(message = "Nous Portal sign-in is required. Sign in to Nous Portal in /connect.") {
+    super(message)
+    this.name = "NousAuthRequiredError"
+  }
+}
+
+export class SolsticeBrokerTransientError extends Error {
+  readonly _tag = "SolsticeBrokerTransientError" as const
+  readonly status?: number
+  constructor(message: string, status?: number) {
+    super(message)
+    this.name = "SolsticeBrokerTransientError"
+    this.status = status
+  }
+}
+
+export type Options = {
+  readonly fetch?: Fetch
+  readonly now?: () => number
+  readonly timeoutMs?: number
+}
+
+export type ClientConfig = {
+  readonly clientID: string
+  readonly authorizeURL: string
+  readonly scope: string
+}
 
 export type Tokens = {
-  access: string
-  refresh: string
-  expires: number
-}
-
-export type AccountInfo = {
-  projectId?: string
-  email?: string
-  paidTier?: string
-}
-
-export type AccountTokens = {
-  refresh: string
-  access?: string
-  expires?: number
-  projectId?: string
-  email?: string
-}
-
-export type CompletedAccount = Tokens & {
-  projectId: string
-  email?: string
-  paidTier?: string
-}
-
-export type CatalogModel = {
-  id: string
-  name?: string
-  modelEnum?: string
-  provider?: string
-  internal?: boolean
-  disabled?: boolean
-  recommended?: boolean
+  readonly access: string
+  readonly refresh: string
+  readonly expires: number
+  readonly scope?: string
 }
 
 type CredentialLike = {
@@ -71,283 +81,251 @@ type CredentialLike = {
 export const isSubscription = (credential: CredentialLike | undefined) =>
   credential?.type === "oauth" && credential.methodID === methodID
 
-export const projectId = (metadata: Readonly<Record<string, unknown>> | undefined) => {
-  const value = metadata?.projectId
-  return typeof value === "string" && value.length > 0 ? value : undefined
-}
-
-const TokenResponse = Schema.Struct({
-  access_token: Schema.String,
-  refresh_token: Schema.optional(Schema.String),
-  expires_in: Schema.optional(Schema.Number),
-})
-const decodeToken = Schema.decodeUnknownOption(TokenResponse)
-
-const osType = () => {
-  if (process.platform === "darwin") return "darwin"
-  if (process.platform === "win32") return "windows"
-  return "linux"
-}
-
-const archType = () => {
-  if (process.arch === "arm64") return "arm64"
-  return "amd64"
-}
-
-export const userAgent = () =>
-  `antigravity/cli/${cliVersion} (aidev_client; os_type=${osType()}; arch=${archType()}; auth_method=consumer)`
+export const isLegacyAntigravity = (credential: CredentialLike | undefined) =>
+  credential?.type === "oauth" && credential.methodID === legacyMethodID
 
 const base64url = (buf: Buffer) => buf.toString("base64url").replace(/=+$/, "")
 
 export const pkce = () => {
   const verifier = base64url(randomBytes(32))
-  return { verifier, challenge: base64url(createHash("sha256").update(verifier).digest()) }
-}
-
-export const authorizeURL = (challenge: string, state: string) =>
-  `${authorizeEndpoint}?${new URLSearchParams({
-    response_type: "code",
-    client_id: clientID,
-    redirect_uri: redirectURI,
-    scope: scopes.join(" "),
-    code_challenge: challenge,
-    code_challenge_method: "S256",
-    access_type: "offline",
-    prompt: "consent",
-    state,
-  })}`
-
-export const nextRefresh = (current: string, returned?: string) => returned || current
-
-function tokensFrom(data: typeof TokenResponse.Type, currentRefresh?: string): Tokens {
-  const refresh = nextRefresh(currentRefresh ?? "", data.refresh_token)
-  if (!refresh) throw new Error("Google OAuth returned no refresh token")
   return {
-    access: data.access_token,
-    refresh,
-    expires: Date.now() + (data.expires_in ?? 3600) * 1000,
+    verifier,
+    challenge: base64url(createHash("sha256").update(verifier).digest()),
   }
 }
 
-export type Fetch = (input: string, init?: RequestInit) => Promise<Response>
+export const randomState = () => base64url(randomBytes(32))
 
-async function token(
-  body: URLSearchParams,
-  currentRefresh?: string,
-  request: Fetch = fetch,
+export const refreshFingerprint = (refreshToken: string) =>
+  createHash("sha256").update(refreshToken).digest("hex").slice(0, 12)
+
+const ConfigResponse = Schema.Struct({
+  client_id: Schema.String,
+  authorize_url: Schema.String,
+  scope: Schema.String,
+})
+const decodeConfig = Schema.decodeUnknownOption(Schema.fromJsonString(ConfigResponse))
+
+const TokenResponse = Schema.Struct({
+  access_token: Schema.String,
+  refresh_token: Schema.optional(Schema.String),
+  expires_in: Schema.optional(Schema.Number),
+  scope: Schema.optional(Schema.String),
+})
+const decodeToken = Schema.decodeUnknownOption(Schema.fromJsonString(TokenResponse))
+
+const ErrorBody = Schema.Struct({
+  error: Schema.optional(Schema.Unknown),
+})
+const decodeErrorBody = Schema.decodeUnknownOption(Schema.fromJsonString(ErrorBody))
+
+function parseDeadGrantCode(code: string | undefined): DeadGrantCode | undefined {
+  if (code === "invalid_grant" || code === "unauthorized_client") return code
+  return undefined
+}
+
+export async function discoverClient(
+  portalBaseURL: string,
+  nousAccessToken: string,
+  options?: Options,
+  signal?: AbortSignal,
+): Promise<ClientConfig> {
+  const base = validateHttpsOrLoopback(portalBaseURL, "Nous Portal URL")
+  const request = options?.fetch ?? fetch
+  const { response, text } = await (async () => {
+    const res = await request(`${base}/api/oauth/gemini-auth/config`, {
+      method: "GET",
+      headers: {
+        Accept: "application/json",
+        Authorization: `Bearer ${nousAccessToken}`,
+      },
+      signal: requestSignal(signal, options?.timeoutMs),
+    })
+    const body = await readBoundedText(res)
+    return { response: res, text: body }
+  })().catch((cause: unknown) => {
+    signal?.throwIfAborted()
+    throw new SolsticeBrokerTransientError(
+      cause instanceof Error && cause.name === "TimeoutError"
+        ? "Solstice OAuth configuration request timed out"
+        : "Solstice OAuth configuration request failed",
+    )
+  })
+
+  if (response.status === 404) {
+    throw new Error("Solstice is not available on this Nous Portal account yet.")
+  }
+  if (response.status === 401 && !isVercelMitigated(response)) {
+    throw new NousAuthRequiredError("Nous Portal sign-in expired. Sign in to Nous Portal again.")
+  }
+  if (!response.ok) {
+    throw new SolsticeBrokerTransientError(
+      `Solstice OAuth configuration failed transiently (HTTP ${response.status})`,
+      response.status,
+    )
+  }
+
+  const data = Option.getOrUndefined(decodeConfig(text))
+  const clientID = data?.client_id.trim()
+  const rawAuthorizeURL = data?.authorize_url.trim()
+  const scope = data?.scope.trim().replace(/\s+/g, " ")
+  if (!clientID || !rawAuthorizeURL || !scope) {
+    throw new Error("Nous Portal returned an invalid Solstice OAuth configuration")
+  }
+  const validatedURL = validateAuthorizeURL(rawAuthorizeURL, base)
+  return {
+    clientID,
+    authorizeURL: validatedURL.toString(),
+    scope,
+  }
+}
+
+export function buildAuthorizeURL(
+  config: ClientConfig,
+  params: { readonly redirectURI: string; readonly challenge: string; readonly state: string },
+): string {
+  const url = new URL(config.authorizeURL)
+  url.searchParams.set("response_type", "code")
+  url.searchParams.set("client_id", config.clientID)
+  url.searchParams.set("redirect_uri", params.redirectURI)
+  url.searchParams.set("scope", config.scope.trim().replace(/\s+/g, " "))
+  url.searchParams.set("code_challenge", params.challenge)
+  url.searchParams.set("code_challenge_method", "S256")
+  url.searchParams.set("access_type", "offline")
+  url.searchParams.set("prompt", "consent")
+  url.searchParams.set("state", params.state)
+  return url.toString()
+}
+
+export async function exchange(
+  portalBaseURL: string,
+  nousAccessToken: string,
+  input: { readonly code: string; readonly verifier: string; readonly redirectURI: string },
+  options?: Options,
   signal?: AbortSignal,
 ): Promise<Tokens> {
-  const response = await request(tokenEndpoint, {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded", "User-Agent": userAgent() },
-    body: body.toString(),
-    signal: requestSignal(signal),
-  })
-  // OAuth bodies may echo credentials; never include provider-controlled details.
-  if (!response.ok) throw new Error(`Google OAuth failed with HTTP ${response.status}`)
-  const data = Option.getOrUndefined(
-    decodeToken(
-      await response.json().catch(() => {
-        signal?.throwIfAborted()
-        // JSON parser errors can include a snippet of the credential response too.
-        throw new Error("Google OAuth returned an invalid credential response")
+  const base = validateHttpsOrLoopback(portalBaseURL, "Nous Portal URL")
+  const request = options?.fetch ?? fetch
+  const now = options?.now ?? Date.now
+  const { response, text } = await (async () => {
+    const res = await request(`${base}/api/oauth/gemini-auth/exchange`, {
+      method: "POST",
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${nousAccessToken}`,
+      },
+      body: JSON.stringify({
+        code: input.code,
+        code_verifier: input.verifier,
+        redirect_uri: input.redirectURI,
       }),
-    ),
-  )
-  if (
-    !data ||
-    !data.access_token.trim() ||
-    (data.expires_in !== undefined && (!Number.isInteger(data.expires_in) || data.expires_in <= 0))
-  ) {
-    throw new Error("Google OAuth returned an invalid credential response")
+      signal: requestSignal(signal, options?.timeoutMs),
+    })
+    const body = await readBoundedText(res)
+    return { response: res, text: body }
+  })().catch((cause: unknown) => {
+    signal?.throwIfAborted()
+    throw new SolsticeBrokerTransientError(
+      cause instanceof Error && cause.name === "TimeoutError"
+        ? "Google (Solstice) token exchange timed out"
+        : "Google (Solstice) token exchange failed",
+    )
+  })
+
+  if (response.status === 401 && !isVercelMitigated(response)) {
+    throw new NousAuthRequiredError("Nous Portal sign-in expired. Sign in to Nous Portal again.")
   }
-  return tokensFrom(data, currentRefresh)
+  if (!response.ok) {
+    const parsed = Option.getOrUndefined(decodeErrorBody(text))
+    const code = sanitizeErrorCode(parsed?.error)
+    throw new Error(`Google (Solstice) token exchange failed${code ? ` (${code})` : ` (HTTP ${response.status})`}`)
+  }
+
+  const data = Option.getOrUndefined(decodeToken(text))
+  const access = data?.access_token.trim()
+  const refresh = data?.refresh_token?.trim()
+  const validExpiry = data?.expires_in === undefined || (Number.isInteger(data.expires_in) && data.expires_in > 0)
+  if (!data || !access || !refresh || !validExpiry) {
+    throw new Error("Google (Solstice) returned an invalid credential response")
+  }
+  const scope = data.scope?.trim()
+  return {
+    access,
+    refresh,
+    expires: now() + (data.expires_in ?? DEFAULT_TOKEN_TTL_SECONDS) * 1000,
+    ...(scope ? { scope } : {}),
+  }
 }
 
-function requestSignal(signal?: AbortSignal) {
-  signal?.throwIfAborted()
-  const timeout = AbortSignal.timeout(8_000)
-  return signal ? AbortSignal.any([signal, timeout]) : timeout
-}
-
-export const exchange = (code: string, verifier: string, request: Fetch = fetch, signal?: AbortSignal) =>
-  token(
-    new URLSearchParams({
-      grant_type: "authorization_code",
-      code,
-      code_verifier: verifier,
-      client_id: clientID,
-      client_secret: clientSecret,
-      redirect_uri: redirectURI,
-    }),
-    undefined,
-    request,
-    signal,
-  )
-
-export const refresh = (refreshToken: string, request: Fetch = fetch, signal?: AbortSignal) =>
-  token(
-    new URLSearchParams({
-      grant_type: "refresh_token",
-      refresh_token: refreshToken,
-      client_id: clientID,
-      client_secret: clientSecret,
-    }),
-    refreshToken,
-    request,
-    signal,
-  )
-
-export async function refreshCredential(value: Credential.OAuth, request: Fetch = fetch, signal?: AbortSignal) {
+export async function refreshCredential(
+  value: Credential.OAuth,
+  nousAccessToken: string,
+  portalBaseURL: string,
+  options?: Options,
+  signal?: AbortSignal,
+): Promise<Credential.OAuth> {
   // Importer deliberately provides no refresh token: fail before any network I/O.
   if (value.metadata?.shuvcodeAuthImport === "access-only") {
     throw new Error("Access-only imported credentials cannot be refreshed; import fresh credentials explicitly")
   }
-  if (!value.refresh) throw new Error("Google AI Pro is missing a refresh token")
-  const tokens = await refresh(value.refresh, request, signal)
+  if (!value.refresh.trim()) {
+    throw new Error("Google (Solstice) is missing a refresh token")
+  }
+  const base = validateHttpsOrLoopback(portalBaseURL, "Nous Portal URL")
+  const request = options?.fetch ?? fetch
+  const now = options?.now ?? Date.now
+
+  const { response, text } = await (async () => {
+    const res = await request(`${base}/api/oauth/gemini-auth/refresh`, {
+      method: "POST",
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${nousAccessToken}`,
+      },
+      body: JSON.stringify({ refresh_token: value.refresh }),
+      signal: requestSignal(signal, options?.timeoutMs),
+    })
+    const body = await readBoundedText(res)
+    return { response: res, text: body }
+  })().catch((cause: unknown) => {
+    signal?.throwIfAborted()
+    throw new SolsticeBrokerTransientError(
+      cause instanceof Error && cause.name === "TimeoutError"
+        ? "Google (Solstice) token refresh timed out"
+        : "Google (Solstice) token refresh network error",
+    )
+  })
+
+  if (!response.ok) {
+    // Only explicit OAuth dead-grant codes mark the Google grant dead; non-JSON proxy pages
+    // and broker 5xx/429/edge-challenge responses stay transient.
+    const parsed = Option.getOrUndefined(decodeErrorBody(text))
+    const code = sanitizeErrorCode(parsed?.error)
+    const deadCode = parseDeadGrantCode(code)
+    if (deadCode) throw new SolsticeGrantDeadError(deadCode)
+    if (response.status === 401 && !isVercelMitigated(response)) {
+      throw new NousAuthRequiredError("Nous Portal sign-in expired. Sign in to Nous Portal again.")
+    }
+    throw new SolsticeBrokerTransientError(
+      `Google (Solstice) token refresh failed transiently${code ? ` (${code})` : ` (HTTP ${response.status})`}`,
+      response.status,
+    )
+  }
+
+  const data = Option.getOrUndefined(decodeToken(text))
+  const access = data?.access_token.trim()
+  const validExpiry = data?.expires_in === undefined || (Number.isInteger(data.expires_in) && data.expires_in > 0)
+  if (!data || !access || !validExpiry) {
+    throw new SolsticeBrokerTransientError("Google (Solstice) returned an invalid token refresh response")
+  }
+  const refresh = data.refresh_token?.trim() || value.refresh
   return Credential.OAuth.make({
     ...value,
-    ...tokens,
+    access,
+    refresh,
+    expires: now() + (data.expires_in ?? DEFAULT_TOKEN_TTL_SECONDS) * 1000,
     metadata: value.metadata,
   })
-}
-
-async function cloudCode<A>(path: string, access: string, body: unknown, request: Fetch, signal?: AbortSignal) {
-  const response = await request(`${cloudCodeEndpoint}${path}`, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${access}`,
-      "Content-Type": "application/json",
-      "User-Agent": userAgent(),
-    },
-    body: JSON.stringify(body),
-    signal: requestSignal(signal),
-  })
-  if (!response.ok) throw new Error(`Cloud Code ${path} failed with HTTP ${response.status}`)
-  return (await response.json()) as A
-}
-
-const stringField = (value: unknown) => (typeof value === "string" && value.length > 0 ? value : undefined)
-
-const record = (value: unknown): Record<string, unknown> | undefined => {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return
-  return value as Record<string, unknown>
-}
-
-export async function loadCodeAssist(
-  access: string,
-  request: Fetch = fetch,
-  signal?: AbortSignal,
-): Promise<AccountInfo> {
-  const data = record(
-    await cloudCode<unknown>(
-      "/v1internal:loadCodeAssist",
-      access,
-      { metadata: { ideType: "ANTIGRAVITY" } },
-      request,
-      signal,
-    ),
-  )
-  if (!data) return {}
-  const project = data.cloudaicompanionProject
-  const projectRecord = record(project)
-  const paid = data.paidTier
-  const paidRecord = record(paid)
-  return {
-    projectId: stringField(project) ?? stringField(projectRecord?.id) ?? stringField(projectRecord?.name),
-    paidTier: stringField(paid) ?? stringField(paidRecord?.id) ?? stringField(paidRecord?.name),
-  }
-}
-
-export async function fetchUserInfo(access: string, request: Fetch = fetch, signal?: AbortSignal) {
-  const response = await request(userInfoEndpoint, {
-    headers: { Authorization: `Bearer ${access}`, "User-Agent": userAgent() },
-    signal: requestSignal(signal),
-  })
-  if (!response.ok) return
-  const data = record(await response.json())
-  return { email: stringField(data?.email) }
-}
-
-export function parseCatalogModels(payload: unknown): CatalogModel[] {
-  const data = record(payload)
-  const catalog = [data?.models, data?.availableModels, data?.model].find(
-    (value) => Array.isArray(value) || record(value),
-  )
-  const entries: [string | undefined, unknown][] = Array.isArray(catalog)
-    ? catalog.map((item) => [undefined, item])
-    : Object.entries(record(catalog) ?? {})
-  return entries.flatMap(([key, item]) => {
-    const model = record(item)
-    if (!model) return []
-    const id = stringField(key) ?? stringField(model.id) ?? stringField(model.name) ?? stringField(model.modelId)
-    if (!id) return []
-    return [
-      {
-        id,
-        name: stringField(model.displayName) ?? stringField(model.display_name) ?? stringField(model.name),
-        modelEnum: stringField(model.model) ?? stringField(model.model_enum) ?? stringField(model.modelEnum),
-        provider: stringField(model.modelProvider) ?? stringField(model.model_provider),
-        internal: model.isInternal === true || model.is_internal === true,
-        disabled: model.disabled === true,
-        recommended: model.recommended === true,
-      },
-    ]
-  })
-}
-
-export async function fetchAvailableModels(
-  access: string,
-  project: string,
-  request: Fetch = fetch,
-  signal?: AbortSignal,
-) {
-  return parseCatalogModels(
-    await cloudCode<unknown>("/v1internal:fetchAvailableModels", access, { project }, request, signal),
-  )
-}
-
-/** Best-effort quota readout. HTTP failures return undefined so a 429 can still be explained. */
-export async function fetchQuotaSummary(access: string, project: string, request: Fetch = fetch, signal?: AbortSignal) {
-  const response = await request(`${cloudCodeEndpoint}/v1internal:retrieveUserQuotaSummary`, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${access}`,
-      "Content-Type": "application/json",
-      "User-Agent": userAgent(),
-    },
-    body: JSON.stringify({ project }),
-    signal: requestSignal(signal),
-  })
-  if (!response.ok) return
-  const body: unknown = await response.json()
-  return body
-}
-
-export async function completeAccount(
-  input: AccountTokens | Tokens,
-  request: Fetch = fetch,
-  signal?: AbortSignal,
-): Promise<CompletedAccount> {
-  signal?.throwIfAborted()
-  const access = "access" in input ? input.access : undefined
-  const expires = "expires" in input ? input.expires : undefined
-  const tokens =
-    access && expires && expires > Date.now() + 60_000
-      ? { access, refresh: input.refresh, expires }
-      : await refresh(input.refresh, request, signal)
-  const assist = await loadCodeAssist(tokens.access, request, signal).catch(() => ({}) as AccountInfo)
-  signal?.throwIfAborted()
-  const project = assist.projectId ?? ("projectId" in input ? input.projectId : undefined)
-  if (!project) throw new Error("Google AI Pro did not return a Cloud Code project id")
-  const email =
-    ("email" in input ? input.email : undefined) ??
-    (await fetchUserInfo(tokens.access, request, signal).catch(() => undefined))?.email
-  signal?.throwIfAborted()
-  return {
-    ...tokens,
-    projectId: project,
-    email,
-    paidTier: assist.paidTier,
-  }
 }

@@ -9,7 +9,13 @@ afterEach(async () => {
   await Promise.all(directories.splice(0).map((directory) => rm(directory, { recursive: true, force: true })))
 })
 
-const markers = ["shuvcode.provider.claude", "claude-pro-max", "opencode.provider.google-antigravity", "google-ai-pro"]
+const markers = [
+  "shuvcode.provider.claude",
+  "claude-pro-max",
+  "shuvcode.provider.google-solstice",
+  "google-solstice",
+  "nous-device",
+]
 
 async function artifact(content: string, filename: string) {
   const directory = await mkdtemp(path.join(os.tmpdir(), "shuvcode-bundled-providers-"))
@@ -23,14 +29,16 @@ for (const filename of ["shuvcode", "opencode.mjs"]) {
   test(`${filename} artifact requires both bundled subscription providers`, async () => {
     await verifyArtifact(await artifact(markers.join("\n"), filename))
     for (const missing of markers) {
-      const file = await artifact(markers.filter((marker) => marker !== missing).join("\n"), filename)
+      const file = await artifact(markers.filter((marker) => !marker.includes(missing)).join("\n"), filename)
       await expect(verifyArtifact(file)).rejects.toThrow("missing bundled subscription providers")
     }
   })
 }
 
-test("provider verification retains the forbidden-payload guard", async () => {
-  await expect(verifyArtifact(await artifact(markers.join("\n") + "\n@napi-rs/canvas", "shuvcode"))).rejects.toThrow(
-    "forbidden simulation payload",
-  )
+test("provider verification retains the forbidden-payload guard and blocks legacy Cloud Code payloads", async () => {
+  for (const forbidden of ["@napi-rs/canvas", "daily-cloudcode-pa.googleapis.com", "antigravity/cli/"]) {
+    await expect(verifyArtifact(await artifact(`${markers.join("\n")}\n${forbidden}`, "shuvcode"))).rejects.toThrow(
+      "forbidden simulation payload",
+    )
+  }
 })

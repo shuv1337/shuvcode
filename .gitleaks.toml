@@ -7,7 +7,6 @@ useDefault = true
 description = "reviewed baseline"
 paths = [
   '''^packages/ai/test/fixtures/recordings/runway\-video/generates\-a\-video\.json$''',
-  '''^packages/antigravity\-plugin/src/oauth\.ts$''',
   '''^packages/app/src/runtime/i18n/language\.tsx$''',
   '''^packages/http\-recorder/test/http\.test\.ts$''',
   '''^packages/http\-recorder/test/redaction\.test\.ts$''',
