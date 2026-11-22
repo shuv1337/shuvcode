@@ -5,7 +5,7 @@
   "private": true,
   "type": "module",
   "license": "MIT",
-  "description": "Google AI Pro / Antigravity OAuth plugin for OpenCode V2. Rewrites native Gemini HTTP into Cloud Code v1internal and adds the Google AI Pro method on /connect.",
+  "description": "Google (Solstice) per-user-quota Gemini OAuth plugin for OpenCode V2, brokered through Nous Portal.",
   "scripts": {
     "test": "bun test --timeout 5000",
     "typecheck": "tsc --noEmit",

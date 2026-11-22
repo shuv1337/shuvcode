@@ -11,7 +11,6 @@ async function main() {
       source: { type: "string" },
       target: { type: "string" },
       "window-end": { type: "string" },
-      "legacy-accounts": { type: "string" },
       mapping: { type: "string" },
       "dry-run": { type: "boolean" },
       help: { type: "boolean" },
@@ -19,7 +18,7 @@ async function main() {
   }).values
   if (args.help) {
     console.log(
-      "bun run script/import-test-auth.ts --source /absolute/checkpointed.db --target /absolute/new-private-root --window-end 2026-09-15T16:00:00-07:00 [--dry-run] [--mapping /absolute/mapping.json] [--legacy-accounts /absolute/antigravity-accounts.json]",
+      "bun run script/import-test-auth.ts --source /absolute/checkpointed.db --target /absolute/new-private-root --window-end 2026-09-15T16:00:00-07:00 [--dry-run] [--mapping /absolute/mapping.json]",
     )
     return
   }
@@ -34,7 +33,6 @@ async function main() {
     source: args.source,
     target: args.target,
     windowEnd: Date.parse(args["window-end"]),
-    legacyAccounts: args["legacy-accounts"],
     dryRun: args["dry-run"],
     mapping,
   }

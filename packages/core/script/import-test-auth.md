@@ -46,7 +46,7 @@ All three providers are mandatory:
   to `claude-pro-max`. Existing `sk-ant-oat…` setup-token keys are also accepted
   as subscription auth, unchanged. Ordinary Anthropic API keys are rejected;
   no expiry or refresh capability is invented for setup tokens.
-- `google`: OAuth `google-ai-pro` and nonempty `metadata.projectId`.
+- `google`: OAuth `google-solstice`.
 
 All matching accounts are retained, including inactive accounts; unrelated
 providers are omitted. Every imported OAuth access token must be nonempty and
@@ -78,37 +78,6 @@ unplaced rows or resolve a generic `oauth` method. Conflicting known placement
 or methods, unknown providers/methods, missing IDs or invalid selections fail
 closed. Active mappings may select any imported account for that provider.
 No mapping means preserve the effective source selection.
-
-## Optional complete legacy Google accounts
-
-Only if the database contains no Google credentials, explicitly supply
-`--legacy-accounts /absolute/antigravity-accounts.json`. This does not discover
-HOME, IDE state databases, or other account stores. Accepted JSON is:
-
-```json
-{
-  "activeIndex": 0,
-  "accounts": [
-    {
-      "accessToken": "<access token>",
-      "expires": 1790000000000,
-      "projectId": "<Cloud Code project>",
-      "email": "optional-label@example.test",
-      "metadata": { "optional": "preserved" }
-    }
-  ]
-}
-```
-
-The complete-field spellings correspond to the old OAuth adapter's
-`accessToken`, absolute `expires`, `projectId`, and account-list `activeIndex`.
-The old refresh-only account-list format does **not** establish a usable access
-snapshot: missing access/absolute expiry/project is rejected, even if it has a
-refresh token or relative `expires_in`. All accounts must be complete; none are
-silently dropped. No refresh token is copied, including legacy `refreshToken`.
-Legacy source aliases for explicit selection are `legacy-google-0`, etc.
-A simultaneous authoritative Google database record is rejected rather than
-merging two potentially divergent selections.
 
 ## Isolation and publication
 

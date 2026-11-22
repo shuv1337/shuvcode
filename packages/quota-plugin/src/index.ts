@@ -3,7 +3,6 @@ import type { Credential } from "@opencode/plugin/effect"
 import { Effect } from "effect"
 import { Claude } from "./claude.js"
 import { Codex } from "./codex.js"
-import { Google } from "./google.js"
 import { QuotaRpc } from "./rpc.js"
 import type { Result, Token } from "./shared.js"
 import { XAI } from "./xai.js"
@@ -26,7 +25,7 @@ interface Source {
   readonly key?: (key: string) => boolean
 }
 
-/** Display order matches the sidebar: ChatGPT/Codex, Claude, xAI, Google AI Pro. */
+/** Display order matches the sidebar: ChatGPT/Codex, Claude, xAI. */
 export const sources: readonly Source[] = [
   { ...Codex, fetchQuota: (token) => Codex.fetchQuota(token) },
   {
@@ -35,7 +34,6 @@ export const sources: readonly Source[] = [
     key: (key) => key.startsWith("sk-ant-oat"),
   },
   { ...XAI, fetchQuota: (token) => XAI.fetchQuota(token) },
-  { ...Google, fetchQuota: (token) => Google.fetchQuota(token) },
 ]
 
 export function token(source: Source, credential: Credential.Value | undefined): Token | undefined {

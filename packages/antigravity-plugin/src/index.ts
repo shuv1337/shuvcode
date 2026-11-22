@@ -1,254 +1,579 @@
-import { createServer } from "node:http"
+import type { Server } from "node:http"
 import type { IntegrationOAuthMethodRegistration } from "@opencode/plugin/effect/integration"
+import type { ConnectionInfo } from "@opencode/client"
 import { Credential, Plugin, Provider } from "@opencode/plugin/effect"
-import { Deferred, Effect, Option, Schema, Semaphore, Stream } from "effect"
-import { GoogleAntigravityOAuth } from "./oauth"
+import { Deferred, Effect, Option, Schema, type Scope, Semaphore, Stream } from "effect"
+import { NousPortalOAuth } from "./nous"
+import { GoogleSolsticeOAuth } from "./oauth"
 import { OauthCallbackPage } from "./page"
-import { GoogleAntigravityWire } from "./wire"
+import { type ReceivedCallback, submitRedirect } from "./redirect"
+import {
+  type Fetch,
+  resolvePortalBaseURL,
+  sanitizeErrorCode,
+  timingSafeEqualString,
+  validateHttpsOrLoopback,
+} from "./url"
+import { GoogleSolsticeWire } from "./wire"
 
-const decodeJson = Schema.decodeUnknownOption(Schema.fromJsonString(Schema.Unknown))
-export const ID = "opencode.provider.google-antigravity"
+export const ID = "shuvcode.provider.google-solstice"
 
-export const oauth = {
-  integrationID: GoogleAntigravityOAuth.integrationID,
-  method: { id: GoogleAntigravityOAuth.methodID, type: "oauth", label: "Google AI Pro / Antigravity" },
-  authorize: () =>
-    Effect.gen(function* () {
-      const pkce = GoogleAntigravityOAuth.pkce()
-      const state = Buffer.from(crypto.getRandomValues(new Uint8Array(32))).toString("base64url")
-      const code = yield* Deferred.make<string, Error>()
-      const server = createServer((request, response) => {
-        const url = new URL(request.url ?? "/", GoogleAntigravityOAuth.redirectURI)
-        if (url.pathname !== "/oauth-callback") {
-          response.writeHead(404).end("Not found")
-          return
-        }
-        const error = url.searchParams.get("error_description") ?? url.searchParams.get("error")
-        const value = url.searchParams.get("code")
-        const failure =
-          url.searchParams.get("state") !== state
-            ? "Invalid OAuth state"
-            : (error ?? (!value ? "Missing authorization code" : undefined))
-        if (failure) {
-          Effect.runFork(Deferred.fail(code, new Error(failure)))
-          response
-            .writeHead(400, { "Content-Type": "text/html" })
-            .end(OauthCallbackPage.error(failure, { provider: "Google AI Pro" }))
-          return
-        }
-        Effect.runFork(Deferred.succeed(code, value!))
-        response
-          .writeHead(200, { "Content-Type": "text/html" })
-          .end(OauthCallbackPage.success({ provider: "Google AI Pro" }))
-      })
-      yield* Effect.addFinalizer(() => Effect.sync(() => server.close()))
-      yield* Effect.callback<void, Error>((resume) => {
-        server.once("error", (error) => resume(Effect.fail(error)))
-        server.listen(GoogleAntigravityOAuth.callbackPort, "localhost", () => resume(Effect.void))
-      })
-      return {
-        mode: "auto" as const,
-        url: GoogleAntigravityOAuth.authorizeURL(pkce.challenge, state),
-        instructions: "Complete authorization in your browser.",
-        callback: Deferred.await(code).pipe(
-          Effect.flatMap((value) =>
-            Effect.tryPromise({
-              try: async (signal) =>
-                credential(
-                  await GoogleAntigravityOAuth.completeAccount(
-                    await GoogleAntigravityOAuth.exchange(value, pkce.verifier, undefined, signal),
-                    undefined,
-                    signal,
-                  ),
-                ),
-              catch: (cause) => cause,
-            }),
-          ),
-        ),
-      }
-    }),
-  refresh: (value) =>
-    Effect.tryPromise({
-      try: (signal) => GoogleAntigravityOAuth.refreshCredential(value, undefined, signal),
-      catch: (cause) =>
-        new Error(`Google AI Pro token refresh failed: ${cause instanceof Error ? cause.message : String(cause)}`),
-    }),
-  label: (value) => (typeof value.metadata?.email === "string" ? value.metadata.email : undefined),
-} satisfies IntegrationOAuthMethodRegistration
+const DEAD_GRANTS_KEY = "solstice-dead-grants"
+const LEGACY_MIGRATION_MESSAGE =
+  "Google AI Pro (Antigravity) was replaced by Google (Solstice). Sign in to Nous Portal, then reconnect Google in /connect."
 
-export const GoogleAntigravityPlugin = Plugin.define({
-  id: ID,
-  effect: Effect.fn(function* (ctx) {
-    const loading = Semaphore.makeUnsafe(1)
-    const mapped = new WeakSet<Request>()
-    let subscription = false
-    let modelEnums = new Map(GoogleAntigravityWire.modelEnumDefaults)
-    let disabledModels: ReadonlySet<string> = new Set<string>()
-    const load = Effect.fn("GoogleAntigravityPlugin.load")(function* () {
-      const connection = yield* ctx.integration.connection.active(GoogleAntigravityOAuth.integrationID)
-      // Keep login and reload subscriptions alive when stored auth expires. Inference
-      // still resolves fail-closed in the request hook and the host model resolver.
-      const resolved = connection
-        ? yield* ctx.integration.connection.resolve(connection).pipe(Effect.orElseSucceed(() => undefined))
-        : undefined
-      subscription = GoogleAntigravityOAuth.isSubscription(resolved)
-      modelEnums = new Map(GoogleAntigravityWire.modelEnumDefaults)
-      disabledModels = new Set<string>()
-      // Imported access-only credentials must activate without discovery network I/O.
-      if (!subscription || resolved?.type !== "oauth" || resolved.metadata?.shuvcodeAuthImport === "access-only") return
-      const projectId = GoogleAntigravityOAuth.projectId(resolved.metadata)
-      if (!projectId) return
-      const models = yield* Effect.tryPromise({
-        try: (signal) => GoogleAntigravityOAuth.fetchAvailableModels(resolved.access, projectId, undefined, signal),
-        catch: (cause) => cause,
-      }).pipe(Effect.orElseSucceed(() => undefined))
-      if (!models) return
-      disabledModels = GoogleAntigravityWire.disabledModelsFrom(models)
-      modelEnums = GoogleAntigravityWire.modelEnumsFrom(models)
-    })
-    yield* ctx.integration.transform((draft) => {
-      draft.update(GoogleAntigravityOAuth.integrationID, (integration) => {
-        if (!integration.name || integration.name === integration.id) integration.name = "Google"
-      })
-      draft.method.update(oauth)
-    })
-    yield* load()
-    yield* ctx.provider.transform((evt) => GoogleAntigravityWire.applyProvider(evt, subscription))
-    yield* ctx.model.transform((evt) => GoogleAntigravityWire.applyModels(evt, subscription, disabledModels))
-    yield* ctx.session.hook(
-      "http.request",
-      (evt) =>
-        Effect.gen(function* () {
-          if (evt.model.providerID !== Provider.ID.google || !GoogleAntigravityWire.isGenerateURL(evt.request.url))
-            return
-          const connection = yield* ctx.integration.connection.active(GoogleAntigravityOAuth.integrationID)
-          if (!connection) return
-          // Never fall through to API-key transport when subscription resolution fails.
-          const resolved = yield* ctx.integration.connection.resolve(connection).pipe(Effect.orDie)
-          if (!GoogleAntigravityOAuth.isSubscription(resolved) || resolved?.type !== "oauth") return
-          const projectId = GoogleAntigravityOAuth.projectId(resolved.metadata)
-          if (!projectId) throw new Error("Google AI Pro is missing a Cloud Code project id")
-          const text = yield* Effect.promise(() => evt.request.clone().text())
-          const body = Option.getOrUndefined(decodeJson(text))
-          if (body === undefined) throw new Error("Google AI Pro request body is not JSON")
-          const model =
-            evt.model.id || GoogleAntigravityWire.modelFromURL(evt.request.url) || GoogleAntigravityWire.defaultModelID
-          const headers = new Headers(evt.request.headers)
-          GoogleAntigravityWire.applyRequestHeaders(headers, resolved.access)
-          evt.request = new Request(GoogleAntigravityWire.generateURL, {
-            method: "POST",
-            signal: evt.request.signal,
-            headers,
-            body: JSON.stringify(
-              GoogleAntigravityWire.wrapGenerateRequest({
-                body,
-                projectId,
-                model,
-                sessionID: evt.sessionID,
-                modelEnum: modelEnums.get(model) ?? modelEnums.get(GoogleAntigravityWire.catalogID(model)),
-              }),
-            ),
-          })
-          mapped.add(evt.request)
-        }),
-      { providerID: Provider.ID.google },
-    )
-    yield* ctx.session.hook(
-      "http.response",
-      (evt) =>
-        Effect.gen(function* () {
-          if (evt.model.providerID !== Provider.ID.google || !mapped.has(evt.request)) return
-          if (!evt.response.body) return
-          if (!evt.response.ok) {
-            const text = yield* Effect.tryPromise({
-              try: () => evt.response.clone().text(),
-              catch: (cause) => cause,
-            }).pipe(Effect.orElseSucceed(() => ""))
-            const parsed = GoogleAntigravityWire.parseCloudCodeError(text)
-            if (!parsed) return
-            const connection = yield* ctx.integration.connection.active(GoogleAntigravityOAuth.integrationID)
-            const resolved = connection
-              ? yield* ctx.integration.connection.resolve(connection).pipe(Effect.orElseSucceed(() => undefined))
-              : undefined
-            const oauth =
-              resolved?.type === "oauth" && GoogleAntigravityOAuth.isSubscription(resolved) ? resolved : undefined
-            const projectId = oauth ? GoogleAntigravityOAuth.projectId(oauth.metadata) : undefined
-            const summary =
-              evt.response.status === 429 && oauth && projectId
-                ? yield* Effect.tryPromise({
-                    try: (signal) =>
-                      GoogleAntigravityOAuth.fetchQuotaSummary(oauth.access, projectId, undefined, signal),
-                    catch: (cause) => cause,
-                  }).pipe(Effect.orElseSucceed(() => undefined))
-                : undefined
-            const explained = GoogleAntigravityWire.explainCloudCodeError({
-              error: parsed,
-              summary,
-              httpStatus: evt.response.status,
-              modelID: evt.model.id,
-            })
-            if (!explained) return
-            const headers = new Headers(evt.response.headers)
-            headers.delete("content-length")
-            headers.delete("content-encoding")
-            headers.set("content-type", "application/json")
-            evt.response = new Response(explained.body, {
-              status: evt.response.status,
-              statusText: evt.response.statusText,
-              headers,
-            })
-            return
-          }
-          const headers = new Headers(evt.response.headers)
-          headers.delete("content-length")
-          headers.delete("content-encoding")
-          evt.response = new Response(evt.response.body.pipeThrough(GoogleAntigravityWire.unwrapSSE()), {
-            status: evt.response.status,
-            statusText: evt.response.statusText,
-            headers,
-          })
-        }),
-      { providerID: Provider.ID.google },
-    )
-    const reload = () => loading.withPermit(load().pipe(Effect.andThen(ctx.provider.reload())))
-    yield* ctx.event
-      .subscribe()
-      .pipe(
-        Stream.filter(isGoogleCredentialEvent),
-        Stream.runForEach(reload),
-        Effect.forkScoped({ startImmediately: true }),
-      )
-  }),
+export type PluginOptions = {
+  readonly fetch?: Fetch
+  readonly now?: () => number
+  readonly portalURL?: string
+}
+
+const DeadGrantEntry = Schema.Struct({
+  fingerprint: Schema.String,
+  error: Schema.Literals(["invalid_grant", "unauthorized_client"]),
 })
+const DeadGrantMap = Schema.Record(Schema.String, DeadGrantEntry)
+const decodeDeadGrants = Schema.decodeUnknownOption(DeadGrantMap)
 
-export default GoogleAntigravityPlugin
-export { GoogleAntigravityOAuth } from "./oauth"
-export { GoogleAntigravityWire } from "./wire"
-
-function credential(account: GoogleAntigravityOAuth.CompletedAccount) {
-  return Credential.OAuth.make({
-    type: "oauth",
-    methodID: GoogleAntigravityOAuth.methodID,
-    access: account.access,
-    refresh: account.refresh,
-    expires: account.expires,
-    metadata: {
-      projectId: account.projectId,
-      ...(account.email ? { email: account.email } : {}),
-      ...(account.paidTier ? { paidTier: account.paidTier } : {}),
-    },
+function listen(server: Server) {
+  return Effect.callback<number, Error>((resume) => {
+    const onError = (error: Error) => resume(Effect.fail(error))
+    server.once("error", onError)
+    server.listen(0, "127.0.0.1", () => {
+      server.off("error", onError)
+      const address = server.address()
+      if (!address || typeof address === "string") return resume(Effect.fail(new Error("Missing OAuth callback port")))
+      resume(Effect.succeed(address.port))
+    })
   })
 }
 
-export function isGoogleCredentialEvent(event: { readonly type: string; readonly data?: unknown }) {
-  // Updated has no integration payload; every update can affect Google's active connection.
+function unwrapCause(value: unknown, predicate: (item: unknown) => boolean): unknown {
+  let current: unknown = value
+  for (let depth = 0; depth < 6 && current !== undefined && current !== null; depth++) {
+    if (predicate(current)) return current
+    if (typeof current === "object" && "cause" in current) {
+      current = current.cause
+      continue
+    }
+    break
+  }
+  return undefined
+}
+
+const isNousTransient = (value: unknown): value is NousPortalOAuth.NousTransientError =>
+  value instanceof NousPortalOAuth.NousTransientError
+
+const isNousDead = (value: unknown): value is NousPortalOAuth.NousGrantDeadError =>
+  value instanceof NousPortalOAuth.NousGrantDeadError
+
+export function createPlugin(options?: PluginOptions): Plugin.Plugin<Scope.Scope> {
+  if (options?.portalURL !== undefined && options.portalURL.trim().length > 0) {
+    validateHttpsOrLoopback(options.portalURL, "portalURL option")
+  }
+  const runtimeOptions = {
+    ...(options?.fetch ? { fetch: options.fetch } : {}),
+    ...(options?.now ? { now: options.now } : {}),
+  }
+  const resolvePortal = () => resolvePortalBaseURL(options?.portalURL)
+
+  return Plugin.define({
+    id: ID,
+    effect: Effect.fn(function* (ctx) {
+      const loading = Semaphore.makeUnsafe(1)
+      const knownLegacy = new Set<string>()
+      let subscription = false
+      let nousFailedConnectionID: string | undefined
+
+      const readDeadGrants = Effect.fn("GoogleSolsticePlugin.readDeadGrants")(function* () {
+        const stored = yield* ctx.storage.get(DEAD_GRANTS_KEY)
+        return Option.getOrElse(decodeDeadGrants(stored), () => ({}) as Record<string, typeof DeadGrantEntry.Type>)
+      })
+
+      const recordDeadGrant = Effect.fn("GoogleSolsticePlugin.recordDeadGrant")(function* (
+        credentialID: string,
+        fingerprint: string,
+        error: GoogleSolsticeOAuth.DeadGrantCode,
+      ) {
+        const current = yield* readDeadGrants()
+        yield* ctx.storage.set(DEAD_GRANTS_KEY, {
+          ...current,
+          [credentialID]: { fingerprint, error },
+        })
+      })
+
+      const clearDeadGrant = Effect.fn("GoogleSolsticePlugin.clearDeadGrant")(function* (credentialID: string) {
+        const current = yield* readDeadGrants()
+        if (!(credentialID in current)) return
+        const next = Object.fromEntries(Object.entries(current).filter(([id]) => id !== credentialID))
+        yield* ctx.storage.set(DEAD_GRANTS_KEY, next)
+      })
+
+      const clearDeadGrantIfRotated = Effect.fn("GoogleSolsticePlugin.clearDeadGrantIfRotated")(function* (
+        credentialID: string,
+        credential: Credential.OAuth,
+      ) {
+        const current = yield* readDeadGrants()
+        const entry = current[credentialID]
+        if (!entry) return
+        if (!credential.refresh.trim()) return
+        if (GoogleSolsticeOAuth.refreshFingerprint(credential.refresh) !== entry.fingerprint) {
+          yield* clearDeadGrant(credentialID)
+        }
+      })
+
+      const markNousNeedsAuth = Effect.fn("GoogleSolsticePlugin.markNousNeedsAuth")(function* (
+        connection: ConnectionInfo,
+        message: string,
+      ) {
+        nousFailedConnectionID = connection.type === "credential" ? connection.id : undefined
+        yield* ctx.integration.connection.status({
+          integrationID: NousPortalOAuth.integrationID,
+          connection,
+          status: { status: "needs_auth", message },
+        })
+      })
+
+      const clearNousNeedsAuth = Effect.fn("GoogleSolsticePlugin.clearNousNeedsAuth")(function* (
+        connection: ConnectionInfo,
+      ) {
+        nousFailedConnectionID = undefined
+        yield* ctx.integration.connection.status({
+          integrationID: NousPortalOAuth.integrationID,
+          connection,
+          status: undefined,
+        })
+      })
+
+      const resolveNousAccessToken = Effect.fn("GoogleSolsticePlugin.resolveNousAccessToken")(function* () {
+        const nousConnection = yield* ctx.integration.connection.active(NousPortalOAuth.integrationID)
+        if (!nousConnection || nousConnection.type !== "credential" || nousConnection.method !== "oauth") {
+          return yield* Effect.fail(
+            new GoogleSolsticeOAuth.NousAuthRequiredError(
+              "Sign in to Nous Portal first in /connect before connecting or refreshing Google (Solstice).",
+            ),
+          )
+        }
+        const resolved = yield* ctx.integration.connection.resolve(nousConnection).pipe(
+          Effect.map((value) => ({ ok: true as const, value })),
+          Effect.catch((cause) => Effect.succeed({ ok: false as const, cause })),
+        )
+        if (!resolved.ok) {
+          const transient = unwrapCause(resolved.cause, isNousTransient)
+          if (transient) return yield* Effect.fail(transient)
+          const dead = unwrapCause(resolved.cause, isNousDead)
+          const message =
+            dead instanceof Error ? dead.message : "Nous Portal sign-in expired. Sign in to Nous Portal again."
+          yield* markNousNeedsAuth(nousConnection, message)
+          return yield* Effect.fail(new GoogleSolsticeOAuth.NousAuthRequiredError(message))
+        }
+        if (!resolved.value || resolved.value.type !== "oauth" || !resolved.value.access.trim()) {
+          const message = "Nous Portal sign-in is required. Sign in to Nous Portal in /connect."
+          yield* markNousNeedsAuth(nousConnection, message)
+          return yield* Effect.fail(new GoogleSolsticeOAuth.NousAuthRequiredError(message))
+        }
+        const metadataPortal =
+          typeof resolved.value.metadata?.portalBaseURL === "string" &&
+          resolved.value.metadata.portalBaseURL.trim().length > 0
+            ? resolved.value.metadata.portalBaseURL
+            : undefined
+        const portalBaseURL = yield* Effect.try({
+          try: () => (metadataPortal ? validateHttpsOrLoopback(metadataPortal, "Nous Portal URL") : resolvePortal()),
+          catch: (cause) => (cause instanceof Error ? cause : new Error(String(cause))),
+        })
+        return {
+          access: resolved.value.access,
+          connection: nousConnection,
+          portalBaseURL,
+        }
+      })
+
+      const nousOAuth: IntegrationOAuthMethodRegistration = {
+        integrationID: NousPortalOAuth.integrationID,
+        method: {
+          id: NousPortalOAuth.methodID,
+          type: "oauth",
+          label: "Sign in with Nous Portal",
+        },
+        authorize: () =>
+          Effect.gen(function* () {
+            const portalBaseURL = yield* Effect.try({
+              try: resolvePortal,
+              catch: (cause) => (cause instanceof Error ? cause : new Error(String(cause))),
+            })
+            const device = yield* Effect.tryPromise({
+              try: (signal) => NousPortalOAuth.requestDeviceCode(portalBaseURL, runtimeOptions, signal),
+              catch: (cause) => (cause instanceof Error ? cause : new Error(String(cause))),
+            })
+            return {
+              mode: "auto" as const,
+              url: device.verificationURIComplete ?? device.verificationURI,
+              instructions: `Open the URL and confirm code: ${device.userCode}`,
+              expiresAt: device.expiresAt,
+              callback: NousPortalOAuth.pollDeviceToken(portalBaseURL, device, runtimeOptions),
+            }
+          }),
+        refresh: (value) =>
+          Effect.gen(function* () {
+            const portalURL = yield* Effect.try({
+              try: resolvePortal,
+              catch: (cause) => (cause instanceof Error ? cause : new Error(String(cause))),
+            })
+            const refreshed = yield* Effect.tryPromise({
+              try: (signal) => NousPortalOAuth.refreshCredential(value, { ...runtimeOptions, portalURL }, signal),
+              catch: (cause) => (cause instanceof Error ? cause : new Error(String(cause))),
+            }).pipe(
+              Effect.tapError((cause) =>
+                Effect.gen(function* () {
+                  if (!(cause instanceof NousPortalOAuth.NousGrantDeadError)) return
+                  const connection = yield* ctx.integration.connection.active(NousPortalOAuth.integrationID)
+                  if (!connection) return
+                  yield* markNousNeedsAuth(connection, cause.message)
+                }),
+              ),
+            )
+            const connection = yield* ctx.integration.connection.active(NousPortalOAuth.integrationID)
+            if (connection) yield* clearNousNeedsAuth(connection)
+            return refreshed
+          }),
+      }
+
+      const solsticeOAuth: IntegrationOAuthMethodRegistration = {
+        integrationID: GoogleSolsticeOAuth.integrationID,
+        method: {
+          id: GoogleSolsticeOAuth.methodID,
+          type: "oauth",
+          label: "Google (Solstice)",
+        },
+        authorize: () =>
+          Effect.gen(function* () {
+            const nous = yield* resolveNousAccessToken()
+            const config = yield* Effect.tryPromise({
+              try: (signal) =>
+                GoogleSolsticeOAuth.discoverClient(nous.portalBaseURL, nous.access, runtimeOptions, signal),
+              catch: (cause) => (cause instanceof Error ? cause : new Error(String(cause))),
+            }).pipe(
+              Effect.tapError((cause) =>
+                cause instanceof GoogleSolsticeOAuth.NousAuthRequiredError
+                  ? markNousNeedsAuth(nous.connection, cause.message)
+                  : Effect.void,
+              ),
+            )
+            const pkce = GoogleSolsticeOAuth.pkce()
+            const state = GoogleSolsticeOAuth.randomState()
+            const received = yield* Deferred.make<ReceivedCallback, Error>()
+            // Lazy import so non-Node runtimes never evaluate node:http on module load.
+            const { createServer } = yield* Effect.promise(() => import("node:http"))
+            const server = createServer((request, response) => {
+              const url = new URL(request.url ?? "/", "http://127.0.0.1")
+              if (url.pathname !== GoogleSolsticeOAuth.callbackPath) {
+                response.writeHead(404).end("Not found")
+                return
+              }
+              if (!timingSafeEqualString(state, url.searchParams.get("state"))) {
+                response
+                  .writeHead(400, { "Content-Type": "text/html" })
+                  .end(OauthCallbackPage.error("Invalid OAuth state", { provider: "Google (Solstice)" }))
+                return
+              }
+              const rawError = url.searchParams.get("error")
+              if (rawError !== null && rawError.trim().length > 0) {
+                const code = sanitizeErrorCode(rawError)
+                const message = code ? `Google authorization failed (${code})` : "Google authorization failed"
+                Effect.runFork(Deferred.fail(received, new Error(message)))
+                response
+                  .writeHead(400, { "Content-Type": "text/html" })
+                  .end(OauthCallbackPage.error(message, { provider: "Google (Solstice)" }))
+                return
+              }
+              const code = url.searchParams.get("code")?.trim()
+              if (!code) {
+                response
+                  .writeHead(400, { "Content-Type": "text/html" })
+                  .end(OauthCallbackPage.error("Missing authorization code", { provider: "Google (Solstice)" }))
+                return
+              }
+              if (!Effect.runSync(Deferred.succeed(received, { code, response }))) {
+                response.writeHead(409).end("OAuth callback already received")
+              }
+            })
+            const port = yield* listen(server)
+            yield* Effect.addFinalizer(() => Effect.sync(() => server.close()))
+            const redirectURI = `http://127.0.0.1:${port}${GoogleSolsticeOAuth.callbackPath}`
+            return {
+              mode: "auto" as const,
+              url: GoogleSolsticeOAuth.buildAuthorizeURL(config, {
+                redirectURI,
+                challenge: pkce.challenge,
+                state,
+              }),
+              instructions:
+                "Complete Google sign-in in your browser. If the browser cannot reach this machine, paste the final redirect URL.",
+              callback: Effect.gen(function* () {
+                const result = yield* Deferred.await(received)
+                const respond = (error?: string) =>
+                  Effect.sync(() => {
+                    if (!result.response || result.response.writableEnded) return
+                    result.response
+                      .writeHead(error ? 400 : 200, { "Content-Type": "text/html" })
+                      .end(
+                        error
+                          ? OauthCallbackPage.error(error, { provider: "Google (Solstice)" })
+                          : OauthCallbackPage.success({ provider: "Google (Solstice)" }),
+                      )
+                  })
+                return yield* Effect.tryPromise({
+                  try: (signal) =>
+                    GoogleSolsticeOAuth.exchange(
+                      nous.portalBaseURL,
+                      nous.access,
+                      { code: result.code, verifier: pkce.verifier, redirectURI },
+                      runtimeOptions,
+                      signal,
+                    ),
+                  catch: (cause) => (cause instanceof Error ? cause : new Error(String(cause))),
+                }).pipe(
+                  Effect.tapError((cause) =>
+                    cause instanceof GoogleSolsticeOAuth.NousAuthRequiredError
+                      ? markNousNeedsAuth(nous.connection, cause.message)
+                      : Effect.void,
+                  ),
+                  Effect.map((tokens) =>
+                    Credential.OAuth.make({
+                      type: "oauth",
+                      methodID: GoogleSolsticeOAuth.methodID,
+                      access: tokens.access,
+                      refresh: tokens.refresh,
+                      expires: tokens.expires,
+                      metadata: {
+                        portalBaseURL: nous.portalBaseURL,
+                        ...(tokens.scope ? { scope: tokens.scope } : {}),
+                      },
+                    }),
+                  ),
+                  Effect.tap(() => respond()),
+                  Effect.tapError((cause) =>
+                    respond(cause instanceof Error ? cause.message : "Google (Solstice) sign-in failed"),
+                  ),
+                  Effect.onInterrupt(() => Effect.sync(() => result.response?.destroy())),
+                )
+              }),
+              submit: submitRedirect({ state, received }),
+            }
+          }),
+        refresh: (value) =>
+          Effect.gen(function* () {
+            if (value.metadata?.shuvcodeAuthImport === "access-only") {
+              return yield* Effect.fail(
+                new Error("Access-only imported credentials cannot be refreshed; import fresh credentials explicitly"),
+              )
+            }
+            if (!value.refresh.trim()) {
+              return yield* Effect.fail(new Error("Google (Solstice) is missing a refresh token"))
+            }
+            const googleConnection = yield* ctx.integration.connection.active(GoogleSolsticeOAuth.integrationID)
+            const credentialID = googleConnection?.type === "credential" ? googleConnection.id : undefined
+            const fingerprint = GoogleSolsticeOAuth.refreshFingerprint(value.refresh)
+            if (credentialID) {
+              const deadGrants = yield* readDeadGrants()
+              const entry = deadGrants[credentialID]
+              if (entry && entry.fingerprint === fingerprint) {
+                const deadError = new GoogleSolsticeOAuth.SolsticeGrantDeadError(entry.error)
+                yield* ctx.integration.connection.status({
+                  integrationID: GoogleSolsticeOAuth.integrationID,
+                  connection: googleConnection!,
+                  status: { status: "needs_auth", message: deadError.message },
+                })
+                return yield* Effect.fail(deadError)
+              }
+              if (entry && entry.fingerprint !== fingerprint) {
+                yield* clearDeadGrant(credentialID)
+              }
+            }
+            const nous = yield* resolveNousAccessToken()
+            const metadataPortal =
+              typeof value.metadata?.portalBaseURL === "string" && value.metadata.portalBaseURL.trim().length > 0
+                ? value.metadata.portalBaseURL
+                : undefined
+            const portalBaseURL = yield* Effect.try({
+              try: () =>
+                metadataPortal ? validateHttpsOrLoopback(metadataPortal, "Nous Portal URL") : nous.portalBaseURL,
+              catch: (cause) => (cause instanceof Error ? cause : new Error(String(cause))),
+            })
+            const refreshed = yield* Effect.tryPromise({
+              try: (signal) =>
+                GoogleSolsticeOAuth.refreshCredential(value, nous.access, portalBaseURL, runtimeOptions, signal),
+              catch: (cause) => (cause instanceof Error ? cause : new Error(String(cause))),
+            }).pipe(
+              Effect.tapError((cause) =>
+                Effect.gen(function* () {
+                  if (cause instanceof GoogleSolsticeOAuth.SolsticeGrantDeadError) {
+                    if (credentialID) yield* recordDeadGrant(credentialID, fingerprint, cause.code)
+                    if (googleConnection) {
+                      yield* ctx.integration.connection.status({
+                        integrationID: GoogleSolsticeOAuth.integrationID,
+                        connection: googleConnection,
+                        status: { status: "needs_auth", message: cause.message },
+                      })
+                    }
+                    return
+                  }
+                  if (cause instanceof GoogleSolsticeOAuth.NousAuthRequiredError) {
+                    // Never mark the Google grant dead when the Nous Portal bearer needs re-login.
+                    yield* markNousNeedsAuth(nous.connection, cause.message)
+                  }
+                }),
+              ),
+            )
+            if (credentialID) yield* clearDeadGrant(credentialID)
+            if (googleConnection) {
+              yield* ctx.integration.connection.status({
+                integrationID: GoogleSolsticeOAuth.integrationID,
+                connection: googleConnection,
+                status: undefined,
+              })
+            }
+            yield* clearNousNeedsAuth(nous.connection)
+            return refreshed
+          }),
+        label: (value) => (typeof value.metadata?.email === "string" ? value.metadata.email : undefined),
+      }
+
+      const load = Effect.fn("GoogleSolsticePlugin.load")(function* () {
+        const connection = yield* ctx.integration.connection.active(GoogleSolsticeOAuth.integrationID)
+        if (!connection || connection.type !== "credential" || connection.method !== "oauth") {
+          subscription = false
+          return
+        }
+        const resolved = yield* ctx.integration.connection.resolve(connection).pipe(
+          Effect.map((value) => ({ ok: true as const, value })),
+          Effect.catch((cause) => Effect.succeed({ ok: false as const, cause })),
+        )
+        if (resolved.ok) {
+          if (GoogleSolsticeOAuth.isSubscription(resolved.value) && resolved.value?.type === "oauth") {
+            subscription = true
+            knownLegacy.delete(connection.id)
+            yield* clearDeadGrantIfRotated(connection.id, resolved.value)
+            yield* ctx.integration.connection.status({
+              integrationID: GoogleSolsticeOAuth.integrationID,
+              connection,
+              status: undefined,
+            })
+            return
+          }
+          if (GoogleSolsticeOAuth.isLegacyAntigravity(resolved.value)) {
+            subscription = false
+            knownLegacy.add(connection.id)
+            yield* ctx.integration.connection.status({
+              integrationID: GoogleSolsticeOAuth.integrationID,
+              connection,
+              status: { status: "needs_auth", message: LEGACY_MIGRATION_MESSAGE },
+            })
+            return
+          }
+          subscription = false
+          return
+        }
+        // Keep Solstice models active during transient outages so catalog/cost do not flicker to API-key defaults.
+        subscription = !knownLegacy.has(connection.id)
+      })
+
+      yield* ctx.integration.transform((draft) => {
+        draft.update(NousPortalOAuth.integrationID, (integration) => {
+          integration.name = "Nous Portal"
+        })
+        draft.method.update(nousOAuth)
+        draft.update(GoogleSolsticeOAuth.integrationID, (integration) => {
+          if (!integration.name || integration.name === integration.id) integration.name = "Google"
+        })
+        draft.method.update(solsticeOAuth)
+      })
+
+      yield* load()
+      yield* ctx.provider.transform((evt) => GoogleSolsticeWire.applyProvider(evt, subscription))
+      yield* ctx.model.transform((evt) => GoogleSolsticeWire.applyModels(evt, subscription))
+
+      yield* ctx.session.hook(
+        "http.request",
+        (evt) =>
+          Effect.gen(function* () {
+            if (evt.model.providerID !== Provider.ID.google) return
+            const connection = yield* ctx.integration.connection.active(GoogleSolsticeOAuth.integrationID)
+            if (!connection || connection.type !== "credential" || connection.method !== "oauth") return
+            // Fail closed: never fall through to API-key transport when OAuth resolution fails.
+            const resolved = yield* ctx.integration.connection.resolve(connection).pipe(Effect.orDie)
+            if (GoogleSolsticeOAuth.isLegacyAntigravity(resolved)) {
+              knownLegacy.add(connection.id)
+              yield* ctx.integration.connection.status({
+                integrationID: GoogleSolsticeOAuth.integrationID,
+                connection,
+                status: { status: "needs_auth", message: LEGACY_MIGRATION_MESSAGE },
+              })
+              return yield* Effect.die(new Error(LEGACY_MIGRATION_MESSAGE))
+            }
+            if (!GoogleSolsticeOAuth.isSubscription(resolved) || resolved?.type !== "oauth") return
+            const targetURL = GoogleSolsticeWire.rewriteGenerateURL(evt.request.url)
+            if (!targetURL) {
+              return yield* Effect.die(new Error("Google (Solstice) supports GenerateContent endpoints only"))
+            }
+            const headers = new Headers(evt.request.headers)
+            GoogleSolsticeWire.applyRequestHeaders(headers, resolved.access)
+            const body = evt.request.body ? yield* Effect.promise(() => evt.request.clone().arrayBuffer()) : undefined
+            evt.request = new Request(targetURL, {
+              method: evt.request.method,
+              headers,
+              signal: evt.request.signal,
+              ...(body !== undefined ? { body } : {}),
+            })
+          }),
+        { providerID: Provider.ID.google },
+      )
+
+      const onCredentialEvent = (event: { readonly type: string; readonly data?: unknown }) =>
+        loading.withPermit(
+          Effect.gen(function* () {
+            const nousConnection = yield* ctx.integration.connection.active(NousPortalOAuth.integrationID)
+            const switchedNous =
+              event.type === "credential.switched" && eventIntegrationID(event.data) === NousPortalOAuth.integrationID
+            const rotatedNous =
+              nousConnection?.type === "credential" &&
+              nousFailedConnectionID !== undefined &&
+              nousConnection.id !== nousFailedConnectionID
+            if (nousConnection && (switchedNous || rotatedNous)) {
+              yield* clearNousNeedsAuth(nousConnection)
+            }
+            yield* load()
+            yield* ctx.provider.reload()
+          }),
+        )
+
+      yield* ctx.event
+        .subscribe()
+        .pipe(
+          Stream.filter(isSolsticeCredentialEvent),
+          Stream.runForEach(onCredentialEvent),
+          Effect.forkScoped({ startImmediately: true }),
+        )
+    }),
+  })
+}
+
+export const GoogleSolsticePlugin = createPlugin()
+export const GoogleAntigravityPlugin = GoogleSolsticePlugin
+export default GoogleSolsticePlugin
+export { NousPortalOAuth } from "./nous"
+export { GoogleSolsticeOAuth } from "./oauth"
+export { GoogleSolsticeWire } from "./wire"
+
+function eventIntegrationID(data: unknown): string | undefined {
+  if (!data || typeof data !== "object" || !("integrationID" in data)) return undefined
+  return typeof data.integrationID === "string" ? data.integrationID : undefined
+}
+
+export function isSolsticeCredentialEvent(event: { readonly type: string; readonly data?: unknown }) {
+  // credential.updated has no integration payload; reload whenever any credential changes.
   if (event.type === "credential.updated") return true
   if (event.type !== "credential.switched") return false
-  const data = event.data
-  return (
-    !!data &&
-    typeof data === "object" &&
-    "integrationID" in data &&
-    data.integrationID === GoogleAntigravityOAuth.integrationID
-  )
+  const id = eventIntegrationID(event.data)
+  return id === GoogleSolsticeOAuth.integrationID || id === NousPortalOAuth.integrationID
 }
