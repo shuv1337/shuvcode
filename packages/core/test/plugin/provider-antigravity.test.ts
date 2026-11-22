@@ -1,12 +1,15 @@
 import { expect } from "bun:test"
-import { Effect, Layer, Stream } from "effect"
+import { Effect, Layer, Schema, Stream } from "effect"
 import { HttpClientResponse } from "effect/http"
 import { Message, ToolDefinition } from "@opencode/ai"
 import { LLM } from "@opencode/ai/effect"
 import { LLMClient, RequestExecutor } from "@opencode/ai/route"
 import { Gemini } from "@opencode/ai/protocols"
 import { Agent } from "@opencode/schema/agent"
+import { Document, Info } from "@opencode/schema/config"
 import { Bus } from "@opencode/core/bus"
+import { Config } from "@opencode/core/config"
+import { ConfigProviderPlugin } from "@opencode/core/config/plugin/provider"
 import { Credential } from "@opencode/core/credential"
 import { Integration } from "@opencode/core/integration"
 import { Location } from "@opencode/core/location"
@@ -61,16 +64,20 @@ const addPlugin = (pluginDef = GoogleSolsticePlugin) =>
     yield* pluginDef.effect(host)
   })
 
+const decodeConfig = Schema.decodeUnknownSync(Info)
+
 const seedGoogleCatalog = Effect.fn(function* () {
   const providers = yield* Provider.Service
   yield* providers.transform((editor) => {
     editor.update(Provider.ID.google, (draft) => {
-      draft.package = "@opencode/ai/providers/google"
+      draft.package = "@opencode/ai/providers/google/interactions"
     })
-    // Simulate models.dev shipping unary 32k output on gemini-4-argon, which Solstice raises to 64k.
+    // Simulate models.dev shipping unary 32k output + interactions package on gemini-4-argon.
+    // Solstice forces @opencode/ai/providers/google and raises output floor to 64k.
     editor.models.update(Provider.ID.google, Model.ID.make("gemini-4-argon"), (draft) => {
       draft.name = "Gemini 4 Argon (Catalog)"
       draft.family = Model.Family.make("gemini")
+      draft.package = "@opencode/ai/providers/google/interactions"
       draft.limit = { context: 1_048_576, output: 32_768 }
     })
     editor.models.update(Provider.ID.google, Model.ID.make("gemini-old"), () => {})
@@ -78,7 +85,7 @@ const seedGoogleCatalog = Effect.fn(function* () {
 })
 
 it.effect(
-  "Solstice exposes 4 zero-cost models, 20m chunkTimeout, small model pick, and never exposes Nous provider",
+  "Solstice exposes 4 zero-cost models, 20m chunkTimeout, small model pick, forces google package, and never exposes Nous provider",
   () =>
     Effect.gen(function* () {
       const credentials = yield* Credential.Service
@@ -95,12 +102,14 @@ it.effect(
       )
 
       const google = yield* providers.get(Provider.ID.google)
+      expect(google?.package).toBe("@opencode/ai/providers/google")
       expect(google?.settings?.chunkTimeout).toBe(GoogleSolsticeWire.CHUNK_TIMEOUT_MS)
 
       for (const item of GoogleSolsticeWire.shippedModels) {
         const model = yield* models.get(Provider.ID.google, Model.ID.make(item.id))
         expect(model?.enabled).toBe(true)
         expect(model?.cost).toEqual([])
+        expect(model?.package).toBe("@opencode/ai/providers/google")
         expect(model?.modelID).toBe(Model.ID.make(item.id))
         expect(model?.limit).toEqual({ context: 1_048_576, output: 65_536 })
       }
@@ -118,44 +127,67 @@ it.effect(
     }),
 )
 
-it.effect("user-configured future Gemini slug can be enabled after Solstice transform and routes to PerUserQuota", () =>
-  Effect.gen(function* () {
-    const credentials = yield* Credential.Service
-    const models = yield* Model.Service
-    const hooks = yield* PluginHooks.Service
-    yield* seedGoogleCatalog()
-    yield* credentials.create({ integrationID: Integration.ID.make("google"), value: importedSolstice })
-    yield* addPlugin()
-    // Mirrors ConfigProviderPlugin running after ProviderPlugins for a user-configured future slug.
-    yield* models.transform((editor) => {
-      editor.update(Provider.ID.google, Model.ID.make("gemini-4-neon"), (draft) => {
-        draft.name = "Gemini 4 Neon"
-        draft.enabled = true
-        draft.cost = []
-      })
-    })
-    const neon = yield* models.get(Provider.ID.google, Model.ID.make("gemini-4-neon"))
-    expect(neon?.enabled).toBe(true)
-    expect(neon?.cost).toEqual([])
+it.effect(
+  "user-configured future Gemini slug via real ConfigProviderPlugin stays enabled without disabled:false and routes to PerUserQuota",
+  () =>
+    Effect.gen(function* () {
+      const credentials = yield* Credential.Service
+      const models = yield* Model.Service
+      const hooks = yield* PluginHooks.Service
+      const plugin = yield* Plugin.Service
+      yield* seedGoogleCatalog()
+      yield* credentials.create({ integrationID: Integration.ID.make("google"), value: importedSolstice })
+      yield* addPlugin()
 
-    const event = yield* hooks.trigger("session", "http.request", {
-      ...identity,
-      model: Model.Ref.make({ providerID: Provider.ID.google, id: Model.ID.make("gemini-4-neon") }),
-      request: new Request(
-        "https://generativelanguage.googleapis.com/v1beta/models/gemini-4-neon:streamGenerateContent?key=drop",
-        {
-          method: "POST",
-          headers: { "x-goog-api-key": "drop", "content-type": "application/json" },
-          body: '{"contents":[]}',
-        },
-      ),
-    })
-    expect(event.request.url).toBe(
-      "https://generativelanguage.googleapis.com/v1alpha/models/gemini-4-neon:streamGenerateContentPerUserQuota?alt=sse",
-    )
-    expect(event.request.headers.get("authorization")).toBe("Bearer fixture-solstice-token")
-    expect(event.request.headers.has("x-goog-api-key")).toBe(false)
-  }),
+      // Activate real ConfigProviderPlugin after GoogleSolsticePlugin with a brand-new future slug
+      // and NO explicit `disabled: false`.
+      const configHost = yield* PluginHost.make(plugin, "config-provider-test")
+      yield* ConfigProviderPlugin.Plugin.effect(configHost).pipe(
+        Effect.provide(
+          Config.testLayer([
+            new Document({
+              type: "document",
+              info: decodeConfig({
+                providers: {
+                  google: {
+                    models: {
+                      "gemini-4-neon": { name: "Gemini 4 Neon" },
+                    },
+                  },
+                },
+              }),
+            }),
+          ]),
+        ),
+      )
+
+      const neon = yield* models.get(Provider.ID.google, Model.ID.make("gemini-4-neon"))
+      expect(neon?.enabled).toBe(true)
+      expect(neon?.cost).toEqual([])
+      expect(
+        (yield* models.available()).some((m) => m.providerID === Provider.ID.google && m.id === "gemini-4-neon"),
+      ).toBe(true)
+      // Pre-config non-shipped catalog models remain hidden.
+      expect((yield* models.get(Provider.ID.google, Model.ID.make("gemini-old")))?.enabled).toBe(false)
+
+      const event = yield* hooks.trigger("session", "http.request", {
+        ...identity,
+        model: Model.Ref.make({ providerID: Provider.ID.google, id: Model.ID.make("gemini-4-neon") }),
+        request: new Request(
+          "https://generativelanguage.googleapis.com/v1beta/models/gemini-4-neon:streamGenerateContent?key=drop",
+          {
+            method: "POST",
+            headers: { "x-goog-api-key": "drop", "content-type": "application/json" },
+            body: '{"contents":[]}',
+          },
+        ),
+      })
+      expect(event.request.url).toBe(
+        "https://generativelanguage.googleapis.com/v1alpha/models/gemini-4-neon:streamGenerateContentPerUserQuota?alt=sse",
+      )
+      expect(event.request.headers.get("authorization")).toBe("Bearer fixture-solstice-token")
+      expect(event.request.headers.has("x-goog-api-key")).toBe(false)
+    }),
 )
 
 it.effect("Solstice keeps API-key Google catalog and HTTP requests completely untouched", () =>
@@ -199,30 +231,64 @@ it.effect("Solstice fails closed on non-GenerateContent URLs so OAuth tokens nev
   }),
 )
 
-it.effect("legacy google-ai-pro credential marks google needs_auth and fails closed on inference", () =>
-  Effect.gen(function* () {
-    const credentials = yield* Credential.Service
-    const integration = yield* Integration.Service
-    const hooks = yield* PluginHooks.Service
-    yield* seedGoogleCatalog()
-    yield* credentials.create({ integrationID: Integration.ID.make("google"), value: legacyAntigravity })
-    yield* addPlugin()
+it.effect(
+  "legacy google-ai-pro credential disables google provider/models, marks needs_auth, fails closed, and restores on reconnect",
+  () =>
+    Effect.gen(function* () {
+      const credentials = yield* Credential.Service
+      const integration = yield* Integration.Service
+      const providers = yield* Provider.Service
+      const models = yield* Model.Service
+      const hooks = yield* PluginHooks.Service
+      yield* seedGoogleCatalog()
+      yield* credentials.create({ integrationID: Integration.ID.make("google"), value: legacyAntigravity })
+      yield* addPlugin()
 
-    const googleIntegration = yield* integration.get(GoogleSolsticeOAuth.integrationID)
-    expect(googleIntegration?.connections[0]?.status?.status).toBe("needs_auth")
-    expect(googleIntegration?.connections[0]?.status?.message).toContain("Google (Solstice)")
+      // Provider and models are excluded from available lists so neither Model.default() nor Generate.Service use legacy auth.
+      expect((yield* providers.available()).some((provider) => provider.id === Provider.ID.google)).toBe(false)
+      expect((yield* models.available()).some((model) => model.providerID === Provider.ID.google)).toBe(false)
 
-    const exit = yield* Effect.exit(
-      hooks.trigger("session", "http.request", {
-        ...identity,
-        request: new Request(
-          "https://generativelanguage.googleapis.com/v1beta/models/gemini-4-argon:streamGenerateContent",
-          { method: "POST", body: "{}" },
-        ),
-      }),
-    )
-    expect(exit._tag).toBe("Failure")
-  }),
+      const googleIntegration = yield* integration.get(GoogleSolsticeOAuth.integrationID)
+      expect(googleIntegration?.connections[0]?.status?.status).toBe("needs_auth")
+      expect(googleIntegration?.connections[0]?.status?.message).toContain("Google (Solstice)")
+
+      const exit = yield* Effect.exit(
+        hooks.trigger("session", "http.request", {
+          ...identity,
+          request: new Request(
+            "https://generativelanguage.googleapis.com/v1beta/models/gemini-4-argon:streamGenerateContent",
+            { method: "POST", body: "{}" },
+          ),
+        }),
+      )
+      expect(exit._tag).toBe("Failure")
+
+      // Switching to a Solstice credential clears legacy mode and restores google availability.
+      const solsticeCred = yield* credentials.create({
+        integrationID: Integration.ID.make("google"),
+        value: importedSolstice,
+      })
+      yield* credentials.activate(solsticeCred.id)
+      // Wait for credential event reload to propagate.
+      yield* Effect.yieldNow
+      yield* providers.reload()
+      yield* models.reload()
+      expect((yield* providers.available()).some((provider) => provider.id === Provider.ID.google)).toBe(true)
+      expect((yield* models.available()).some((model) => model.providerID === Provider.ID.google)).toBe(true)
+      expect((yield* integration.get(GoogleSolsticeOAuth.integrationID))?.connections[0]?.status).toBeUndefined()
+
+      // Switching to an API key also restores normal google provider/catalog availability.
+      const apiKeyCred = yield* credentials.create({
+        integrationID: Integration.ID.make("google"),
+        value: Credential.Key.make({ type: "key", key: "fixture-api-key" }),
+      })
+      yield* credentials.activate(apiKeyCred.id)
+      yield* Effect.yieldNow
+      yield* providers.reload()
+      yield* models.reload()
+      expect((yield* providers.available()).some((provider) => provider.id === Provider.ID.google)).toBe(true)
+      expect((yield* models.get(Provider.ID.google, Model.ID.make("gemini-old")))?.enabled).toBe(true)
+    }),
 )
 
 it.effect(

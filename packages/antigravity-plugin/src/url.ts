@@ -3,6 +3,9 @@ import { timingSafeEqual } from "node:crypto"
 export type Fetch = (input: string, init?: RequestInit) => Promise<Response>
 
 export const DEFAULT_NOUS_PORTAL_URL = "https://portal.nousresearch.com"
+// Keep per-request timeout under half of Core Credential.refresh's 30s ceiling
+// so sequential Nous + Solstice refreshes complete or surface typed transient errors cleanly.
+export const DEFAULT_TIMEOUT_MS = 12_000
 
 const SAFE_ERROR_CODE = /^[a-z0-9_.-]{1,64}$/i
 const LOOPBACK_HOSTS = new Set(["127.0.0.1", "[::1]", "::1"])
@@ -109,7 +112,7 @@ export async function readBoundedText(response: Response, maxBytes = 65_536): Pr
   return new TextDecoder().decode(combined)
 }
 
-export function requestSignal(signal: AbortSignal | undefined, timeoutMs = 30_000): AbortSignal {
+export function requestSignal(signal: AbortSignal | undefined, timeoutMs = DEFAULT_TIMEOUT_MS): AbortSignal {
   signal?.throwIfAborted()
   const timeout = AbortSignal.timeout(timeoutMs)
   return signal ? AbortSignal.any([signal, timeout]) : timeout

@@ -89,10 +89,18 @@ export function applyRequestHeaders(headers: Headers, accessToken: string) {
   headers.set("Authorization", `Bearer ${accessToken}`)
 }
 
-export function applyProvider(evt: ProviderEditor, active: boolean) {
-  if (!active) return
+export type GoogleMode = "none" | "solstice" | "legacy"
+
+export function applyProvider(evt: ProviderEditor, mode: GoogleMode) {
+  if (mode === "none") return
+  if (mode === "legacy") {
+    evt.update(googleProviderID, (provider) => {
+      provider.activation = "disabled"
+    })
+    return
+  }
   evt.update(googleProviderID, (provider) => {
-    if (!provider.package) provider.package = "@opencode/ai/providers/google"
+    provider.package = "@opencode/ai/providers/google"
     provider.integrationID = GoogleSolsticeOAuth.integrationID
     if (!provider.name || provider.name === provider.id) provider.name = "Google"
     provider.settings = {
@@ -102,16 +110,28 @@ export function applyProvider(evt: ProviderEditor, active: boolean) {
   })
 }
 
-export function applyModels(evt: ModelEditor, active: boolean) {
-  if (!active) return
+export function applyModels(evt: ModelEditor, mode: GoogleMode, catalogModelIDs?: ReadonlySet<string>) {
+  if (mode === "none") return
   const catalog = evt.provider.get(googleProviderID)?.models
+  const existingIDs = new Set([
+    ...(catalog?.keys() ?? []),
+    ...evt.list(googleProviderID).map((model) => String(model.id)),
+  ])
+  if (mode === "legacy") {
+    for (const id of existingIDs) {
+      evt.update(googleProviderID, id, (draft) => {
+        draft.enabled = false
+      })
+    }
+    return
+  }
   for (const model of shippedModels) {
     evt.update(googleProviderID, model.id, (draft) => {
       draft.modelID = Model.ID.make(model.id)
       draft.cost = []
       draft.enabled = true
       draft.status = "active"
-      if (!draft.package) draft.package = "@opencode/ai/providers/google"
+      draft.package = "@opencode/ai/providers/google"
       if (!catalog?.has(model.id)) {
         draft.name = model.name
         draft.family = Model.Family.make(model.family)
@@ -132,15 +152,12 @@ export function applyModels(evt: ModelEditor, active: boolean) {
       }
     })
   }
-  const existingIDs = new Set([
-    ...(catalog?.keys() ?? []),
-    ...evt.list(googleProviderID).map((model) => String(model.id)),
-  ])
   for (const id of existingIDs) {
     if (shippedIDs.has(id)) continue
     evt.update(googleProviderID, id, (draft) => {
       draft.cost = []
-      draft.enabled = false
+      // Only hide pre-config catalog models; brand-new slugs configured in opencode.json stay enabled.
+      if (!catalogModelIDs || catalogModelIDs.has(id)) draft.enabled = false
     })
   }
 }

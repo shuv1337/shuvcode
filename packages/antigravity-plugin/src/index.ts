@@ -82,7 +82,8 @@ export function createPlugin(options?: PluginOptions): Plugin.Plugin<Scope.Scope
     effect: Effect.fn(function* (ctx) {
       const loading = Semaphore.makeUnsafe(1)
       const knownLegacy = new Set<string>()
-      let subscription = false
+      let mode: GoogleSolsticeWire.GoogleMode = "none"
+      let catalogModelIDs: ReadonlySet<string> = new Set()
       let nousFailedConnectionID: string | undefined
 
       const readDeadGrants = Effect.fn("GoogleSolsticePlugin.readDeadGrants")(function* () {
@@ -210,6 +211,7 @@ export function createPlugin(options?: PluginOptions): Plugin.Plugin<Scope.Scope
           }),
         refresh: (value) =>
           Effect.gen(function* () {
+            const connection = yield* ctx.integration.connection.active(NousPortalOAuth.integrationID)
             const portalURL = yield* Effect.try({
               try: resolvePortal,
               catch: (cause) => (cause instanceof Error ? cause : new Error(String(cause))),
@@ -221,12 +223,10 @@ export function createPlugin(options?: PluginOptions): Plugin.Plugin<Scope.Scope
               Effect.tapError((cause) =>
                 Effect.gen(function* () {
                   if (!(cause instanceof NousPortalOAuth.NousGrantDeadError)) return
-                  const connection = yield* ctx.integration.connection.active(NousPortalOAuth.integrationID)
                   if (isOAuthCredential(connection)) yield* markNousNeedsAuth(connection, cause.message)
                 }),
               ),
             )
-            const connection = yield* ctx.integration.connection.active(NousPortalOAuth.integrationID)
             if (isOAuthCredential(connection)) yield* clearNousNeedsAuth(connection)
             return refreshed
           }),
@@ -439,7 +439,7 @@ export function createPlugin(options?: PluginOptions): Plugin.Plugin<Scope.Scope
       const load = Effect.fn("GoogleSolsticePlugin.load")(function* () {
         const connection = yield* ctx.integration.connection.active(GoogleSolsticeOAuth.integrationID)
         if (!isOAuthCredential(connection)) {
-          subscription = false
+          mode = "none"
           return
         }
         const resolved = yield* ctx.integration.connection.resolve(connection).pipe(
@@ -448,7 +448,7 @@ export function createPlugin(options?: PluginOptions): Plugin.Plugin<Scope.Scope
         )
         if (resolved.ok) {
           if (GoogleSolsticeOAuth.isSubscription(resolved.value) && resolved.value?.type === "oauth") {
-            subscription = true
+            mode = "solstice"
             knownLegacy.delete(connection.id)
             const deadGrants = yield* readDeadGrants()
             const deadEntry = resolved.value.refresh.trim()
@@ -471,7 +471,7 @@ export function createPlugin(options?: PluginOptions): Plugin.Plugin<Scope.Scope
             return
           }
           if (GoogleSolsticeOAuth.isLegacyAntigravity(resolved.value)) {
-            subscription = false
+            mode = "legacy"
             knownLegacy.add(connection.id)
             yield* ctx.integration.connection.status({
               integrationID: GoogleSolsticeOAuth.integrationID,
@@ -480,11 +480,11 @@ export function createPlugin(options?: PluginOptions): Plugin.Plugin<Scope.Scope
             })
             return
           }
-          subscription = false
+          mode = "none"
           return
         }
         // Keep Solstice models active during transient outages so catalog/cost do not flicker to API-key defaults.
-        subscription = !knownLegacy.has(connection.id)
+        mode = knownLegacy.has(connection.id) ? "legacy" : "solstice"
       })
 
       yield* ctx.integration.transform((draft) => {
@@ -499,8 +499,12 @@ export function createPlugin(options?: PluginOptions): Plugin.Plugin<Scope.Scope
       })
 
       yield* load()
-      yield* ctx.provider.transform((evt) => GoogleSolsticeWire.applyProvider(evt, subscription))
-      yield* ctx.model.transform((evt) => GoogleSolsticeWire.applyModels(evt, subscription))
+      yield* ctx.provider.transform((evt) => {
+        // Capture pre-config catalog IDs before ConfigProviderPlugin overlays user-configured future slugs.
+        catalogModelIDs = new Set(evt.get(GoogleSolsticeWire.googleProviderID)?.models.keys() ?? [])
+        GoogleSolsticeWire.applyProvider(evt, mode)
+      })
+      yield* ctx.model.transform((evt) => GoogleSolsticeWire.applyModels(evt, mode, catalogModelIDs))
 
       yield* ctx.session.hook(
         "http.request",
@@ -509,8 +513,11 @@ export function createPlugin(options?: PluginOptions): Plugin.Plugin<Scope.Scope
             if (evt.model.providerID !== Provider.ID.google) return
             const connection = yield* ctx.integration.connection.active(GoogleSolsticeOAuth.integrationID)
             if (!isOAuthCredential(connection)) return
-            // Fail closed: never fall through to API-key transport when OAuth resolution fails.
+            // Fail closed: never fall through to API-key transport when OAuth resolution fails or credential vanishes.
             const resolved = yield* ctx.integration.connection.resolve(connection).pipe(Effect.orDie)
+            if (!resolved) {
+              return yield* Effect.die(new Error("Google OAuth credential is no longer available"))
+            }
             if (GoogleSolsticeOAuth.isLegacyAntigravity(resolved)) {
               knownLegacy.add(connection.id)
               yield* ctx.integration.connection.status({

@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test"
 import {
   DEFAULT_NOUS_PORTAL_URL,
+  DEFAULT_TIMEOUT_MS,
   readBoundedText,
   resolvePortalBaseURL,
   retryAfterMs,
@@ -101,5 +102,6 @@ describe("URL validation & security helpers", () => {
 
     const big = new Response("x".repeat(200))
     expect((await readBoundedText(big, 32)).length).toBe(32)
+    expect(DEFAULT_TIMEOUT_MS).toBe(12_000)
   })
 })

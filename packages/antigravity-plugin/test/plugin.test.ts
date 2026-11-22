@@ -25,6 +25,9 @@ function createStubHost(input: {
 }) {
   const methods = new Map<string, IntegrationOAuthMethodRegistration>()
   const storage = new Map<string, unknown>()
+  let requestHook:
+    | ((evt: { model: { providerID: string }; request: Request }) => Effect.Effect<void, unknown>)
+    | undefined
   const context = {
     integration: {
       transform: (fn: (editor: IntegrationEditor) => void) =>
@@ -63,7 +66,14 @@ function createStubHost(input: {
       reload: () => Effect.void,
     },
     session: {
-      hook: () => Effect.succeed({ dispose: Effect.void }),
+      hook: (
+        name: string,
+        fn: (evt: { model: { providerID: string }; request: Request }) => Effect.Effect<void, unknown>,
+      ) =>
+        Effect.sync(() => {
+          if (name === "http.request") requestHook = fn
+          return { dispose: Effect.void }
+        }),
     },
     storage: {
       get: (key: string) => Effect.succeed(storage.get(key)),
@@ -80,7 +90,7 @@ function createStubHost(input: {
       subscribe: () => Stream.empty,
     },
   } as unknown as Context
-  return { context, methods, storage }
+  return { context, methods, storage, getRequestHook: () => requestHook }
 }
 
 describe("GoogleSolsticePlugin package", () => {
@@ -345,6 +355,39 @@ describe("GoogleSolsticePlugin package", () => {
           expect(failure).toBeInstanceOf(GoogleSolsticeOAuth.SolsticeBrokerTransientError)
           expect(statuses.filter((entry) => entry.integrationID === NousPortalOAuth.integrationID)).toEqual([])
           expect(statuses.filter((entry) => entry.integrationID === GoogleSolsticeOAuth.integrationID)).toEqual([])
+        }),
+      ),
+    )
+  })
+
+  test("http.request fails closed when resolved OAuth credential disappears before dispatch", async () => {
+    const testPlugin = createPlugin({ portalURL: "http://127.0.0.1:9914" })
+    const { context, getRequestHook } = createStubHost({
+      active: (id) =>
+        Effect.succeed(
+          id === GoogleSolsticeOAuth.integrationID
+            ? { type: "credential" as const, id: "cred_deleted", label: "Google", method: "oauth" as const }
+            : undefined,
+        ),
+      resolve: () => Effect.succeed(undefined),
+    })
+
+    await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          yield* testPlugin.effect(context)
+          const hook = getRequestHook()
+          expect(hook).toBeDefined()
+          const exit = yield* Effect.exit(
+            hook!({
+              model: { providerID: "google" },
+              request: new Request(
+                "https://generativelanguage.googleapis.com/v1beta/models/gemini-4-argon:streamGenerateContent",
+                { method: "POST", headers: { "x-goog-api-key": "stale-token" }, body: "{}" },
+              ),
+            }),
+          )
+          expect(exit._tag).toBe("Failure")
         }),
       ),
     )
