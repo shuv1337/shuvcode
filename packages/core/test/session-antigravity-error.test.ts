@@ -152,7 +152,7 @@ it.effect(
         value: Credential.OAuth.make({
           type: "oauth",
           methodID: GoogleSolsticeOAuth.methodID,
-          access: "ya29.stale",
+          access: "fixture-stale",
           refresh: "1//solstice-refresh-err",
           expires: 1,
           metadata: { portalBaseURL: portal },

@@ -132,14 +132,18 @@ export async function discoverClient(
 ): Promise<ClientConfig> {
   const base = validateHttpsOrLoopback(portalBaseURL, "Nous Portal URL")
   const request = options?.fetch ?? fetch
-  const response = await request(`${base}/api/oauth/gemini-auth/config`, {
-    method: "GET",
-    headers: {
-      Accept: "application/json",
-      Authorization: `Bearer ${nousAccessToken}`,
-    },
-    signal: requestSignal(signal, options?.timeoutMs),
-  }).catch((cause: unknown) => {
+  const { response, text } = await (async () => {
+    const res = await request(`${base}/api/oauth/gemini-auth/config`, {
+      method: "GET",
+      headers: {
+        Accept: "application/json",
+        Authorization: `Bearer ${nousAccessToken}`,
+      },
+      signal: requestSignal(signal, options?.timeoutMs),
+    })
+    const body = await readBoundedText(res)
+    return { response: res, text: body }
+  })().catch((cause: unknown) => {
     signal?.throwIfAborted()
     throw new SolsticeBrokerTransientError(
       cause instanceof Error && cause.name === "TimeoutError"
@@ -161,7 +165,6 @@ export async function discoverClient(
     )
   }
 
-  const text = await readBoundedText(response)
   const data = Option.getOrUndefined(decodeConfig(text))
   const clientID = data?.client_id.trim()
   const rawAuthorizeURL = data?.authorize_url.trim()
@@ -204,20 +207,24 @@ export async function exchange(
   const base = validateHttpsOrLoopback(portalBaseURL, "Nous Portal URL")
   const request = options?.fetch ?? fetch
   const now = options?.now ?? Date.now
-  const response = await request(`${base}/api/oauth/gemini-auth/exchange`, {
-    method: "POST",
-    headers: {
-      Accept: "application/json",
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${nousAccessToken}`,
-    },
-    body: JSON.stringify({
-      code: input.code,
-      code_verifier: input.verifier,
-      redirect_uri: input.redirectURI,
-    }),
-    signal: requestSignal(signal, options?.timeoutMs),
-  }).catch((cause: unknown) => {
+  const { response, text } = await (async () => {
+    const res = await request(`${base}/api/oauth/gemini-auth/exchange`, {
+      method: "POST",
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${nousAccessToken}`,
+      },
+      body: JSON.stringify({
+        code: input.code,
+        code_verifier: input.verifier,
+        redirect_uri: input.redirectURI,
+      }),
+      signal: requestSignal(signal, options?.timeoutMs),
+    })
+    const body = await readBoundedText(res)
+    return { response: res, text: body }
+  })().catch((cause: unknown) => {
     signal?.throwIfAborted()
     throw new SolsticeBrokerTransientError(
       cause instanceof Error && cause.name === "TimeoutError"
@@ -226,7 +233,6 @@ export async function exchange(
     )
   })
 
-  const text = await readBoundedText(response)
   if (response.status === 401 && !isVercelMitigated(response)) {
     throw new NousAuthRequiredError("Nous Portal sign-in expired. Sign in to Nous Portal again.")
   }
@@ -270,16 +276,20 @@ export async function refreshCredential(
   const request = options?.fetch ?? fetch
   const now = options?.now ?? Date.now
 
-  const response = await request(`${base}/api/oauth/gemini-auth/refresh`, {
-    method: "POST",
-    headers: {
-      Accept: "application/json",
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${nousAccessToken}`,
-    },
-    body: JSON.stringify({ refresh_token: value.refresh }),
-    signal: requestSignal(signal, options?.timeoutMs),
-  }).catch((cause: unknown) => {
+  const { response, text } = await (async () => {
+    const res = await request(`${base}/api/oauth/gemini-auth/refresh`, {
+      method: "POST",
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${nousAccessToken}`,
+      },
+      body: JSON.stringify({ refresh_token: value.refresh }),
+      signal: requestSignal(signal, options?.timeoutMs),
+    })
+    const body = await readBoundedText(res)
+    return { response: res, text: body }
+  })().catch((cause: unknown) => {
     signal?.throwIfAborted()
     throw new SolsticeBrokerTransientError(
       cause instanceof Error && cause.name === "TimeoutError"
@@ -287,8 +297,6 @@ export async function refreshCredential(
         : "Google (Solstice) token refresh network error",
     )
   })
-
-  const text = await readBoundedText(response)
 
   if (!response.ok) {
     // Only explicit OAuth dead-grant codes mark the Google grant dead; non-JSON proxy pages

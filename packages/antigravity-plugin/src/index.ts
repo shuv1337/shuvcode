@@ -1,6 +1,6 @@
 import type { Server } from "node:http"
 import type { IntegrationOAuthMethodRegistration } from "@opencode/plugin/effect/integration"
-import type { ConnectionInfo } from "@opencode/client"
+import type { Context } from "@opencode/plugin/effect/plugin"
 import { Credential, Plugin, Provider } from "@opencode/plugin/effect"
 import { Deferred, Effect, Option, Schema, type Scope, Semaphore, Stream } from "effect"
 import { NousPortalOAuth } from "./nous"
@@ -16,6 +16,8 @@ import {
 } from "./url"
 import { GoogleSolsticeWire } from "./wire"
 
+type ConnectionInfo = Parameters<Context["integration"]["connection"]["resolve"]>[0]
+
 export const ID = "shuvcode.provider.google-solstice"
 
 const DEAD_GRANTS_KEY = "solstice-dead-grants"
@@ -29,7 +31,6 @@ export type PluginOptions = {
 }
 
 const DeadGrantEntry = Schema.Struct({
-  fingerprint: Schema.String,
   error: Schema.Literals(["invalid_grant", "unauthorized_client"]),
 })
 const DeadGrantMap = Schema.Record(Schema.String, DeadGrantEntry)
@@ -48,10 +49,10 @@ function listen(server: Server) {
   })
 }
 
-function unwrapCause(value: unknown, predicate: (item: unknown) => boolean): unknown {
+function findTaggedError(value: unknown, tag: string): unknown {
   let current: unknown = value
   for (let depth = 0; depth < 6 && current !== undefined && current !== null; depth++) {
-    if (predicate(current)) return current
+    if (typeof current === "object" && "_tag" in current && current._tag === tag) return current
     if (typeof current === "object" && "cause" in current) {
       current = current.cause
       continue
@@ -61,11 +62,10 @@ function unwrapCause(value: unknown, predicate: (item: unknown) => boolean): unk
   return undefined
 }
 
-const isNousTransient = (value: unknown): value is NousPortalOAuth.NousTransientError =>
-  value instanceof NousPortalOAuth.NousTransientError
-
-const isNousDead = (value: unknown): value is NousPortalOAuth.NousGrantDeadError =>
-  value instanceof NousPortalOAuth.NousGrantDeadError
+const isOAuthCredential = (
+  connection: ConnectionInfo | undefined,
+): connection is Extract<ConnectionInfo, { readonly type: "credential" }> =>
+  connection !== undefined && connection.type === "credential" && connection.method === "oauth"
 
 export function createPlugin(options?: PluginOptions): Plugin.Plugin<Scope.Scope> {
   if (options?.portalURL !== undefined && options.portalURL.trim().length > 0) {
@@ -91,42 +91,29 @@ export function createPlugin(options?: PluginOptions): Plugin.Plugin<Scope.Scope
       })
 
       const recordDeadGrant = Effect.fn("GoogleSolsticePlugin.recordDeadGrant")(function* (
-        credentialID: string,
         fingerprint: string,
         error: GoogleSolsticeOAuth.DeadGrantCode,
       ) {
         const current = yield* readDeadGrants()
         yield* ctx.storage.set(DEAD_GRANTS_KEY, {
           ...current,
-          [credentialID]: { fingerprint, error },
+          [fingerprint]: { error },
         })
       })
 
-      const clearDeadGrant = Effect.fn("GoogleSolsticePlugin.clearDeadGrant")(function* (credentialID: string) {
+      const clearDeadGrant = Effect.fn("GoogleSolsticePlugin.clearDeadGrant")(function* (fingerprint: string) {
         const current = yield* readDeadGrants()
-        if (!(credentialID in current)) return
-        const next = Object.fromEntries(Object.entries(current).filter(([id]) => id !== credentialID))
+        if (!(fingerprint in current)) return
+        const next = Object.fromEntries(Object.entries(current).filter(([key]) => key !== fingerprint))
         yield* ctx.storage.set(DEAD_GRANTS_KEY, next)
-      })
-
-      const clearDeadGrantIfRotated = Effect.fn("GoogleSolsticePlugin.clearDeadGrantIfRotated")(function* (
-        credentialID: string,
-        credential: Credential.OAuth,
-      ) {
-        const current = yield* readDeadGrants()
-        const entry = current[credentialID]
-        if (!entry) return
-        if (!credential.refresh.trim()) return
-        if (GoogleSolsticeOAuth.refreshFingerprint(credential.refresh) !== entry.fingerprint) {
-          yield* clearDeadGrant(credentialID)
-        }
       })
 
       const markNousNeedsAuth = Effect.fn("GoogleSolsticePlugin.markNousNeedsAuth")(function* (
         connection: ConnectionInfo,
         message: string,
       ) {
-        nousFailedConnectionID = connection.type === "credential" ? connection.id : undefined
+        if (!isOAuthCredential(connection)) return
+        nousFailedConnectionID = connection.id
         yield* ctx.integration.connection.status({
           integrationID: NousPortalOAuth.integrationID,
           connection,
@@ -137,6 +124,7 @@ export function createPlugin(options?: PluginOptions): Plugin.Plugin<Scope.Scope
       const clearNousNeedsAuth = Effect.fn("GoogleSolsticePlugin.clearNousNeedsAuth")(function* (
         connection: ConnectionInfo,
       ) {
+        if (!isOAuthCredential(connection)) return
         nousFailedConnectionID = undefined
         yield* ctx.integration.connection.status({
           integrationID: NousPortalOAuth.integrationID,
@@ -147,7 +135,7 @@ export function createPlugin(options?: PluginOptions): Plugin.Plugin<Scope.Scope
 
       const resolveNousAccessToken = Effect.fn("GoogleSolsticePlugin.resolveNousAccessToken")(function* () {
         const nousConnection = yield* ctx.integration.connection.active(NousPortalOAuth.integrationID)
-        if (!nousConnection || nousConnection.type !== "credential" || nousConnection.method !== "oauth") {
+        if (!isOAuthCredential(nousConnection)) {
           return yield* Effect.fail(
             new GoogleSolsticeOAuth.NousAuthRequiredError(
               "Sign in to Nous Portal first in /connect before connecting or refreshing Google (Solstice).",
@@ -159,13 +147,20 @@ export function createPlugin(options?: PluginOptions): Plugin.Plugin<Scope.Scope
           Effect.catch((cause) => Effect.succeed({ ok: false as const, cause })),
         )
         if (!resolved.ok) {
-          const transient = unwrapCause(resolved.cause, isNousTransient)
+          // Only an explicit NousGrantDeadError marks Nous needs_auth; timeouts, body-read resets,
+          // and other non-dead failures stay transient so a healthy Nous login is never poisoned.
+          const dead = findTaggedError(resolved.cause, "NousGrantDeadError")
+          if (dead) {
+            const message =
+              dead instanceof Error ? dead.message : "Nous Portal sign-in expired. Sign in to Nous Portal again."
+            yield* markNousNeedsAuth(nousConnection, message)
+            return yield* Effect.fail(new GoogleSolsticeOAuth.NousAuthRequiredError(message))
+          }
+          const transient = findTaggedError(resolved.cause, "NousTransientError")
           if (transient) return yield* Effect.fail(transient)
-          const dead = unwrapCause(resolved.cause, isNousDead)
-          const message =
-            dead instanceof Error ? dead.message : "Nous Portal sign-in expired. Sign in to Nous Portal again."
-          yield* markNousNeedsAuth(nousConnection, message)
-          return yield* Effect.fail(new GoogleSolsticeOAuth.NousAuthRequiredError(message))
+          return yield* Effect.fail(
+            new GoogleSolsticeOAuth.SolsticeBrokerTransientError("Nous Portal token resolution failed transiently"),
+          )
         }
         if (!resolved.value || resolved.value.type !== "oauth" || !resolved.value.access.trim()) {
           const message = "Nous Portal sign-in is required. Sign in to Nous Portal in /connect."
@@ -227,13 +222,12 @@ export function createPlugin(options?: PluginOptions): Plugin.Plugin<Scope.Scope
                 Effect.gen(function* () {
                   if (!(cause instanceof NousPortalOAuth.NousGrantDeadError)) return
                   const connection = yield* ctx.integration.connection.active(NousPortalOAuth.integrationID)
-                  if (!connection) return
-                  yield* markNousNeedsAuth(connection, cause.message)
+                  if (isOAuthCredential(connection)) yield* markNousNeedsAuth(connection, cause.message)
                 }),
               ),
             )
             const connection = yield* ctx.integration.connection.active(NousPortalOAuth.integrationID)
-            if (connection) yield* clearNousNeedsAuth(connection)
+            if (isOAuthCredential(connection)) yield* clearNousNeedsAuth(connection)
             return refreshed
           }),
       }
@@ -265,14 +259,19 @@ export function createPlugin(options?: PluginOptions): Plugin.Plugin<Scope.Scope
             // Lazy import so non-Node runtimes never evaluate node:http on module load.
             const { createServer } = yield* Effect.promise(() => import("node:http"))
             const server = createServer((request, response) => {
-              const url = new URL(request.url ?? "/", "http://127.0.0.1")
+              const rawURL = request.url ?? "/"
+              if (!URL.canParse(rawURL, "http://127.0.0.1")) {
+                response.writeHead(400, { "Content-Type": "text/plain", Connection: "close" }).end("Bad request")
+                return
+              }
+              const url = new URL(rawURL, "http://127.0.0.1")
               if (url.pathname !== GoogleSolsticeOAuth.callbackPath) {
-                response.writeHead(404).end("Not found")
+                response.writeHead(404, { "Content-Type": "text/plain", Connection: "close" }).end("Not found")
                 return
               }
               if (!timingSafeEqualString(state, url.searchParams.get("state"))) {
                 response
-                  .writeHead(400, { "Content-Type": "text/html" })
+                  .writeHead(400, { "Content-Type": "text/html", Connection: "close" })
                   .end(OauthCallbackPage.error("Invalid OAuth state", { provider: "Google (Solstice)" }))
                 return
               }
@@ -282,23 +281,25 @@ export function createPlugin(options?: PluginOptions): Plugin.Plugin<Scope.Scope
                 const message = code ? `Google authorization failed (${code})` : "Google authorization failed"
                 Effect.runFork(Deferred.fail(received, new Error(message)))
                 response
-                  .writeHead(400, { "Content-Type": "text/html" })
+                  .writeHead(400, { "Content-Type": "text/html", Connection: "close" })
                   .end(OauthCallbackPage.error(message, { provider: "Google (Solstice)" }))
                 return
               }
               const code = url.searchParams.get("code")?.trim()
               if (!code) {
                 response
-                  .writeHead(400, { "Content-Type": "text/html" })
+                  .writeHead(400, { "Content-Type": "text/html", Connection: "close" })
                   .end(OauthCallbackPage.error("Missing authorization code", { provider: "Google (Solstice)" }))
                 return
               }
               if (!Effect.runSync(Deferred.succeed(received, { code, response }))) {
-                response.writeHead(409).end("OAuth callback already received")
+                response
+                  .writeHead(409, { "Content-Type": "text/plain", Connection: "close" })
+                  .end("OAuth callback already received")
               }
             })
-            const port = yield* listen(server)
             yield* Effect.addFinalizer(() => Effect.sync(() => server.close()))
+            const port = yield* listen(server)
             const redirectURI = `http://127.0.0.1:${port}${GoogleSolsticeOAuth.callbackPath}`
             return {
               mode: "auto" as const,
@@ -315,7 +316,7 @@ export function createPlugin(options?: PluginOptions): Plugin.Plugin<Scope.Scope
                   Effect.sync(() => {
                     if (!result.response || result.response.writableEnded) return
                     result.response
-                      .writeHead(error ? 400 : 200, { "Content-Type": "text/html" })
+                      .writeHead(error ? 400 : 200, { "Content-Type": "text/html", Connection: "close" })
                       .end(
                         error
                           ? OauthCallbackPage.error(error, { provider: "Google (Solstice)" })
@@ -372,23 +373,19 @@ export function createPlugin(options?: PluginOptions): Plugin.Plugin<Scope.Scope
               return yield* Effect.fail(new Error("Google (Solstice) is missing a refresh token"))
             }
             const googleConnection = yield* ctx.integration.connection.active(GoogleSolsticeOAuth.integrationID)
-            const credentialID = googleConnection?.type === "credential" ? googleConnection.id : undefined
             const fingerprint = GoogleSolsticeOAuth.refreshFingerprint(value.refresh)
-            if (credentialID) {
-              const deadGrants = yield* readDeadGrants()
-              const entry = deadGrants[credentialID]
-              if (entry && entry.fingerprint === fingerprint) {
-                const deadError = new GoogleSolsticeOAuth.SolsticeGrantDeadError(entry.error)
+            const deadGrants = yield* readDeadGrants()
+            const deadEntry = deadGrants[fingerprint]
+            if (deadEntry) {
+              const deadError = new GoogleSolsticeOAuth.SolsticeGrantDeadError(deadEntry.error)
+              if (isOAuthCredential(googleConnection)) {
                 yield* ctx.integration.connection.status({
                   integrationID: GoogleSolsticeOAuth.integrationID,
-                  connection: googleConnection!,
+                  connection: googleConnection,
                   status: { status: "needs_auth", message: deadError.message },
                 })
-                return yield* Effect.fail(deadError)
               }
-              if (entry && entry.fingerprint !== fingerprint) {
-                yield* clearDeadGrant(credentialID)
-              }
+              return yield* Effect.fail(deadError)
             }
             const nous = yield* resolveNousAccessToken()
             const metadataPortal =
@@ -408,8 +405,8 @@ export function createPlugin(options?: PluginOptions): Plugin.Plugin<Scope.Scope
               Effect.tapError((cause) =>
                 Effect.gen(function* () {
                   if (cause instanceof GoogleSolsticeOAuth.SolsticeGrantDeadError) {
-                    if (credentialID) yield* recordDeadGrant(credentialID, fingerprint, cause.code)
-                    if (googleConnection) {
+                    yield* recordDeadGrant(fingerprint, cause.code)
+                    if (isOAuthCredential(googleConnection)) {
                       yield* ctx.integration.connection.status({
                         integrationID: GoogleSolsticeOAuth.integrationID,
                         connection: googleConnection,
@@ -425,8 +422,8 @@ export function createPlugin(options?: PluginOptions): Plugin.Plugin<Scope.Scope
                 }),
               ),
             )
-            if (credentialID) yield* clearDeadGrant(credentialID)
-            if (googleConnection) {
+            yield* clearDeadGrant(fingerprint)
+            if (isOAuthCredential(googleConnection)) {
               yield* ctx.integration.connection.status({
                 integrationID: GoogleSolsticeOAuth.integrationID,
                 connection: googleConnection,
@@ -441,7 +438,7 @@ export function createPlugin(options?: PluginOptions): Plugin.Plugin<Scope.Scope
 
       const load = Effect.fn("GoogleSolsticePlugin.load")(function* () {
         const connection = yield* ctx.integration.connection.active(GoogleSolsticeOAuth.integrationID)
-        if (!connection || connection.type !== "credential" || connection.method !== "oauth") {
+        if (!isOAuthCredential(connection)) {
           subscription = false
           return
         }
@@ -453,7 +450,19 @@ export function createPlugin(options?: PluginOptions): Plugin.Plugin<Scope.Scope
           if (GoogleSolsticeOAuth.isSubscription(resolved.value) && resolved.value?.type === "oauth") {
             subscription = true
             knownLegacy.delete(connection.id)
-            yield* clearDeadGrantIfRotated(connection.id, resolved.value)
+            const deadGrants = yield* readDeadGrants()
+            const deadEntry = resolved.value.refresh.trim()
+              ? deadGrants[GoogleSolsticeOAuth.refreshFingerprint(resolved.value.refresh)]
+              : undefined
+            if (deadEntry) {
+              const deadError = new GoogleSolsticeOAuth.SolsticeGrantDeadError(deadEntry.error)
+              yield* ctx.integration.connection.status({
+                integrationID: GoogleSolsticeOAuth.integrationID,
+                connection,
+                status: { status: "needs_auth", message: deadError.message },
+              })
+              return
+            }
             yield* ctx.integration.connection.status({
               integrationID: GoogleSolsticeOAuth.integrationID,
               connection,
@@ -499,7 +508,7 @@ export function createPlugin(options?: PluginOptions): Plugin.Plugin<Scope.Scope
           Effect.gen(function* () {
             if (evt.model.providerID !== Provider.ID.google) return
             const connection = yield* ctx.integration.connection.active(GoogleSolsticeOAuth.integrationID)
-            if (!connection || connection.type !== "credential" || connection.method !== "oauth") return
+            if (!isOAuthCredential(connection)) return
             // Fail closed: never fall through to API-key transport when OAuth resolution fails.
             const resolved = yield* ctx.integration.connection.resolve(connection).pipe(Effect.orDie)
             if (GoogleSolsticeOAuth.isLegacyAntigravity(resolved)) {
@@ -536,10 +545,10 @@ export function createPlugin(options?: PluginOptions): Plugin.Plugin<Scope.Scope
             const switchedNous =
               event.type === "credential.switched" && eventIntegrationID(event.data) === NousPortalOAuth.integrationID
             const rotatedNous =
-              nousConnection?.type === "credential" &&
+              isOAuthCredential(nousConnection) &&
               nousFailedConnectionID !== undefined &&
               nousConnection.id !== nousFailedConnectionID
-            if (nousConnection && (switchedNous || rotatedNous)) {
+            if (isOAuthCredential(nousConnection) && (switchedNous || rotatedNous)) {
               yield* clearNousNeedsAuth(nousConnection)
             }
             yield* load()

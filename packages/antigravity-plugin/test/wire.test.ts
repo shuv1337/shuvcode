@@ -43,6 +43,9 @@ describe("GoogleSolsticeWire", () => {
     expect(
       GoogleSolsticeWire.rewriteGenerateURL("https://generativelanguage.googleapis.com/v1beta/files"),
     ).toBeUndefined()
+    expect(
+      GoogleSolsticeWire.rewriteGenerateURL("file:///v1beta/models/gemini-4-argon:streamGenerateContent"),
+    ).toBeUndefined()
     expect(GoogleSolsticeWire.rewriteGenerateURL("not-a-url")).toBeUndefined()
   })
 
@@ -52,9 +55,9 @@ describe("GoogleSolsticeWire", () => {
       "user-agent": "opencode/test",
       "content-type": "application/json",
     })
-    GoogleSolsticeWire.applyRequestHeaders(headers, "ya29.solstice-token")
+    GoogleSolsticeWire.applyRequestHeaders(headers, "fixture-solstice-token")
     expect(headers.has("x-goog-api-key")).toBe(false)
-    expect(headers.get("authorization")).toBe("Bearer ya29.solstice-token")
+    expect(headers.get("authorization")).toBe("Bearer fixture-solstice-token")
     expect(headers.get("user-agent")).toBe("opencode/test")
   })
 

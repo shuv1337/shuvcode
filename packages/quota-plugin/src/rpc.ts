@@ -13,7 +13,7 @@ export const Window = Schema.Struct({
 export type Window = typeof Window.Type
 
 export const Provider = Schema.Struct({
-  /** Stable quota source id: codex | claude | xai | google. */
+  /** Stable quota source id: codex | claude | xai. */
   id: Schema.String,
   name: Schema.String,
   integrationID: Schema.String,

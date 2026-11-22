@@ -40,7 +40,7 @@ const identity = {
 const importedSolstice = Credential.OAuth.make({
   type: "oauth",
   methodID: GoogleSolsticeOAuth.methodID,
-  access: "ya29.fixture-solstice",
+  access: "fixture-solstice-token",
   refresh: "",
   expires: Date.now() + 3_600_000,
   metadata: { portalBaseURL: portal, shuvcodeAuthImport: "access-only" },
@@ -48,7 +48,7 @@ const importedSolstice = Credential.OAuth.make({
 const legacyAntigravity = Credential.OAuth.make({
   type: "oauth",
   methodID: GoogleSolsticeOAuth.legacyMethodID,
-  access: "ya29.legacy-antigravity",
+  access: "fixture-legacy-token",
   refresh: "1//legacy",
   expires: Date.now() + 3_600_000,
   metadata: { projectId: "legacy-project" },
@@ -153,7 +153,7 @@ it.effect("user-configured future Gemini slug can be enabled after Solstice tran
     expect(event.request.url).toBe(
       "https://generativelanguage.googleapis.com/v1alpha/models/gemini-4-neon:streamGenerateContentPerUserQuota?alt=sse",
     )
-    expect(event.request.headers.get("authorization")).toBe("Bearer ya29.fixture-solstice")
+    expect(event.request.headers.get("authorization")).toBe("Bearer fixture-solstice-token")
     expect(event.request.headers.has("x-goog-api-key")).toBe(false)
   }),
 )
@@ -249,7 +249,7 @@ it.effect(
             if (mode === "dead") {
               return Response.json({ error: "invalid_grant" }, { status: 400 })
             }
-            return Response.json({ access_token: "ya29.rotated", expires_in: 3600 })
+            return Response.json({ access_token: "fixture-rotated", expires_in: 3600 })
           }
           throw new Error(`Unexpected URL: ${url}`)
         },
@@ -271,7 +271,7 @@ it.effect(
         value: Credential.OAuth.make({
           type: "oauth",
           methodID: GoogleSolsticeOAuth.methodID,
-          access: "ya29.expired",
+          access: "fixture-expired",
           refresh: "1//solstice-refresh-a",
           expires: 1,
           metadata: { portalBaseURL: portal },
@@ -302,14 +302,29 @@ it.effect(
       expect((yield* Effect.exit(integration.connection.resolve(googleConn)))._tag).toBe("Failure")
       expect(refreshCalls).toBe(callsAfterDead)
 
-      // 4. Reconnecting Google with a new refresh token clears the dead cache and refreshes cleanly.
+      // 4. Reloading plugin with a non-expiring copy of the same dead refresh token preserves needs_auth.
+      yield* credentials.create({
+        integrationID: GoogleSolsticeOAuth.integrationID,
+        value: Credential.OAuth.make({
+          type: "oauth",
+          methodID: GoogleSolsticeOAuth.methodID,
+          access: "fixture-still-valid-access",
+          refresh: "1//solstice-refresh-a",
+          expires: Date.now() + 3_600_000,
+          metadata: { portalBaseURL: portal },
+        }),
+      })
+      yield* addPlugin(testPlugin)
+      expect((yield* statusOf(GoogleSolsticeOAuth.integrationID))?.status).toBe("needs_auth")
+
+      // 5. Reconnecting Google with a new refresh token clears the dead cache and refreshes cleanly.
       mode = "ok"
       yield* credentials.create({
         integrationID: GoogleSolsticeOAuth.integrationID,
         value: Credential.OAuth.make({
           type: "oauth",
           methodID: GoogleSolsticeOAuth.methodID,
-          access: "ya29.expired-new",
+          access: "fixture-expired-new",
           refresh: "1//solstice-refresh-b",
           expires: 1,
           metadata: { portalBaseURL: portal },
@@ -317,7 +332,7 @@ it.effect(
       })
       const rotatedConn = (yield* integration.connection.active(GoogleSolsticeOAuth.integrationID))!
       const resolved = yield* integration.connection.resolve(rotatedConn)
-      expect(resolved?.type === "oauth" && resolved.access).toBe("ya29.rotated")
+      expect(resolved?.type === "oauth" && resolved.access).toBe("fixture-rotated")
       expect(yield* statusOf(GoogleSolsticeOAuth.integrationID)).toBeUndefined()
     }),
 )
@@ -368,7 +383,7 @@ it.effect(
       expect(step1Event.request.url).toBe(
         "https://generativelanguage.googleapis.com/v1alpha/models/gemini-4-argon:streamGenerateContentPerUserQuota?alt=sse",
       )
-      expect(step1Event.request.headers.get("authorization")).toBe("Bearer ya29.fixture-solstice")
+      expect(step1Event.request.headers.get("authorization")).toBe("Bearer fixture-solstice-token")
       expect(step1Event.request.headers.has("x-goog-api-key")).toBe(false)
       // Body bytes pass through untouched (no envelope wrapping).
       expect(yield* Effect.promise(() => step1Event.request.clone().text())).toBe(step1Payload)

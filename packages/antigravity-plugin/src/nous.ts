@@ -116,15 +116,19 @@ export async function requestDeviceCode(
   const base = validateHttpsOrLoopback(portalBaseURL, "Nous Portal URL")
   const request = options?.fetch ?? fetch
   const now = options?.now ?? Date.now
-  const response = await request(`${base}/api/oauth/device/code`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/x-www-form-urlencoded",
-      Accept: "application/json",
-    },
-    body: new URLSearchParams({ client_id: clientID, scope }).toString(),
-    signal: requestSignal(signal, options?.timeoutMs),
-  }).catch((cause: unknown) => {
+  const { response, text } = await (async () => {
+    const res = await request(`${base}/api/oauth/device/code`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+        Accept: "application/json",
+      },
+      body: new URLSearchParams({ client_id: clientID, scope }).toString(),
+      signal: requestSignal(signal, options?.timeoutMs),
+    })
+    const body = await readBoundedText(res)
+    return { response: res, text: body }
+  })().catch((cause: unknown) => {
     signal?.throwIfAborted()
     throw new NousTransientError(
       cause instanceof Error && cause.name === "TimeoutError"
@@ -138,7 +142,6 @@ export async function requestDeviceCode(
       response.status,
     )
   }
-  const text = await readBoundedText(response)
   const data = Option.getOrUndefined(decodeDeviceCode(text))
   const deviceCode = data?.device_code.trim()
   const userCode = data?.user_code.trim()
@@ -266,9 +269,10 @@ export function pollDeviceToken(
         continue
       }
 
-      const mitigated = isVercelMitigated(response) && (response.status === 403 || response.status === 429)
-      const transientNonJson = !data && (response.status === 408 || response.status === 429 || response.status >= 500)
-      if (mitigated || transientNonJson) {
+      const mitigated =
+        isVercelMitigated(response) && (response.status === 401 || response.status === 403 || response.status === 429)
+      const transientStatus = response.status === 408 || response.status === 429 || response.status >= 500
+      if (mitigated || transientStatus) {
         const backoff = retryAfterMs(response, after, MAX_RETRY_AFTER_MS) ?? intervalMs
         const waitMs = Math.min(backoff, Math.max(0, device.expiresAt - after))
         if (waitMs <= 0) {
@@ -310,20 +314,24 @@ export async function refreshCredential(
   const request = options?.fetch ?? fetch
   const now = options?.now ?? Date.now
 
-  const response = await request(`${base}/api/oauth/token`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/x-www-form-urlencoded",
-      Accept: "application/json",
-      // NAS refresh expects the refresh token in this header rather than the form body.
-      "x-nous-refresh-token": credential.refresh,
-    },
-    body: new URLSearchParams({
-      grant_type: "refresh_token",
-      client_id: clientID,
-    }).toString(),
-    signal: requestSignal(signal, options?.timeoutMs),
-  }).catch((cause: unknown) => {
+  const { response, text } = await (async () => {
+    const res = await request(`${base}/api/oauth/token`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+        Accept: "application/json",
+        // NAS refresh expects the refresh token in this header rather than the form body.
+        "x-nous-refresh-token": credential.refresh,
+      },
+      body: new URLSearchParams({
+        grant_type: "refresh_token",
+        client_id: clientID,
+      }).toString(),
+      signal: requestSignal(signal, options?.timeoutMs),
+    })
+    const body = await readBoundedText(res)
+    return { response: res, text: body }
+  })().catch((cause: unknown) => {
     signal?.throwIfAborted()
     throw new NousTransientError(
       cause instanceof Error && cause.name === "TimeoutError"
@@ -332,7 +340,6 @@ export async function refreshCredential(
     )
   })
 
-  const text = await readBoundedText(response)
   const data = Option.getOrUndefined(decodeToken(text))
 
   if (response.ok) {
@@ -352,7 +359,7 @@ export async function refreshCredential(
     })
   }
 
-  if (isVercelMitigated(response) && (response.status === 403 || response.status === 429)) {
+  if (isVercelMitigated(response) && (response.status === 401 || response.status === 403 || response.status === 429)) {
     throw new NousTransientError("Nous Portal token refresh was temporarily challenged", response.status)
   }
   if (response.status >= 500 || response.status === 408 || response.status === 429) {

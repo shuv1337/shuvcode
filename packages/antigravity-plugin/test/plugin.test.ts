@@ -14,6 +14,75 @@ import plugin, {
 } from "../src/index"
 import { OauthCallbackPage } from "../src/page"
 
+function createStubHost(input: {
+  readonly active?: (
+    id: string,
+  ) => Effect.Effect<Parameters<Context["integration"]["connection"]["resolve"]>[0] | undefined>
+  readonly resolve?: (
+    connection: Parameters<Context["integration"]["connection"]["resolve"]>[0],
+  ) => Effect.Effect<Credential.Value | undefined, unknown>
+  readonly onStatus?: (call: { readonly integrationID: string; readonly status: unknown }) => void
+}) {
+  const methods = new Map<string, IntegrationOAuthMethodRegistration>()
+  const storage = new Map<string, unknown>()
+  const context = {
+    integration: {
+      transform: (fn: (editor: IntegrationEditor) => void) =>
+        Effect.sync(() => {
+          fn({
+            list: () => [],
+            get: () => undefined,
+            update: () => {},
+            remove: () => {},
+            method: {
+              list: () => [],
+              update: (reg) => {
+                if (reg.method.type === "oauth") methods.set(reg.method.id, reg as IntegrationOAuthMethodRegistration)
+              },
+              remove: () => {},
+            },
+          })
+          return { dispose: Effect.void }
+        }),
+      reload: () => Effect.void,
+      connection: {
+        active: input.active ?? (() => Effect.succeed(undefined)),
+        resolve: input.resolve ?? (() => Effect.succeed(undefined)),
+        status: (call: { readonly integrationID: string; readonly status: unknown }) =>
+          Effect.sync(() => {
+            input.onStatus?.(call)
+          }),
+      },
+    },
+    provider: {
+      transform: () => Effect.succeed({ dispose: Effect.void }),
+      reload: () => Effect.void,
+    },
+    model: {
+      transform: () => Effect.succeed({ dispose: Effect.void }),
+      reload: () => Effect.void,
+    },
+    session: {
+      hook: () => Effect.succeed({ dispose: Effect.void }),
+    },
+    storage: {
+      get: (key: string) => Effect.succeed(storage.get(key)),
+      set: (key: string, value: unknown) =>
+        Effect.sync(() => {
+          storage.set(key, value)
+        }),
+      remove: (key: string) =>
+        Effect.sync(() => {
+          storage.delete(key)
+        }),
+    },
+    event: {
+      subscribe: () => Stream.empty,
+    },
+  } as unknown as Context
+  return { context, methods, storage }
+}
+
 describe("GoogleSolsticePlugin package", () => {
   test("exports plugin identity, factory, and credential event filter", () => {
     expect(plugin).toBe(GoogleSolsticePlugin)
@@ -41,7 +110,6 @@ describe("GoogleSolsticePlugin package", () => {
 
   test("google-solstice authorize holds browser response until exchange finishes and supports redirect paste", async () => {
     const portal = "http://127.0.0.1:9911"
-    const methods = new Map<string, IntegrationOAuthMethodRegistration>()
     const nousCred = Credential.OAuth.make({
       type: "oauth",
       methodID: NousPortalOAuth.methodID,
@@ -51,6 +119,10 @@ describe("GoogleSolsticePlugin package", () => {
       metadata: { portalBaseURL: portal },
     })
 
+    let markExchangeStarted: (() => void) | undefined
+    const exchangeStarted = new Promise<void>((resolve) => {
+      markExchangeStarted = resolve
+    })
     let releaseExchange: (() => void) | undefined
     const exchangeGate = new Promise<void>((resolve) => {
       releaseExchange = resolve
@@ -70,10 +142,13 @@ describe("GoogleSolsticePlugin package", () => {
         }
         if (url === `${portal}/api/oauth/gemini-auth/exchange`) {
           const body = JSON.parse(String(init?.body)) as { code: string }
-          if (body.code === "browser-code") await exchangeGate
+          if (body.code === "browser-code") {
+            markExchangeStarted?.()
+            await exchangeGate
+          }
           exchangeFinished = true
           return Response.json({
-            access_token: `ya29.${body.code}`,
+            access_token: `fixture-${body.code}`,
             refresh_token: `1//refresh-${body.code}`,
             expires_in: 3600,
           })
@@ -82,67 +157,24 @@ describe("GoogleSolsticePlugin package", () => {
       },
     })
 
-    const stubContext = {
-      integration: {
-        transform: (fn: (editor: IntegrationEditor) => void) =>
-          Effect.sync(() => {
-            fn({
-              list: () => [],
-              get: () => undefined,
-              update: () => {},
-              remove: () => {},
-              method: {
-                list: () => [],
-                update: (reg) => {
-                  if (reg.method.type === "oauth") methods.set(reg.method.id, reg as IntegrationOAuthMethodRegistration)
-                },
-                remove: () => {},
-              },
-            })
-            return { dispose: Effect.void }
-          }),
-        reload: () => Effect.void,
-        connection: {
-          active: (id: string) =>
-            Effect.succeed(
-              id === NousPortalOAuth.integrationID
-                ? { type: "credential" as const, id: "cred_nous", label: "Nous", method: "oauth" as const }
-                : undefined,
-            ),
-          resolve: () => Effect.succeed(nousCred),
-          status: () => Effect.void,
-        },
-      },
-      provider: {
-        transform: () => Effect.succeed({ dispose: Effect.void }),
-        reload: () => Effect.void,
-      },
-      model: {
-        transform: () => Effect.succeed({ dispose: Effect.void }),
-        reload: () => Effect.void,
-      },
-      session: {
-        hook: () => Effect.succeed({ dispose: Effect.void }),
-      },
-      storage: {
-        get: () => Effect.succeed(undefined),
-        set: () => Effect.void,
-        remove: () => Effect.void,
-      },
-      event: {
-        subscribe: () => Stream.empty,
-      },
-    } as unknown as Context
+    const { context, methods } = createStubHost({
+      active: (id) =>
+        Effect.succeed(
+          id === NousPortalOAuth.integrationID
+            ? { type: "credential" as const, id: "cred_nous", label: "Nous", method: "oauth" as const }
+            : undefined,
+        ),
+      resolve: () => Effect.succeed(nousCred),
+    })
 
-    // Run both browser callback and pasted redirect flows under scoped cleanup.
     await Effect.runPromise(
       Effect.scoped(
         Effect.gen(function* () {
-          yield* testPlugin.effect(stubContext)
+          yield* testPlugin.effect(context)
           const solstice = methods.get(GoogleSolsticeOAuth.methodID)
           expect(solstice).toBeDefined()
 
-          // 1. Browser loopback callback: response stays open until exchange finishes.
+          // 1. Browser loopback callback: verify HTTP response stays open while exchange is gated.
           const browserAuth = yield* solstice!.authorize({})
           expect(browserAuth.mode).toBe("auto")
           if (browserAuth.mode !== "auto") return
@@ -156,17 +188,29 @@ describe("GoogleSolsticePlugin package", () => {
           expect(badResponse.status).toBe(400)
 
           const callbackFiber = yield* Effect.forkChild(browserAuth.callback, { startImmediately: true })
-          const responsePromise = fetch(`${redirectURI}?state=${encodeURIComponent(state)}&code=browser-code`)
-          // Release exchange and confirm HTTP response completes with 200 HTML after exchange finished.
+          let settled = false
+          const responsePromise = fetch(`${redirectURI}?state=${encodeURIComponent(state)}&code=browser-code`).then(
+            (res) => {
+              settled = true
+              return res
+            },
+          )
+          // Wait until exchange has actually started, yield a macrotask, and assert the browser response is still held.
+          yield* Effect.promise(() => exchangeStarted)
+          yield* Effect.promise(() => new Promise((resolve) => setTimeout(resolve, 20)))
+          expect(settled).toBe(false)
+          expect(exchangeFinished).toBe(false)
+
           releaseExchange!()
           const [httpResponse, browserCred] = yield* Effect.all([
             Effect.promise(() => responsePromise),
             Fiber.join(callbackFiber),
           ])
+          expect(settled).toBe(true)
           expect(exchangeFinished).toBe(true)
           expect(httpResponse.status).toBe(200)
           expect(yield* Effect.promise(() => httpResponse.text())).toContain("Google (Solstice)")
-          expect(browserCred.access).toBe("ya29.browser-code")
+          expect(browserCred.access).toBe("fixture-browser-code")
           expect(browserCred.refresh).toBe("1//refresh-browser-code")
 
           // 2. Pasted redirect fallback (SSH / remote browser) via submit()
@@ -181,8 +225,126 @@ describe("GoogleSolsticePlugin package", () => {
           expect(badPaste._tag).toBe("Failure")
           yield* pasteAuth.submit!(`${pasteRedirect}?state=${encodeURIComponent(pasteState)}&code=pasted-code`)
           const pastedCred = yield* Fiber.join(pasteFiber)
-          expect(pastedCred.access).toBe("ya29.pasted-code")
+          expect(pastedCred.access).toBe("fixture-pasted-code")
           expect(pastedCred.refresh).toBe("1//refresh-pasted-code")
+        }),
+      ),
+    )
+  })
+
+  test("interrupting solstice authorize callback during exchange destroys held response and closes server", async () => {
+    const portal = "http://127.0.0.1:9912"
+    const nousCred = Credential.OAuth.make({
+      type: "oauth",
+      methodID: NousPortalOAuth.methodID,
+      access: "nous-access-token",
+      refresh: "nous-refresh-token",
+      expires: Date.now() + 3_600_000,
+      metadata: { portalBaseURL: portal },
+    })
+
+    let markExchangeStarted: (() => void) | undefined
+    const exchangeStarted = new Promise<void>((resolve) => {
+      markExchangeStarted = resolve
+    })
+    let exchangeAborted = false
+
+    const testPlugin = createPlugin({
+      portalURL: portal,
+      fetch: async (url, init) => {
+        if (url === `${portal}/api/oauth/gemini-auth/config`) {
+          return Response.json({
+            client_id: "solstice-client-id",
+            authorize_url: "https://accounts.google.com/o/oauth2/v2/auth",
+            scope: "openid",
+          })
+        }
+        if (url === `${portal}/api/oauth/gemini-auth/exchange`) {
+          return new Promise<Response>((_resolve, reject) => {
+            init?.signal?.addEventListener("abort", () => {
+              exchangeAborted = true
+              reject(new Error("aborted"))
+            })
+            markExchangeStarted?.()
+          })
+        }
+        throw new Error(`Unexpected URL: ${url}`)
+      },
+    })
+
+    const { context, methods } = createStubHost({
+      active: (id) =>
+        Effect.succeed(
+          id === NousPortalOAuth.integrationID
+            ? { type: "credential" as const, id: "cred_nous", label: "Nous", method: "oauth" as const }
+            : undefined,
+        ),
+      resolve: () => Effect.succeed(nousCred),
+    })
+
+    let capturedRedirectURI = ""
+    await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          yield* testPlugin.effect(context)
+          const solstice = methods.get(GoogleSolsticeOAuth.methodID)!
+          const auth = yield* solstice.authorize({})
+          if (auth.mode !== "auto") return
+          const authorizeURL = new URL(auth.url)
+          capturedRedirectURI = authorizeURL.searchParams.get("redirect_uri")!
+          const state = authorizeURL.searchParams.get("state")!
+
+          const callbackFiber = yield* Effect.forkChild(auth.callback, { startImmediately: true })
+          const browserRequest = fetch(`${capturedRedirectURI}?state=${encodeURIComponent(state)}&code=hang`).catch(
+            (cause: unknown) => cause,
+          )
+          yield* Effect.promise(() => exchangeStarted)
+          yield* Fiber.interrupt(callbackFiber)
+          const outcome = yield* Effect.promise(() => browserRequest)
+          expect(outcome).toBeInstanceOf(Error)
+          expect(exchangeAborted).toBe(true)
+        }),
+      ),
+    )
+
+    // Scoped finalizer closed the loopback callback server after scope exit.
+    await expect(fetch(capturedRedirectURI)).rejects.toThrow()
+  })
+
+  test("non-dead timeout during Nous resolution does not mark nous needs_auth", async () => {
+    const portal = "http://127.0.0.1:9913"
+    const statuses: Array<{ readonly integrationID: string; readonly status: unknown }> = []
+    const testPlugin = createPlugin({ portalURL: portal })
+    const { context, methods } = createStubHost({
+      active: (id) =>
+        Effect.succeed(
+          id === NousPortalOAuth.integrationID
+            ? { type: "credential" as const, id: "cred_nous", label: "Nous", method: "oauth" as const }
+            : id === GoogleSolsticeOAuth.integrationID
+              ? { type: "credential" as const, id: "cred_google", label: "Google", method: "oauth" as const }
+              : undefined,
+        ),
+      resolve: () => Effect.fail({ _tag: "TimeoutException", message: "timed out" }),
+      onStatus: (call) => statuses.push(call),
+    })
+
+    await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          yield* testPlugin.effect(context)
+          const solstice = methods.get(GoogleSolsticeOAuth.methodID)!
+          const googleCred = Credential.OAuth.make({
+            type: "oauth",
+            methodID: GoogleSolsticeOAuth.methodID,
+            access: "fixture-stale",
+            refresh: "1//solstice-refresh-timeout",
+            expires: 1,
+            metadata: { portalBaseURL: portal },
+          })
+          const failure = yield* Effect.flip(solstice.refresh!(googleCred))
+          expect(failure).toBeInstanceOf(GoogleSolsticeOAuth.SolsticeBrokerTransientError)
+          expect(statuses.filter((entry) => entry.integrationID === NousPortalOAuth.integrationID)).toEqual([])
+          expect(statuses.filter((entry) => entry.integrationID === GoogleSolsticeOAuth.integrationID)).toEqual([])
         }),
       ),
     )

@@ -94,7 +94,7 @@ describe("GoogleSolsticeOAuth", () => {
             redirect_uri: "http://127.0.0.1:5000/gemini-auth/callback",
           })
           return Response.json({
-            access_token: "ya29.access",
+            access_token: "fixture-access",
             refresh_token: "1//refresh",
             expires_in: 3600,
           })
@@ -102,7 +102,7 @@ describe("GoogleSolsticeOAuth", () => {
       },
     )
     expect(tokens).toEqual({
-      access: "ya29.access",
+      access: "fixture-access",
       refresh: "1//refresh",
       expires: now + 3_600_000,
     })
@@ -112,7 +112,7 @@ describe("GoogleSolsticeOAuth", () => {
         portal,
         "nous-access-1",
         { code: "code-1", verifier: "ver-1", redirectURI: "http://127.0.0.1:5000/gemini-auth/callback" },
-        { fetch: async () => Response.json({ access_token: "ya29.only" }) },
+        { fetch: async () => Response.json({ access_token: "fixture-only" }) },
       ),
     ).rejects.toThrow("invalid credential response")
   })
@@ -182,6 +182,15 @@ describe("GoogleSolsticeOAuth", () => {
       async () => new Response("challenge", { status: 401, headers: { "x-vercel-mitigated": "challenge" } }),
       async () => new Response("Not Found", { status: 404 }),
       async () => new Response("<html>Bad Gateway</html>", { status: 502 }),
+      async () =>
+        new Response(
+          new ReadableStream({
+            start(controller) {
+              controller.error(new Error("ECONNRESET"))
+            },
+          }),
+          { status: 200 },
+        ),
       async () => {
         throw new Error("ECONNRESET")
       },
@@ -195,9 +204,9 @@ describe("GoogleSolsticeOAuth", () => {
     // Happy path preserves prior refresh token and metadata
     const refreshed = await GoogleSolsticeOAuth.refreshCredential(cred, "nous-access", portal, {
       now: () => now,
-      fetch: async () => Response.json({ access_token: "ya29.fresh", expires_in: 1800 }),
+      fetch: async () => Response.json({ access_token: "fixture-fresh", expires_in: 1800 }),
     })
-    expect(refreshed.access).toBe("ya29.fresh")
+    expect(refreshed.access).toBe("fixture-fresh")
     expect(refreshed.refresh).toBe("1//solstice-refresh")
     expect(refreshed.expires).toBe(now + 1_800_000)
     expect(refreshed.metadata).toEqual({ portalBaseURL: portal, email: "user@example.test" })

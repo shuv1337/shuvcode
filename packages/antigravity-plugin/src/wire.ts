@@ -60,6 +60,7 @@ const shippedIDs = new Set(shippedModels.map((model) => model.id))
 export function rewriteGenerateURL(rawURL: string): string | undefined {
   if (!URL.canParse(rawURL)) return undefined
   const url = new URL(rawURL)
+  if (url.protocol !== "https:" && url.protocol !== "http:") return undefined
   const match = GENERATE_PATH.exec(url.pathname)
   if (!match) return undefined
   const prefix = match[1] ?? ""

@@ -55,7 +55,7 @@ describe("NousPortalOAuth", () => {
     ).rejects.toThrow()
   })
 
-  test("pollDeviceToken handles authorization_pending, slow_down, x-vercel-mitigated, non-JSON 502, and JWT TTL", async () => {
+  test("pollDeviceToken handles authorization_pending, slow_down, x-vercel-mitigated, JSON/non-JSON 502 & 429, and JWT TTL", async () => {
     const start = 1_700_000_000_000
     let attempt = 0
     const accessToken = jwt({ iat: 1_700_000_000, exp: 1_700_001_200 })
@@ -82,6 +82,10 @@ describe("NousPortalOAuth", () => {
                 })
               }
               if (attempt === 4) return new Response("<html>502</html>", { status: 502 })
+              if (attempt === 5) return Response.json({ error: "server_error" }, { status: 502 })
+              if (attempt === 6) {
+                return Response.json({ error: "rate_limited" }, { status: 429, headers: { "retry-after": "12" } })
+              }
               return Response.json({
                 access_token: accessToken,
                 refresh_token: "nous_refresh_1",
@@ -91,14 +95,14 @@ describe("NousPortalOAuth", () => {
           }),
           { startImmediately: true },
         )
-        // Advance through pending (5s) + slow_down (10s) + mitigated Retry-After (15s) + 502 (10s)
-        for (const ms of [5_000, 10_000, 15_000, 10_000]) {
+        // Advance through pending (5s) + slow_down (10s) + mitigated (15s) + HTML 502 (10s) + JSON 502 (10s) + JSON 429 (12s)
+        for (const ms of [5_000, 10_000, 15_000, 10_000, 10_000, 12_000]) {
           yield* TestClock.adjust(ms)
         }
         return yield* Fiber.join(fiber)
       }).pipe(Effect.provide(TestClock.layer())),
     )
-    expect(attempt).toBe(5)
+    expect(attempt).toBe(7)
     expect(credential).toEqual(
       Credential.OAuth.make({
         type: "oauth",
@@ -109,6 +113,43 @@ describe("NousPortalOAuth", () => {
         metadata: { portalBaseURL: portal, scope: "inference:invoke" },
       }),
     )
+  })
+
+  test("pollDeviceToken aborts its in-flight fetch signal when interrupted", async () => {
+    const start = 1_700_000_000_000
+    let aborted = false
+    let notifyStarted: (() => void) | undefined
+    const started = new Promise<void>((resolve) => {
+      notifyStarted = resolve
+    })
+    const device: NousPortalOAuth.DeviceCode = {
+      deviceCode: "dev_interrupt",
+      userCode: "ABCD",
+      verificationURI: "https://portal.nousresearch.com/device",
+      expiresAt: start + 60_000,
+      intervalMs: 5_000,
+    }
+    await Effect.runPromise(
+      Effect.gen(function* () {
+        const fiber = yield* Effect.forkChild(
+          NousPortalOAuth.pollDeviceToken(portal, device, {
+            now: () => start,
+            fetch: async (_url, init) =>
+              new Promise<Response>((_resolve, reject) => {
+                init?.signal?.addEventListener("abort", () => {
+                  aborted = true
+                  reject(new Error("aborted"))
+                })
+                notifyStarted?.()
+              }),
+          }),
+          { startImmediately: true },
+        )
+        yield* Effect.promise(() => started)
+        yield* Fiber.interrupt(fiber)
+      }),
+    )
+    expect(aborted).toBe(true)
   })
 
   test("pollDeviceToken fails safely on terminal OAuth error without leaking body", async () => {
@@ -167,10 +208,27 @@ describe("NousPortalOAuth", () => {
     expect(refreshed.expires).toBe(now + 900_000)
     expect(refreshed.metadata).toEqual({ portalBaseURL: portal, custom: "keep" })
 
-    // 403 with x-vercel-mitigated stays transient
+    // 401/403 with x-vercel-mitigated stays transient
+    for (const status of [401, 403] as const) {
+      await expect(
+        NousPortalOAuth.refreshCredential(cred, {
+          fetch: async () => new Response("challenge", { status, headers: { "x-vercel-mitigated": "challenge" } }),
+        }),
+      ).rejects.toBeInstanceOf(NousPortalOAuth.NousTransientError)
+    }
+
+    // Mid-body read reset stays transient
     await expect(
       NousPortalOAuth.refreshCredential(cred, {
-        fetch: async () => new Response("challenge", { status: 403, headers: { "x-vercel-mitigated": "challenge" } }),
+        fetch: async () =>
+          new Response(
+            new ReadableStream({
+              start(controller) {
+                controller.error(new Error("ECONNRESET"))
+              },
+            }),
+            { status: 200 },
+          ),
       }),
     ).rejects.toBeInstanceOf(NousPortalOAuth.NousTransientError)
 
