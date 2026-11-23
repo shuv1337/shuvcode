@@ -382,7 +382,7 @@ describe("GoogleSolsticePlugin package", () => {
             hook!({
               model: { providerID: "google" },
               request: new Request(
-                "https://generativelanguage.googleapis.com/v1beta/models/gemini-4-argon:streamGenerateContent",
+                "https://generativelanguage.googleapis.com/v1beta/models/gemini-4-neon:streamGenerateContent",
                 { method: "POST", headers: { "x-goog-api-key": "stale-token" }, body: "{}" },
               ),
             }),
