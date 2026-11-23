@@ -37,7 +37,7 @@ const portal = "http://127.0.0.1:9922"
 const identity = {
   sessionID: Session.ID.make("ses_solstice"),
   agent: Agent.ID.make("build"),
-  model: Model.Ref.make({ providerID: Provider.ID.google, id: Model.ID.make("gemini-4-argon") }),
+  model: Model.Ref.make({ providerID: Provider.ID.google, id: Model.ID.make("gemini-4-neon") }),
   kind: "primary" as const,
 }
 const importedSolstice = Credential.OAuth.make({
@@ -72,13 +72,19 @@ const seedGoogleCatalog = Effect.fn(function* () {
     editor.update(Provider.ID.google, (draft) => {
       draft.package = "@opencode/ai/providers/google/interactions"
     })
-    // Simulate models.dev shipping unary 32k output + interactions package on gemini-4-argon.
+    // Simulate models.dev shipping unary 32k output + interactions package on gemini-4-carbon.
     // Solstice forces @opencode/ai/providers/google and raises output floor to 64k.
-    editor.models.update(Provider.ID.google, Model.ID.make("gemini-4-argon"), (draft) => {
-      draft.name = "Gemini 4 Argon (Catalog)"
+    editor.models.update(Provider.ID.google, Model.ID.make("gemini-4-carbon"), (draft) => {
+      draft.name = "Gemini 4 Carbon (Catalog)"
       draft.family = Model.Family.make("gemini")
       draft.package = "@opencode/ai/providers/google/interactions"
       draft.limit = { context: 1_048_576, output: 32_768 }
+      draft.variants = [
+        {
+          id: Model.VariantID.make("high"),
+          settings: { thinkingLevel: "high", thinkingSummaries: "auto" },
+        },
+      ]
     })
     editor.models.update(Provider.ID.google, Model.ID.make("gemini-old"), () => {})
   })
@@ -113,11 +119,27 @@ it.effect(
         expect(model?.modelID).toBe(Model.ID.make(item.id))
         expect(model?.limit).toEqual({ context: 1_048_576, output: 65_536 })
       }
-      // Catalog name preserved on cataloged gemini-4-argon while output floor raised from 32k -> 64k
-      expect((yield* models.get(Provider.ID.google, Model.ID.make("gemini-4-argon")))?.name).toBe(
-        "Gemini 4 Argon (Catalog)",
-      )
-      // Uncataloged models get fallback multimodal capabilities and native thinking variants
+      // Catalog name preserved on cataloged gemini-4-carbon while output floor raised from 32k -> 64k
+      // and Interactions-shaped variants are rewritten to native GenerateContent thinkingConfig.
+      const carbon = yield* models.get(Provider.ID.google, Model.ID.make("gemini-4-carbon"))
+      expect(carbon?.name).toBe("Gemini 4 Carbon (Catalog)")
+      expect(carbon?.variants).toEqual([
+        {
+          id: Model.VariantID.make("low"),
+          settings: { thinkingConfig: { includeThoughts: true, thinkingLevel: "low" } },
+        },
+        {
+          id: Model.VariantID.make("medium"),
+          settings: { thinkingConfig: { includeThoughts: true, thinkingLevel: "medium" } },
+        },
+        {
+          id: Model.VariantID.make("high"),
+          settings: { thinkingConfig: { includeThoughts: true, thinkingLevel: "high" } },
+        },
+      ])
+      // Uncataloged models get fallback multimodal capabilities and native thinking variants (including xhigh on Neon)
+      const neon = yield* models.get(Provider.ID.google, Model.ID.make("gemini-4-neon"))
+      expect(neon?.variants.map((variant) => String(variant.id))).toEqual(["low", "medium", "high", "xhigh"])
       const flashLite = yield* models.get(Provider.ID.google, Model.ID.make("gemini-3.5-flash-lite"))
       expect(flashLite?.capabilities.input).toContain("pdf")
       expect(flashLite?.variants.map((variant) => String(variant.id))).toEqual(["minimal", "low", "medium", "high"])
@@ -151,7 +173,7 @@ it.effect(
                 providers: {
                   google: {
                     models: {
-                      "gemini-4-neon": { name: "Gemini 4 Neon" },
+                      "gemini-4-xenon": { name: "Gemini 4 Xenon" },
                     },
                   },
                 },
@@ -161,20 +183,20 @@ it.effect(
         ),
       )
 
-      const neon = yield* models.get(Provider.ID.google, Model.ID.make("gemini-4-neon"))
-      expect(neon?.enabled).toBe(true)
-      expect(neon?.cost).toEqual([])
+      const xenon = yield* models.get(Provider.ID.google, Model.ID.make("gemini-4-xenon"))
+      expect(xenon?.enabled).toBe(true)
+      expect(xenon?.cost).toEqual([])
       expect(
-        (yield* models.available()).some((m) => m.providerID === Provider.ID.google && m.id === "gemini-4-neon"),
+        (yield* models.available()).some((m) => m.providerID === Provider.ID.google && m.id === "gemini-4-xenon"),
       ).toBe(true)
       // Pre-config non-shipped catalog models remain hidden.
       expect((yield* models.get(Provider.ID.google, Model.ID.make("gemini-old")))?.enabled).toBe(false)
 
       const event = yield* hooks.trigger("session", "http.request", {
         ...identity,
-        model: Model.Ref.make({ providerID: Provider.ID.google, id: Model.ID.make("gemini-4-neon") }),
+        model: Model.Ref.make({ providerID: Provider.ID.google, id: Model.ID.make("gemini-4-xenon") }),
         request: new Request(
-          "https://generativelanguage.googleapis.com/v1beta/models/gemini-4-neon:streamGenerateContent?key=drop",
+          "https://generativelanguage.googleapis.com/v1beta/models/gemini-4-xenon:streamGenerateContent?key=drop",
           {
             method: "POST",
             headers: { "x-goog-api-key": "drop", "content-type": "application/json" },
@@ -183,7 +205,7 @@ it.effect(
         ),
       })
       expect(event.request.url).toBe(
-        "https://generativelanguage.googleapis.com/v1alpha/models/gemini-4-neon:streamGenerateContentPerUserQuota?alt=sse",
+        "https://generativelanguage.googleapis.com/v1alpha/models/gemini-4-xenon:streamGenerateContentPerUserQuota?alt=sse",
       )
       expect(event.request.headers.get("authorization")).toBe("Bearer fixture-solstice-token")
       expect(event.request.headers.has("x-goog-api-key")).toBe(false)

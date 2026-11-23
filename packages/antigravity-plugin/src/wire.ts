@@ -6,7 +6,7 @@ import { Model, Provider } from "@opencode/plugin/effect"
 import { GoogleSolsticeOAuth } from "./oauth"
 
 export const inferenceBaseURL = "https://generativelanguage.googleapis.com/v1alpha"
-export const defaultModelID = Model.ID.make("gemini-3.1-pro-preview")
+export const defaultModelID = Model.ID.make("gemini-4-neon")
 export const googleProviderID = Provider.ID.google
 // Google recommends a 20-minute streaming chunk timeout for Gemini 4 thinking/re-prefill pauses.
 export const CHUNK_TIMEOUT_MS = 1_200_000
@@ -25,26 +25,28 @@ export type ShippedModel = {
 
 export const shippedModels: readonly ShippedModel[] = [
   {
-    id: "gemini-3.1-pro-preview",
-    name: "Gemini 3.1 Pro Preview",
-    family: "gemini-pro",
+    id: "gemini-4-neon",
+    name: "Gemini 4 Neon",
+    family: "gemini",
     limit: { context: 1_048_576, output: 65_536 },
-    efforts: ["low", "medium", "high"],
+    efforts: ["low", "medium", "high", "xhigh"],
+    minOutput: 65_536,
   },
   {
-    id: "gemini-4-argon",
-    name: "Gemini 4 Argon",
+    id: "gemini-4-hydrogen",
+    name: "Gemini 4 Hydrogen",
+    family: "gemini",
+    limit: { context: 1_048_576, output: 65_536 },
+    efforts: ["low", "medium", "high", "xhigh"],
+    minOutput: 65_536,
+  },
+  {
+    id: "gemini-4-carbon",
+    name: "Gemini 4 Carbon",
     family: "gemini",
     limit: { context: 1_048_576, output: 65_536 },
     efforts: ["low", "medium", "high"],
     minOutput: 65_536,
-  },
-  {
-    id: "gemini-3.8-flash",
-    name: "Gemini 3.8 Flash",
-    family: "gemini-flash",
-    limit: { context: 1_048_576, output: 65_536 },
-    efforts: ["low", "medium", "high"],
   },
   {
     id: "gemini-3.5-flash-lite",
@@ -132,6 +134,12 @@ export function applyModels(evt: ModelEditor, mode: GoogleMode, catalogModelIDs?
       draft.enabled = true
       draft.status = "active"
       draft.package = "@opencode/ai/providers/google"
+      // Always emit native GenerateContent thinkingConfig variants: catalog entries resolved under
+      // google/interactions carry top-level thinkingLevel/thinkingSummaries, which Gemini GenerateContent ignores.
+      draft.variants = model.efforts.map((effort) => ({
+        id: Model.VariantID.make(effort),
+        settings: { thinkingConfig: { includeThoughts: true, thinkingLevel: effort } },
+      }))
       if (!catalog?.has(model.id)) {
         draft.name = model.name
         draft.family = Model.Family.make(model.family)
@@ -141,10 +149,6 @@ export function applyModels(evt: ModelEditor, mode: GoogleMode, catalogModelIDs?
           input: ["text", "image", "audio", "video", "pdf"],
           output: ["text"],
         }
-        draft.variants = model.efforts.map((effort) => ({
-          id: Model.VariantID.make(effort),
-          settings: { thinkingConfig: { includeThoughts: true, thinkingLevel: effort } },
-        }))
         return
       }
       if (model.minOutput) {
