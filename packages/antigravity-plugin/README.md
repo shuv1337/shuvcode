@@ -29,10 +29,11 @@ imports, SDK transport wrappers, or proxy servers.
   swaps `x-goog-api-key` for `Authorization: Bearer <access>`, preserves the
   request body bytes untouched, and sets `chunkTimeout: 1_200_000` (20 minutes).
   Native Gemini SSE and error payloads flow directly to `@opencode/ai`.
-- **Shipped models**: Enables `gemini-3.1-pro-preview`, `gemini-4-argon` (with
-  64k streaming output floor), `gemini-3.8-flash`, and `gemini-3.5-flash-lite`
-  at zero cost. Other catalog models are zero-costed and disabled so explicit
-  `opencode.json` model overrides can enable future Gemini slugs cleanly.
+- **Shipped models**: Enables `gemini-4-neon`, `gemini-4-hydrogen`, and
+  `gemini-4-carbon` (each with a 64k streaming output floor), plus
+  `gemini-3.5-flash-lite` at zero cost. Other catalog models are zero-costed
+  and disabled so explicit `opencode.json` model overrides can enable future
+  Gemini slugs cleanly.
 - **Dead-grant isolation**: Only explicit `invalid_grant` or
   `unauthorized_client` errors from Solstice refresh mark the Google grant dead
   (fingerprinted by SHA-256 prefix in plugin storage, never storing raw tokens).

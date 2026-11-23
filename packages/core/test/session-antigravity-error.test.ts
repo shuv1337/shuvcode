@@ -20,7 +20,7 @@ const portal = "http://127.0.0.1:9933"
 const identity = {
   sessionID: Session.ID.make("ses_solstice_error"),
   agent: Agent.ID.make("build"),
-  model: Model.Ref.make({ providerID: Provider.ID.google, id: Model.ID.make("gemini-4-argon") }),
+  model: Model.Ref.make({ providerID: Provider.ID.google, id: Model.ID.make("gemini-4-neon") }),
   kind: "primary" as const,
 }
 
@@ -96,7 +96,7 @@ for (const scenario of [
   it.effect(`native Google Solstice error: ${scenario.name}`, () =>
     Effect.sync(() => {
       const url = GoogleSolsticeWire.rewriteGenerateURL(
-        "https://generativelanguage.googleapis.com/v1beta/models/gemini-4-argon:streamGenerateContent?alt=sse",
+        "https://generativelanguage.googleapis.com/v1beta/models/gemini-4-neon:streamGenerateContent?alt=sse",
       )!
       const error = RequestExecutor.httpFailure({
         message: scenario.body,
@@ -166,7 +166,7 @@ it.effect(
 
       const request = () =>
         new Request(
-          "https://generativelanguage.googleapis.com/v1beta/models/gemini-4-argon:streamGenerateContent?alt=sse",
+          "https://generativelanguage.googleapis.com/v1beta/models/gemini-4-neon:streamGenerateContent?alt=sse",
           { method: "POST", body: '{"contents":[]}' },
         )
 
