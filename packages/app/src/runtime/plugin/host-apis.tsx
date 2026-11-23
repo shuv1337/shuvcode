@@ -25,7 +25,6 @@ import {
   type MountedSession,
   type NotifyOptions,
   type NotifyResult,
-  type OpenOptions,
   type PanelSidebar,
   type PanelState,
   type ServerRef,
@@ -36,8 +35,9 @@ import {
   type StorageScope,
   type Tabs,
 } from "@opencode/plugin/gui"
-import { BuiltinPanel, BuiltinPromptGate, type BuiltinStoreFrom, type BuiltinStoreOptions } from "@opencode/plugin/gui/builtin"
+import { BuiltinPanel, BuiltinPromptGate, type BuiltinOpenOptions, type BuiltinStoreFrom, type BuiltinStoreOptions } from "@opencode/plugin/gui/builtin"
 import { usePlatform } from "@/runtime/platform/platform"
+import { startDragOut } from "@/runtime/platform/drag-out"
 import { same } from "@/runtime/persistence/equality"
 import { Persist, persisted, removePersisted } from "@/runtime/persistence/storage"
 import { useGlobal, type ServerCtx } from "@/runtime/server/runtime"
@@ -107,7 +107,8 @@ type Attached = {
   scope: (server: string) => ServerScope
   /** Records a session-scoped store so layout pruning drops it with the session. */
   scoped: (name: string) => void
-  layout: Omit<Layout, "narrow" | "settings" | "project" | "draft" | "command" | "stored" | "side"> & {
+  layout: Omit<Layout, "narrow" | "settings" | "project" | "draft" | "command" | "stored" | "side" | "open"> & {
+    open(key: string, session: SessionRef, options?: BuiltinOpenOptions): void
     stored(plugin: string, session: SessionRef): readonly string[]
     /** `width` and `resize` take the panel's host key, `${plugin}:${panel id}`. */
     side: Layout["side"]
@@ -327,6 +328,7 @@ export function createHostApis() {
             reveal: (path) => platform.revealPath?.(path) ?? Promise.resolve(false),
             installed: (app) => platform.checkAppExists?.(app) ?? Promise.resolve(false),
             forceFocus: (enabled) => platform.setForceFocus?.(enabled) ?? Promise.resolve(),
+            dragOut: (event, path) => startDragOut(platform, event, path),
             async pick(options) {
               if (options?.directory) {
                 const picked = await platform.openDirectoryPickerDialog({
@@ -842,7 +844,7 @@ export function createPluginAttachment(apis: HostApis) {
     key: string,
     session: SessionRef,
     value: string,
-    options: OpenOptions | undefined,
+    options: BuiltinOpenOptions | undefined,
     via: "open" | "toggle",
   ) => {
     const wasOpen = sideOpened(session)
@@ -868,18 +870,18 @@ export function createPluginAttachment(apis: HostApis) {
     if (mountedSession(session)) region()?.opening(key)
   }
 
-  const place = (key: string, session: SessionRef, value: string, options: OpenOptions | undefined) => {
+  const place = (key: string, session: SessionRef, value: string, options: BuiltinOpenOptions | undefined) => {
     const item = provider(key)
     const placement = options?.tab ?? "open"
 
     // An append adds the tab quietly: no selection, no region change, no preview replacement.
-    if (placement === "append") return layout.panel.append(value, key)
+    if (placement === "append") return layout.panel.append(value, key, options?.after)
 
     // A select keeps the narrow-screen view, as a background open does, and shows the tab's pane too.
     if (placement === "select")
       return batch(() => {
         uncover(session, key)
-        layout.panel.append(value, key)
+        layout.panel.append(value, key, options?.after)
         layout.panel.focus(value, key)
         reveal(session, value, key)
       })
@@ -907,7 +909,7 @@ export function createPluginAttachment(apis: HostApis) {
     })
   }
 
-  const open = (key: string, session: SessionRef, options?: OpenOptions) =>
+  const open = (key: string, session: SessionRef, options?: BuiltinOpenOptions) =>
     withLocated(session, (value) => openAt(key, session, value, options, "open"))
 
   const closeAt = (key: string, session: SessionRef, value: string) => {

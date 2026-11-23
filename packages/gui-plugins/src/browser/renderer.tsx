@@ -481,14 +481,18 @@ const setup: Plugin.Setup<typeof definition> = (ctx) => {
     },
     get entries() {
       return [
-        { id: "settings-browser-links", title: ctx.t("settings.links.title"), keywords: "links open system browser" },
-        { id: "settings-browser-agent-pages", title: ctx.t("settings.agentPages.title"), keywords: "agent preview automatic browser pane" },
+        { id: "settings-browser-links", title: ctx.t("settings.links.title"), keywords: "links open system default browser opencode's browser web shift click" },
+        {
+          id: "settings-browser-agent-pages",
+          title: ctx.t("settings.agentPages.title"),
+          keywords: "open the browser when the agent shows a page agent preview automatic browser pane tab file",
+        },
         {
           id: "settings-browser-remote",
           title: ctx.t("settings.remote.title"),
           keywords: "remote server sign in cookies share",
         },
-        { id: "settings-browser-cookies", title: ctx.t("settings.cookies.title"), keywords: "cookies sign out history clear" },
+        { id: "settings-browser-cookies", title: ctx.t("settings.cookies.title"), keywords: "cookies sign out browsing data history clear" },
         {
           id: "settings-browser-import",
           title: ctx.t("settings.import.title"),
@@ -522,7 +526,11 @@ const setup: Plugin.Setup<typeof definition> = (ctx) => {
     const text = () => {
       const tab = page()
 
-      return !tab?.url || tab.url === "about:blank" ? ctx.t("tab.new") : tabTitle(tab, saved()) || tab.url
+      // A tab a link opened keeps this label until its page names itself, so it is relabelled once: never with
+      // Chromium's name for a document that has not named itself, which is its address.
+      const unnamed = !tab?.url || tab.url === "about:blank" || model()?.unnamed({ key: session }, id)
+
+      return unnamed ? ctx.t("tab.new") : tabTitle(tab, saved()) || tab.url
     }
 
     const icon = () => {

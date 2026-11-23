@@ -190,6 +190,8 @@ export type ModelMediaInput = "assets" | "state" | "root"
 
 export type ToolFreeformFormat = "text" | "regex" | "lark"
 
+export type ModelSpeed = { base: string; id: string; faster: boolean }
+
 export type MoneyUSDPerMillionTokens = number
 
 export type GenerateTextResponse = { data: { text: string } }
@@ -343,6 +345,8 @@ export type AutomationTriggerEvent = { type: "event"; server: string; event: str
 
 export type AutomationActionCode = { type: "code"; code: string; args?: JsonValue }
 
+export type AutomationActionShell = { type: "shell"; command: string }
+
 export type AutomationStatus = "active" | "paused" | "done"
 
 export type AutomationOutcome = "fired" | "late" | "skipped" | "disabled" | "failed" | "expired"
@@ -352,6 +356,17 @@ export type ArtifactCapability = "static" | "server-code" | "sqlite" | "durable-
 export type ArtifactID = string
 
 export type ArtifactTime = { created: number; updated: number }
+
+export type MachineInfo = {
+  id: string
+  online: boolean
+  paired: boolean
+  os?: string
+  arch?: string
+  connection?: { kind: "websocket" | "iroh"; path?: "direct" | "relayed"; rtt?: number }
+}
+
+export type MachineReach = { type: "url"; url: string }
 
 export type ReferenceGitSource = { type: "git"; repository: string; branch?: string }
 
@@ -763,7 +778,14 @@ export type GenerateChoiceAnswer = {
   confidence: number
 }
 
-export type VoiceModel = { model: string; provider: string; transports: Array<VoiceTransportType>; available: boolean }
+export type VoiceModel = {
+  model: string
+  name: string
+  engine: string
+  provider: string
+  transports: Array<VoiceTransportType>
+  available: boolean
+}
 
 export type VoiceTransport = VoiceWebRTCTransport | VoiceWebSocketTransport
 
@@ -1021,6 +1043,13 @@ export type ArtifactInfo = {
   entry: string
   url: string
   time: ArtifactTime
+}
+
+export type MachineInvite = {
+  name: string
+  join: string
+  expires: number
+  reach: Array<MachineReach | { type: "iroh" }>
 }
 
 export type VcsInfo = { provider?: string; branch: VcsBranch }
@@ -2424,6 +2453,7 @@ export type ModelInfo = {
   body?: { [x: string]: any }
   capabilities: ModelCapabilities
   variants: Array<ModelVariant>
+  experimental?: { speed?: ModelSpeed }
   time: { released: number }
   cost: Array<ModelCost>
   status: "alpha" | "beta" | "deprecated" | "active"
@@ -2497,6 +2527,7 @@ export type ConfigEntry =
         enterprise?: { url?: string }
         username?: string
         timezone?: string
+        automations?: boolean
         permissions?: PermissionRuleset
         policies?: Array<{
           action:
@@ -2673,17 +2704,17 @@ export type ConfigEntry =
           all_flags?: boolean
           todo?: boolean
           media_blob?: boolean
-          automations?: boolean
           artifacts?: boolean
-          video_generate?: boolean | { model?: string | { providerID: string; model: string; variant?: string } }
           console_watches?: boolean
-          mcp_events?: boolean
           recommended_api?: boolean
+          model_speeds?: boolean
           full_codemode?: boolean
           machines?: boolean
           home_memory?: boolean
+          project_overlay?: boolean
+          opencode_api?: boolean
           sqlite_fts?: boolean
-          schedules?: boolean
+          video_generate?: boolean | { model?: string | { providerID: string; model: string; variant?: string } }
           part_rows?: boolean
           image_generate?: boolean | { model?: string | { providerID: string; model: string; variant?: string } }
           subagent_depth?: number
@@ -2708,7 +2739,7 @@ export type ConfigEntry =
     }
   | { type: "directory"; path: AbsolutePath }
 
-export type AutomationAction = AutomationActionPrompt | AutomationActionCode
+export type AutomationAction = AutomationActionPrompt | AutomationActionCode | AutomationActionShell
 
 export type UsageLimitsInfo = {
   workspace: { id: string; name?: string; usageURL: string }
@@ -3284,10 +3315,6 @@ export type ProviderRequestError = {
 export const isProviderRequestError = (value: unknown): value is ProviderRequestError =>
   typeof value === "object" && value !== null && "_tag" in value && value["_tag"] === "ProviderRequestError"
 
-export type ForbiddenError = { readonly _tag: "ForbiddenError"; readonly message: string }
-export const isForbiddenError = (value: unknown): value is ForbiddenError =>
-  typeof value === "object" && value !== null && "_tag" in value && value["_tag"] === "ForbiddenError"
-
 export type VideoNotFoundError = {
   readonly _tag: "VideoNotFoundError"
   readonly videoID: string
@@ -3329,6 +3356,10 @@ export type McpServerNotFoundError = {
 }
 export const isMcpServerNotFoundError = (value: unknown): value is McpServerNotFoundError =>
   typeof value === "object" && value !== null && "_tag" in value && value["_tag"] === "McpServerNotFoundError"
+
+export type ForbiddenError = { readonly _tag: "ForbiddenError"; readonly message: string }
+export const isForbiddenError = (value: unknown): value is ForbiddenError =>
+  typeof value === "object" && value !== null && "_tag" in value && value["_tag"] === "ForbiddenError"
 
 export type ProjectNotFoundError = {
   readonly _tag: "ProjectNotFoundError"
@@ -3411,6 +3442,14 @@ export type ArtifactNotFoundError = {
 }
 export const isArtifactNotFoundError = (value: unknown): value is ArtifactNotFoundError =>
   typeof value === "object" && value !== null && "_tag" in value && value["_tag"] === "ArtifactNotFoundError"
+
+export type MachineNotFoundError = {
+  readonly _tag: "MachineNotFoundError"
+  readonly machine: string
+  readonly message: string
+}
+export const isMachineNotFoundError = (value: unknown): value is MachineNotFoundError =>
+  typeof value === "object" && value !== null && "_tag" in value && value["_tag"] === "MachineNotFoundError"
 
 export type ShellNotFoundError = { readonly _tag: "ShellNotFoundError"; readonly id: string; readonly message: string }
 export const isShellNotFoundError = (value: unknown): value is ShellNotFoundError =>
@@ -4769,6 +4808,7 @@ export type ExperimentalAutomationCreateInput = {
           | { readonly subagent: string; readonly session?: never }
       }
     | { readonly type: "code"; readonly code: string; readonly args?: JsonValue }
+    | { readonly type: "shell"; readonly command: string }
   readonly expires?: string | undefined
 }
 
@@ -4867,6 +4907,20 @@ export type ExperimentalJobListOutput = { data: Array<JobInfo> }["data"]
 export type ExperimentalJobCancelInput = { readonly id: string }
 
 export type ExperimentalJobCancelOutput = void
+
+export type ExperimentalMachineListOutput = { data: Array<MachineInfo> }["data"]
+
+export type ExperimentalMachineAddInput = {
+  readonly name: string
+  readonly reach: ReadonlyArray<{ readonly type: "url"; readonly url: string }>
+  readonly replace?: boolean | undefined
+}
+
+export type ExperimentalMachineAddOutput = { data: MachineInvite }["data"]
+
+export type ExperimentalMachineRemoveInput = { readonly name: string }
+
+export type ExperimentalMachineRemoveOutput = void
 
 export type ShellListInput = { readonly location?: { readonly directory?: string | undefined } | undefined }
 

@@ -53,3 +53,18 @@ text:/home/projects
 text:/home/sessions
 # Synthetic home directory in an upstream story fixture (components-lab/dialog-story-runtime.tsx).
 text:/Users/alex
+# Upstream packages/cli-rs (native Rust CLI) synthetic home paths in tests and parity oracles.
+text:/home/ada
+text:/home/adam
+text:/home/meow
+text:/home/username
+text:/Users/ada
+text:/Users/meow
+text:/Users/kit
+text:/Users/a.png
+# Upstream tree-sitter query author credits (packages/cli-rs/assets/queries).
+email:maxbrunsfeld@gmail.com
+email:stuart.mashaal@gmail.com
+# Upstream packages/cli-rs scripts: a sourced completion snippet (no shebang) and a parity test stub.
+shellcheck:packages/cli-rs/crates/cli/src/completions/bash.sh
+shellcheck:packages/cli-rs/parity/scenarios/E.5/fake-editor.sh

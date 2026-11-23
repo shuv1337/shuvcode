@@ -1,4 +1,4 @@
-import { createSignal, onCleanup, untrack } from "solid-js"
+import { createSignal, getOwner, onCleanup, runWithOwner, untrack } from "solid-js"
 import { createKeyed, createLatest, usePlugin, type IpcClient } from "@opencode/plugin/gui"
 import type { Choice } from "./choices"
 import type definition from "./index"
@@ -69,6 +69,18 @@ export function createProfileJobs(
     return current.status === "active" ? `${current.generation}:${version()}` : undefined
   }
 
+  // A question belongs to the surface that asked, so it goes with it.
+  const owner = getOwner()
+
+  // What the person is asked before the one job that deletes: clearing the browsing data.
+  const question = () => ({
+    title: ctx.t("settings.clear.confirm.title"),
+    description: ctx.t("settings.clear.confirm.description"),
+    confirm: ctx.t("settings.clear.confirm.action"),
+    cancel: ctx.t("common.cancel"),
+    danger: true,
+  })
+
   const dispatch = (event: JobsEvent) => {
     const next = transitionJobs(untrack(state), event)
     setState(next.state)
@@ -76,6 +88,19 @@ export function createProfileJobs(
   }
 
   const run = (effect: JobsEffect) => {
+    if (effect.type === "confirm") {
+      const attempt = effect.attempt
+
+      // The app's own confirmation: it starts on Cancel, and Escape or a click outside answers no. It closes with
+      // the surface that asked, which is a no too, as is a question that could not be asked.
+      const asked = runWithOwner(owner, () => ctx.dialogs.confirm(question())) ?? Promise.resolve(false)
+
+      return void asked.then(
+        (confirmed) => dispatch({ type: "answered", attempt, confirmed }),
+        () => dispatch({ type: "answered", attempt, confirmed: false }),
+      )
+    }
+
     if (effect.type === "notify") {
       setVersion((value) => value + 1)
       input.finished?.(effect.finished)
@@ -219,20 +244,28 @@ export function createProfileJobs(
     if (result.type === "failed" && result.reason === "key" && browser && keychain(finished.job))
       return { text: ctx.t("signins.failed.keychain", { browser }), error: true }
 
+    // A cookie file that cannot be read is no browser's data, and there is no browser to close.
+    if (result.type === "failed" && result.reason === "read" && finished.job.type === "import-file")
+      return { text: ctx.t("signins.failed.read.file"), error: true }
+
     if (result.type === "failed") return { text: ctx.t(`signins.failed.${result.reason}`), error: true }
 
     const loss = importLoss(result)
 
-    // A cookie file is cookies and says so in counts: how many came, and how many did not. A browser's import counts
-    // them only when none came.
-    if (loss?.reason === "other" && (result.imported === 0 || finished.job.type === "import-file"))
+    // A cookie file is cookies and says so in counts: how many came, and how many did not. A browser's import never
+    // counts cookies.
+    if (loss?.reason === "other" && finished.job.type === "import-file")
       return { text: ctx.plural("signins.imported.incomplete", result.imported, { omitted: loss.count }), error: result.imported === 0 }
 
-    if (result.imported === 0 && loss)
+    if (result.imported === 0 && loss?.reason === "protected")
       return {
         text: browser ? ctx.t("signins.protected.named", { browser }) : ctx.t("signins.protected"),
         error: true,
       }
+
+    // No sign-in could be brought and no history came with them: nothing was imported.
+    if (result.imported === 0 && loss && !result.pages)
+      return { text: browser ? ctx.t("signins.imported.none.from", { browser }) : ctx.t("settings.failed.import"), error: true }
 
     // Some sign-ins stayed behind, as Chrome's and Edge's app-bound ones on Windows do: their sites open signed out.
     if (loss)
