@@ -72,6 +72,7 @@ export type {
 export { Realtime } from "./experimental/realtime.js"
 export type {
   RealtimeConnectInput,
+  RealtimeEngine,
   RealtimeSession,
   RealtimeTransport,
   RealtimeTransportInput,
