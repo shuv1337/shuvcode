@@ -15,8 +15,11 @@ paths = [
   # api_message_id + literal REDACTED (not credentials).
   '''^packages/core/test/plugin/provider/claude\-agent/fixtures/recordings/.*\.jsonl$''',
 ]
-# Upstream services/update verifies this public Cloudflare Access JWT audience.
-# It is an application identifier, not a token, signing key or credential.
 regexes = [
+  # Upstream services/update verifies this public Cloudflare Access JWT audience.
+  # It is an application identifier, not a token, signing key or credential.
   '''^d369a93ad5ce8cf96eebe30620488dd2537427c92fed439c310288832a282987$''',
+  # RFC 6455 section 1.3 sample Sec-WebSocket-Key nonce ("the sample nonce"), used by
+  # upstream v2.4.0 machine-link handshake tests (packages/server/test/machine-link.test.ts).
+  '''^dGhlIHNhbXBsZSBub25jZQ==$''',
 ]
