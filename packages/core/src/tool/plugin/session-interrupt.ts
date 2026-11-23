@@ -42,7 +42,7 @@ export const Plugin = {
           description: "Interrupt a session, and stop its background commands and subagents too.",
           input: Input,
           output: Schema.String,
-          options: { namespace: "opencode.session", codemode: true },
+          options: { namespace: "shuvcode.session", codemode: true },
           execute: (input, context) =>
             Effect.gen(function* () {
               yield* sessions.get(input.sessionID)

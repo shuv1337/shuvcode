@@ -3,7 +3,8 @@ import type { MachineInfo, MachineInvite } from "@opencode/client/promise"
 import { describe, expect, test } from "bun:test"
 import { Console, Effect, Option, Stdio } from "effect"
 import { EOL } from "node:os"
-import { Commands, Server } from "../src/commands/commands"
+import { Commands } from "../src/commands/commands"
+import { ServerFlags } from "../src/services/server-flags"
 import {
   formatMachineAdd,
   formatMachineError,
@@ -166,7 +167,7 @@ async function runMachine(args: ReadonlyArray<string>) {
     default: () =>
       Effect.gen(function* () {
         ran.push(name)
-        servers.push(yield* Effect.serviceOption(Server).pipe(Effect.map(Option.flatten)))
+        servers.push(Option.fromNullishOr((yield* ServerFlags.read()).server))
       }),
   })
   const machine = Commands.commands.machine.commands

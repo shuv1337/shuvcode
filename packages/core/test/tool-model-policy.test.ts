@@ -288,7 +288,7 @@ describe("SessionContext.select model tool policy", () => {
 
         const deepseek = yield* select("deepseek", "deepseek-reasoner")
         expect(names(deepseek)).toEqual(["execute"])
-        expect(paths(deepseek).join(",")).toBe("alpha.search,edit,shuvcode.session_move,read,shell,websearch,write")
+        expect(paths(deepseek).join(",")).toBe("alpha.search,edit,read,shell,shuvcode.session_move,websearch,write")
 
         yield* websearch.select(false)
         expect(paths(yield* select("openai", "gpt-5"))).not.toContain("websearch")

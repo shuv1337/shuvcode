@@ -1,7 +1,8 @@
 import { NodeServices } from "@effect/platform-node"
 import { expect, test } from "bun:test"
 import { Console, Effect, Option, Stdio } from "effect"
-import { Commands, Server } from "../src/commands/commands"
+import { Commands } from "../src/commands/commands"
+import { ServerFlags } from "../src/services/server-flags"
 import { Runtime } from "../src/framework/runtime"
 
 test("login is hidden from root help but has the same help as auth login", async () => {
@@ -13,7 +14,7 @@ test("login is hidden from root help but has the same help as auth login", async
 
   expect(root.help).toMatch(/^\s+auth\s/m)
   expect(root.help).not.toMatch(/^\s+login\s/m)
-  expect(login.help).toContain("opencode login [flags] [<target>]")
+  expect(login.help).toContain("shuvcode login [flags] [<target>]")
   expect(sections(login.help)).toEqual(sections(auth.help))
 })
 
@@ -40,7 +41,7 @@ async function run(args: ReadonlyArray<string>) {
   const capture = (command: string) => async () => ({
     default: (input: unknown) =>
       Effect.gen(function* () {
-        calls.push({ command, input, server: yield* Effect.serviceOption(Server).pipe(Effect.map(Option.flatten)) })
+        calls.push({ command, input, server: Option.fromNullishOr((yield* ServerFlags.read()).server) })
       }),
   })
   await Effect.runPromise(

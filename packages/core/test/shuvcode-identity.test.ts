@@ -50,11 +50,6 @@ const expectedShuvcodeTools = [
   "worktree_list",
   "worktree_remove",
   "models",
-  "automation_create",
-  "automation_list",
-  "automation_pause",
-  "automation_resume",
-  "automation_delete",
   "artifact_create",
   "artifact_read",
   "artifact_update",
@@ -66,21 +61,22 @@ const expectedShuvcodeTools = [
 
 const expectedSessionTools = ["move", "rename"] as const
 
+// Upstream gave automation tools their own brand-neutral `automation` namespace (anomalyco/opencode#65001).
+const expectedAutomationTools = ["create", "delete", "list", "pause", "resume"] as const
+
 const expectedMcpPermissions = {
   shuvcode_list_mcp_resources: "opencode_list_mcp_resources",
   shuvcode_read_mcp_resource: "opencode_read_mcp_resource",
   shuvcode_list_mcp_events: "opencode_list_mcp_events",
 } as const
 
+// Upstream trimmed the unattended denylist in anomalyco/opencode#65217; Shuvcode keeps its namespace for the rest.
 const forbiddenAutomationTools = [
-  "shuvcode.automation_create",
-  "shuvcode.automation_pause",
-  "shuvcode.automation_resume",
-  "shuvcode.automation_delete",
+  "automation.create",
+  "automation.pause",
+  "automation.resume",
+  "automation.delete",
   "shuvcode.session.move",
-  "shuvcode.session.rename",
-  "shuvcode.worktree_create",
-  "shuvcode.worktree_remove",
 ] as const
 
 const allowedOpencodeSubstrings = [
@@ -105,9 +101,7 @@ const configEntries = [
     type: "document",
     info: new Info({
       experimental: new ConfigExperimental.Info({
-        automations: true,
         artifacts: true,
-        mcp_events: true,
       }),
     }),
   }),
@@ -119,6 +113,7 @@ const npmLayer = Layer.succeed(
     add: (name) => Effect.succeed({ directory: "", name }),
     resolve: (name) => Effect.succeed({ directory: "", name }),
     check: () => Effect.succeed(false),
+    follows: () => Effect.succeed(false),
     update: (name) => Effect.succeed({ directory: "", name }),
     reject: () => Effect.succeed(false),
     which: () => Effect.undefined,
@@ -149,7 +144,7 @@ const it = testEffect(
       App.node.replace(App.configured(appConfig)),
       Config.node.replace(Config.testLayer(configEntries)),
       Flag.node.replace(
-        Flag.testLayer(configEntries, { app: appConfig, overrides: "automations,artifacts,mcp_events" }),
+        Flag.testLayer(configEntries, { app: appConfig, overrides: "artifacts" }),
       ),
       Global.node.replace(tempGlobalLayer),
       Location.node.replace(tempLocationLayer),
@@ -193,6 +188,8 @@ describe("shuvcode fork identity", () => {
       expect(shuvcodeTools.map((tool) => tool.name).toSorted()).toEqual([...expectedShuvcodeTools].toSorted())
       const sessionTools = registered.filter((tool) => tool.options?.namespace === "shuvcode.session")
       expect(sessionTools.map((tool) => tool.name).toSorted()).toEqual([...expectedSessionTools])
+      const automationTools = registered.filter((tool) => tool.options?.namespace === "automation")
+      expect(automationTools.map((tool) => tool.name).toSorted()).toEqual([...expectedAutomationTools])
 
       for (const [toolID, expectedPermission] of Object.entries(expectedMcpPermissions)) {
         const tool = registered.find((item) => item.id === toolID)
@@ -211,6 +208,7 @@ describe("shuvcode fork identity", () => {
         expect.arrayContaining([
           ...expectedShuvcodeTools.map((name) => `shuvcode.${name}`),
           ...expectedSessionTools.map((name) => `shuvcode.session.${name}`),
+          ...expectedAutomationTools.map((name) => `automation.${name}`),
         ]),
       )
 
@@ -241,7 +239,7 @@ describe("shuvcode fork identity", () => {
     }),
   )
 
-  it.effect("forbids all shuvcode state-mutating tools inside automations", () =>
+  it.effect("forbids automation and session-move tools inside automations", () =>
     Effect.gen(function* () {
       const sessions = yield* Session.Service
       const location = yield* Location.Service

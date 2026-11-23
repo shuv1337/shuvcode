@@ -9,25 +9,24 @@ import {
 } from "@opencode/client/promise"
 import { Service } from "@opencode/client/effect/service"
 import { MACHINE_LINK_PATH, type MachineReach } from "@opencode/protocol/groups/machine"
-import { Effect, Option } from "effect"
+import { Effect } from "effect"
 import { EOL } from "node:os"
-import { Server, Standalone } from "../../commands"
 import { ServerConnection } from "../../../services/server-connection"
+import { ServerFlags } from "../../../services/server-flags"
 import { ServiceConfig } from "../../../services/service-config"
 import { isLoopback } from "../../../services/service-urls"
 import { errorMessage } from "../../../util/error"
 
 export const ensureMachineClient = Effect.fn("cli.machine.client")(function* () {
-  const standalone = yield* Effect.serviceOption(Standalone)
-  if (Option.getOrElse(standalone, () => false))
+  const flags = yield* ServerFlags.read()
+  if (flags.standalone)
     return yield* Effect.fail(
       new Error("--standalone starts a server for this command only; a machine needs one that keeps running."),
     )
-  const serverFlag = yield* Effect.serviceOption(Server).pipe(Effect.map(Option.flatten))
   const config = yield* ServiceConfig.read()
-  if (Option.isNone(serverFlag) && config.disabled === true)
+  if (flags.server === undefined && config.disabled === true)
     return yield* Effect.fail(
-      new Error("Managing machines requires the background service; run `opencode service unset disabled` first."),
+      new Error("Managing machines requires the background service; run `shuvcode service unset disabled` first."),
     )
   const server = yield* ServerConnection.resolve()
   return OpenCode.make({ baseUrl: server.endpoint.url, headers: Service.headers(server.endpoint) })

@@ -8,7 +8,7 @@ describe("default command directory", () => {
     const result = await cli(["missing-directory-not-a-command"])
 
     expect(result.exitCode).toBe(1)
-    expect(result.stdout).toContain("opencode <subcommand> [flags] [<directory>]")
+    expect(result.stdout).toContain("shuvcode <subcommand> [flags] [<directory>]")
     expect(result.stdout + result.stderr).toContain('No directory or command named "missing-directory-not-a-command"')
     expect(result.stdout + result.stderr).not.toContain("ENOENT")
   })

@@ -68,10 +68,10 @@ export const Plugin = {
         editor.add({
           name: "search",
           description:
-            'Find the user\'s past sessions, in this project unless scope is "all". With query: full-text search over session titles, user and assistant messages, and compaction summaries. Matches any query word, ranked so messages with more and rarer words come first; supports "exact phrase", prefix*, AND, OR, NOT. Returns the best-matching sessions with up to 3 snippets and messageIDs each. Without query: lists sessions, most recently updated first. Filter either way by directory. Follow up with opencode.session.read({ sessionID, messageID }).',
+            'Find the user\'s past sessions, in this project unless scope is "all". With query: full-text search over session titles, user and assistant messages, and compaction summaries. Matches any query word, ranked so messages with more and rarer words come first; supports "exact phrase", prefix*, AND, OR, NOT. Returns the best-matching sessions with up to 3 snippets and messageIDs each. Without query: lists sessions, most recently updated first. Filter either way by directory. Follow up with shuvcode.session.read({ sessionID, messageID }).',
           input: SearchInput,
           output: SessionSearch.SearchOutput,
-          options: { namespace: "opencode.session", codemode: true },
+          options: { namespace: "shuvcode.session", codemode: true },
           execute: (input) =>
             search
               .search({ ...input, projectID: input.scope === "all" ? undefined : ctx.location.project.id })
@@ -83,10 +83,10 @@ export const Plugin = {
         editor.add({
           name: "read",
           description:
-            'Read messages from one session, including history from before compaction. With messageID (from opencode.session.search), returns messages around it; direction "before" or "after" reads only one side. Without messageID, reads the newest messages, or the oldest with direction "after". Tool calls are one-line summaries in calls unless full is true. To keep reading, pass older as messageID with direction "before", or newer with direction "after"; pages never repeat.',
+            'Read messages from one session, including history from before compaction. With messageID (from shuvcode.session.search), returns messages around it; direction "before" or "after" reads only one side. Without messageID, reads the newest messages, or the oldest with direction "after". Tool calls are one-line summaries in calls unless full is true. To keep reading, pass older as messageID with direction "before", or newer with direction "after"; pages never repeat.',
           input: ReadInput,
           output: SessionSearch.ReadOutput,
-          options: { namespace: "opencode.session", codemode: true },
+          options: { namespace: "shuvcode.session", codemode: true },
           execute: (input) =>
             search.read(input).pipe(
               Effect.map((output) => ({ output })),
