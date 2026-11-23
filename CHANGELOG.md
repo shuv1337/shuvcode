@@ -16,11 +16,12 @@ Syncs upstream `dev` through `92e28580f1`: 214 commits beyond the dev pin in [#5
 ### Breaking changes
 
 - Automation tools move to upstream's own namespace: `tools.automation.create`, `.list`, `.pause`, `.resume` and `.delete` replace `tools.shuvcode.automation_*`, and the direct tools are `automation_create` and so on instead of `shuvcode_automation_*`. Update permission rules that name the old tools.
-- The unattended automation denylist follows upstream, which loosens the previous fork restriction per Lauren's call (Nov 23) ([#65217](https://github.com/anomalyco/opencode/pull/65217)): it now blocks `automation.create`, `.pause`, `.resume`, `.delete` and `shuvcode.session.move`. Automation code can call `shell`, `shuvcode.session.rename` and the worktree tools after the permission prompts at creation.
+- The unattended automation denylist follows upstream ([#65217](https://github.com/anomalyco/opencode/pull/65217)): it now blocks `automation.create`, `.pause`, `.resume`, `.delete` and `shuvcode.session.move`. Automation code can call `shell`, `shuvcode.session.rename` and the worktree tools after the permission prompts at creation.
 - `experimental.automations` and `experimental.mcp_events` are gone; MCP Events are always available and automations use the top-level `automations` key.
 
 ### Fork changes
 
+- Google (Solstice) OAuth replaces legacy Antigravity Cloud Code emulation ([#510](https://github.com/shuv1337/shuvcode/pull/510)) and ships the live Gemini 4 PerUserQuota lineup (`gemini-4-neon`, `gemini-4-hydrogen`, `gemini-4-carbon`, `gemini-3.5-flash-lite`) with native GenerateContent `thinkingConfig` effort variants ([#512](https://github.com/shuv1337/shuvcode/pull/512)).
 - The new upstream session tools use the `shuvcode.session` namespace; the new `machine` and hidden `login` commands use the fork's global `--server`/`--standalone` handling.
 - Claude Agent stays hidden: the new Claude websearch provider is registered only by the unloaded Claude Agent plugin.
 - Loading session storage before permissions no longer fails on an import cycle that upstream's experimental session working directory added.

@@ -53,6 +53,15 @@ describe("hasConnectedProvider", () => {
       { integrations: [], providers: [{ id: "opencode" }], models: [ollama] },
       false,
     ],
+    [
+      "hidden provider connection and models are ignored",
+      {
+        integrations: [{ id: "claude-agent", connections: [{ type: "env", name: "ANTHROPIC_API_KEY" }] }],
+        providers: [{ id: "opencode" }, { id: "claude-agent" }],
+        models: [opencode, { providerID: "claude-agent", status: "active" }],
+      },
+      false,
+    ],
   ])("%s", (_, input, expected) => {
     expect(hasConnectedProvider(input)).toBe(expected)
   })

@@ -13,8 +13,8 @@ import { CwdError } from "./error.js"
 import type { SessionSchema } from "./schema.js"
 import { SessionTable } from "./sql.js"
 
-export { readStored, writeStored } from "./cwd-stored.js"
 import { readStored, writeStored } from "./cwd-stored.js"
+export { readStored, writeStored } from "./cwd-stored.js"
 
 export const read = Effect.fn("SessionCwd.read")(function* (db: Database.Interface["db"], sessionID: SessionSchema.ID) {
   const row = yield* db
