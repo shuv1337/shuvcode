@@ -2,6 +2,33 @@
 
 Release notes for OpenCode V2, newest first.
 
+## v2.4.0-shuv.1 — 2026-11-23
+
+Syncs upstream `dev` through `d284e7ce17`: 183 commits beyond the dev pin in [#509](https://github.com/shuv1337/shuvcode/pull/509), including the v2.4.0 release commit (`d6379ff0e1`, patch-identical to the `v2.4.0` tag) and one later fix ([#65757](https://github.com/anomalyco/opencode/pull/65757)).
+
+### Highlights
+
+- **Automations** are on by default; set `"automations": false` to turn them off. Code actions can call the session's Code Mode tools, and an automation can run a fixed shell command.
+- **Machines**: `shuvcode machine add|list|remove` pairs remote machines with the background service.
+- **Session search** (`sqlite_fts`) and **session interrupt** (`full_codemode`) tools join `tools.shuvcode.session`.
+- Video generation, the desktop's built-in browser profile, MCP Events push delivery and the new TUI designs come from upstream v2.4.0 below.
+
+### Breaking changes
+
+- Automation tools move to upstream's own namespace: `tools.automation.create`, `.list`, `.pause`, `.resume` and `.delete` replace `tools.shuvcode.automation_*`, and the direct tools are `automation_create` and so on instead of `shuvcode_automation_*`. Update permission rules that name the old tools.
+- The unattended automation denylist follows upstream ([#65217](https://github.com/anomalyco/opencode/pull/65217)): it now blocks `automation.create`, `.pause`, `.resume`, `.delete` and `shuvcode.session.move`. Automation code can call `shell`, `shuvcode.session.rename` and the worktree tools after the permission prompts at creation.
+- `experimental.automations` and `experimental.mcp_events` are gone; MCP Events are always available and automations use the top-level `automations` key.
+
+### Fork changes
+
+- The new upstream session tools use the `shuvcode.session` namespace; the new `machine` and hidden `login` commands use the fork's global `--server`/`--standalone` handling.
+- Claude Agent stays hidden: the new Claude websearch provider is registered only by the unloaded Claude Agent plugin.
+- The upstream native Rust CLI (`packages/cli-rs`) is in the tree but outside the fork's build and publish.
+
+### Rollback
+
+Roll back to `v2.3.2-shuv.1`. Permission rules rewritten for the `automation.*` names would need the old `shuvcode.automation_*` names again.
+
 ## v2.4.0 — 2026-11-23
 
 ### Highlights

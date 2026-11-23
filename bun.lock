@@ -137,7 +137,7 @@
     },
     "packages/cli": {
       "name": "shuvcode",
-      "version": "2.3.2-shuv.1",
+      "version": "2.4.0-shuv.1",
       "bin": {
         "shuvcode": "./bin/shuvcode.mjs",
       },
