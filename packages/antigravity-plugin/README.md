@@ -29,8 +29,8 @@ imports, SDK transport wrappers, or proxy servers.
   swaps `x-goog-api-key` for `Authorization: Bearer <access>`, preserves the
   request body bytes untouched, and sets `chunkTimeout: 1_200_000` (20 minutes).
   Native Gemini SSE and error payloads flow directly to `@opencode/ai`.
-- **Shipped models**: Enables `gemini-4-neon`, `gemini-4-hydrogen`,
-  `gemini-4-carbon` (with 64k streaming output floor), and
+- **Shipped models**: Enables `gemini-4-neon`, `gemini-4-hydrogen`, and
+  `gemini-4-carbon` (each with a 64k streaming output floor), plus
   `gemini-3.5-flash-lite` at zero cost. Other catalog models are zero-costed
   and disabled so explicit `opencode.json` model overrides can enable future
   Gemini slugs cleanly.

@@ -161,8 +161,9 @@ it.effect(
       yield* credentials.create({ integrationID: Integration.ID.make("google"), value: importedSolstice })
       yield* addPlugin()
 
-      // Activate real ConfigProviderPlugin after GoogleSolsticePlugin with a brand-new future slug
-      // and NO explicit `disabled: false`.
+      // Activate real ConfigProviderPlugin after GoogleSolsticePlugin with:
+      // 1. a brand-new future slug (no explicit `disabled: false`), and
+      // 2. a user override on uncataloged shipped `gemini-4-neon` (must keep 1M context, multimodal inputs, and family).
       const configHost = yield* PluginHost.make(plugin, "config-provider-test")
       yield* ConfigProviderPlugin.Plugin.effect(configHost).pipe(
         Effect.provide(
@@ -174,6 +175,7 @@ it.effect(
                   google: {
                     models: {
                       "gemini-4-xenon": { name: "Gemini 4 Xenon" },
+                      "gemini-4-neon": { name: "Custom Neon" },
                     },
                   },
                 },
@@ -189,6 +191,12 @@ it.effect(
       expect(
         (yield* models.available()).some((m) => m.providerID === Provider.ID.google && m.id === "gemini-4-xenon"),
       ).toBe(true)
+      const overriddenNeon = yield* models.get(Provider.ID.google, Model.ID.make("gemini-4-neon"))
+      expect(overriddenNeon?.name).toBe("Custom Neon")
+      expect(overriddenNeon?.family).toBe(Model.Family.make("gemini"))
+      expect(overriddenNeon?.limit).toEqual({ context: 1_048_576, output: 65_536 })
+      expect(overriddenNeon?.capabilities.input).toEqual(["text", "image", "audio", "video", "pdf"])
+      expect(overriddenNeon?.variants.map((variant) => String(variant.id))).toEqual(["low", "medium", "high", "xhigh"])
       // Pre-config non-shipped catalog models remain hidden.
       expect((yield* models.get(Provider.ID.google, Model.ID.make("gemini-old")))?.enabled).toBe(false)
 
@@ -278,7 +286,7 @@ it.effect(
         hooks.trigger("session", "http.request", {
           ...identity,
           request: new Request(
-            "https://generativelanguage.googleapis.com/v1beta/models/gemini-4-argon:streamGenerateContent",
+            "https://generativelanguage.googleapis.com/v1beta/models/gemini-4-neon:streamGenerateContent",
             { method: "POST", body: "{}" },
           ),
         }),
@@ -435,7 +443,7 @@ it.effect(
       yield* credentials.create({ integrationID: Integration.ID.make("google"), value: importedSolstice })
       yield* addPlugin()
 
-      const routeModel = Gemini.route.model({ id: "gemini-4-argon" })
+      const routeModel = Gemini.route.model({ id: "gemini-4-neon" })
       const tool = ToolDefinition.make({
         name: "echo",
         description: "Echo text back",
@@ -460,7 +468,7 @@ it.effect(
       const step1Event = yield* hooks.trigger("session", "http.request", {
         ...identity,
         request: new Request(
-          "https://generativelanguage.googleapis.com/v1beta/models/gemini-4-argon:streamGenerateContent?alt=sse",
+          "https://generativelanguage.googleapis.com/v1beta/models/gemini-4-neon:streamGenerateContent?alt=sse",
           {
             method: "POST",
             headers: { "x-goog-api-key": "drop-me", "content-type": "application/json" },
@@ -469,7 +477,7 @@ it.effect(
         ),
       })
       expect(step1Event.request.url).toBe(
-        "https://generativelanguage.googleapis.com/v1alpha/models/gemini-4-argon:streamGenerateContentPerUserQuota?alt=sse",
+        "https://generativelanguage.googleapis.com/v1alpha/models/gemini-4-neon:streamGenerateContentPerUserQuota?alt=sse",
       )
       expect(step1Event.request.headers.get("authorization")).toBe("Bearer fixture-solstice-token")
       expect(step1Event.request.headers.has("x-goog-api-key")).toBe(false)
@@ -490,7 +498,7 @@ it.effect(
               continuationToken: "cont_token_1",
             },
           ],
-          modelVersion: "gemini-4-argon",
+          modelVersion: "gemini-4-neon",
         })}`,
         "",
       ].join("\n\n")
@@ -510,7 +518,7 @@ it.effect(
               finishReason: "STOP",
             },
           ],
-          modelVersion: "gemini-4-argon",
+          modelVersion: "gemini-4-neon",
         })}`,
         "",
       ].join("\n\n")
@@ -601,7 +609,7 @@ it.effect(
       const step2Event = yield* hooks.trigger("session", "http.request", {
         ...identity,
         request: new Request(
-          "https://generativelanguage.googleapis.com/v1beta/models/gemini-4-argon:streamGenerateContent?alt=sse",
+          "https://generativelanguage.googleapis.com/v1beta/models/gemini-4-neon:streamGenerateContent?alt=sse",
           {
             method: "POST",
             body: JSON.stringify(step2Body),

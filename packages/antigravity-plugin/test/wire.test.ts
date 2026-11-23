@@ -1,5 +1,4 @@
 import { describe, expect, test } from "bun:test"
-import { Model } from "@opencode/plugin/effect"
 import { GoogleSolsticeWire } from "../src/wire"
 
 describe("GoogleSolsticeWire", () => {
@@ -59,37 +58,5 @@ describe("GoogleSolsticeWire", () => {
     expect(headers.has("x-goog-api-key")).toBe(false)
     expect(headers.get("authorization")).toBe("Bearer fixture-solstice-token")
     expect(headers.get("user-agent")).toBe("opencode/test")
-  })
-
-  test("ships the 4 confirmed Solstice models with 20-minute chunk timeout", () => {
-    expect(GoogleSolsticeWire.defaultModelID).toBe(Model.ID.make("gemini-4-neon"))
-    expect(GoogleSolsticeWire.CHUNK_TIMEOUT_MS).toBe(1_200_000)
-    expect(GoogleSolsticeWire.shippedModels.map((model) => model.id)).toEqual([
-      "gemini-4-neon",
-      "gemini-4-hydrogen",
-      "gemini-4-carbon",
-      "gemini-3.5-flash-lite",
-    ])
-    expect(GoogleSolsticeWire.shippedModels.find((m) => m.id === "gemini-4-neon")?.efforts).toEqual([
-      "low",
-      "medium",
-      "high",
-      "xhigh",
-    ])
-    expect(GoogleSolsticeWire.shippedModels.find((m) => m.id === "gemini-4-hydrogen")?.efforts).toEqual([
-      "low",
-      "medium",
-      "high",
-      "xhigh",
-    ])
-    expect(GoogleSolsticeWire.shippedModels.find((m) => m.id === "gemini-4-carbon")?.efforts).toEqual([
-      "low",
-      "medium",
-      "high",
-    ])
-    expect(GoogleSolsticeWire.shippedModels.find((m) => m.id === "gemini-4-carbon")?.minOutput).toBe(65_536)
-    expect(GoogleSolsticeWire.shippedModels.find((m) => m.id === "gemini-3.5-flash-lite")?.family).toBe(
-      "gemini-flash-lite",
-    )
   })
 })

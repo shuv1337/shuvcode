@@ -140,7 +140,8 @@ export function applyModels(evt: ModelEditor, mode: GoogleMode, catalogModelIDs?
         id: Model.VariantID.make(effort),
         settings: { thinkingConfig: { includeThoughts: true, thinkingLevel: effort } },
       }))
-      if (!catalog?.has(model.id)) {
+      const isCataloged = catalogModelIDs ? catalogModelIDs.has(model.id) : Boolean(catalog?.has(model.id))
+      if (!isCataloged) {
         draft.name = model.name
         draft.family = Model.Family.make(model.family)
         draft.limit = { ...model.limit }
