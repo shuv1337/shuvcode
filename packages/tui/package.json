@@ -55,7 +55,6 @@
     "@opencode/core": "workspace:*",
     "@opencode/latex": "workspace:*",
     "@opencode/merman": "workspace:*",
-    "@shuvcode/gpt-live-plugin": "workspace:*",
     "@shuvcode/quota-plugin": "workspace:*",
     "@opencode/plugin": "workspace:*",
     "@opencode/schema": "workspace:*",
