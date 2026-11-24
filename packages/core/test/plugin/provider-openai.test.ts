@@ -2,12 +2,15 @@ import { Money } from "@opencode/schema/money"
 import { Agent } from "@opencode/schema/agent"
 import { Session } from "@opencode/core/session"
 import { OpenAIResponses } from "@opencode/ai/protocols/openai-responses"
+import { ai } from "@opencode/ai/effect"
+import { compileRequest } from "@opencode/ai/testing"
 import { describe, expect } from "bun:test"
 import { DateTime, Effect } from "effect"
 import { Credential } from "@opencode/core/credential"
 import { Integration } from "@opencode/core/integration"
 import { Location } from "@opencode/core/location"
 import { Model } from "@opencode/core/model"
+import { ModelResolver } from "@opencode/core/model-resolver"
 import { ModelsDev } from "@opencode/core/models-dev"
 import { Bus } from "@opencode/core/bus"
 import { Plugin } from "@opencode/core/plugin"
@@ -33,14 +36,18 @@ const addPlugin = Effect.fn(function* () {
   yield* OpenAIPlugin.effect(host)
 })
 
-
 // A catalog whose OpenAI entry carries the given subscription model lists; `lists.current` can be swapped before a refresh.
 const subscriptionCatalog = (lists: { current: Record<string, readonly string[]> }) =>
   ModelsDev.Service.of({
     get: () =>
       Effect.sync(() => [
         {
-          info: { id: Provider.ID.openai, name: "OpenAI", activation: "auto", package: "@opencode/ai/providers/openai" },
+          info: {
+            id: Provider.ID.openai,
+            name: "OpenAI",
+            activation: "auto",
+            package: "@opencode/ai/providers/openai",
+          },
           models: [],
           environment: [],
           subscriptions: lists.current,
@@ -103,124 +110,130 @@ describe("OpenAIPlugin", () => {
     }),
   )
 
-  it.effect("filters the OpenAI catalog to codex-eligible models under a ChatGPT connection when the catalog's Codex list is empty", () =>
-    Effect.gen(function* () {
-      const catalog = yield* Provider.Service
-      const models = yield* Model.Service
-      const credentials = yield* Credential.Service
-      yield* catalog.transform((catalog) => {
-        catalog.update(Provider.ID.openai, (draft) => {
-          draft.package = "@opencode/ai/providers/openai"
-        })
-        catalog.models.update(Provider.ID.openai, Model.ID.make("gpt-5.5"), () => {})
-        catalog.models.update(Provider.ID.openai, Model.ID.make("gpt-5.3-codex-spark"), () => {})
-        catalog.models.update(Provider.ID.openai, Model.ID.make("gpt-5.6-sol"), (model) => {
-          model.limit = { context: 1_050_000, input: 922_000, output: 128_000 }
-          model.cost = [
-            {
-              input: Money.USDPerMillionTokens.make(1),
-              output: Money.USDPerMillionTokens.make(2),
-              cache: {
-                read: Money.USDPerMillionTokens.make(0.1),
-                write: Money.USDPerMillionTokens.zero,
+  it.effect(
+    "filters the OpenAI catalog to codex-eligible models under a ChatGPT connection when the catalog's Codex list is empty",
+    () =>
+      Effect.gen(function* () {
+        const catalog = yield* Provider.Service
+        const models = yield* Model.Service
+        const credentials = yield* Credential.Service
+        yield* catalog.transform((catalog) => {
+          catalog.update(Provider.ID.openai, (draft) => {
+            draft.package = "@opencode/ai/providers/openai"
+          })
+          catalog.models.update(Provider.ID.openai, Model.ID.make("gpt-5.5"), () => {})
+          catalog.models.update(Provider.ID.openai, Model.ID.make("gpt-5.3-codex-spark"), () => {})
+          catalog.models.update(Provider.ID.openai, Model.ID.make("gpt-5.6-sol"), (model) => {
+            model.limit = { context: 1_050_000, input: 922_000, output: 128_000 }
+            model.cost = [
+              {
+                input: Money.USDPerMillionTokens.make(1),
+                output: Money.USDPerMillionTokens.make(2),
+                cache: {
+                  read: Money.USDPerMillionTokens.make(0.1),
+                  write: Money.USDPerMillionTokens.zero,
+                },
               },
-            },
-          ]
+            ]
+          })
+          catalog.models.update(Provider.ID.openai, Model.ID.make("gpt-5.5-pro"), () => {})
+          catalog.models.update(Provider.ID.openai, Model.ID.make("gpt-5.4"), (model) => {
+            model.limit = { context: 1_050_000, input: 922_000, output: 64_000 }
+          })
+          catalog.models.update(Provider.ID.openai, Model.ID.make("gpt-5.4-pro"), (model) => {
+            model.modelID = Model.ID.make("gpt-5.4")
+            model.body = { reasoning: { mode: "pro" } }
+          })
+          catalog.models.update(Provider.ID.openai, Model.ID.make("gpt-5.6"), () => {})
+          catalog.models.update(Provider.ID.openai, Model.ID.make("gpt-4.1"), () => {})
+          catalog.models.update(Provider.ID.openai, Model.ID.make("gpt-6-astra"), (model) => {
+            model.limit = { context: 1_050_000, input: 922_000, output: 128_000 }
+          })
+          catalog.models.update(Provider.ID.openai, Model.ID.make("gpt-5.10"), (model) => {
+            model.limit = { context: 1_050_000, input: 922_000, output: 128_000 }
+          })
+          catalog.models.update(Provider.ID.openai, Model.ID.make("gpt-5"), () => {})
+          catalog.models.update(Provider.ID.openai, Model.ID.make("gpt-5.04-astra"), () => {})
+          catalog.models.update(Provider.ID.openai, Model.ID.make("gpt-4.99"), () => {})
+          catalog.models.update(Provider.ID.openai, Model.ID.make("gpt-image-1.5"), (model) => {
+            model.type = "image"
+          })
+          catalog.models.update(Provider.ID.openai, Model.ID.make("gpt-image-2"), (model) => {
+            model.type = "image"
+            model.cost = [
+              {
+                input: Money.USDPerMillionTokens.make(8),
+                output: Money.USDPerMillionTokens.make(30),
+                cache: { read: Money.USDPerMillionTokens.zero, write: Money.USDPerMillionTokens.zero },
+              },
+            ]
+          })
         })
-        catalog.models.update(Provider.ID.openai, Model.ID.make("gpt-5.5-pro"), () => {})
-        catalog.models.update(Provider.ID.openai, Model.ID.make("gpt-5.4"), (model) => {
-          model.limit = { context: 1_050_000, input: 922_000, output: 64_000 }
+        yield* credentials.create({
+          integrationID: Integration.ID.make("openai"),
+          value: Credential.OAuth.make({
+            type: "oauth",
+            methodID: Integration.MethodID.make("chatgpt-browser"),
+            access: "chatgpt-token",
+            refresh: "refresh",
+            expires: Date.now() + 60_000,
+            metadata: { accountID: "acct_123" },
+          }),
         })
-        catalog.models.update(Provider.ID.openai, Model.ID.make("gpt-5.4-pro"), (model) => {
-          model.modelID = Model.ID.make("gpt-5.4")
-          model.body = { reasoning: { mode: "pro" } }
-        })
-        catalog.models.update(Provider.ID.openai, Model.ID.make("gpt-5.6"), () => {})
-        catalog.models.update(Provider.ID.openai, Model.ID.make("gpt-4.1"), () => {})
-        catalog.models.update(Provider.ID.openai, Model.ID.make("gpt-6-astra"), (model) => {
-          model.limit = { context: 1_050_000, input: 922_000, output: 128_000 }
-        })
-        catalog.models.update(Provider.ID.openai, Model.ID.make("gpt-5.10"), (model) => {
-          model.limit = { context: 1_050_000, input: 922_000, output: 128_000 }
-        })
-        catalog.models.update(Provider.ID.openai, Model.ID.make("gpt-5"), () => {})
-        catalog.models.update(Provider.ID.openai, Model.ID.make("gpt-5.04-astra"), () => {})
-        catalog.models.update(Provider.ID.openai, Model.ID.make("gpt-4.99"), () => {})
-        catalog.models.update(Provider.ID.openai, Model.ID.make("gpt-image-1.5"), (model) => {
-          model.type = "image"
-        })
-        catalog.models.update(Provider.ID.openai, Model.ID.make("gpt-image-2"), (model) => {
-          model.type = "image"
-          model.cost = [
-            {
-              input: Money.USDPerMillionTokens.make(8),
-              output: Money.USDPerMillionTokens.make(30),
-              cache: { read: Money.USDPerMillionTokens.zero, write: Money.USDPerMillionTokens.zero },
-            },
-          ]
-        })
-      })
-      yield* credentials.create({
-        integrationID: Integration.ID.make("openai"),
-        value: Credential.OAuth.make({
-          type: "oauth",
-          methodID: Integration.MethodID.make("chatgpt-browser"),
-          access: "chatgpt-token",
-          refresh: "refresh",
-          expires: Date.now() + 60_000,
-          metadata: { accountID: "acct_123" },
-        }),
-      })
-      yield* addPlugin().pipe(Effect.provideService(ModelsDev.Service, subscriptionCatalog({ current: { "openai-codex": [] } })))
+        yield* addPlugin().pipe(
+          Effect.provideService(ModelsDev.Service, subscriptionCatalog({ current: { "openai-codex": [] } })),
+        )
 
-      const direct = yield* request(Provider.ID.openai, "https://api.openai.com/v1")
-      const custom = yield* request(Provider.ID.make("custom-openai"), "https://custom.example/v1")
-      const proxy = yield* request(Provider.ID.openai, "https://proxy.example/v1?region=us")
+        const direct = yield* request(Provider.ID.openai, "https://api.openai.com/v1")
+        const custom = yield* request(Provider.ID.make("custom-openai"), "https://custom.example/v1")
+        const proxy = yield* request(Provider.ID.openai, "https://proxy.example/v1?region=us")
 
-      const provider = required(yield* catalog.get(Provider.ID.openai))
-      expect(provider.package).toBe("@opencode/ai/providers/openai")
-      expect(provider.settings).toMatchObject({ baseURL: "https://chatgpt.com/backend-api/codex" })
-      expect(provider.settings?.encoding).toBe("zstd")
-      expect(provider.headers).toMatchObject({
-        originator: "opencode",
-        "chatgpt-account-id": "acct_123",
-        "x-codex-beta-features": "remote_compaction_v2",
-      })
-      expect(direct.baseURL).toBe("https://chatgpt.com/backend-api/codex")
-      expect(direct.headers).toMatchObject({ originator: "opencode", "session-id": "ses_test" })
-      expect(direct.hasHttpHooks).toBe(false)
-      expect(custom.headers).not.toHaveProperty("originator")
-      expect(proxy.baseURL).toBe("https://proxy.example/v1?region=us")
-      expect(proxy.headers).toMatchObject({ originator: "opencode", "session-id": "ses_test" })
-      const sessions = yield* Session.Service
-      const location = yield* Location.Service
-      const parent = yield* sessions.create({ location: { directory: location.directory } })
-      const child = yield* sessions.create({ parentID: parent.id })
-      const childRequest = yield* request(Provider.ID.openai, "https://api.openai.com/v1", child.id)
-      expect(childRequest.headers).toMatchObject({ "session-id": parent.id })
-      const eligible = required(yield* models.get(Provider.ID.openai, Model.ID.make("gpt-5.6-sol")))
-      expect(eligible.package).toBe("@opencode/ai/providers/openai")
-      expect(eligible.headers).toMatchObject({ originator: "opencode", "chatgpt-account-id": "acct_123" })
-      expect(eligible.cost).toEqual([])
-      expect(eligible.limit).toEqual({ context: 1_050_000, input: 922_000, output: 128_000 })
-      expect(eligible.enabled).toBe(true)
-      expect(required(yield* models.get(Provider.ID.openai, Model.ID.make("gpt-5.5"))).enabled).toBe(false)
-      expect(required(yield* models.get(Provider.ID.openai, Model.ID.make("gpt-5.3-codex-spark"))).enabled).toBe(false)
-      expect(required(yield* models.get(Provider.ID.openai, Model.ID.make("gpt-5.5-pro"))).enabled).toBe(false)
-      expect(required(yield* models.get(Provider.ID.openai, Model.ID.make("gpt-5.4-pro"))).enabled).toBe(false)
-      expect(required(yield* models.get(Provider.ID.openai, Model.ID.make("gpt-5.4"))).enabled).toBe(false)
-      expect(required(yield* models.get(Provider.ID.openai, Model.ID.make("gpt-5.6"))).enabled).toBe(false)
-      expect(required(yield* models.get(Provider.ID.openai, Model.ID.make("gpt-4.1"))).enabled).toBe(false)
-      expect(required(yield* models.get(Provider.ID.openai, Model.ID.make("gpt-6-astra"))).enabled).toBe(true)
-      expect(required(yield* models.get(Provider.ID.openai, Model.ID.make("gpt-5.10"))).enabled).toBe(true)
-      expect(required(yield* models.get(Provider.ID.openai, Model.ID.make("gpt-5"))).enabled).toBe(false)
-      expect(required(yield* models.get(Provider.ID.openai, Model.ID.make("gpt-5.04-astra"))).enabled).toBe(false)
-      expect(required(yield* models.get(Provider.ID.openai, Model.ID.make("gpt-4.99"))).enabled).toBe(false)
-      // Only the image model the Codex client uses is offered, covered by the subscription.
-      const images = (yield* models.available(["image"])).filter((model) => model.providerID === Provider.ID.openai)
-      expect(images.map((model) => model.id)).toEqual([Model.ID.make("gpt-image-2")])
-      expect(images[0]?.cost).toEqual([])
-    }),
+        const provider = required(yield* catalog.get(Provider.ID.openai))
+        expect(provider.package).toBe("@opencode/ai/providers/openai")
+        expect(provider.settings).toMatchObject({ baseURL: "https://chatgpt.com/backend-api/codex" })
+        expect(provider.settings?.encoding).toBe("zstd")
+        expect(provider.headers).toMatchObject({
+          originator: "opencode",
+          "chatgpt-account-id": "acct_123",
+          "x-codex-beta-features": "remote_compaction_v2",
+        })
+        expect(direct.baseURL).toBe("https://chatgpt.com/backend-api/codex")
+        expect(direct.headers).toMatchObject({ originator: "opencode", "session-id": "ses_test" })
+        expect(direct.hasHttpHooks).toBe(false)
+        expect(custom.headers).not.toHaveProperty("originator")
+        expect(proxy.baseURL).toBe("https://proxy.example/v1?region=us")
+        expect(proxy.headers).toMatchObject({ originator: "opencode", "session-id": "ses_test" })
+        const sessions = yield* Session.Service
+        const location = yield* Location.Service
+        const parent = yield* sessions.create({ location: { directory: location.directory } })
+        const child = yield* sessions.create({ parentID: parent.id })
+        const childRequest = yield* request(Provider.ID.openai, "https://api.openai.com/v1", child.id)
+        expect(childRequest.headers).toMatchObject({ "session-id": parent.id })
+        const eligible = required(yield* models.get(Provider.ID.openai, Model.ID.make("gpt-5.6-sol")))
+        expect(eligible.package).toBe("@opencode/ai/providers/openai")
+        expect(eligible.headers).toMatchObject({ originator: "opencode", "chatgpt-account-id": "acct_123" })
+        expect(eligible.cost).toEqual([])
+        expect(eligible.limit).toEqual({ context: 1_050_000, input: 922_000, output: 128_000 })
+        expect(eligible.enabled).toBe(true)
+        expect(required(yield* models.get(Provider.ID.openai, Model.ID.make("gpt-5.5"))).enabled).toBe(false)
+        expect(required(yield* models.get(Provider.ID.openai, Model.ID.make("gpt-5.3-codex-spark"))).enabled).toBe(
+          false,
+        )
+        expect(required(yield* models.get(Provider.ID.openai, Model.ID.make("gpt-5.5-pro"))).enabled).toBe(false)
+        expect(required(yield* models.get(Provider.ID.openai, Model.ID.make("gpt-5.4-pro"))).enabled).toBe(false)
+        expect(required(yield* models.get(Provider.ID.openai, Model.ID.make("gpt-5.4"))).enabled).toBe(false)
+        expect(required(yield* models.get(Provider.ID.openai, Model.ID.make("gpt-5.6"))).enabled).toBe(false)
+        expect(required(yield* models.get(Provider.ID.openai, Model.ID.make("gpt-4.1"))).enabled).toBe(false)
+        expect(required(yield* models.get(Provider.ID.openai, Model.ID.make("gpt-6-astra"))).enabled).toBe(true)
+        expect(required(yield* models.get(Provider.ID.openai, Model.ID.make("gpt-5.10"))).enabled).toBe(true)
+        expect(required(yield* models.get(Provider.ID.openai, Model.ID.make("gpt-5"))).enabled).toBe(false)
+        expect(required(yield* models.get(Provider.ID.openai, Model.ID.make("gpt-5.04-astra"))).enabled).toBe(false)
+        expect(required(yield* models.get(Provider.ID.openai, Model.ID.make("gpt-4.99"))).enabled).toBe(false)
+        // Only the image model the Codex client uses is offered, covered by the subscription.
+        const images = (yield* models.available(["image"])).filter((model) => model.providerID === Provider.ID.openai)
+        expect(images.map((model) => model.id)).toEqual([Model.ID.make("gpt-image-2")])
+        expect(images[0]?.cost).toEqual([])
+      }),
   )
 
   it.effect("offers only the catalog's Codex list under a ChatGPT connection, and follows its refreshes", () =>
@@ -273,6 +286,131 @@ describe("OpenAIPlugin", () => {
       expect(yield* enabled("gpt-5.5")).toBe(false)
     }),
   )
+
+  for (const methodID of ["chatgpt-headless", "chatgpt-browser"] as const) {
+    it.effect(`keeps Ultrafast variants of plan-listed models under ${methodID} OAuth`, () =>
+      Effect.gen(function* () {
+        const catalog = yield* Provider.Service
+        const models = yield* Model.Service
+        const credentials = yield* Credential.Service
+        const bus = yield* Bus.Service
+        const paidCost = [
+          {
+            input: Money.USDPerMillionTokens.make(10),
+            output: Money.USDPerMillionTokens.make(20),
+            cache: {
+              read: Money.USDPerMillionTokens.make(1),
+              write: Money.USDPerMillionTokens.zero,
+            },
+          },
+        ]
+        yield* catalog.transform((catalog) => {
+          catalog.update(Provider.ID.openai, (draft) => {
+            draft.package = "@opencode/ai/providers/openai"
+          })
+          for (const id of ["gpt-6.2-astra", "gpt-6.2-astra-fast", "gpt-6.2-sol", "gpt-6.2-sol-fast"])
+            catalog.models.update(Provider.ID.openai, Model.ID.make(id), () => {})
+          // Mode form (model_speeds = false)
+          catalog.models.update(Provider.ID.openai, Model.ID.make("gpt-6.2-astra-ultrafast"), (model) => {
+            model.modelID = Model.ID.make("gpt-6.2-astra")
+            model.body = { service_tier: "ultrafast" }
+            model.cost = paidCost
+          })
+          // Speed form (model_speeds = true)
+          catalog.models.update(Provider.ID.openai, Model.ID.make("gpt-6.2-sol-ultrafast"), (model) => {
+            model.modelID = Model.ID.make("gpt-6.2-sol")
+            model.settings = { serviceTier: "ultrafast" }
+            model.experimental = {
+              speed: { base: Model.ID.make("gpt-6.2-sol"), id: "ultrafast", faster: true },
+            }
+            model.cost = paidCost
+          })
+          // Negative cases
+          catalog.models.update(Provider.ID.openai, Model.ID.make("gpt-6.2-astra-pro"), (model) => {
+            model.modelID = Model.ID.make("gpt-6.2-astra")
+            model.body = { reasoning: { mode: "pro" } }
+          })
+          catalog.models.update(Provider.ID.openai, Model.ID.make("gpt-6.2-astra-pro-ultrafast"), (model) => {
+            model.modelID = Model.ID.make("gpt-6.2-astra")
+            model.body = { reasoning: { mode: "pro" }, service_tier: "ultrafast" }
+          })
+          catalog.models.update(Provider.ID.openai, Model.ID.make("gpt-6.2-astra-flex"), (model) => {
+            model.modelID = Model.ID.make("gpt-6.2-astra")
+            model.body = { service_tier: "flex" }
+          })
+          catalog.models.update(Provider.ID.openai, Model.ID.make("gpt-6.2-sol-flex"), (model) => {
+            model.modelID = Model.ID.make("gpt-6.2-sol")
+            model.settings = { serviceTier: "flex" }
+            model.experimental = {
+              speed: { base: Model.ID.make("gpt-6.2-sol"), id: "flex", faster: false },
+            }
+          })
+          catalog.models.update(Provider.ID.openai, Model.ID.make("gpt-7-ultrafast"), (model) => {
+            model.modelID = Model.ID.make("gpt-7")
+            model.body = { service_tier: "ultrafast" }
+          })
+          catalog.models.update(Provider.ID.openai, Model.ID.make("gpt-6.2-astra-ultrafast-fake"), (model) => {
+            model.modelID = Model.ID.make("gpt-6.2-astra")
+          })
+        })
+        yield* credentials.create({
+          integrationID: Integration.ID.make("openai"),
+          value: Credential.OAuth.make({
+            type: "oauth",
+            methodID: Integration.MethodID.make(methodID),
+            access: "chatgpt-token",
+            refresh: "refresh",
+            expires: Date.now() + 60_000,
+            metadata: { accountID: "acct_123" },
+          }),
+        })
+        const lists = {
+          current: {
+            "openai-codex": ["gpt-6.2-astra", "gpt-6.2-astra-fast", "gpt-6.2-sol", "gpt-6.2-sol-fast"],
+          },
+        }
+        const plugin = yield* Plugin.Service
+        const host = yield* PluginHost.make(plugin, "test")
+        yield* OpenAIPlugin.effect(host).pipe(Effect.provideService(ModelsDev.Service, subscriptionCatalog(lists)))
+        const enabled = (id: string) =>
+          models.get(Provider.ID.openai, Model.ID.make(id)).pipe(Effect.map((model) => required(model).enabled))
+
+        const modeUltrafast = required(yield* models.get(Provider.ID.openai, Model.ID.make("gpt-6.2-astra-ultrafast")))
+        expect(modeUltrafast.enabled).toBe(true)
+        expect(modeUltrafast.cost).toEqual([])
+        expect(modeUltrafast.body).toMatchObject({ service_tier: "ultrafast" })
+
+        const speedUltrafast = required(yield* models.get(Provider.ID.openai, Model.ID.make("gpt-6.2-sol-ultrafast")))
+        expect(speedUltrafast.enabled).toBe(true)
+        expect(speedUltrafast.cost).toEqual([])
+        expect(speedUltrafast.settings).toMatchObject({ serviceTier: "ultrafast" })
+
+        expect(yield* enabled("gpt-6.2-astra-pro")).toBe(false)
+        expect(yield* enabled("gpt-6.2-astra-pro-ultrafast")).toBe(false)
+        expect(yield* enabled("gpt-6.2-astra-flex")).toBe(false)
+        expect(yield* enabled("gpt-6.2-sol-flex")).toBe(false)
+        expect(yield* enabled("gpt-7-ultrafast")).toBe(false)
+        expect(yield* enabled("gpt-6.2-astra-ultrafast-fake")).toBe(false)
+
+        const resolver = yield* ModelResolver.Service
+        const modeResolved = yield* resolver.resolveModel(modeUltrafast)
+        expect(modeResolved.model.options?.http?.body).toMatchObject({ service_tier: "ultrafast" })
+        const modeCompiled = yield* compileRequest(ai.request({ model: modeResolved.model, prompt: "Hello" }))
+        expect(modeCompiled.body).toMatchObject({ model: "gpt-6.2-astra" })
+
+        const speedCompiled = yield* resolver
+          .resolveModel(speedUltrafast)
+          .pipe(Effect.flatMap((resolved) => compileRequest(ai.request({ model: resolved.model, prompt: "Hello" }))))
+        expect(speedCompiled.body).toMatchObject({ model: "gpt-6.2-sol", service_tier: "ultrafast" })
+
+        lists.current = { "openai-codex": ["gpt-6.2-sol", "gpt-6.2-sol-fast"] }
+        yield* bus.publish(ModelsDev.Event.Refreshed, {})
+        yield* drain
+        expect(yield* enabled("gpt-6.2-astra-ultrafast")).toBe(false)
+        expect(yield* enabled("gpt-6.2-sol-ultrafast")).toBe(true)
+      }).pipe(Effect.provide(ModelResolver.layer)),
+    )
+  }
 
   it.effect("keeps the full OpenAI catalog under an API key connection", () =>
     Effect.gen(function* () {
