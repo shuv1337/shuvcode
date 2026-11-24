@@ -2,6 +2,22 @@
 
 Release notes for OpenCode V2, newest first.
 
+## v2.4.1-shuv.2 — 2026-11-24
+
+Hotfix release on top of `v2.4.1-shuv.1`.
+
+### Bug fixes
+
+- **OpenAI ChatGPT OAuth (Codex):** Restored Ultrafast model variants (such as `gpt-6.2-astra-ultrafast` and `gpt-6.2-sol-ultrafast`) in the model selector and speed picker for plan-listed base models while keeping `pro`, `flex`, and unlisted models hidden ([#515](https://github.com/shuv1337/shuvcode/pull/515), fixes [#514](https://github.com/shuv1337/shuvcode/issues/514)).
+
+### Breaking changes
+
+- Removed the bundled fork-only `@shuvcode/gpt-live-plugin` package, its native `gpt-live-host` helper binary, and its six fork-only TUI `voice.*` keybinds / `/voice*` slash commands ([#513](https://github.com/shuv1337/shuvcode/pull/513)). Upstream native voice support is unchanged, and stale `shuvcode.gpt-live` or `voice.*` entries in user config degrade silently.
+
+### Rollback
+
+Roll back to `v2.4.1-shuv.1`.
+
 ## v2.4.1-shuv.1 — 2026-11-23
 
 Syncs upstream `dev` through `92e28580f1`: 214 commits beyond the dev pin in [#509](https://github.com/shuv1337/shuvcode/pull/509), including the v2.4.0 and v2.4.1 release commits (`d6379ff0e1` and `472d9f8e2e`, which carry the same version and lockfile changes as the lightweight `v2.4.0` and `v2.4.1` tags) and later `dev` fixes.
