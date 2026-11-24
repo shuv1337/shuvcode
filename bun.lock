@@ -280,7 +280,6 @@
         "@parcel/watcher": "2.5.1",
         "@shuvcode/antigravity-plugin": "workspace:*",
         "@shuvcode/claude-plugin": "workspace:*",
-        "@shuvcode/gpt-live-plugin": "workspace:*",
         "@shuvcode/quota-plugin": "workspace:*",
         "@silvia-odwyer/photon-node": "0.3.4",
         "@standard-schema/spec": "catalog:",
@@ -447,24 +446,6 @@
         "@lydell/node-pty-linux-x64": "1.2.0-beta.12",
         "@lydell/node-pty-win32-arm64": "1.2.0-beta.12",
         "@lydell/node-pty-win32-x64": "1.2.0-beta.12",
-      },
-    },
-    "packages/gpt-live-plugin": {
-      "name": "@shuvcode/gpt-live-plugin",
-      "version": "0.1.1",
-      "dependencies": {
-        "@opencode/plugin": "workspace:*",
-        "@opentui/core": "catalog:",
-        "zod": "catalog:",
-      },
-      "devDependencies": {
-        "@opencode/theme": "workspace:*",
-        "@opentui/solid": "catalog:",
-        "@tsconfig/bun": "catalog:",
-        "@types/bun": "catalog:",
-        "@typescript/native": "catalog:",
-        "solid-js": "catalog:",
-        "typescript": "catalog:",
       },
     },
     "packages/gui-plugins": {
@@ -875,7 +856,6 @@
         "@opentui/core": "catalog:",
         "@opentui/keymap": "catalog:",
         "@opentui/solid": "catalog:",
-        "@shuvcode/gpt-live-plugin": "workspace:*",
         "@shuvcode/quota-plugin": "workspace:*",
         "@solid-primitives/event-bus": "1.1.2",
         "effect": "catalog:",
@@ -2395,8 +2375,6 @@
     "@shuvcode/antigravity-plugin": ["@shuvcode/antigravity-plugin@workspace:packages/antigravity-plugin"],
 
     "@shuvcode/claude-plugin": ["@shuvcode/claude-plugin@workspace:packages/claude-plugin"],
-
-    "@shuvcode/gpt-live-plugin": ["@shuvcode/gpt-live-plugin@workspace:packages/gpt-live-plugin"],
 
     "@shuvcode/quota-plugin": ["@shuvcode/quota-plugin@workspace:packages/quota-plugin"],
 
