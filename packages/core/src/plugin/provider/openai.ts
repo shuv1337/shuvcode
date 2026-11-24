@@ -290,12 +290,21 @@ export const OpenAIPlugin = define({
         // subscription covers usage, so hide the rest and zero the cost.
         models.update(model.providerID, model.id, (draft) => {
           if (!chatgpt) return
+          const isPro = Schema.is(Schema.Struct({ mode: Schema.Literal("pro") }))(draft.body?.reasoning)
           if (plan.current) {
-            if (plan.current.has(draft.id)) draft.cost = []
-            else draft.enabled = false
+            // Shuvcode (#514): models.dev openai-codex only lists fast modes, but Codex OAuth accounts with access
+            // also use Ultrafast; handle both body.service_tier (model_speeds off) and settings.serviceTier
+            // (model_speeds on).
+            const isUltrafast = draft.body?.service_tier === "ultrafast" || draft.settings?.serviceTier === "ultrafast"
+            const baseID = draft.modelID ?? draft.id
+            if (plan.current.has(draft.id) || (isUltrafast && !isPro && plan.current.has(baseID))) {
+              draft.cost = []
+              return
+            }
+            draft.enabled = false
             return
           }
-          if (Schema.is(Schema.Struct({ mode: Schema.Literal("pro") }))(draft.body?.reasoning)) {
+          if (isPro) {
             draft.enabled = false
             return
           }
