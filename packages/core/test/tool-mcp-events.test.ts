@@ -77,7 +77,9 @@ describe("list_mcp_events", () => {
       expect(
         allowed.codeModeCatalog ? codeModeListings(allowed.codeModeCatalog).map((tool) => tool.path) : [],
       ).toContain("shuvcode.list_mcp_events")
-      const denied = yield* registry.snapshot([{ action: "opencode_list_mcp_events", resource: "*", effect: "deny" }])
+      const denied = yield* registry.snapshot(
+        PermissionPolicy.fromRules([{ action: "opencode_list_mcp_events", resource: "*", effect: "deny" }]),
+      )
       expect(denied.definitions.map((tool) => tool.name)).not.toContain("shuvcode_list_mcp_events")
       expect(
         denied.codeModeCatalog ? codeModeListings(denied.codeModeCatalog).map((tool) => tool.path) : [],

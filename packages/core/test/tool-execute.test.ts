@@ -846,7 +846,7 @@ describe("Code Mode opencode:// fetch", () => {
     ])
   })
 
-  test("asks as the opencode api command that would make the same call", async () => {
+  test("asks as the shuvcode api command that would make the same call", async () => {
     const asked: Array<{ action: string; resources: ReadonlyArray<string>; save?: ReadonlyArray<string> }> = []
     const sent: Array<string> = []
     const handle = api((request) => Effect.sync(() => (sent.push(request.url), Response.json({ ok: true }))))
@@ -864,8 +864,8 @@ describe("Code Mode opencode:// fetch", () => {
     expect(asked).toEqual([
       expect.objectContaining({
         action: "shell",
-        resources: [`opencode api post /api/session/${context.sessionID}/prompt`],
-        save: ["opencode *"],
+        resources: [`shuvcode api post /api/session/${context.sessionID}/prompt`],
+        save: ["shuvcode *"],
       }),
     ])
     const denied = permissionService({

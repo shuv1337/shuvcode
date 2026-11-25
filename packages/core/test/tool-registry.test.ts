@@ -827,7 +827,9 @@ describe("Tool", () => {
       expect((yield* run(enabled, "call-enabled")).content[0]).toMatchObject({ type: "text" })
       expect(calls).toEqual(["hidden"])
 
-      const denied = yield* service.snapshot([{ action: "secret", resource: "*", effect: "deny" }])
+      const denied = yield* service.snapshot(
+        Permission.Policy.fromRules([{ action: "secret", resource: "*", effect: "deny" }]),
+      )
       const blocked = yield* run(denied, "call-denied")
       expect(calls).toEqual(["hidden"])
       expect(blocked.metadata).toMatchObject({ error: true })

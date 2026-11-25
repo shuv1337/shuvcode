@@ -132,7 +132,7 @@ describe("child sessions inherit parent agent denies", () => {
         const info = yield* agents.get(session.agent ?? general)
         if (!info) return yield* Effect.die(`Missing child agent: ${session.agent}`)
         const names = (yield* tools.snapshot(
-          Permission.merge(info.permissions, session.permissions ?? []),
+          Permission.Policy.fromRules(info.permissions, session.permissions ?? []),
         )).definitions.map((tool) => tool.name)
         expect(names.includes("read")).toBe(true)
         for (const name of editing) expect(names.includes(name)).toBe(false)

@@ -110,13 +110,13 @@ const fetchOpencode = (url: string, init: Init) =>
     const api = Option.getOrElse(yield* Effect.serviceOption(CodeModeApi.Service), () => CodeModeApi.unavailable)
     const method = (init.method ?? "GET").toUpperCase()
     const source = { type: "tool" as const, messageID: execution.messageID, id: execution.id }
-    // The call is checked as the `opencode api` command that would make it, so shell rules for that command cover it
+    // The call is checked as the `shuvcode api` command that would make it, so shell rules for that command cover it
     // too, and saving approval saves what the shell tool saves for it.
     yield* permission
       .assert({
         action: "shell",
-        resources: [`opencode api ${method.toLowerCase()} ${path}`],
-        save: ["opencode *"],
+        resources: [`shuvcode api ${method.toLowerCase()} ${path}`],
+        save: ["shuvcode *"],
         metadata: display([url, init]),
         sessionID: execution.sessionID,
         agent: execution.agent,
