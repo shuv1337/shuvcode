@@ -31,6 +31,7 @@ const every = (state: Flag.State): Record<Flag.Key, Flag.State> => ({
   ...Record.map(ConfigFlag.registry, () => state),
   todo: { enabled: false, source: "default" },
   opencode_api: { enabled: false, source: "default" },
+  mcp_skills: state.source === "default" ? { enabled: true, source: "default" } : state,
 })
 
 describe("Flag.resolve", () => {
@@ -39,6 +40,7 @@ describe("Flag.resolve", () => {
     ["dev", true],
     ["beta", false],
     ["latest", false],
+    ["integration-v2", false],
     ["my-branch", false],
     ["unknown", false],
   ] as const)("applies %s build defaults", (channel, enabled) => {
@@ -71,6 +73,20 @@ describe("Flag.resolve", () => {
         { enabled: false, source: "default" },
         { enabled: false, source: "default" },
       ])
+  })
+
+  test("mcp_skills defaults to on in every channel and still respects overrides", () => {
+    for (const channel of ["local", "dev", "beta", "latest", "integration-v2", "unknown"]) {
+      expect(Flag.resolve({ entries: [], channel }).mcp_skills).toEqual({ enabled: true, source: "default" })
+    }
+
+    const resolve = (experimental?: ConstructorParameters<typeof ConfigExperimental.Info>[0], overrides?: string) =>
+      Flag.resolve({ entries: experimental ? [document(experimental)] : [], channel: "latest", overrides }).mcp_skills
+    expect(resolve({ mcp_skills: false })).toEqual({ enabled: false, source: "config" })
+    expect(resolve({ all_flags: true, mcp_skills: false })).toEqual({ enabled: false, source: "config" })
+    expect(resolve({ all_flags: false })).toEqual({ enabled: true, source: "default" })
+    expect(resolve(undefined, "-mcp_skills")).toEqual({ enabled: false, source: "env" })
+    expect(resolve({ mcp_skills: true }, "-mcp_skills,all")).toEqual({ enabled: false, source: "env" })
   })
 
   test.each(["full_codemode", "sqlite_fts"] as const)(

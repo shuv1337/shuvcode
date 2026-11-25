@@ -4,8 +4,9 @@ export * as ConfigFlag from "./flag.js"
 export const wildcard = "all"
 
 /**
- * Flags default to on in local and dev builds and off in releases, except for `optInOnly` flags, which must be
- * named explicitly in `experimental.<key>` or `OPENCODE_FLAGS`. Read a flag with Core's `Flag.enabled("<key>")`.
+ * Flags default to on in local and dev builds and off in releases. `defaultOn` flags default to on in every build;
+ * `optInOnly` flags must be named explicitly in `experimental.<key>` or `OPENCODE_FLAGS`.
+ * Read a flag with Core's `Flag.enabled("<key>")`.
  */
 export const registry = {
   todo: "Enable the experimental todowrite tool. Off by default in every build, including local and dev; opt in with OPENCODE_FLAGS=todo or experimental.todo: true.",
@@ -32,6 +33,9 @@ export const registry = {
 export type Key = keyof typeof registry
 
 export const optInOnly: ReadonlySet<Key> = new Set(["todo", "opencode_api"])
+
+/** Flags on by default in every build channel, including releases. Opt out with `OPENCODE_FLAGS=-<key>` or `experimental.<key>: false`. */
+export const defaultOn: ReadonlySet<Key> = new Set(["mcp_skills"])
 
 /** Flags that stay off outside local and dev builds, whatever `OPENCODE_FLAGS` or config say. */
 export const localOnly: ReadonlySet<Key> = new Set(["opencode_api"])

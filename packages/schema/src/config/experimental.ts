@@ -22,7 +22,9 @@ export class Info extends Schema.Class<Info>("ConfigExperimental.Info")({
       description:
         ConfigFlag.optInOnly.has(key) || ConfigFlag.localOnly.has(key)
           ? description
-          : `${description} Defaults to on in local and dev builds and off in releases.`,
+          : ConfigFlag.defaultOn.has(key)
+            ? `${description} Defaults to on in all builds; set false to disable.`
+            : `${description} Defaults to on in local and dev builds and off in releases.`,
     }),
   ),
   video_generate: Schema.Union([
