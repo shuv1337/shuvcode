@@ -175,6 +175,7 @@ test("removing theme or theme.name from config reverts to the default theme", as
     })
     await app.renderOnce()
     expect(themes.selected).toBe("gruvbox")
+    expect(themes.mode()).toBe("light")
     expect(theme.background.base.equals(defaultDark)).toBeFalse()
 
     await config.update((draft) => {

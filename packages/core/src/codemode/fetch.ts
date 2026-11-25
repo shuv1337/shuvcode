@@ -108,6 +108,11 @@ const fetchOpencode = (url: string, init: Init) =>
     const permission = yield* Permission.Service
     const path = yield* CodeModeApi.path(url, execution.sessionID)
     const api = Option.getOrElse(yield* Effect.serviceOption(CodeModeApi.Service), () => CodeModeApi.unavailable)
+    if (api === CodeModeApi.unavailable || api === CodeModeApi.disabled)
+      return new Extension.StreamingResponse(
+        yield* api.fetch(new Request(new URL(path, "http://opencode.local").href)),
+        false,
+      )
     const method = (init.method ?? "GET").toUpperCase()
     const source = { type: "tool" as const, messageID: execution.messageID, id: execution.id }
     // The call is checked as the `shuvcode api` command that would make it, so shell rules for that command cover it

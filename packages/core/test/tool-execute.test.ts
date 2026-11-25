@@ -876,9 +876,22 @@ describe("Code Mode opencode:// fetch", () => {
     expect(sent).toHaveLength(1)
   })
 
-  test("accepts only opencode:///api/... URLs, reports a disabled API, and fails without one", async () => {
+  test("accepts only opencode:///api/... URLs, reports a disabled API, and fails without one before asking permission", async () => {
+    const asked: Array<Permission.AssertInput> = []
+    const uncalled = permissionService({
+      assert: (input) =>
+        Effect.sync(() => {
+          asked.push(input)
+        }).pipe(
+          Effect.andThen(
+            Effect.fail(
+              new Permission.BlockedError({ rules: [], permission: input.action, resources: input.resources }),
+            ),
+          ),
+        ),
+    })
     const run = (code: string, api?: Context.Context<CodeModeTool.Api>) =>
-      Effect.runPromise(createCodeMode(new Map(), allowAll, undefined, api).execute({ code }, context)).then(
+      Effect.runPromise(createCodeMode(new Map(), uncalled, undefined, api).execute({ code }, context)).then(
         (result) => result.output.output,
       )
     const never = api(() => Effect.die("never sent"))
@@ -893,6 +906,7 @@ describe("Code Mode opencode:// fetch", () => {
     expect(await run(`try { await fetch("opencode:///api/info") } catch (e) { return e.message }`)).toContain(
       "opencode:// URLs are unavailable",
     )
+    expect(asked).toEqual([])
   })
 })
 

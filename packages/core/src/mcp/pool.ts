@@ -123,7 +123,7 @@ export const layer = Layer.effect(
     const unfixed = new Set<string>()
 
     // Takes only data from the Location that opens it: the connection outlives that Location's claim.
-    const open = (key: string, input: Pick<Input, "name" | "config" | "directory" | "clientInfo">) => {
+    const open = (key: string, input: Pick<Input, "name" | "config" | "directory" | "clientInfo" | "skills">) => {
       const slot: Slot = {
         holders: new Set(),
         lock: Semaphore.makeUnsafe(1),
@@ -135,6 +135,7 @@ export const layer = Layer.effect(
           directory: input.directory,
           shared: true,
           clientInfo: input.clientInfo,
+          skills: input.skills,
           // Every holder of a key presents the same credential, so any of them can build the provider.
           authProvider: Effect.suspend(() => slot.holders.values().next().value?.authProvider ?? Effect.undefined),
           elicitation: {
@@ -246,6 +247,7 @@ export const layer = Layer.effect(
           config: input.config,
           directory: input.directory,
           clientInfo: input.clientInfo,
+          skills: input.skills,
         })
       yield* Effect.acquireRelease(
         Effect.sync(() => slot.holders.add(holder)),

@@ -1,5 +1,10 @@
 import { describe, expect } from "bun:test"
-import { McpServer, WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/server"
+import {
+  CLIENT_CAPABILITIES_META_KEY,
+  createMcpHandler,
+  McpServer,
+  WebStandardStreamableHTTPServerTransport,
+} from "@modelcontextprotocol/server"
 import { skillEntry, SkillsExtension, type Skill as ServedSkill } from "@modelcontextprotocol/server/ext/skills"
 import { ConfigMCP } from "@opencode/schema/config/mcp"
 import { Document, Info } from "@opencode/schema/config"
@@ -77,7 +82,7 @@ const id = Skill.ID.make("team:deploy")
  */
 const skillServer = (
   skills: Record<string, Record<string, string>>,
-  options: { instructions?: string; extra?: ServedSkill[] } = {},
+  options: { instructions?: string; extra?: ServedSkill[]; modern?: boolean } = {},
 ) =>
   Effect.acquireRelease(
     Effect.promise(async () => {
@@ -90,23 +95,37 @@ const skillServer = (
           Object.entries(files).map(([file, content]) => [`skill://${folder}/${file}`, content] as const),
         ),
       )
-      const state = { reads: [] as string[], capabilities: undefined as unknown }
-      const server = new McpServer({ name: "team", version: "1.0.0" }, { instructions: options.instructions })
-      new SkillsExtension({
+      const state = { reads: [] as string[], capabilities: undefined as unknown, skillLists: 0 }
+      const extension = new SkillsExtension({
         source: {
-          list: async () => ({ skills: entries }),
+          list: async () => {
+            state.skillLists += 1
+            return { skills: entries }
+          },
           get: async (uri) => entries.find((entry) => entry.uri === uri),
           read: async (uri) => {
             const text = served.get(uri)
             return text === undefined ? undefined : { text }
           },
         },
-      }).attach(server)
-      const transport = new WebStandardStreamableHTTPServerTransport({
-        sessionIdGenerator: () => crypto.randomUUID(),
-        enableJsonResponse: true,
       })
-      await server.connect(transport)
+      const makeServer = () => {
+        const server = new McpServer({ name: "team", version: "1.0.0" }, { instructions: options.instructions })
+        extension.attach(server)
+        return server
+      }
+      const modern = options.modern ? createMcpHandler(makeServer, { legacy: "reject" }) : undefined
+      const legacy = modern
+        ? undefined
+        : await (async () => {
+            const server = makeServer()
+            const transport = new WebStandardStreamableHTTPServerTransport({
+              sessionIdGenerator: () => crypto.randomUUID(),
+              enableJsonResponse: true,
+            })
+            await server.connect(transport)
+            return { server, transport }
+          })()
       const http = Bun.serve({
         port: 0,
         fetch: async (request) => {
@@ -115,8 +134,10 @@ const skillServer = (
             if (body.method === "resources/read" && typeof body.params.uri === "string")
               state.reads.push(body.params.uri)
             if (body.method === "initialize") state.capabilities = body.params.capabilities
+            if (isRecord(body.params._meta) && CLIENT_CAPABILITIES_META_KEY in body.params._meta)
+              state.capabilities = body.params._meta[CLIENT_CAPABILITIES_META_KEY]
           }
-          return transport.handleRequest(request)
+          return modern ? modern.fetch(request) : legacy!.transport.handleRequest(request)
         },
       })
       return {
@@ -124,7 +145,8 @@ const skillServer = (
         state,
         serve: (uri: string, content: string) => served.set(uri, content),
         close: async () => {
-          await server.close().catch(() => {})
+          await legacy?.server.close().catch(() => {})
+          await modern?.close().catch(() => {})
           await http.stop(true)
         },
       }
@@ -132,10 +154,15 @@ const skillServer = (
     (server) => Effect.promise(server.close),
   )
 
-const connect = Effect.fnUntraced(function* (name: string, url: string, expected: ReadonlyArray<string>) {
+const connect = Effect.fnUntraced(function* (
+  name: string,
+  url: string,
+  expected: ReadonlyArray<string>,
+  options: { pool?: boolean } = {},
+) {
   const mcp = yield* Mcp.Service
   const skills = yield* Skill.Service
-  yield* mcp.add(name, new ConfigMCP.Remote({ type: "remote", url, oauth: false }))
+  yield* mcp.add(name, new ConfigMCP.Remote({ type: "remote", url, oauth: false, pool: options.pool }))
   yield* eventually(mcp.servers(), (servers) =>
     servers.some((server) => server.name === name && server.status.status === "connected"),
   )
@@ -227,6 +254,29 @@ describe("MCP skills", () => {
       yield* connect("other", without.url, [])
       const mcp = yield* Mcp.Service
       expect(yield* mcp.instructions()).toEqual([{ server: Mcp.ServerName.make("other"), instructions: "Call ping." }])
+    }),
+  )
+
+  it.live("advertises and lists skills on pooled connections", () =>
+    Effect.gen(function* () {
+      const server = yield* skillServer({ deploy }, { modern: true })
+      const listed = yield* connect("team", server.url, ["team:deploy"], { pool: true })
+      expect(server.state.skillLists).toBe(1)
+      expect(server.state.capabilities).toMatchObject({ extensions: { "io.modelcontextprotocol/skills": {} } })
+      expect(server.state.capabilities).not.toHaveProperty("roots")
+      expect(listed).toEqual([
+        {
+          id,
+          name: Skill.Name.make("team:deploy"),
+          description: "Deploy the app",
+          path: AbsolutePath.make(Skill.uri(id, "SKILL.md")),
+          content: "",
+        },
+      ])
+      const skills = yield* Skill.Service
+      expect(yield* skills.files(id)).toEqual(["scripts/run.sh"])
+      expect(yield* skills.content(id)).toBe("# Deploy\n\nRun scripts/run.sh.\n")
+      expect(new TextDecoder().decode(yield* skills.read(id, "scripts/run.sh"))).toBe("echo run")
     }),
   )
 })
