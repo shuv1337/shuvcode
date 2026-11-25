@@ -1,12 +1,12 @@
-export * as SessionCwdStored from "./cwd-stored.js"
+export * as SessionCwdStore from "./cwd-store.js"
 
-import { Option, Schema } from "effect"
+import { eq } from "drizzle-orm"
+import { Effect, Option, Schema } from "effect"
+import type { Database } from "../database/database.js"
 import { Environment } from "../environment/index.js"
 import type { SessionSchema } from "./schema.js"
+import { SessionTable } from "./sql.js"
 
-// Pure metadata helpers, kept apart from `cwd.ts` so `session/info.ts` can use them without
-// importing `file-access.ts` -> `permission.ts` -> `session/store.ts`, an import cycle that
-// leaves `SessionStore.node` uninitialized when `session/store.ts` is the first module loaded.
 // Experimental storage inside session_v2.metadata so this stays internal with zero DB migration.
 // Stripped from public Session.Info.metadata and preserved across MetadataUpdated.
 const metadataKey = "$opencode_experimental_cwd"
@@ -32,3 +32,35 @@ export function writeStored(
   const next = cwd ? { ...clean, [metadataKey]: cwd } : clean
   return Object.keys(next).length > 0 ? next : null
 }
+
+export const read = Effect.fn("SessionCwd.read")(function* (db: Database.Interface["db"], sessionID: SessionSchema.ID) {
+  const row = yield* db
+    .select({ metadata: SessionTable.metadata })
+    .from(SessionTable)
+    .where(eq(SessionTable.id, sessionID))
+    .get()
+    .pipe(Effect.orDie)
+  return readStored(row?.metadata).cwd
+})
+
+export const write = Effect.fn("SessionCwd.write")(function* (
+  db: Database.Interface["db"],
+  sessionID: SessionSchema.ID,
+  cwd: Environment.Place | undefined,
+) {
+  const row = yield* db
+    .select({ metadata: SessionTable.metadata })
+    .from(SessionTable)
+    .where(eq(SessionTable.id, sessionID))
+    .get()
+    .pipe(Effect.orDie)
+  if (!row) return
+  const existing = readStored(row.metadata)
+  if (existing.cwd?.absolute === cwd?.absolute && existing.cwd?.environment.id === cwd?.environment.id) return
+  yield* db
+    .update(SessionTable)
+    .set({ metadata: writeStored(row.metadata, cwd) })
+    .where(eq(SessionTable.id, sessionID))
+    .run()
+    .pipe(Effect.orDie)
+})

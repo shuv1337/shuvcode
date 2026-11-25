@@ -14,6 +14,7 @@ import { AISDK } from "../aisdk.js"
 import { Automation } from "../automation.js"
 import { Command } from "../command.js"
 import { Credential } from "../credential.js"
+import { Environment } from "../environment/index.js"
 import { Bus } from "../bus.js"
 import { Integration } from "../integration.js"
 import { IntegrationConnection } from "../integration/connection.js"
@@ -65,6 +66,7 @@ export const make = Effect.fn("PluginHost.make")(function* (plugin: Pick<Interfa
   const integration = yield* Integration.Service
   const kv = yield* KV.Service
   const mcp = yield* Mcp.Service
+  const environment = yield* Environment.Service
   const location = yield* Location.Service
   const reference = yield* Reference.Service
   const rpc = yield* Rpc.Service
@@ -82,7 +84,7 @@ export const make = Effect.fn("PluginHost.make")(function* (plugin: Pick<Interfa
   const locations = yield* LocationServiceMap.Service
   const worktrees = yield* Worktree.Service
   const worktreeStrategies = yield* WorktreeStrategies.Service
-  const currentWorktreeStrategies = location.workspaceID ? undefined : worktreeStrategies
+  const currentWorktreeStrategies = environment.local ? worktreeStrategies : undefined
   const locationInfo = (current: Location.Interface = location) =>
     new Location.Info({
       directory: current.directory,
@@ -323,7 +325,13 @@ export const make = Effect.fn("PluginHost.make")(function* (plugin: Pick<Interfa
       },
       automation: {
         // A plugin has no UI listener to answer an interactive ask, so asks settle unattended, as they do over HTTP.
-        create: (input) => automations.create(input).pipe(Effect.provideService(Permission.Unattended, [])),
+        // A JavaScript plugin can pass any shape, so validate it against the type-side schema before storing it.
+        create: (input) =>
+          Schema.decodeUnknownEffect(Schema.toType(Automation.CreateInput))(input).pipe(
+            Effect.mapError((error) => new Automation.InvalidError({ reason: error.message })),
+            Effect.flatMap((decoded) => automations.create(decoded)),
+            Effect.provideService(Permission.Unattended, []),
+          ),
         list: (input) => automations.list(input),
         delete: (input) => automations.remove(input.automationID),
       },
@@ -653,6 +661,7 @@ export const requirements = LayerNode.group([
   Integration.node,
   KV.node,
   Mcp.node,
+  Environment.node,
   Location.node,
   Reference.node,
   Rpc.node,
