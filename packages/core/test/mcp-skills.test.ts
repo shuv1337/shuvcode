@@ -7,7 +7,8 @@ import {
 } from "@modelcontextprotocol/server"
 import { skillEntry, SkillsExtension, type Skill as ServedSkill } from "@modelcontextprotocol/server/ext/skills"
 import { ConfigMCP } from "@opencode/schema/config/mcp"
-import { Document, Info } from "@opencode/schema/config"
+import { Document, Info, type Entry } from "@opencode/schema/config"
+import { ConfigExperimental } from "@opencode/schema/config/experimental"
 import { Bus } from "@opencode/core/bus"
 import { Config } from "@opencode/core/config"
 import { Flag } from "@opencode/core/flag"
@@ -31,45 +32,53 @@ import { testEffect } from "./lib/effect"
 import { eventually } from "./lib/eventually"
 
 const unused = () => Effect.die("unused integration service")
-const config = Config.testLayer([new Document({ type: "document", info: new Info({}) })])
-const it = testEffect(
-  AppNodeBuilder.build(
-    LayerNode.group([
-      Mcp.node,
-      Skill.node,
-      Bus.node,
-      makeLocationNode({
-        name: "test/mcp-skills-plugin",
-        layer: Layer.effectDiscard(McpSkillPlugin.Plugin.effect(host())),
-        deps: [Mcp.node, Bus.node, Skill.node],
-      }),
-    ]),
-    [
-      Config.node.replace(config),
-      Flag.node.replace(Flag.testLayer([], { overrides: "mcp_skills" })),
-      Location.node.replace(tempLocationLayer),
-      Environment.node.replace(hostEnvironmentLayer),
-      Integration.node.replace(
-        Layer.mock(Integration.Service, {
-          revision: () => 0,
-          connection: {
-            active: unused,
-            resolve: unused,
-            key: unused,
-            external: unused,
-            activate: unused,
-            update: unused,
-            remove: unused,
-            status: unused,
-          },
-          oauth: { connect: unused, status: unused, complete: unused, cancel: unused },
-          command: { connect: unused, status: unused, cancel: unused },
+const setup = (entries: Entry[] = []) =>
+  testEffect(
+    AppNodeBuilder.build(
+      LayerNode.group([
+        Mcp.node,
+        Skill.node,
+        Bus.node,
+        makeLocationNode({
+          name: "test/mcp-skills-plugin",
+          layer: Layer.effectDiscard(McpSkillPlugin.Plugin.effect(host())),
+          deps: [Mcp.node, Bus.node, Skill.node],
         }),
-      ),
-      Credential.node.replace(Layer.mock(Credential.Service, {})),
-    ],
-  ).pipe(Layer.provideMerge(config)),
-)
+      ]),
+      [
+        Config.node.replace(Config.testLayer(entries)),
+        Flag.node.replace(Flag.testLayer(entries, { app: { channel: "latest" } })),
+        Location.node.replace(tempLocationLayer),
+        Environment.node.replace(hostEnvironmentLayer),
+        Integration.node.replace(
+          Layer.mock(Integration.Service, {
+            revision: () => 0,
+            connection: {
+              active: unused,
+              resolve: unused,
+              key: unused,
+              external: unused,
+              activate: unused,
+              update: unused,
+              remove: unused,
+              status: unused,
+            },
+            oauth: { connect: unused, status: unused, complete: unused, cancel: unused },
+            command: { connect: unused, status: unused, cancel: unused },
+          }),
+        ),
+        Credential.node.replace(Layer.mock(Credential.Service, {})),
+      ],
+    ),
+  )
+
+const it = setup()
+const optedOut = setup([
+  new Document({
+    type: "document",
+    info: new Info({ experimental: new ConfigExperimental.Info({ mcp_skills: false }) }),
+  }),
+])
 
 const DEPLOY = "---\nname: deploy\ndescription: Deploy the app\n---\n# Deploy\n\nRun scripts/run.sh.\n"
 const deploy = { "SKILL.md": DEPLOY, "scripts/run.sh": "echo run" }
@@ -170,7 +179,7 @@ const connect = Effect.fnUntraced(function* (
 })
 
 describe("MCP skills", () => {
-  it.live("lists skills as <server>:<name> without reading, and refuses dynamic ones", () =>
+  it.live("advertises and lists static skills by default on latest without reading their files", () =>
     Effect.gen(function* () {
       const server = yield* skillServer(
         { deploy },
@@ -198,6 +207,17 @@ describe("MCP skills", () => {
       const skills = yield* Skill.Service
       expect(yield* skills.files(id)).toEqual(["scripts/run.sh"])
       expect(server.state.reads).toEqual([])
+    }),
+  )
+
+  optedOut.live("does not advertise or list skills when disabled in config on latest", () =>
+    Effect.gen(function* () {
+      const server = yield* skillServer({ deploy })
+      const listed = yield* connect("team", server.url, [])
+      expect(server.state.capabilities).toBeDefined()
+      expect(server.state.capabilities).not.toMatchObject({ extensions: { "io.modelcontextprotocol/skills": {} } })
+      expect(server.state.skillLists).toBe(0)
+      expect(listed).toEqual([])
     }),
   )
 
