@@ -2713,6 +2713,7 @@ export type ConfigEntry =
           home_memory?: boolean
           project_overlay?: boolean
           opencode_api?: boolean
+          mcp_skills?: boolean
           sqlite_fts?: boolean
           video_generate?: boolean | { model?: string | { providerID: string; model: string; variant?: string } }
           part_rows?: boolean
@@ -2828,6 +2829,7 @@ export type AgentInfo = {
   model?: ModelRef
   request: ProviderRequest
   system?: string
+  instructions?: string | { selected: string; unselected: string }
   description?: string
   mode: "subagent" | "primary" | "all"
   hidden: boolean
@@ -3204,6 +3206,10 @@ export type ConflictError = {
 }
 export const isConflictError = (value: unknown): value is ConflictError =>
   typeof value === "object" && value !== null && "_tag" in value && value["_tag"] === "ConflictError"
+
+export type SkillLoadError = { readonly _tag: "SkillLoadError"; readonly skill: string; readonly message: string }
+export const isSkillLoadError = (value: unknown): value is SkillLoadError =>
+  typeof value === "object" && value !== null && "_tag" in value && value["_tag"] === "SkillLoadError"
 
 export type CommandNotFoundError = {
   readonly _tag: "CommandNotFoundError"
@@ -4558,6 +4564,14 @@ export type CommandListOutput = { location: LocationPublicRef; data: Array<Comma
 export type SkillListInput = { readonly location?: { readonly directory?: string | undefined } | undefined }
 
 export type SkillListOutput = { location: LocationPublicRef; data: Array<SkillInfo> }
+
+export type ExperimentalSkillFileInput = {
+  readonly skillID: string
+  readonly location?: { readonly directory?: string | undefined } | undefined
+  readonly path: string
+}
+
+export type ExperimentalSkillFileOutput = globalThis.Uint8Array
 
 export type RpcCallInput = {
   readonly rpcID: string

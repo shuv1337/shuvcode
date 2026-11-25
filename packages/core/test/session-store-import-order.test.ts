@@ -2,7 +2,8 @@ import { expect, test } from "bun:test"
 import path from "node:path"
 
 // session/info.ts once reached permission.ts through session/cwd.ts -> file-access.ts, so loading
-// session/store.ts first left SessionStore.node uninitialized. A fresh process has an empty module cache.
+// session/store.ts first left SessionStore.node uninitialized. Upstream independently broke the
+// cycle with session/cwd-store.ts. A fresh process has an empty module cache.
 test.each(["session/store.ts", "session/execution.ts"])("%s loads as the first core module", async (entry) => {
   const child = Bun.spawn(
     [process.execPath, "-e", `await import(${JSON.stringify(path.resolve(import.meta.dir, "../src", entry))})`],

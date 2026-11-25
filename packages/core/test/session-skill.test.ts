@@ -39,6 +39,13 @@ const info = Skill.Info.make({
   path: AbsolutePath.make(path.resolve("/skills/effect.md")),
   content: "  Use Effect\n",
 })
+const broken = {
+  id: Skill.ID.make("broken"),
+  name: Skill.Name.make("Broken"),
+  description: "Broken skill",
+  path: AbsolutePath.make(Skill.uri("broken", "SKILL.md")),
+  content: Effect.fail(new Skill.LoadError({ skill: "broken", message: "digest mismatch" })),
+}
 const locations = makeGlobalNode({
   service: LocationServiceMap.Service,
   layer: Layer.effect(
@@ -51,29 +58,25 @@ const locations = makeGlobalNode({
           Layer.effectDiscard(
             Effect.gen(function* () {
               const skills = yield* Skill.Service
-              yield* skills.transform((editor) => editor.add(info))
+              yield* skills.transform((editor) => {
+                editor.add(info)
+                editor.add(broken)
+              })
               yield* registerIntegrationPolicy({ skill: skills })
             }),
           ).pipe(
             Layer.provideMerge(
-              LayerNode.compile(
-                LayerNode.group([PluginHooks.node, Image.node, Skill.node, Config.node]),
-                {
-                  replacements: [
-                    Config.node.replace(
-                      Config.testLayer(
-                        ref.directory === blocked.directory
-                          ? [
-                              organizationPolicy([
-                                { action: "skill.use", resource: "effect", effect: "deny" },
-                              ]),
-                            ]
-                          : [],
-                      ),
+              LayerNode.compile(LayerNode.group([PluginHooks.node, Image.node, Skill.node, Config.node]), {
+                replacements: [
+                  Config.node.replace(
+                    Config.testLayer(
+                      ref.directory === blocked.directory
+                        ? [organizationPolicy([{ action: "skill.use", resource: "effect", effect: "deny" }])]
+                        : [],
                     ),
-                  ],
-                },
-              ),
+                  ),
+                ],
+              }),
             ),
           ),
           Layer.mock(Plugin.Service, { awaitActivation: Effect.void }),
@@ -222,6 +225,28 @@ describe("Session.skill", () => {
       expect(yield* sessions.messages({ sessionID: session.id })).toEqual([
         expect.objectContaining({ id, type: "skill", skill: "effect", name: "Effect", text: info.content }),
       ])
+      expect(yield* sessions.inbox(session.id)).toEqual([])
+    }),
+  )
+
+  it.effect("fails with Skill.LoadError instead of dying when loading skill content fails", () =>
+    Effect.gen(function* () {
+      const sessions = yield* Session.Service
+      const session = yield* sessions.create({ location })
+      expect(
+        yield* sessions.skill({ sessionID: session.id, skill: broken.id, resume: false }).pipe(Effect.flip),
+      ).toMatchObject({ _tag: "Skill.LoadError", skill: broken.id, message: "digest mismatch" })
+      expect(
+        yield* sessions
+          .prompt({
+            sessionID: session.id,
+            text: "@broken",
+            skills: [{ id: broken.id, mention: { start: 0, end: 7, text: "@broken" } }],
+            resume: false,
+          })
+          .pipe(Effect.flip),
+      ).toMatchObject({ _tag: "Skill.LoadError", skill: broken.id, message: "digest mismatch" })
+      expect(yield* sessions.messages({ sessionID: session.id })).toEqual([])
       expect(yield* sessions.inbox(session.id)).toEqual([])
     }),
   )

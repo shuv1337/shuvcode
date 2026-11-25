@@ -5,7 +5,13 @@ import { expect, test } from "bun:test"
 import { resolveThemeDocument } from "@opencode/theme/tui"
 import { ConfigProvider, useConfig, type Info } from "../../src/config"
 import { ThemeProvider, useTheme, useThemes } from "../../src/context/theme"
-import { getOpenCodeTheme, getOpenCodeClassicTheme } from "../../src/theme"
+import {
+  DEFAULT_THEME_NAME,
+  DEFAULT_THEMES,
+  getOpenCodeTheme,
+  getOpenCodeClassicTheme,
+  parseTheme,
+} from "../../src/theme"
 import { emptyThemeSource, tmpdir } from "../fixture/fixture"
 import { TestTuiContexts } from "../fixture/tui-environment"
 import { createTuiResolvedConfig } from "../fixture/tui-runtime"
@@ -106,6 +112,79 @@ test("names the new theme opencode and the previous one opencode-classic", async
     })
     expect(theme.background.base.equals(newTheme)).toBeTrue()
     expect(themes.has("opencode-classic")).toBeTrue()
+  } finally {
+    app.renderer.destroy()
+  }
+})
+
+test("removing theme or theme.name from config reverts to the default theme", async () => {
+  await using temporary = await tmpdir()
+  let settings: Info = { theme: { name: "gruvbox", mode: "light" } }
+  let config!: ReturnType<typeof useConfig>
+  let themes!: ReturnType<typeof useThemes>
+  let theme!: ReturnType<typeof useTheme>
+  function Probe() {
+    config = useConfig()
+    themes = useThemes()
+    theme = useTheme()
+    return null
+  }
+  const app = await testRender(
+    () => (
+      <TestTuiContexts paths={{ state: temporary.path }}>
+        <ConfigProvider
+          config={createTuiResolvedConfig(settings)}
+          service={{
+            get: async () => structuredClone(settings),
+            update: async (update) => {
+              const next = structuredClone(settings)
+              update(next)
+              settings = next
+              return structuredClone(settings)
+            },
+          }}
+        >
+          <ThemeProvider mode="dark" source={emptyThemeSource}>
+            <Probe />
+          </ThemeProvider>
+        </ConfigProvider>
+      </TestTuiContexts>
+    ),
+    { width: 20, height: 2 },
+  )
+
+  try {
+    await app.renderOnce()
+    const defaultDark = resolveThemeDocument(parseTheme(DEFAULT_THEMES[DEFAULT_THEME_NAME]), "dark").background.base
+    expect(themes.selected).toBe("gruvbox")
+    expect(themes.mode()).toBe("light")
+    expect(theme.background.base.equals(defaultDark)).toBeFalse()
+
+    // The default theme is dark-only, even with a light preference.
+    await config.update((draft) => {
+      delete draft.theme?.name
+    })
+    await app.renderOnce()
+    expect(themes.selected).toBe(DEFAULT_THEME_NAME)
+    expect(themes.mode()).toBe("dark")
+    expect(theme.background.base.equals(defaultDark)).toBeTrue()
+
+    // Re-applying a theme and removing the entire theme block also reverts to the default.
+    await config.update((draft) => {
+      draft.theme = { name: "gruvbox", mode: "light" }
+    })
+    await app.renderOnce()
+    expect(themes.selected).toBe("gruvbox")
+    expect(themes.mode()).toBe("light")
+    expect(theme.background.base.equals(defaultDark)).toBeFalse()
+
+    await config.update((draft) => {
+      delete draft.theme
+    })
+    await app.renderOnce()
+    expect(themes.selected).toBe(DEFAULT_THEME_NAME)
+    expect(themes.mode()).toBe("dark")
+    expect(theme.background.base.equals(defaultDark)).toBeTrue()
   } finally {
     app.renderer.destroy()
   }
