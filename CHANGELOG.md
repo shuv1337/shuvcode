@@ -2,6 +2,23 @@
 
 Release notes for OpenCode V2, newest first.
 
+## v2.4.1-shuv.3 — 2026-11-25
+
+Syncs upstream `dev` through `2545a8720f` (80 commits beyond `92e28580f1` in [#517](https://github.com/shuv1337/shuvcode/pull/517)) and enables SEP-2640 MCP Skills by default across all build channels ([#518](https://github.com/shuv1337/shuvcode/pull/518)).
+
+### Highlights
+
+- **MCP Skills (SEP-2640) enabled by default:** Shuvcode now advertises `io.modelcontextprotocol/skills` on all build channels, including releases, and registers offered static skills as `<server>:<skill>` ([#517](https://github.com/shuv1337/shuvcode/pull/517), [#518](https://github.com/shuv1337/shuvcode/pull/518)). Pooled MCP connections (`pool: true`) forward the skills capability, and failed skill loads return typed `Skill.LoadError` responses rather than crashing. Servers that offer static skills no longer contribute their top-level MCP `instructions` to the prompt. Opt out with `"experimental": { "mcp_skills": false }` or `OPENCODE_FLAGS=-mcp_skills`.
+- **Upstream `dev` updates (`92e28580f1..2545a8720f`):** Composable `Permission.Policy` evaluation, an experimental `cd` tool behind `experimental.machines`, and an upstream import-cycle fix in `session/cwd-store.ts` that replaces the fork's temporary `cwd-stored.ts`. The `opencode://` Code Mode API also improves: the fork authorizes calls as `shuvcode api` and saves rules as `shuvcode *`, while disabled or unavailable requests fail before prompting.
+
+### Fork notes
+
+- Preserves the three layers that hide Claude Agent SDK, root-family permission routing ([#429](https://github.com/shuv1337/shuvcode/pull/429)), OpenAI Ultrafast models for Codex OAuth ([#515](https://github.com/shuv1337/shuvcode/pull/515)), the dark-only `nightowl` default theme fallback, and the `shuvcode` CLI and service identity.
+
+### Rollback
+
+Roll back to `v2.4.1-shuv.2`, or disable MCP Skills in place with `"experimental": { "mcp_skills": false }` or `OPENCODE_FLAGS=-mcp_skills`.
+
 ## v2.4.1-shuv.2 — 2026-11-24
 
 Hotfix release on top of `v2.4.1-shuv.1`.
