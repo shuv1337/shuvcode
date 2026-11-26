@@ -1,5 +1,7 @@
 import { createHash } from "node:crypto"
 import { isAbsolute } from "node:path"
+import { RendererControlState } from "@opentui/core"
+import { useRenderer } from "@opentui/solid"
 import { createEffect, onCleanup } from "solid-js"
 import { useData } from "./data"
 import { useRoute } from "./route"
@@ -8,11 +10,14 @@ const OSC7577_MAX_BYTES = 2048
 const OSC7577_MAX_ARGS = 64
 const CONTROL_CHAR_PATTERN = /[\u0000-\u001f\u007f-\u009f]/
 
+type Write = (sequence: string) => boolean | void
+
 export type ProgramResumeInput = {
   readonly token: string
   readonly cwd: string
   readonly command: (sessionID?: string) => readonly string[]
-  readonly write: (sequence: string) => void
+  readonly write: Write
+  readonly useNativeSession?: boolean
 }
 
 export function programResumeReport(input: {
@@ -42,9 +47,10 @@ export function programResumeReport(input: {
 
 function validCommand(command: { argv: readonly string[]; cwd?: string }) {
   const executable = command.argv[0]
+  if (!executable || executable === "." || executable === "..") return false
   return (
     command.argv.length <= OSC7577_MAX_ARGS &&
-    Boolean(executable && (isAbsolute(executable) || (!executable.startsWith("-") && !/[/\\]/.test(executable)))) &&
+    (isAbsolute(executable) || (!executable.startsWith("-") && !/[/\\]/.test(executable))) &&
     command.argv.every(validText) &&
     (command.cwd === undefined || (isAbsolute(command.cwd) && validText(command.cwd)))
   )
@@ -65,25 +71,28 @@ export function createProgramResumeReporter(
     now?: () => number
   },
 ) {
-  if (!input) return { report: () => {}, reemit: () => {}, clear: () => {} }
+  if (!input) return { report: () => {}, reemit: () => {}, clear: () => {}, attachLiveWrite: () => () => {} }
   const pid = options?.pid ?? process.pid
   const now = options?.now ?? Date.now
   let lastTime = 1
   let lastKey: string | undefined
-  let lastSession: string | undefined
+  let target: { sessionID: string | undefined } | undefined
+  let liveWrite: Write | undefined
   let closed = false
 
   const nextTime = () => (lastTime = Math.max(lastTime, Math.floor(now() / 1000)))
-  const write = (sequence: string) => {
-    if (!sequence) return
+  const write = (writer: Write | undefined, sequence: string) => {
+    if (!writer || !sequence) return false
     try {
-      input.write(sequence)
+      return writer(sequence) !== false
     } catch {
       // Terminal writes are best-effort, including when the terminal has already gone away.
+      return false
     }
   }
   const report = (sessionID?: string, options?: { force?: boolean }) => {
     if (closed) return
+    target = { sessionID }
     const command = { argv: input.command(sessionID), cwd: input.cwd }
     const key = JSON.stringify(command)
     if (!options?.force && key === lastKey) return
@@ -91,19 +100,25 @@ export function createProgramResumeReporter(
     if (!sequence) return
     const reportedKey = sequence.includes(":clear=1:") ? "clear" : key
     if (reportedKey === "clear" && lastKey === "clear") return
-    write(sequence)
+    // Direct terminal output cannot run alongside OpenTUI's native writer.
+    if (!write(liveWrite ?? (input.useNativeSession ? undefined : input.write), sequence)) return
     lastKey = reportedKey
-    lastSession = sessionID
   }
   return {
     report,
     reemit() {
-      if (lastKey !== undefined && lastKey !== "clear") report(lastSession, { force: true })
+      if (target) report(target.sessionID, { force: true })
+    },
+    attachLiveWrite(writer: Write) {
+      liveWrite = writer
+      return () => {
+        liveWrite = undefined
+      }
     },
     clear() {
       if (closed) return
       closed = true
-      write(programResumeReport({ token: input.token, pid, time: nextTime() }))
+      write(input.write, programResumeReport({ token: input.token, pid, time: nextTime() }))
     },
   }
 }
@@ -111,22 +126,26 @@ export function createProgramResumeReporter(
 export function ProgramResume(props: { reporter: ReturnType<typeof createProgramResumeReporter> }) {
   const route = useRoute()
   const data = useData()
+  const renderer = useRenderer()
   let reported = false
   createEffect(() => {
     if (route.data.type === "plugin" && reported) return
-    if (route.data.type === "session") {
-      const id = route.data.sessionID
-      // Read the reactive metadata even while creation is in flight.
-      if (id === "dummy" || !data.session.get(id) || data.session.creating(id)) return
-      props.reporter.report(id)
-    } else {
+    if (route.data.type !== "session") {
       props.reporter.report()
+      reported = true
+      return
     }
+    const id = route.data.sessionID
+    // Read the reactive metadata even while creation is in flight.
+    if (id === "dummy" || !data.session.get(id) || data.session.creating(id)) return
+    props.reporter.report(id)
     reported = true
   })
 
   if (process.platform !== "win32") {
-    const onContinue = () => props.reporter.reemit()
+    const onContinue = () => {
+      if (renderer.controlState !== RendererControlState.EXPLICIT_SUSPENDED) props.reporter.reemit()
+    }
     process.on("SIGCONT", onContinue)
     onCleanup(() => process.off("SIGCONT", onContinue))
   }

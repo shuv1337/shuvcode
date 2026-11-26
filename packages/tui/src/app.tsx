@@ -18,6 +18,8 @@ import {
   createCliRenderer,
   getTreeSitterClient,
   MouseButton,
+  NativeSession,
+  RendererControlState,
   type CliRenderer,
   type CliRendererConfig,
   type ThemeMode,
@@ -296,13 +298,39 @@ function* runTui(input: TuiInput) {
           const { Drive } = yield* Effect.promise(() => import("@opencode/simulation/frontend"))
           return yield* Drive.create(options, input.app.version)
         }
-        return yield* Effect.acquireRelease(
+        const output = yield* Effect.acquireRelease(
           Effect.tryPromise({
-            try: () => createCliRenderer(options),
+            try: async () => {
+              if (!input.resume?.useNativeSession) return { renderer: await createCliRenderer(options) }
+              const nativeSession = new NativeSession(process.stdout)
+              try {
+                return { renderer: await createCliRenderer({ ...options, nativeSession }), nativeSession }
+              } catch (error) {
+                if (!nativeSession.disposed) nativeSession.dispose()
+                throw error
+              }
+            },
             catch: (error) => (error instanceof Error ? error : new Error(String(error))),
           }),
-          releaseRenderer,
+          (output) => releaseRenderer(output.renderer),
         )
+        const nativeSession = output.nativeSession
+        if (nativeSession) {
+          const encoder = new TextEncoder()
+          yield* Effect.acquireRelease(
+            Effect.sync(() =>
+              resume.attachLiveWrite(
+                (sequence) =>
+                  !output.renderer.isDestroyed &&
+                  output.renderer.controlState !== RendererControlState.EXPLICIT_SUSPENDED &&
+                  nativeSession.open &&
+                  nativeSession.write(encoder.encode(sequence)),
+              ),
+            ),
+            (detach) => Effect.sync(detach),
+          )
+        }
+        return output.renderer
       })
       renderer.setMaxListeners(15)
       const clipboard = yield* Effect.acquireRelease(
@@ -452,7 +480,7 @@ function* runTui(input: TuiInput) {
                                                                                 packages={input.packages}
                                                                                 directories={pluginDirectories}
                                                                               >
-                                                                                <App />
+                                                                                <App onTerminalResume={resume.reemit} />
                                                                                 {input.resume && (
                                                                                   <ProgramResume reporter={resume} />
                                                                                 )}
@@ -510,7 +538,7 @@ function* runTui(input: TuiInput) {
   })
 }
 
-function App() {
+function App(props: { onTerminalResume: () => void }) {
   const app = useTuiApp()
   const startup = useTuiStartup()
   const config = useConfig()
@@ -1290,7 +1318,9 @@ function App() {
         enabled: process.platform !== "win32",
         run: async () => {
           await renderer.suspend()
-          process.once("SIGCONT", () => renderer.resume())
+          process.once("SIGCONT", () => {
+            void renderer.resume().then(props.onTerminalResume, () => {})
+          })
           process.kill(0, "SIGTSTP")
         },
       },

@@ -14,6 +14,7 @@ import { tmpdir } from "./fixture/fixture"
 import { createAppFixture } from "./fixture/app"
 import { waitForHighlightedFrame } from "./fixture/frame"
 import { readResume, token } from "./fixture/program-resume"
+import type { Exit } from "../src/context/exit"
 import type { PluginInfo } from "@opencode/client"
 
 test.each([100, 44])("Ctrl-O is immediate, dismissible, and prunes cached deletions at width %s", async (width) => {
@@ -291,51 +292,100 @@ test("SIGHUP clears title and disposes scoped resources once", async () => {
   }
 })
 
-test.each(["exit", "SIGHUP", "SIGTERM"] as const)("program resume on %s while the terminal flushes", async (action) => {
-  const renderer = await createTestRenderer({ width: 80, height: 24 })
-  await renderer.renderer.setupTerminal()
-  const nativeClosed = renderer.renderer.closed
-  const release = Promise.withResolvers<void>()
-  const closed = nativeClosed.then(() => release.promise)
-  Object.defineProperty(renderer.renderer, "closed", { get: () => closed })
-  const writes: string[] = []
-  const signals = ["SIGHUP", "SIGTERM", "SIGCONT"] as const
-  const before = new Map(signals.map((signal) => [signal, new Set(process.listeners(signal))]))
-  await using setup = await createAppFixture({
-    setup: renderer,
-    resume: { token, cwd: process.cwd(), command: () => ["shuvcode"], write: (seq) => writes.push(seq) },
-  })
-  try {
-    await setup.ready
-    await setup.waitForFrame((frame) => frame.includes("commands"))
-    expect(writes.map((seq) => readResume(seq).argv)).toEqual([["shuvcode"]])
-    if (process.platform !== "win32") {
-      process.emit("SIGCONT")
-      expect(writes.map((seq) => readResume(seq).argv)).toEqual([["shuvcode"], ["shuvcode"]])
-    }
-    const preExit = writes.length
-    setup.events.emit({
-      id: "evt_resume_exit",
-      created: 1,
-      type: "tui.command.execute",
-      location: { directory },
-      data: { command: "app.exit" },
+test.each(["exit", "SIGHUP", "SIGTERM", "failed flush"] as const)(
+  "program resume on %s while the terminal flushes",
+  async (action) => {
+    const renderer = await createTestRenderer({ width: 80, height: 24 })
+    await renderer.renderer.setupTerminal()
+    const nativeClosed = renderer.renderer.closed
+    const release = Promise.withResolvers<void>()
+    const closed = nativeClosed.then(() => release.promise)
+    void closed.catch(() => {})
+    Object.defineProperty(renderer.renderer, "closed", { get: () => closed })
+    const writes: string[] = []
+    const signals = ["SIGHUP", "SIGTERM", "SIGCONT"] as const
+    const before = new Map(signals.map((signal) => [signal, new Set(process.listeners(signal))]))
+    await using setup = await createAppFixture({
+      setup: renderer,
+      resume: {
+        token,
+        cwd: process.cwd(),
+        command: () => ["shuvcode"],
+        write: (seq) => {
+          writes.push(seq)
+        },
+      },
     })
-    await nativeClosed
-    expect(writes).toHaveLength(preExit)
-    if (action !== "exit") {
-      // The user already requested exit, but the terminal can still signal during native teardown.
-      if (action === "SIGHUP") process.emit("SIGHUP")
-      if (action === "SIGTERM") process.emit("SIGTERM")
+    try {
+      await setup.ready
+      await setup.waitForFrame((frame) => frame.includes("commands"))
+      expect(writes.map((seq) => readResume(seq).argv)).toEqual([["shuvcode"]])
+      if (process.platform !== "win32") {
+        process.emit("SIGCONT")
+        expect(writes.map((seq) => readResume(seq).argv)).toEqual([["shuvcode"], ["shuvcode"]])
+      }
+      const preExit = writes.length
+      setup.events.emit({
+        id: "evt_resume_exit",
+        created: 1,
+        type: "tui.command.execute",
+        location: { directory },
+        data: { command: "app.exit" },
+      })
+      await nativeClosed
+      expect(writes).toHaveLength(preExit)
+      if (action !== "exit") {
+        // The user already requested exit, but the terminal can still signal during native teardown.
+        if (action === "SIGHUP") process.emit("SIGHUP")
+        if (action === "SIGTERM") process.emit("SIGTERM")
+      }
+      if (action === "failed flush") release.reject(new Error("terminal output closed"))
+      else release.resolve()
+      await setup.closed
+      expect(writes.slice(preExit).map((seq) => readResume(seq).clear)).toEqual(action === "exit" ? [true] : [])
+      for (const signal of signals) {
+        expect(process.listeners(signal).filter((listener) => !before.get(signal)?.has(listener))).toEqual([])
+      }
+    } finally {
+      release.resolve()
     }
-    release.resolve()
-    await setup.closed
-    expect(writes.slice(preExit).map((seq) => readResume(seq).clear)).toEqual(action === "exit" ? [true] : [])
-    for (const signal of signals) {
-      expect(process.listeners(signal).filter((listener) => !before.get(signal)?.has(listener))).toEqual([])
+  },
+)
+
+test("an error passed to exit leaves the resume record intact", async () => {
+  const context = await import("../src/context/exit")
+  const original = context.ExitProvider
+  const registered = Promise.withResolvers<Exit>()
+  const provider = spyOn(context, "ExitProvider").mockImplementation((props) => {
+    registered.resolve(props.exit)
+    return original(props)
+  })
+  const writes: string[] = []
+  try {
+    await using setup = await createAppFixture({
+      resume: {
+        token,
+        cwd: process.cwd(),
+        command: () => ["shuvcode"],
+        write: (seq) => {
+          writes.push(seq)
+        },
+      },
+    })
+    await setup.ready
+    await setup.waitForFrame(() => writes.length > 0)
+    const stderr = spyOn(process.stderr, "write").mockReturnValue(true)
+    try {
+      const exit = await registered.promise
+      exit(new Error("boom"))
+      await setup.closed
+      expect(stderr.mock.calls.some((call) => String(call[0]).includes("boom"))).toBe(true)
+    } finally {
+      stderr.mockRestore()
     }
+    expect(writes.map((seq) => readResume(seq).argv)).toEqual([["shuvcode"]])
   } finally {
-    release.resolve()
+    provider.mockRestore()
   }
 })
 
@@ -344,7 +394,14 @@ test("fiber interruption leaves the resume record intact", async () => {
   const writes: string[] = []
   const setup = await createAppFixture({
     signal: controller.signal,
-    resume: { token, cwd: process.cwd(), command: () => ["shuvcode"], write: (seq) => writes.push(seq) },
+    resume: {
+      token,
+      cwd: process.cwd(),
+      command: () => ["shuvcode"],
+      write: (seq) => {
+        writes.push(seq)
+      },
+    },
   })
   try {
     await setup.ready
@@ -379,7 +436,9 @@ test.each(["continue", "session"] as const)("--%s reports only the confirmed sta
       token,
       cwd: process.cwd(),
       command: (id) => (id ? ["shuvcode", "--session", id] : ["shuvcode"]),
-      write: (seq) => writes.push(seq),
+      write: (seq) => {
+        writes.push(seq)
+      },
     },
     fetch: (url) => {
       if (
@@ -933,10 +992,7 @@ test.each(["show", "hide"] as const)(
     })
     await setup.waitForFrame((frame) => frame.includes("Answer text"))
     if (thinking === "hide") {
-      const row = setup
-        .captureCharFrame()
-        .split("\n")
-        .findIndex((line) => line.includes("+ Thought"))
+      const row = setup.captureCharFrame().split("\n").findIndex((line) => line.includes("+ Thought"))
       await setup.mockMouse.click(6, row)
     }
     await setup.waitForFrame((frame) => frame.includes("THOUGHT_START"))
@@ -1622,10 +1678,10 @@ test("ctrl+c dismisses autocomplete and shell mode before exiting", async () => 
 
 test.skipIf(process.platform === "win32").each(["manual", "select"] as const)(
   "selection copy and pane management respect %s mode in the prompt and terminal pane",
-  async (copy) => {
-    await using state = await tmpdir()
-    const setup = await createTestRenderer({ width: 100, height: 30, kittyKeyboard: true })
-    await setup.renderer.setupTerminal()
+    async (copy) => {
+      await using state = await tmpdir()
+      const setup = await createTestRenderer({ width: 100, height: 30, kittyKeyboard: true })
+      await setup.renderer.setupTerminal()
     setup.renderer.start()
     const ready = Promise.withResolvers<void>()
     const session = {
@@ -2224,7 +2280,9 @@ test("free usage limit offers OpenCode Go once per 24h, transitions Subscribe to
   setup.mockInput.pressEnter()
   await setup.waitForFrame((frame) => frame.includes("GOGO-1234"))
   expect(openSpy).toHaveBeenCalledWith("https://opencode.ai/go")
-  expect(oauthRequests).toEqual([{ methodID: "device", answer: { server: "https://opencode.ai/console" } }])
+  expect(oauthRequests).toEqual([
+    { methodID: "device", answer: { server: "https://opencode.ai/console" } },
+  ])
   const connectFrame = setup.captureCharFrame()
   expect(connectFrame).toContain("OpenCode Console account")
   expect(connectFrame).not.toContain("Enter Go API key")
@@ -2513,13 +2571,7 @@ test("free usage limit Subscribe handles mid-auth/mid-sync Escape, sync failure,
     created: 6,
     type: "session.step.started",
     durable: { aggregateID: session.id, seq: 6, version: 1 },
-    data: {
-      sessionID: session.id,
-      assistantMessageID: "msg_free_assistant_expired",
-      agent: "build",
-      model,
-      started: 6,
-    },
+    data: { sessionID: session.id, assistantMessageID: "msg_free_assistant_expired", agent: "build", model, started: 6 },
   })
   setup.events.emit({
     id: "evt_free_limit_expired_fail",

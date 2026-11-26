@@ -55,19 +55,18 @@ test.each(["\x00", "\n", "\r", "\x1b", "\x7f", "\u0085", "\u009b", "\ud800", "\u
   },
 )
 
-test.each([[], [""], ["./run.sh"], ["bin/shuvcode"], ["bin\\shuvcode"], ["-x"]].map((argv) => [argv] as const))(
-  "clears when the executable is missing or relative (%j)",
-  (argv) => {
-    expect(programResumeReport({ ...input, command: { argv } })).toBe(programResumeReport(input))
-  },
-)
+test.each(
+  [[], [""], ["."], [".."], ["./run.sh"], ["bin/shuvcode"], ["bin\\shuvcode"], ["-x"]].map((argv) => [argv] as const),
+)("clears when the executable is missing or relative (%j)", (argv) => {
+  expect(programResumeReport({ ...input, command: { argv } })).toBe(programResumeReport(input))
+})
 
 test.each(["", "project"])("clears when cwd is not absolute (%j)", (cwd) => {
   expect(programResumeReport({ ...input, command: { argv: ["shuvcode"], cwd } })).toBe(programResumeReport(input))
 })
 
 test.each([0, -1, 1.5, NaN, Infinity, Number.MAX_SAFE_INTEGER + 1])(
-  "does not emit with invalid pid or time (%s)",
+  "does not emit with invalid pid or time (%p)",
   (id) => {
     expect(programResumeReport({ ...input, pid: id })).toBe("")
     expect(programResumeReport({ ...input, time: id })).toBe("")
@@ -106,7 +105,9 @@ test("deduplicates commands, resends on demand, clamps backward time, and clears
       token,
       cwd,
       command: (id) => (id ? ["shuvcode", "--session", id] : ["shuvcode"]),
-      write: (seq) => writes.push(seq),
+      write: (seq) => {
+        writes.push(seq)
+      },
     },
     { pid: 42, now: () => now },
   )
@@ -150,6 +151,59 @@ test("deduplicates unreportable commands and can recover after a write error", (
   expect(writes.map((seq) => readResume(seq).argv)).toEqual([["shuvcode", "first"], undefined, ["shuvcode", "second"]])
 })
 
+test("retries rejected reports without caching them, including the newest session on resume", () => {
+  const writes: string[] = []
+  let accepting = false
+  let attempts = 0
+  const reporter = createProgramResumeReporter({
+    token,
+    cwd,
+    command: (id) => (id ? ["shuvcode", "--session", id] : ["shuvcode"]),
+    write: (seq) => {
+      attempts++
+      if (!accepting) return false
+      writes.push(seq)
+      return true
+    },
+  })
+  reporter.report()
+  accepting = true
+  reporter.report()
+  reporter.report()
+  accepting = false
+  reporter.report("ses_latest")
+  accepting = true
+  reporter.reemit()
+  expect(attempts).toBe(4)
+  expect(writes.map((seq) => readResume(seq).argv)).toEqual([["shuvcode"], ["shuvcode", "--session", "ses_latest"]])
+})
+
+test("native live writes never fall back to stdout and the final clear uses the post-close writer", () => {
+  const live: string[] = []
+  const direct: string[] = []
+  const reporter = createProgramResumeReporter({
+    token,
+    cwd,
+    command: () => ["shuvcode"],
+    write: (seq) => {
+      direct.push(seq)
+    },
+    useNativeSession: true,
+  })
+  reporter.report()
+  const detach = reporter.attachLiveWrite((seq) => {
+    live.push(seq)
+    return true
+  })
+  reporter.reemit()
+  detach()
+  reporter.reemit()
+  expect(direct).toEqual([])
+  reporter.clear()
+  expect(live.map((seq) => readResume(seq).argv)).toEqual([["shuvcode"]])
+  expect(direct.map((seq) => readResume(seq).clear)).toEqual([true])
+})
+
 test.each(["home", "plugin"] as const)(
   "reports confirmed routes from initial %s without changing launch cwd",
   async (start) => {
@@ -158,7 +212,9 @@ test.each(["home", "plugin"] as const)(
       token,
       cwd,
       command: (id) => (id ? ["shuvcode", "--session", id] : ["shuvcode"]),
-      write: (seq) => writes.push(seq),
+      write: (seq) => {
+        writes.push(seq)
+      },
     })
     const session = {
       id: "ses_first",

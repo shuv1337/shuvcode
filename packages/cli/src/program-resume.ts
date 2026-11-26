@@ -11,7 +11,7 @@ delete process.env.OSC7577_TOKEN
 type Flags = { server?: string; standalone?: boolean; auto?: boolean }
 
 export function isValidToken(token: string | undefined): token is string {
-  return typeof token === "string" && token.length > 0 && !/[\s\u0000-\u001f\u007f-\u009f]/.test(token)
+  return typeof token === "string" && /^[A-Za-z0-9_-]{22,64}$/.test(token)
 }
 
 export function buildCommand(options: Flags & { bin: string }, sessionID?: string): readonly string[] {
@@ -40,7 +40,7 @@ export function input(
     cwd?: string
     env?: Readonly<Record<string, string | undefined>>
     bin?: string
-    write?: (sequence: string) => void
+    write?: NonNullable<TuiInput["resume"]>["write"]
   },
 ): TuiInput["resume"] {
   const token = ambient ? ambient.token : rawToken
@@ -54,15 +54,18 @@ export function input(
     token,
     cwd: ambient?.cwd ?? process.cwd(),
     command: (sessionID) => buildCommand({ ...flags, bin }, sessionID),
+    useNativeSession: ambient?.write === undefined,
     write:
       ambient?.write ??
       ((sequence) => {
         const stdout = process.stdout
-        if (!stdout.isTTY || !stdout.writable || stdout.destroyed || stdout.writableEnded) return
+        if (!stdout.isTTY || !stdout.writable || stdout.destroyed || stdout.writableEnded) return false
         try {
-          // One small terminal write, with synchronous error handling even if stdout is gone.
-          writeSync(stdout.fd, sequence)
-        } catch {}
+          // The final clear runs after OpenTUI has released stdout.
+          return writeSync(stdout.fd, sequence) === Buffer.byteLength(sequence)
+        } catch {
+          return false
+        }
       }),
   }
 }

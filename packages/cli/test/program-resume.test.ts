@@ -25,7 +25,9 @@ test("builds an allowlisted command from the package name, mode, and confirmed s
   const flags = { prompt: "private text", continue: true, model: "one/two", auto: true }
   const resume = input(flags, ambient)
   expect(resume?.cwd).toBe(cwd)
+  expect(resume?.useNativeSession).toBe(true)
   expect(resume?.command("ses_test")).toEqual(["shuvcode", "--auto", "--session", "ses_test"])
+  expect(input(flags, { ...ambient, write: () => {} })?.useNativeSession).toBe(false)
 })
 
 test.each([
@@ -41,12 +43,19 @@ test.each([
   expect(buildCommand({ bin: "shuvcode", server }, "ses_test")).toEqual([])
 })
 
-test.each([undefined, "", "has space", "has\ttab", "has\nnewline", "has\u001besc", "has\u009bCSI", "has\u00a0nbsp"])(
-  "does not enable reporting for invalid token %j",
-  (token) => {
-    expect(input({}, { ...ambient, token })).toBeUndefined()
-  },
-)
+test.each([
+  undefined,
+  "",
+  "a".repeat(21),
+  "a".repeat(65),
+  ...[" ", "\t", "\n", "\u001b", "\u009b", "\u00a0", ".", "+", "=", "é"].map((char) => token + char),
+])("does not enable reporting for invalid token %j", (token) => {
+  expect(input({}, { ...ambient, token })).toBeUndefined()
+})
+
+test.each([22, 64])("enables reporting for a %p-character URL-safe token", (length) => {
+  expect(input({}, { ...ambient, token: "A1_-".padEnd(length, "a") })).toBeDefined()
+})
 
 test("does not enable source builds or non-TTY output", () => {
   expect(input({}, { ...ambient, isTTY: false })).toBeUndefined()
@@ -94,16 +103,17 @@ test("strips the token before child processes and omits it from forwarded sessio
 test("production code avoids Bun.spawn's startup environment snapshot", async () => {
   // Bun 1.4.4 inherits the original token by default even after deletion from process.env.
   // Colocated tests aren't part of the CLI runtime and may use Bun.spawn.
-  const packages = ["cli", "tui", "core", "server", "util", "client", "plugin"]
   const root = path.resolve(import.meta.dir, "../..")
-  const source = new Bun.Glob("src/**/*.{ts,tsx,js,jsx,mts,mjs,cts,cjs}")
+  const source = new Bun.Glob("{*,plugins/*}/src/**/*.{ts,tsx,js,jsx,mts,mjs,cts,cjs}")
+  const member = /\bBun\s*(?:\.\s*spawn(?:Sync)?\b|\[\s*["']spawn(?:Sync)?["']\s*\])/
+  const binding = /\{[^{}]*\bspawn(?:Sync)?\b[^{}]*\}\s*(?:=\s*Bun\b|from\s*["']bun["'])/
   const calls: string[] = []
-  for (const name of packages) {
-    for await (const file of source.scan({ cwd: path.join(root, name) })) {
-      if (/\.(?:test|spec)\.[^.]+$/.test(file)) continue
-      if (/\bBun\s*\.\s*spawn(?:Sync)?\s*\(/.test(await Bun.file(path.join(root, name, file)).text()))
-        calls.push(`${name}/${file}`)
-    }
+  for await (const file of source.scan({ cwd: root })) {
+    if (/\.(?:test|spec|fixture)\.[^.]+$/.test(file)) continue
+    // Only colocated tests import this Electron launcher, which also supplies an explicit env.
+    if (file.replaceAll("\\", "/") === "gui-plugins/src/browser/electron-run.ts") continue
+    const text = await Bun.file(path.join(root, file)).text()
+    if (member.test(text) || binding.test(text)) calls.push(file)
   }
   expect(calls).toEqual([])
 })
