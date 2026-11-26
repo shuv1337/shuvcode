@@ -1,5 +1,6 @@
 #!/usr/bin/env bun
 
+import "./program-resume"
 import { ensurePluginRuntime } from "@opencode/plugin/runtime"
 import { NodeRuntime, NodeServices } from "@effect/platform-node"
 import { Cause, Effect } from "effect"

@@ -13,6 +13,8 @@ import { createEventStream, createFetch, directory, json } from "./fixture/tui-c
 import { tmpdir } from "./fixture/fixture"
 import { createAppFixture } from "./fixture/app"
 import { waitForHighlightedFrame } from "./fixture/frame"
+import { readResume, token } from "./fixture/program-resume"
+import type { Exit } from "../src/context/exit"
 import type { PluginInfo } from "@opencode/client"
 
 test.each([100, 44])("Ctrl-O is immediate, dismissible, and prunes cached deletions at width %s", async (width) => {
@@ -287,6 +289,180 @@ test("SIGHUP clears title and disposes scoped resources once", async () => {
     if (!setup.renderer.isDestroyed) setup.renderer.destroy()
     await setup.renderer.closed
     await server.stop()
+  }
+})
+
+test.each(["exit", "SIGHUP", "SIGTERM", "failed flush"] as const)(
+  "program resume on %s while the terminal flushes",
+  async (action) => {
+    const renderer = await createTestRenderer({ width: 80, height: 24 })
+    await renderer.renderer.setupTerminal()
+    const nativeClosed = renderer.renderer.closed
+    const release = Promise.withResolvers<void>()
+    const closed = nativeClosed.then(() => release.promise)
+    void closed.catch(() => {})
+    Object.defineProperty(renderer.renderer, "closed", { get: () => closed })
+    const writes: string[] = []
+    const signals = ["SIGHUP", "SIGTERM", "SIGCONT"] as const
+    const before = new Map(signals.map((signal) => [signal, new Set(process.listeners(signal))]))
+    await using setup = await createAppFixture({
+      setup: renderer,
+      resume: {
+        token,
+        cwd: process.cwd(),
+        command: () => ["shuvcode"],
+        write: (seq) => {
+          writes.push(seq)
+        },
+      },
+    })
+    try {
+      await setup.ready
+      await setup.waitForFrame((frame) => frame.includes("commands"))
+      expect(writes.map((seq) => readResume(seq).argv)).toEqual([["shuvcode"]])
+      if (process.platform !== "win32") {
+        process.emit("SIGCONT")
+        expect(writes.map((seq) => readResume(seq).argv)).toEqual([["shuvcode"], ["shuvcode"]])
+      }
+      const preExit = writes.length
+      setup.events.emit({
+        id: "evt_resume_exit",
+        created: 1,
+        type: "tui.command.execute",
+        location: { directory },
+        data: { command: "app.exit" },
+      })
+      await nativeClosed
+      expect(writes).toHaveLength(preExit)
+      if (action !== "exit") {
+        // The user already requested exit, but the terminal can still signal during native teardown.
+        if (action === "SIGHUP") process.emit("SIGHUP")
+        if (action === "SIGTERM") process.emit("SIGTERM")
+      }
+      if (action === "failed flush") release.reject(new Error("terminal output closed"))
+      else release.resolve()
+      await setup.closed
+      expect(writes.slice(preExit).map((seq) => readResume(seq).clear)).toEqual(action === "exit" ? [true] : [])
+      for (const signal of signals) {
+        expect(process.listeners(signal).filter((listener) => !before.get(signal)?.has(listener))).toEqual([])
+      }
+    } finally {
+      release.resolve()
+    }
+  },
+)
+
+test("an error passed to exit leaves the resume record intact", async () => {
+  const context = await import("../src/context/exit")
+  const original = context.ExitProvider
+  const registered = Promise.withResolvers<Exit>()
+  const provider = spyOn(context, "ExitProvider").mockImplementation((props) => {
+    registered.resolve(props.exit)
+    return original(props)
+  })
+  const writes: string[] = []
+  try {
+    await using setup = await createAppFixture({
+      resume: {
+        token,
+        cwd: process.cwd(),
+        command: () => ["shuvcode"],
+        write: (seq) => {
+          writes.push(seq)
+        },
+      },
+    })
+    await setup.ready
+    await setup.waitForFrame(() => writes.length > 0)
+    const stderr = spyOn(process.stderr, "write").mockReturnValue(true)
+    try {
+      const exit = await registered.promise
+      exit(new Error("boom"))
+      await setup.closed
+      expect(stderr.mock.calls.some((call) => String(call[0]).includes("boom"))).toBe(true)
+    } finally {
+      stderr.mockRestore()
+    }
+    expect(writes.map((seq) => readResume(seq).argv)).toEqual([["shuvcode"]])
+  } finally {
+    provider.mockRestore()
+  }
+})
+
+test("fiber interruption leaves the resume record intact", async () => {
+  const controller = new AbortController()
+  const writes: string[] = []
+  const setup = await createAppFixture({
+    signal: controller.signal,
+    resume: {
+      token,
+      cwd: process.cwd(),
+      command: () => ["shuvcode"],
+      write: (seq) => {
+        writes.push(seq)
+      },
+    },
+  })
+  try {
+    await setup.ready
+    await setup.waitForFrame(() => writes.length > 0)
+    expect(writes.map((seq) => readResume(seq).argv)).toEqual([["shuvcode"]])
+  } finally {
+    controller.abort()
+    await expect(setup[Symbol.asyncDispose]()).rejects.toThrow()
+  }
+  expect(setup.renderer.isDestroyed).toBe(true)
+  expect(writes).toHaveLength(1)
+})
+
+test.each(["continue", "session"] as const)("--%s reports only the confirmed startup session", async (arg) => {
+  const writes: string[] = []
+  const choose = Promise.withResolvers<Response>()
+  const received = Promise.withResolvers<void>()
+  const session = {
+    id: "ses_resume",
+    title: "Resume session",
+    projectID: "proj_test",
+    location: { directory },
+    cost: 0,
+    tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
+    time: { created: 1, updated: 1 },
+  }
+  const selected = () => (arg === "continue" ? json({ data: [session], cursor: {} }) : json({ data: session }))
+  await using setup = await createAppFixture({
+    args: arg === "continue" ? { continue: true } : { sessionID: session.id },
+    config: { animations: false, tabs: { mode: "off" } },
+    resume: {
+      token,
+      cwd: process.cwd(),
+      command: (id) => (id ? ["shuvcode", "--session", id] : ["shuvcode"]),
+      write: (seq) => {
+        writes.push(seq)
+      },
+    },
+    fetch: (url) => {
+      if (
+        arg === "continue"
+          ? url.pathname === "/api/session" && url.searchParams.get("limit") === "1"
+          : url.pathname === `/api/session/${session.id}`
+      ) {
+        received.resolve()
+        return choose.promise
+      }
+      if (url.pathname === `/api/session/${session.id}`) return json({ data: session })
+      if (url.pathname === `/api/session/${session.id}/message`) return json({ data: [], cursor: {} })
+      if (url.pathname === `/api/session/${session.id}/inbox`) return json({ data: [] })
+      return undefined
+    },
+  })
+  try {
+    await received.promise
+    expect(writes).toEqual([])
+    choose.resolve(selected())
+    await setup.waitForFrame(() => writes.length > 0)
+    expect(writes.map((seq) => readResume(seq).argv)).toEqual([["shuvcode", "--session", session.id]])
+  } finally {
+    choose.resolve(selected())
   }
 })
 
