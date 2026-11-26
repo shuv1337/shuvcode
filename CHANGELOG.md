@@ -2,6 +2,24 @@
 
 Release notes for OpenCode V2, newest first.
 
+## v2.4.2-shuv.1 — 2026-11-25
+
+Syncs upstream `v2.4.2` (`fc31a48531`, 88 commits beyond `2545a8720f` in [#520](https://github.com/shuv1337/shuvcode/pull/520)). See the upstream `v2.4.2` notes below for the full upstream summary.
+
+### Highlights
+
+- **MCP Skills (SEP-2640) improvements (enabled by default since `v2.4.1-shuv.3`):** Skills with the same name from one MCP server now use trailing URI path segments to tell them apart (for example, `<server>:<app>.tools`) instead of dropping duplicates ([#66210](https://github.com/anomalyco/opencode/pull/66210)). Activated skills identify their source server ([#66244](https://github.com/anomalyco/opencode/pull/66244)), and you can resolve unlisted skills directly by `<server>:<SKILL.md uri>` ([#66220](https://github.com/anomalyco/opencode/pull/66220)). Opt out with `"experimental": { "mcp_skills": false }` or `OPENCODE_FLAGS=-mcp_skills`.
+- **Upstream `v2.4.2` updates:** A dedicated GPT-6.2 system prompt rebranded for Shuvcode, Esc to reclaim your last message, site-scoped “Always allow” for web fetches, automations that continue after failed runs, automatic unarchiving when you send a message, and Plan mode rules in the system prompt. Drizzle now delegates SQLite transactions to Effect `SqlClient`, with no new migrations.
+
+### Fork changes
+
+- MCP Skills stay on by default across all channels ([#518](https://github.com/shuv1337/shuvcode/pull/518)). All three layers still hide the Claude Agent SDK provider, including both new TUI lookup paths. Root-family permission routing remains in place ([#429](https://github.com/shuv1337/shuvcode/pull/429)); `permission.cancelled` now immediately clears mobile push notifications routed through the parent session.
+- Preserves OpenAI Ultrafast for Codex OAuth ([#515](https://github.com/shuv1337/shuvcode/pull/515)), the Solstice Gemini 4 lineup ([#510](https://github.com/shuv1337/shuvcode/pull/510), [#512](https://github.com/shuv1337/shuvcode/pull/512)), the dark-only Night Owl default, and the `shuvcode` CLI, service, and report skill identity.
+
+### Rollback
+
+Roll back to `v2.4.1-shuv.3` (or `v2.4.1-shuv.2`).
+
 ## v2.4.2 — 2026-11-25
 
 ### Highlights
