@@ -8,9 +8,9 @@ Fork release on upstream `v2.4.2` (`fc31a48531`) adding native OSC 7577 Program 
 
 ### Highlights
 
-- **Native OSC 7577 v0.5 Program Resume ([#522](https://github.com/shuv1337/shuvcode/pull/522)):** Packaged `shuvcode` / `shuvcode-node` TUI sessions now emit signed OSC 7577 resume records when `OSC7577_TOKEN` is set on an interactive TTY, allowing terminal hosts (such as Rex / herdr) to resume the active session automatically across terminal or server restarts.
+- **Native OSC 7577 v0.5 Program Resume ([#522](https://github.com/shuv1337/shuvcode/pull/522)):** Packaged `shuvcode` / `shuvcode-node` TUI sessions now emit signed OSC 7577 resume records when a valid `OSC7577_TOKEN` is set on TTY stdout (suppressed in drive, story, and route modes), allowing terminal hosts (such as Rex / herdr) to resume the active session automatically across terminal or server restarts.
   - Emits on session open and switch (including newly created sessions), re-emits on `SIGCONT` and `terminal.suspend` resume, and routes live writes through OpenTUI's `NativeSession` output queue so escape sequences never interleave with frame repaints.
-  - Emits `clear=1` only on user-initiated clean exit after renderer teardown — preserving the resume record on `SIGHUP`, `SIGTERM`, crashes, error exits, and failed flushes.
+  - On shutdown, emits `clear=1` only after a user-initiated clean exit and successful renderer teardown (preserving the resume record on `SIGHUP`, `SIGTERM`, crashes, error exits, and failed flushes); also emits `clear=1` mid-session if a resume command is invalid or its encoded report exceeds 2,048 bytes.
   - Strips `OSC7577_TOKEN` from `process.env` at CLI startup and `Env.session()` so child processes and tools never inherit it.
 
 ### Rollback
