@@ -2,10 +2,10 @@
 
 Shuvcode exposes an HTTP API from its server.
 
-In Code Mode, use the built-in `shuvcode` tool namespace first, called inside
-`execute` as `tools.shuvcode.*`; find its tools with Code Mode's `search`, for
-example `search({ namespace: "shuvcode" })`. For anything they do not cover, call
-the API with `fetch("opencode:///api/...")`. It reaches this Shuvcode server,
+Use your built-in tools first (including `tools.shuvcode.*`, discoverable with
+`search({ namespace: "shuvcode" })`, and other Code Mode namespaces in
+`search(...)`). Only fall back to `fetch("opencode:///api/...")`
+for things they do not cover. It reaches this Shuvcode server,
 already signed in, and uses the session's directory. `current` in place of a
 session ID names the calling session:
 

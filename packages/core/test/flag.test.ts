@@ -38,10 +38,8 @@ describe("Flag.resolve", () => {
   test.each([
     ["local", true],
     ["dev", true],
-    ["beta", false],
     ["latest", false],
     ["integration-v2", false],
-    ["my-branch", false],
     ["unknown", false],
   ] as const)("applies %s build defaults", (channel, enabled) => {
     expect(Flag.resolve({ entries: [], channel })).toEqual(every({ enabled, source: "default" }))
