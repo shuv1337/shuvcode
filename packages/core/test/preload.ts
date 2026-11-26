@@ -29,3 +29,9 @@ fs.mkdirSync(temporary)
 process.env.TMPDIR = temporary
 process.env.TMP = temporary
 process.env.TEMP = temporary
+
+process.once("exit", () => {
+  try {
+    fs.rmSync(home, { recursive: true, force: true, maxRetries: 3, retryDelay: 25 })
+  } catch {}
+})

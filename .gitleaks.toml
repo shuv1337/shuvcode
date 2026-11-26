@@ -22,4 +22,7 @@ regexes = [
   # RFC 6455 section 1.3 sample Sec-WebSocket-Key nonce ("the sample nonce"), used by
   # upstream v2.4.0 machine-link handshake tests (packages/server/test/machine-link.test.ts).
   '''^dGhlIHNhbXBsZSBub25jZQ==$''',
+  # RFC 8032 Ed25519 zero-seed test-vector public key used by upstream v2.4.2
+  # in packages/core/test/fixture/machine-v3.json.
+  '''^O2onvM62pC1io6jQKm8Nc2UyFXcd4kOmOsBIoYtZ2ik$''',
 ]

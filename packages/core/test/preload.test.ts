@@ -33,4 +33,33 @@ describe("Core test environment", () => {
     expect(process.env.UIDOTSH_AUTHORIZATION).toBeUndefined()
     expect(process.env.OPENAI_API_KEY).toBeUndefined()
   })
+
+  test("preload isolates Global.Path when bun test runs without script/test.ts", async () => {
+    const child = Bun.spawn({
+      cmd: [
+        process.execPath,
+        "--preload",
+        "./test/preload.ts",
+        "-e",
+        'import { Global } from "@opencode/util/global"; console.log(JSON.stringify({ home: Global.Path.home, config: Global.Path.config, data: Global.Path.data, envHome: process.env.OPENCODE_TEST_HOME }))',
+      ],
+      cwd: path.resolve(import.meta.dir, ".."),
+      env: {
+        PATH: process.env.PATH,
+        HOME: process.env.HOME,
+        ...(process.platform === "win32"
+          ? { USERPROFILE: process.env.USERPROFILE, SystemRoot: process.env.SystemRoot, TEMP: process.env.TEMP }
+          : {}),
+      },
+      stdout: "pipe",
+      stderr: "pipe",
+    })
+    const [stdout, exitCode] = await Promise.all([new Response(child.stdout).text(), child.exited])
+    expect(exitCode).toBe(0)
+    const result = JSON.parse(stdout.trim())
+    expect(result.envHome).toBeDefined()
+    expect(result.home).toBe(result.envHome)
+    expect(result.config).toBe(path.join(result.envHome, ".config", "shuvcode"))
+    expect(result.data).toBe(path.join(result.envHome, ".local", "share", "shuvcode"))
+  })
 })

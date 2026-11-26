@@ -152,6 +152,7 @@ const layer = AppNodeBuilder.build(
     KV.node,
     Session.node,
     SessionStore.node,
+    SessionInbox.node,
     SessionExecution.node,
     SessionRestart.node,
     LocationServiceMap.node,
@@ -243,16 +244,17 @@ const program = Effect.gen(function* () {
     if (boundary !== "prepared" && boundary !== "exhausted") {
       yield* sessions.create({ id: childID, parentID, agent: Agent.ID.make("build"), model })
       if (boundary !== "created") {
+        const inbox = yield* SessionInbox.Service
         yield* sessions.prompt({ id: inboxID, sessionID: childID, text: input.prompt, resume: false })
         if (boundary === "running") yield* store.claim(childID)
         if (boundary === "cancelled-pending")
           yield* bus.publish(SessionEvent.Execution.Interrupted, { sessionID: childID, reason: "user" })
         if (boundary === "cancelled") {
-          yield* SessionInbox.promote((yield* Database.Service).db, bus, childID, "input")
+          yield* inbox.promote(childID, "input")
           yield* bus.publish(SessionEvent.Execution.Interrupted, { sessionID: childID, reason: "user" })
         }
         if (boundary === "settled" || boundary === "result") {
-          yield* SessionInbox.promote((yield* Database.Service).db, bus, childID, "input")
+          yield* inbox.promote(childID, "input")
           yield* SessionRunner.Service.use((runner) => runner.drain({ sessionID: childID, force: true })).pipe(
             Effect.provide(location),
           )
