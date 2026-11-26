@@ -2,6 +2,21 @@
 
 Release notes for OpenCode V2, newest first.
 
+## v2.4.2-shuv.2 — 2026-11-26
+
+Fork release on upstream `v2.4.2` (`fc31a48531`) adding native OSC 7577 Program Resume support to the full TUI ([#522](https://github.com/shuv1337/shuvcode/pull/522)).
+
+### Highlights
+
+- **Native OSC 7577 v0.5 Program Resume ([#522](https://github.com/shuv1337/shuvcode/pull/522)):** Packaged `shuvcode` / `shuvcode-node` TUI sessions now emit signed OSC 7577 resume records when `OSC7577_TOKEN` is set on an interactive TTY, allowing terminal hosts (such as Rex / herdr) to resume the active session automatically across terminal or server restarts.
+  - Emits on session open and switch (including newly created sessions), re-emits on `SIGCONT` and `terminal.suspend` resume, and routes live writes through OpenTUI's `NativeSession` output queue so escape sequences never interleave with frame repaints.
+  - Emits `clear=1` only on user-initiated clean exit after renderer teardown — preserving the resume record on `SIGHUP`, `SIGTERM`, crashes, error exits, and failed flushes.
+  - Strips `OSC7577_TOKEN` from `process.env` at CLI startup and `Env.session()` so child processes and tools never inherit it.
+
+### Rollback
+
+Roll back to `v2.4.2-shuv.1`.
+
 ## v2.4.2-shuv.1 — 2026-11-25
 
 Syncs upstream `v2.4.2` (`fc31a48531`, 88 commits beyond `2545a8720f` in [#520](https://github.com/shuv1337/shuvcode/pull/520)). See the upstream `v2.4.2` notes below for the full upstream summary.
