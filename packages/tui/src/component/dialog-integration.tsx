@@ -1319,7 +1319,9 @@ async function connected(
     // model picker that follows lists all of them rather than the first.
     onConnected(
       (data.location.provider.list(location) ?? []).some(
-        (provider) => provider.integrationID === integration.id || provider.id === integration.id,
+        (provider) =>
+          !isHiddenProvider(provider.id) &&
+          (provider.integrationID === integration.id || provider.id === integration.id),
       )
         ? integration.id
         : undefined,

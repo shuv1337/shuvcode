@@ -299,6 +299,27 @@ describe("PushWatcher", () => {
     }),
   )
 
+  it.live("clears a cancelled child permission on the parent without waiting for execution to end", () =>
+    Effect.gen(function* () {
+      const bus = yield* Bus.Service
+      const key = yield* phone()
+      const requestID = Permission.ID.make("per_cancelled")
+
+      yield* bus.publish(Permission.Event.Asked, {
+        id: requestID,
+        sessionID: childID,
+        action: "bash",
+        resources: ["git push"],
+      })
+      yield* waitUntil(Effect.sync(() => boxes.length === 1))
+      yield* bus.publish(Permission.Event.Cancelled, { sessionID: childID, requestID })
+      yield* waitUntil(Effect.sync(() => boxes.length === 2))
+
+      expect(silent).toEqual([undefined, true])
+      expect(open(key, boxes[1])).toEqual({ v: 1, id: requestID, type: "clear", sessionID: parentID })
+    }),
+  )
+
   it.live("clears a finished turn once it is viewed, but not by a view reported as the turn ends", () =>
     Effect.gen(function* () {
       const bus = yield* Bus.Service

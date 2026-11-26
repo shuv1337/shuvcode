@@ -26,8 +26,8 @@ const layer = Layer.effectDiscard(
     const list = yield* PushList.Service
     const sender = yield* PushSender.Service
     const stepped = new Set<Session.ID>()
-    // Permission requests each session is waiting on. An interrupted request gets no reply, so the end of the
-    // session's execution clears its notification instead.
+    // Permission requests each session is waiting on. Execution end clears any requests that did not receive
+    // a reply or cancellation event.
     const asking = new Map<Session.ID, Set<string>>()
 
     const topLevel = Effect.fn("PushWatcher.topLevel")(function* (sessionID: Session.ID) {
@@ -99,11 +99,12 @@ const layer = Layer.effectDiscard(
       Effect.forkScoped({ startImmediately: true }),
     )
 
-    // An answer on any client makes the notification stale, and so does a new prompt or a view for a finished turn.
+    // Answering or cancelling a request makes its notification stale, as does a new prompt or a view for a finished turn.
     // A deleted session has nothing left to open, and an archived one has been dealt with.
     yield* bus
       .subscribe([
         Permission.Event.Replied,
+        Permission.Event.Cancelled,
         Form.Event.Replied,
         Form.Event.Cancelled,
         SessionEvent.InboxEnqueued,
@@ -119,7 +120,7 @@ const layer = Layer.effectDiscard(
             asking.delete(event.data.sessionID)
             return sender.clearSession(event.data.sessionID)
           }
-          if (event.type === "permission.replied") {
+          if (event.type === "permission.replied" || event.type === "permission.cancelled") {
             asking.get(event.data.sessionID)?.delete(event.data.requestID)
             return sender.clear([event.data.requestID])
           }

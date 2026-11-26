@@ -39,7 +39,9 @@ export const Plugin = define({
           description: OpencodeDescription,
           path: AbsolutePath.make("skill://shuvcode/SKILL.md"),
           // With opencode:// fetch, its API section points there instead of the `shuvcode api` command.
-          content: api ? OpencodeContent.replace(/## \[API\][^]*?(?=## \[Client\])/, `${apiContent}\n`) : OpencodeContent,
+          content: api
+            ? OpencodeContent.replace(/## \[API\][^]*?(?=## \[Client\])/, `${apiContent}\n`)
+            : OpencodeContent,
         }),
         api ? files : undefined,
       )

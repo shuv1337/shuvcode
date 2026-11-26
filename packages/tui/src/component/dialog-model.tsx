@@ -206,7 +206,9 @@ function DialogConnectedModels(props: {
   const title = createMemo(
     () =>
       (props.integrationID &&
-        data.location.integration.list(location.ref)?.find((item) => item.id === props.integrationID)?.name) ||
+        data.location.integration
+          .list(location.ref)
+          ?.find((item) => !isHiddenProvider(item.id) && item.id === props.integrationID)?.name) ||
       "Select model",
   )
 

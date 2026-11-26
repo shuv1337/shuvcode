@@ -87,6 +87,7 @@ const allowedOpencodeSubstrings = [
   ".opencode",
   "opencode.db",
   "opencode.log",
+  "opencode-<channel>.log",
   "OPENCODE_CLI_CONFIG_CONTENT",
   "OPENCODE_LOG_LEVEL",
   "services/site/",
@@ -143,9 +144,7 @@ const it = testEffect(
     [
       App.node.replace(App.configured(appConfig)),
       Config.node.replace(Config.testLayer(configEntries)),
-      Flag.node.replace(
-        Flag.testLayer(configEntries, { app: appConfig, overrides: "artifacts" }),
-      ),
+      Flag.node.replace(Flag.testLayer(configEntries, { app: appConfig, overrides: "artifacts" })),
       Global.node.replace(tempGlobalLayer),
       Location.node.replace(tempLocationLayer),
       Image.node.replace(imagePassthrough),
@@ -283,7 +282,15 @@ describe("shuvcode fork identity", () => {
       expect(basePrompt).toContain("Shuvcode")
       assertCleanIdentityText("SessionSystemPrompt.make", basePrompt)
 
-      const models = ["gpt-5", "gpt-6-astra", "claude-sonnet-4", "kimi-k2", "trinity", "meta/muse-spark-1.1"] as const
+      const models = [
+        "gpt-5",
+        "gpt-6-astra",
+        "gpt-6.2-sol",
+        "claude-sonnet-4",
+        "kimi-k2",
+        "trinity",
+        "meta/muse-spark-1.1",
+      ] as const
       for (const modelID of models) {
         const event: SessionHooks["context"] = {
           sessionID: Session.ID.make(`ses_prompt_${modelID}`),
