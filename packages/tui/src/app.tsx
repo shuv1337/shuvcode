@@ -34,6 +34,7 @@ import {
   onCleanup,
   batch,
   Show,
+  untrack,
 } from "solid-js"
 import {
   TuiLifecycleProvider,
@@ -59,6 +60,7 @@ import { DevToolsBar } from "./component/devtools-bar"
 import { Reconnecting } from "./component/reconnecting"
 import { MigrationOverlay } from "./component/migration-overlay"
 import { DataProvider, useData } from "./context/data"
+import { createProgramResumeReporter, ProgramResume, type ProgramResumeInput } from "./context/program-resume"
 import { SessionTabsProvider, useSessionTabs } from "./context/session-tabs"
 import { LocationProvider, useLocation } from "./context/location"
 import { LocalProvider, useLocal } from "./context/local"
@@ -203,6 +205,7 @@ export type TuiInput = {
   updater?: UpdateSource
   packages: PackageSource
   environment?: Readonly<Record<string, string>>
+  resume?: ProgramResumeInput
   terminalHandoff?: () => Promise<
     | {
         readonly renderer: CliRenderer
@@ -214,7 +217,9 @@ export type TuiInput = {
   log?: LogSink
 }
 
-export const run = Effect.fn("Tui.run")(function* (input: TuiInput) {
+export const run = Effect.fn("Tui.run")(runTui, Effect.scoped)
+
+function* runTui(input: TuiInput) {
   const log = input.log ?? (() => {})
   const global = yield* Global.Service
   const config = Config.resolve(yield* Effect.tryPromise(() => input.config.get()), {
@@ -249,7 +254,24 @@ export const run = Effect.fn("Tui.run")(function* (input: TuiInput) {
     session: undefined as SessionEpilogue | undefined,
     updatedVersion: undefined as string | undefined,
     reason: undefined as unknown,
+    clean: false,
+    signaled: false,
   }
+  const resume = createProgramResumeReporter(input.resume)
+  if (input.resume) {
+    const onSignal = () => (exit.signaled = true)
+    // Keep marking signals until the renderer's final flush and the last report are done.
+    yield* Effect.acquireRelease(
+      Effect.sync(() => process.on("SIGHUP", onSignal).on("SIGTERM", onSignal)),
+      () => Effect.sync(() => process.off("SIGHUP", onSignal).off("SIGTERM", onSignal)),
+    )
+  }
+  const releaseRenderer = (renderer: CliRenderer) =>
+    Effect.promise(async () => {
+      destroyRenderer(renderer)
+      // A failed final flush can mean the terminal disappeared.
+      await renderer.closed.catch(() => (exit.clean = false))
+    })
   const result = yield* Effect.scoped(
     Effect.gen(function* () {
       const options = {
@@ -268,13 +290,7 @@ export const run = Effect.fn("Tui.run")(function* (input: TuiInput) {
       const renderer = yield* Effect.gen(function* () {
         if (handoff) {
           handoff.renderer.useMouse = options.useMouse
-          return yield* Effect.acquireRelease(Effect.succeed(handoff.renderer), (renderer) =>
-            Effect.promise(async () => {
-              destroyRenderer(renderer)
-              // closed rejects when the terminal is gone or the final flush times out; nothing is left to restore.
-              await renderer.closed.catch(() => {})
-            }),
-          )
+          return yield* Effect.acquireRelease(Effect.succeed(handoff.renderer), releaseRenderer)
         }
         if (process.env.OPENCODE_DRIVE) {
           const { Drive } = yield* Effect.promise(() => import("@opencode/simulation/frontend"))
@@ -285,11 +301,7 @@ export const run = Effect.fn("Tui.run")(function* (input: TuiInput) {
             try: () => createCliRenderer(options),
             catch: (error) => (error instanceof Error ? error : new Error(String(error))),
           }),
-          (renderer) =>
-            Effect.promise(async () => {
-              destroyRenderer(renderer)
-              await renderer.closed.catch(() => {})
-            }),
+          releaseRenderer,
         )
       })
       renderer.setMaxListeners(15)
@@ -327,6 +339,7 @@ export const run = Effect.fn("Tui.run")(function* (input: TuiInput) {
                 exit={(reason) => {
                   if (renderer.isDestroyed) return
                   exit.reason = reason
+                  exit.clean = reason === undefined
                   destroyRenderer(renderer)
                 }}
               >
@@ -440,6 +453,9 @@ export const run = Effect.fn("Tui.run")(function* (input: TuiInput) {
                                                                                 directories={pluginDirectories}
                                                                               >
                                                                                 <App />
+                                                                                {input.resume && (
+                                                                                  <ProgramResume reporter={resume} />
+                                                                                )}
                                                                               </PluginProvider>
                                                                             </PanelProvider>
                                                                           </UpdateNotificationProvider>
@@ -489,9 +505,10 @@ export const run = Effect.fn("Tui.run")(function* (input: TuiInput) {
     if (result.reason !== undefined)
       process.stderr.write((cliErrorMessage(result.reason) ?? errorFormat(result.reason)) + "\n")
     const text = epilogue({ session: result.session, updatedVersion: result.updatedVersion })
+    if (exit.clean && !exit.signaled) resume.clear()
     if (text) process.stdout.write(text + "\n")
   })
-})
+}
 
 function App() {
   const app = useTuiApp()
@@ -554,7 +571,8 @@ function App() {
     if (route.data.type !== "session") return
     const session = data.session.get(route.data.sessionID)
     if (!session) return
-    if (data.session.creating(session.id)) return
+    // The first prompt sets up the environment for an in-flight session.
+    if (untrack(() => data.session.creating(session.id))) return
     if (terminalEnvironment.variables === undefined) return
     void client.api.session
       .environment({ sessionID: session.id, variables: terminalEnvironment.variables })

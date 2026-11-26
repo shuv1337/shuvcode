@@ -55,7 +55,7 @@ import {
 } from "../promise"
 import { createStore, produce, reconcile } from "solid-js/store"
 import type { SessionInbox } from "@opencode/schema/session-inbox"
-import { batch, createEffect, createMemo, createSignal, onCleanup } from "solid-js"
+import { batch, createEffect, createMemo, createSignal, onCleanup, untrack } from "solid-js"
 
 export type DataSessionStatus = "idle" | "running"
 /**
@@ -511,7 +511,7 @@ export function createData(config: CreateDataInput) {
   // In-flight optimistic creates by session ID. prompt() gates its POST on
   // this so a prompt sent to a still-creating session waits for the session
   // to exist server-side instead of failing with "not found".
-  const creating = new Map<string, Promise<unknown>>()
+  const [creating, setCreating] = createStore<Record<string, Promise<unknown> | undefined>>({})
 
   // Per-session send chain: prompts, compactions and the requests a caller
   // puts in it with `sequence` must reach the server in submission order.
@@ -540,7 +540,7 @@ export function createData(config: CreateDataInput) {
     gate?: Promise<unknown>,
     link?: (request: Promise<Value>) => Promise<unknown>,
   ) {
-    const created = creating.get(sessionID)
+    const created = untrack(() => creating[sessionID])
     const previous = sending.get(sessionID)
     const request = Promise.resolve()
       .then(() => Promise.all([gate, created, previous]))
@@ -1268,8 +1268,7 @@ export function createData(config: CreateDataInput) {
             error: event.data.error,
             input: typeof tool.state.input === "string" ? {} : tool.state.input,
             metadata: event.data.metadata,
-            content:
-              omitFiles() && event.data.content ? omitFileData(event.data.content) : event.data.content,
+            content: omitFiles() && event.data.content ? omitFileData(event.data.content) : event.data.content,
           }
           tool.executed = event.data.executed || tool.executed === true
           if (event.data.native) tool.native = { ...tool.native, ...event.data.native }
@@ -1704,7 +1703,7 @@ export function createData(config: CreateDataInput) {
         markDeleted(sessionID)
       },
       creating(sessionID: string) {
-        return creating.has(sessionID)
+        return creating[sessionID] !== undefined
       },
       remember(info: SessionInfo) {
         batch(() => {
@@ -1865,7 +1864,24 @@ export function createData(config: CreateDataInput) {
         const location = payload.location ?? defaultLocation()
         const fresh = !store.session.info[id]
         clearDeleted(id)
+        // Wrapped so even a synchronous client failure reaches the rollback.
+        const request = Promise.resolve()
+          .then(() => api().session.create({ ...payload, id, location }))
+          .then((info) => {
+            sessionOutbox.delete(id)
+            result.session.remember(info)
+            return info
+          })
+          .catch((error) => {
+            // Roll back only a record this call admitted and neither the echo
+            // nor the response has acknowledged: anything else is server state.
+            if (fresh && sessionOutbox.delete(id)) removeSession(id)
+            throw error
+          })
         if (fresh) {
+          setCreating(id, request)
+          const settle = () => setCreating(id, (current) => (current === request ? undefined : current))
+          void request.then(settle, settle)
           const now = Date.now()
           sessionOutbox.add(id)
           result.session.remember({
@@ -1886,21 +1902,6 @@ export function createData(config: CreateDataInput) {
           sync.complete(`session.message:${id}`)
           anchored.add(id)
         }
-        // Wrapped so even a synchronous client failure reaches the rollback.
-        const request = Promise.resolve()
-          .then(() => api().session.create({ ...payload, id, location }))
-          .then((info) => {
-            sessionOutbox.delete(id)
-            result.session.remember(info)
-            return info
-          })
-          .catch((error) => {
-            // Roll back only a record this call admitted and neither the echo
-            // nor the response has acknowledged: anything else is server state.
-            if (fresh && sessionOutbox.delete(id)) removeSession(id)
-            throw error
-          })
-        if (fresh) track(creating, id, request)
         return { id, request }
       },
       compact(input: { sessionID: string; model?: ModelRef }) {

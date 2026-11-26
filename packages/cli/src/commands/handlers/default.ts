@@ -13,6 +13,7 @@ import { UpdatePreflight } from "../../services/update-preflight"
 import { Npm } from "@opencode/util/npm"
 import { OPENCODE_ARTIFACT, OPENCODE_CHANNEL, OPENCODE_HIGHLIGHTS, OPENCODE_VERSION } from "../../version"
 import { Env } from "../../env"
+import { ProgramResume } from "../../program-resume"
 import { Service } from "@opencode/client/effect/service"
 import { OpenCode } from "@opencode/client/promise"
 import { findSession } from "../../session-target"
@@ -21,7 +22,8 @@ import { errorMessage } from "../../util/error"
 export default Runtime.handler(Commands, (input) =>
   Effect.gen(function* () {
     const requestedDirectory = Option.getOrUndefined(input.directory)
-    const requestedServer = (yield* ServerFlags.read()).server
+    const serverFlags = yield* ServerFlags.read()
+    const requestedServer = serverFlags.server
     if (requestedDirectory !== undefined) {
       const isDirectory = yield* FileSystem.FileSystem.pipe(
         Effect.flatMap((fileSystem) => fileSystem.stat(requestedDirectory)),
@@ -36,6 +38,8 @@ export default Runtime.handler(Commands, (input) =>
         })
       process.chdir(requestedDirectory)
     }
+    const auto = input.auto || input.yolo || input.dangerouslySkipPermissions
+    const resume = ProgramResume.input({ ...serverFlags, auto })
     const preflight = UpdatePreflight.make()
     yield* Effect.addFinalizer(() => Effect.promise(() => preflight.close()))
     const serviceStarts = yield* Queue.unbounded<{
@@ -132,7 +136,7 @@ export default Runtime.handler(Commands, (input) =>
         sessionID: sessionExists ? session : undefined,
         newSessionID: sessionExists ? undefined : session,
         prompt: Option.getOrUndefined(input.prompt),
-        auto: input.auto || input.yolo || input.dangerouslySkipPermissions,
+        auto,
       },
       config: {
         path: config.path,
@@ -159,6 +163,7 @@ export default Runtime.handler(Commands, (input) =>
         prepare: (spec, install = true) => runPromise(install ? npm.add(spec) : npm.resolve(spec)),
       },
       environment: requestedServer === undefined ? Env.session() : undefined,
+      resume,
       terminalHandoff: () => preflight.finish(),
       log: (level, message, tags) => {
         const effect =
