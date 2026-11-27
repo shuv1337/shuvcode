@@ -443,11 +443,17 @@ describe("PushWatcher", () => {
         resources: ["git push"],
       })
       yield* waitUntil(Effect.sync(() => boxes.length === 1))
-      yield* bus.publish(Permission.Event.Cancelled, { sessionID: childID, requestID })
+      const cancelled = yield* bus.publish(Permission.Event.Cancelled, { sessionID: childID, requestID })
       yield* waitUntil(Effect.sync(() => boxes.length === 2))
 
       expect(silent).toEqual([undefined, true])
-      expect(open(key, boxes[1])).toEqual({ v: 1, id: requestID, type: "clear", sessionID: parentID })
+      expect(open(key, boxes[0])).toMatchObject({
+        id: requestID,
+        type: "permission",
+        sessionID: parentID,
+        data: { replySessionID: childID },
+      })
+      expect(open(key, boxes[1])).toEqual({ v: 1, type: "clear", ids: [requestID], time: cancelled.created })
     }),
   )
 

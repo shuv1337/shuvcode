@@ -82,7 +82,7 @@ it.live("corrupt or unreadable service.json fails cleanly and is never overwritt
 test("CLI refuses to overwrite an invalid service.json on serve --service while status and stop still work", async () => {
   await using root = await tmpdir()
   const file = path.join(root.path, "config", ServiceConfig.filename())
-  const registration = path.join(root.path, "state", "opencode", ServiceConfig.filename())
+  const registration = path.join(root.path, "state", Global.app, ServiceConfig.filename())
   const raw = '{"hostname":"127.0.0.1","port":"4096","password":"keep-me","env":{"KEEP":"1"}}\n'
   await fs.mkdir(path.dirname(file), { recursive: true })
   await fs.mkdir(path.dirname(registration), { recursive: true })
