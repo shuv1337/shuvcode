@@ -301,6 +301,64 @@ describe("child sessions inherit parent agent denies", () => {
     }),
   )
 
+  for (const policy of ["allowed", "explicit deny", "missing agent"] as const) {
+    it.live(`honors the parent policy for structured_output on a read-only child (${policy})`, () =>
+      Effect.gen(function* () {
+        const tmp = yield* tmpdirScoped()
+        yield* Effect.promise(() =>
+          Bun.write(path.join(tmp.path, "opencode.json"), '{"experimental":{"codemode_agents":true}}'),
+        )
+        const sessions = yield* Session.Service
+        const parent = yield* sessions.create({ location: { directory: AbsolutePath.make(tmp.path) }, agent: plan })
+        const locations = yield* LocationServiceMap.Service
+        const provide = locations.get(parent.location)
+        yield* Plugin.Service.use((plugins) => plugins.awaitActivation).pipe(Effect.provide(provide))
+        const permission = yield* Permission.Service.pipe(Effect.provide(provide))
+        const agents = yield* Agent.Service.pipe(Effect.provide(provide))
+        const context = yield* SessionContext.Service.pipe(Effect.provide(provide))
+        yield* agents.transform((editor) => {
+          editor.update(locked, (agent) => {
+            agent.mode = "subagent"
+            agent.permissions.push({ action: "*", resource: "*", effect: "deny" })
+          })
+        })
+        const output = { action: CodeModeAgents.OUTPUT_TOOL, resources: ["*"] }
+        if (policy === "explicit deny") {
+          yield* sessions.setPermissions({
+            sessionID: parent.id,
+            permissions: [{ action: output.action, resource: "*", effect: "deny" }],
+          })
+        }
+        const selected = yield* context.select(parent.id)
+        // A running call retains its original agent, but creation reads the parent's current agent.
+        if (policy === "missing agent") {
+          yield* sessions.switchAgent({ sessionID: parent.id, agent: Agent.ID.make("missing-parent") })
+        }
+        yield* selected.tools.execute({
+          sessionID: parent.id,
+          agent: plan,
+          messageID: SessionMessage.ID.create(),
+          call: {
+            type: "tool-call",
+            id: "call-structured-policy",
+            name: "execute",
+            input: {
+              code: `return await agent("Inspect the project", { agent: "locked", schema: { type: "object" } })`,
+            },
+          },
+        })
+        const [child] = (yield* sessions.list({ parentID: parent.id })).data
+        if (!child) return yield* Effect.die("Missing structured Code Mode child")
+        const check = { sessionID: child.id, agent: locked, ...output }
+        if (policy === "allowed") {
+          expect(yield* permission.allows(check)).toBe(true)
+          return
+        }
+        yield* expectDenied(permission, check)
+      }),
+    )
+  }
+
   it.live("keeps a child from moving its session past a parent agent's external_directory deny", () =>
     Effect.gen(function* () {
       const tmp = yield* tmpdirScoped()

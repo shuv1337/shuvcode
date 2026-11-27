@@ -166,7 +166,7 @@ export const Plugin = {
           model,
           metadata: { ...(parent.metadata ?? {}), [CodeModeAgents.METADATA_KEY]: marker },
         },
-        // Deny-by-default subagents such as `explore` strip tools outside their allowlist; let them return their answer.
+        // Let deny-by-default subagents return their answer unless the parent denies it.
         output === undefined ? undefined : [{ action: OUTPUT_TOOL, resource: "*", effect: "allow" }],
       )
       if (output === undefined) return SubagentCompletion.text(yield* drain(child.id, frame(input.prompt, false)))

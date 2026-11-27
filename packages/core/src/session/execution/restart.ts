@@ -652,23 +652,38 @@ export const layer = (options?: Options) =>
             ),
             ({ recovery }) => recovery.parentSessionID,
           )
-          // An agent() child has nobody waiting after restart. Abandon it and its owned
-          // children before prepared calls or background jobs can take execution ownership.
+          // An agent() script cannot resume, but an ordinary subagent job can own a
+          // reused session independently of the marker from its original launch.
           const abandoned = new Set<SessionSchema.ID>()
-          for (const sessionID of new Set([...suspended, ...subagentJobs.keys()])) {
-            if (active.has(sessionID)) continue
+          const candidates = new Set([...suspended, ...subagentJobs.keys()])
+          for (const sessionID of candidates) {
+            if (active.has(sessionID) || children.has(sessionID)) continue
             const session = yield* store.get(sessionID)
             if (session && CodeModeAgents.sessionMarker(session.id, session.metadata))
               yield* stopStaleChild(sessionID, abandoned)
           }
+          const abandonedBranch = Effect.fnUntraced(function* (sessionID: SessionSchema.ID) {
+            const visited = new Set<SessionSchema.ID>()
+            let current: SessionSchema.ID | undefined = sessionID
+            while (current && !visited.has(current) && !active.has(current)) {
+              if (abandoned.has(current)) return [...visited].reverse()
+              visited.add(current)
+              current = (yield* store.get(current))?.parentID
+            }
+            return []
+          })
+          // A settled child's report may already be consumed, leaving no job row
+          // for the intermediate session. Descendant jobs still know their ancestry.
+          if (abandoned.size > 0) {
+            for (const sessionID of candidates) {
+              const branch = yield* abandonedBranch(sessionID)
+              for (const descendant of branch) yield* stopStaleChild(descendant, abandoned)
+            }
+          }
           for (const sessionID of abandoned) {
             suspended.delete(sessionID)
-            for (const { background, recovery } of subagentJobs.get(sessionID) ?? []) {
+            for (const { background } of subagentJobs.get(sessionID) ?? []) {
               if (!(yield* recoverable(background))) continue
-              if (background.status === "running") {
-                const child = yield* store.get(recovery.childSessionID)
-                if (child?.parentID === sessionID) yield* stopStaleChild(child.id, abandoned)
-              }
               yield* jobs.completeBackground(background.notificationID)
             }
           }

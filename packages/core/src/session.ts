@@ -138,8 +138,8 @@ export interface Interface {
   >
   readonly create: (
     input: CreateInput,
-    /** Internal tool rules added after the session's effective inherited or explicit permissions. */
-    appendPermissions?: Permission.Ruleset,
+    /** Internal tool rules that override child-agent defaults, but not inherited or explicit session rules. */
+    prependPermissions?: Permission.Ruleset,
   ) => Effect.Effect<SessionSchema.Info, NotFoundError>
   readonly fork: (
     input: ForkInput,
@@ -325,7 +325,7 @@ const layer = Layer.effect(
     })
 
     const result = Service.of({
-      create: Effect.fn("Session.create")(function* (input, appendPermissions) {
+      create: Effect.fn("Session.create")(function* (input, prependPermissions) {
         const sessionID = input.id ?? SessionSchema.ID.create()
         const recorded = yield* store.get(sessionID)
         if (recorded) return recorded
@@ -351,7 +351,7 @@ const layer = Layer.effect(
               title: input.title,
               agent: input.agent,
               metadata: input.metadata ?? parent?.metadata,
-              permissions: appendPermissions ? [...(permissions ?? []), ...appendPermissions] : permissions,
+              permissions: prependPermissions?.length ? [...prependPermissions, ...(permissions ?? [])] : permissions,
               model: input.model,
             },
             { location },

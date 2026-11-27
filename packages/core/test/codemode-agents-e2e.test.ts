@@ -30,9 +30,11 @@ import { Session } from "@opencode/core/session"
 import { SessionEvent } from "@opencode/core/session/event"
 import { SessionExecution } from "@opencode/core/session/execution"
 import { SessionRestart } from "@opencode/core/session/execution/restart"
+import { SessionInbox } from "@opencode/core/session/inbox"
 import { SessionMessage } from "@opencode/core/session/message"
 import { SessionRunnerModel } from "@opencode/core/session/runner/model"
 import { SessionStore } from "@opencode/core/session/store"
+import { SubagentCompletion } from "@opencode/core/session/subagent-completion"
 import { SubagentJob } from "@opencode/core/session/subagent-job"
 import { SubagentRecovery } from "@opencode/core/session/subagent-recovery"
 import { Skill } from "@opencode/core/skill"
@@ -86,6 +88,7 @@ const nodes = LayerNode.group([
   Job.node,
   Session.node,
   SessionExecution.node,
+  SessionInbox.node,
   SessionRestart.node,
   LocationServiceMap.node,
   SessionStore.node,
@@ -189,6 +192,36 @@ const harness = Effect.fnUntraced(function* () {
     })
   const store = Context.get(context, SessionStore.Service)
   const restart = Context.get(context, SessionRestart.Service)
+  const bus = Context.get(context, Bus.Service)
+  const db = Context.get(context, Database.Service).db
+  const recordSubagent = Effect.fnUntraced(function* (
+    parentSessionID: Session.ID,
+    childSessionID: Session.ID,
+    status: "running" | "completed" = "running",
+  ) {
+    const notificationID = SessionMessage.ID.create()
+    const recovery = {
+      kind: "subagent" as const,
+      parentSessionID,
+      childSessionID,
+      agent: "reviewer",
+      description: "Background inspection",
+    }
+    yield* db
+      .insert(JobTable)
+      .values({
+        notification_id: notificationID,
+        id: childSessionID,
+        session_id: parentSessionID,
+        child_session_id: childSessionID,
+        kind: recovery.kind,
+        title: recovery.description,
+        status,
+        recovery,
+      })
+      .run()
+    return { notificationID, recovery, status }
+  })
   return {
     sessions,
     parent,
@@ -196,9 +229,13 @@ const harness = Effect.fnUntraced(function* () {
     run,
     store,
     restart,
-    bus: Context.get(context, Bus.Service),
+    bus,
     jobs: Context.get(context, Job.Service),
-    db: Context.get(context, Database.Service).db,
+    recordSubagent,
+    promote: (sessionID: Session.ID) =>
+      SessionInbox.promote(db, bus, sessionID, "input").pipe(
+        Effect.provideService(SessionInbox.Service, Context.get(context, SessionInbox.Service)),
+      ),
   }
 })
 
@@ -327,25 +364,7 @@ describe("agent()", () => {
         id,
         recovery: { childSessionID: child.id, inboxID, inputDigest: SubagentRecovery.digest(input), agent, model },
       })
-      yield* h.db
-        .insert(JobTable)
-        .values({
-          notification_id: SessionMessage.ID.create(),
-          id: background.id,
-          session_id: orphan.id,
-          child_session_id: background.id,
-          kind: "subagent",
-          title: "Background inspection",
-          status: "running",
-          recovery: {
-            kind: "subagent",
-            parentSessionID: orphan.id,
-            childSessionID: background.id,
-            agent,
-            description: "Background inspection",
-          },
-        })
-        .run()
+      yield* h.recordSubagent(orphan.id, background.id)
       yield* h.store.claim(orphan.id)
       yield* h.store.claim(child.id)
       yield* h.store.claim(background.id)
@@ -362,6 +381,71 @@ describe("agent()", () => {
         .flatMap((message) => (message.type === "assistant" ? message.content : []))
         .find((part) => part.type === "tool" && part.id === id)
       expect(tool).toMatchObject({ state: { status: "error", error: { type: "aborted" } } })
+    }),
+  )
+
+  e2e.live("resumes a marked child that an ordinary subagent job now owns", () =>
+    Effect.gen(function* () {
+      const h = yield* harness()
+      const childID = Session.ID.create()
+      yield* h.sessions.create({
+        id: childID,
+        parentID: h.parent.id,
+        agent: Agent.ID.make("reviewer"),
+        metadata: { [CodeModeAgents.METADATA_KEY]: { childID, structured: false } },
+      })
+      yield* h.sessions.prompt({ sessionID: childID, text: "Continue the ordinary job", resume: false })
+      yield* h.recordSubagent(h.parent.id, childID)
+      yield* h.store.claim(childID)
+      yield* h.llm.serve(
+        script({ reviewer: [TestLLM.text("Recovered", "recovered")], build: [TestLLM.text("Reported", "reported")] }),
+      )
+
+      yield* h.restart.resumeSuspendedSessions
+      yield* h.sessions.wait(childID)
+      yield* h.sessions.wait(h.parent.id)
+      const calls = (yield* h.llm.requests()).filter((request) => request.model.id === "reviewer")
+      expect(calls).toHaveLength(1)
+      expect(text(calls[0]!)).toContain("Continue the ordinary job")
+      expect((yield* h.sessions.get(childID)).outcome).toBe("succeeded")
+      expect(yield* h.store.listSuspended()).toEqual([])
+      expect(yield* h.jobs.pendingBackground).toEqual([])
+    }),
+  )
+
+  e2e.live("abandons a grandchild job even after its intermediate parent's report was delivered", () =>
+    Effect.gen(function* () {
+      const h = yield* harness()
+      const orphanID = Session.ID.create()
+      const agent = Agent.ID.make("reviewer")
+      const orphan = yield* h.sessions.create({
+        id: orphanID,
+        parentID: h.parent.id,
+        agent,
+        metadata: { [CodeModeAgents.METADATA_KEY]: { childID: orphanID, structured: false } },
+      })
+      const intermediate = yield* h.sessions.create({ parentID: orphan.id, agent })
+      const grandchild = yield* h.sessions.create({ parentID: intermediate.id, agent })
+      yield* h.bus.publish(SessionEvent.Execution.Succeeded, { sessionID: intermediate.id })
+      const report = yield* h.recordSubagent(orphan.id, intermediate.id, "completed")
+      yield* SubagentCompletion.deliver(h.sessions, h.jobs, { ...report, status: "completed", resume: false })
+      expect(yield* h.promote(orphan.id)).toBe(1)
+      const job = yield* h.recordSubagent(intermediate.id, grandchild.id)
+      yield* h.store.claim(orphan.id)
+      yield* h.store.claim(grandchild.id)
+      expect(yield* h.jobs.pendingBackground).toMatchObject([{ notificationID: job.notificationID }])
+      expect(new Set(yield* h.store.listSuspended())).toEqual(new Set([orphan.id, grandchild.id]))
+
+      yield* h.restart.resumeSuspendedSessions
+      yield* h.sessions.wait(grandchild.id)
+      yield* h.sessions.wait(intermediate.id)
+      yield* h.sessions.wait(orphan.id)
+      expect(yield* h.llm.requests()).toEqual([])
+      expect(yield* h.jobs.pendingBackground).toEqual([])
+      expect(yield* h.store.listSuspended()).toEqual([])
+      for (const session of [orphan, intermediate, grandchild]) {
+        expect(yield* h.sessions.inbox(session.id)).toEqual([])
+      }
     }),
   )
 
