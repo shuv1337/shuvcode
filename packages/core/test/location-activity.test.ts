@@ -1,6 +1,6 @@
 import type { FileSystem } from "@opencode/core/filesystem"
 import { describe, expect } from "bun:test"
-import { Clock, Context, Deferred, Duration, Effect, Fiber, Layer, LayerMap, RcMap, Schema } from "effect"
+import { Clock, Context, Deferred, Duration, Effect, Fiber, Layer, Schema } from "effect"
 import { TestClock } from "effect/testing"
 import { AppNodeBuilder } from "@opencode/core/effect/app-node-builder"
 import { LayerNode } from "@opencode/util/effect/layer-node"
@@ -52,7 +52,7 @@ const locations = Layer.effect(
   Effect.gen(function* () {
     const bus = yield* Bus.Service
     const activity = yield* ToolActivity.Service
-    const map = yield* LayerMap.make(
+    const map = yield* LocationServiceMap.make(
       (ref: Location.Ref) =>
         // The fixture only exercises these four Location services.
         // oxlint-disable-next-line typescript-eslint/no-unsafe-type-assertion
@@ -108,13 +108,7 @@ const locations = Layer.effect(
         ) as unknown as Layer.Layer<LocationServices, FileSystem.DirectoryNotFoundError>,
       { idleTimeToLive: Duration.infinity },
     )
-    return {
-      ...map,
-      get: (ref: Location.Ref) => map.get(LocationServiceMap.canonical(ref)),
-      contextEffect: (ref: Location.Ref) => map.contextEffect(LocationServiceMap.canonical(ref)),
-      contextEffectOption: (ref: Location.Ref) => map.contextEffectOption(LocationServiceMap.canonical(ref)),
-      invalidate: (ref: Location.Ref) => map.invalidate(LocationServiceMap.canonical(ref)),
-    }
+    return map
   }),
 )
 
@@ -199,7 +193,7 @@ describe("LocationActivity eviction", () => {
         yield* TestClock.adjust("1 minute")
         yield* TestClock.adjust("62 minutes")
         // The idle sibling expired in the same sweep; the waiting executions keep theirs.
-        expect(Array.from(yield* RcMap.keys(map.rcMap))).toEqual([ref])
+        expect(yield* map.keys).toEqual([ref])
         expect(Array.from(yield* execution.active).toSorted()).toEqual(sessionIDs.toSorted())
         expect(interrupted).toEqual([])
         expect((yield* forms.list()).map((form) => form.id).toSorted()).toEqual(
@@ -213,7 +207,7 @@ describe("LocationActivity eviction", () => {
         expect(yield* execution.active).toEqual(new Set())
         expect(yield* store.listSuspended()).toEqual([])
         yield* TestClock.adjust("62 minutes")
-        expect(Array.from(yield* RcMap.keys(map.rcMap))).toEqual([])
+        expect(yield* map.keys).toEqual([])
       }),
     )
   }
@@ -269,13 +263,13 @@ describe("LocationActivity eviction", () => {
         yield* TestClock.adjust("1 minute")
         yield* TestClock.adjust("62 minutes")
         // The idle sibling expired in the same sweep; the job keeps its location.
-        expect(Array.from(yield* RcMap.keys(map.rcMap))).toEqual([ref])
+        expect(yield* map.keys).toEqual([ref])
         expect((yield* jobs.get(job.id))?.status).toBe("running")
 
         yield* Deferred.succeed(finish, "done")
         yield* jobs.wait({ id: job.id })
         yield* TestClock.adjust("62 minutes")
-        expect(Array.from(yield* RcMap.keys(map.rcMap))).toEqual([])
+        expect(yield* map.keys).toEqual([])
       }),
     )
 
@@ -296,7 +290,7 @@ describe("LocationActivity eviction", () => {
 
         yield* TestClock.adjust("1 minute")
         yield* TestClock.adjust(after)
-        const cached = Array.from(yield* RcMap.keys(map.rcMap))
+        const cached = yield* map.keys
         expect(cached.some((ref) => ref.workspaceID === workspaceID)).toBe(!evicted)
         // Locations without the setting keep the 60 minute default.
         expect(cached.some((ref) => ref.workspaceID === undefined)).toBe(
@@ -313,8 +307,8 @@ describe("LocationActivity eviction", () => {
       const ref = LocationServiceMap.canonical(raw)
 
       yield* Location.Service.pipe(Effect.provide(map.get(raw)), Effect.scoped)
-      expect(yield* RcMap.has(map.rcMap, raw)).toBe(false)
-      expect(yield* RcMap.has(map.rcMap, ref)).toBe(true)
+      expect(yield* map.has(raw)).toBe(true)
+      expect(yield* map.has(ref)).toBe(true)
 
       yield* TestClock.adjust("31 minutes")
       yield* bus.publish(
@@ -324,10 +318,10 @@ describe("LocationActivity eviction", () => {
       )
 
       yield* TestClock.adjust("32 minutes")
-      expect(Array.from(yield* RcMap.keys(map.rcMap))).toEqual([ref])
+      expect(yield* map.keys).toEqual([ref])
 
       yield* TestClock.adjust("30 minutes")
-      expect(Array.from(yield* RcMap.keys(map.rcMap))).toEqual([])
+      expect(yield* map.keys).toEqual([])
     }),
   )
 })
@@ -360,7 +354,7 @@ const sweepInterval = "1 second"
 const toolLocations = Layer.effect(
   LocationServiceMap.Service,
   Effect.gen(function* () {
-    const map = yield* LayerMap.make(
+    return yield* LocationServiceMap.make(
       (ref: Location.Ref) =>
         // The fixture only exercises Location, the runner, and the test gate.
         // oxlint-disable-next-line typescript-eslint/no-unsafe-type-assertion
@@ -501,13 +495,6 @@ const toolLocations = Layer.effect(
         })() as unknown as Layer.Layer<LocationServices, FileSystem.DirectoryNotFoundError>,
       { idleTimeToLive: Duration.infinity },
     )
-    return {
-      ...map,
-      get: (ref: Location.Ref) => map.get(LocationServiceMap.canonical(ref)),
-      contextEffect: (ref: Location.Ref) => map.contextEffect(LocationServiceMap.canonical(ref)),
-      contextEffectOption: (ref: Location.Ref) => map.contextEffectOption(LocationServiceMap.canonical(ref)),
-      invalidate: (ref: Location.Ref) => map.invalidate(LocationServiceMap.canonical(ref)),
-    }
   }),
 )
 
@@ -632,7 +619,7 @@ describe("LocationActivity tool leases", () => {
 
       yield* TestClock.adjust("30 seconds")
       expect(Array.from(yield* execution.active)).toEqual([sessionID])
-      expect(Array.from(yield* RcMap.keys(map.rcMap))).toEqual([ref])
+      expect(yield* map.keys).toEqual([ref])
       expect(interrupted).toEqual([])
       expect(yield* leases.count(sessionID)).toBe(1)
 
@@ -641,12 +628,12 @@ describe("LocationActivity tool leases", () => {
       expect(yield* leases.count(sessionID)).toBe(0)
       expect(Array.from(yield* execution.active)).toEqual([sessionID])
       yield* TestClock.adjust("4 seconds")
-      expect(Array.from(yield* RcMap.keys(map.rcMap))).toEqual([ref])
+      expect(yield* map.keys).toEqual([ref])
       expect(interrupted).toEqual([])
 
       yield* TestClock.adjust("2 seconds")
       expect(interrupted).toEqual([{ sessionID, reason: "inactivity" }])
-      expect(Array.from(yield* RcMap.keys(map.rcMap))).toEqual([])
+      expect(yield* map.keys).toEqual([])
       expect((yield* Fiber.join(running))._tag).toBe("Failure")
     }),
   )
@@ -666,11 +653,11 @@ describe("LocationActivity tool leases", () => {
       yield* Deferred.await(gate.started)
 
       yield* TestClock.adjust("5 seconds")
-      expect(Array.from(yield* RcMap.keys(map.rcMap))).toEqual([ref])
+      expect(yield* map.keys).toEqual([ref])
       expect(interrupted).toEqual([])
       yield* TestClock.adjust("2 seconds")
       expect(interrupted).toEqual([{ sessionID, reason: "inactivity" }])
-      expect(Array.from(yield* RcMap.keys(map.rcMap))).toEqual([])
+      expect(yield* map.keys).toEqual([])
       expect((yield* Fiber.join(running))._tag).toBe("Failure")
     }),
   )
@@ -696,10 +683,10 @@ describe("LocationActivity tool leases", () => {
           expect(yield* leases.count(sessionID)).toBe(0)
 
           yield* TestClock.adjust("4 seconds")
-          expect(Array.from(yield* RcMap.keys(map.rcMap))).toEqual([ref])
+          expect(yield* map.keys).toEqual([ref])
           expect(interrupted).toEqual([])
           yield* TestClock.adjust("2 seconds")
-          expect(Array.from(yield* RcMap.keys(map.rcMap))).toEqual([])
+          expect(yield* map.keys).toEqual([])
         }),
     )
   }
@@ -720,15 +707,15 @@ describe("LocationActivity tool leases", () => {
       yield* TestClock.adjust("30 seconds")
       expect(interrupted).toEqual([])
       expect(yield* leases.count(sessionID)).toBe(1)
-      expect(Array.from(yield* RcMap.keys(map.rcMap))).toEqual([ref])
+      expect(yield* map.keys).toEqual([ref])
 
       yield* execution.interrupt(sessionID, { awaitSettlement: true })
       expect(yield* leases.count(sessionID)).toBe(0)
       expect(interrupted).toEqual([{ sessionID, reason: "user" }])
       yield* TestClock.adjust("4 seconds")
-      expect(Array.from(yield* RcMap.keys(map.rcMap))).toEqual([ref])
+      expect(yield* map.keys).toEqual([ref])
       yield* TestClock.adjust("2 seconds")
-      expect(Array.from(yield* RcMap.keys(map.rcMap))).toEqual([])
+      expect(yield* map.keys).toEqual([])
       expect(interrupted.some((event) => event.reason === "inactivity")).toBe(false)
       expect((yield* Fiber.join(running))._tag).toBe("Failure")
     }),
@@ -752,7 +739,7 @@ describe("LocationActivity tool leases", () => {
       yield* TestClock.adjust("30 seconds")
       expect(interrupted).toEqual([])
       expect(yield* leases.count(sessionID)).toBe(1)
-      expect(Array.from(yield* RcMap.keys(map.rcMap))).toEqual([ref])
+      expect(yield* map.keys).toEqual([ref])
 
       yield* Deferred.succeed(gate.release, "done")
       yield* Deferred.await(gate.afterStarted)
@@ -766,9 +753,9 @@ describe("LocationActivity tool leases", () => {
       expect(yield* leases.count(sessionID)).toBe(0)
       yield* Fiber.join(running)
       yield* TestClock.adjust("4 seconds")
-      expect(Array.from(yield* RcMap.keys(map.rcMap))).toEqual([ref])
+      expect(yield* map.keys).toEqual([ref])
       yield* TestClock.adjust("2 seconds")
-      expect(Array.from(yield* RcMap.keys(map.rcMap))).toEqual([])
+      expect(yield* map.keys).toEqual([])
     }),
   )
 
@@ -789,7 +776,7 @@ describe("LocationActivity tool leases", () => {
       yield* TestClock.adjust("30 seconds")
       expect(interrupted).toEqual([])
       expect(yield* leases.count(sessionID)).toBe(1)
-      expect(Array.from(yield* RcMap.keys(map.rcMap))).toEqual([ref])
+      expect(yield* map.keys).toEqual([ref])
 
       yield* Deferred.succeed(gate.release, "done")
       expect(yield* Deferred.await(gate.delivered)).toBe("done")
@@ -797,9 +784,9 @@ describe("LocationActivity tool leases", () => {
       yield* Deferred.succeed(gate.settle, undefined)
       yield* Fiber.join(running)
       yield* TestClock.adjust("4 seconds")
-      expect(Array.from(yield* RcMap.keys(map.rcMap))).toEqual([ref])
+      expect(yield* map.keys).toEqual([ref])
       yield* TestClock.adjust("2 seconds")
-      expect(Array.from(yield* RcMap.keys(map.rcMap))).toEqual([])
+      expect(yield* map.keys).toEqual([])
     }),
   )
 
@@ -843,7 +830,7 @@ describe("LocationActivity tool leases", () => {
       yield* Deferred.succeed(gate.settle, undefined)
       yield* Fiber.join(running)
       yield* TestClock.adjust("8 seconds")
-      expect(Array.from(yield* RcMap.keys(map.rcMap))).toEqual([])
+      expect(yield* map.keys).toEqual([])
     }),
   )
 
@@ -863,7 +850,7 @@ describe("LocationActivity tool leases", () => {
       const running = yield* execution.resume(sessionID).pipe(Effect.exit, Effect.forkScoped)
       yield* Deferred.await(gate.started)
       yield* TestClock.adjust("30 seconds")
-      expect(Array.from(yield* RcMap.keys(map.rcMap))).toEqual([from])
+      expect(yield* map.keys).toEqual([from])
       expect(yield* leases.count(sessionID)).toBe(1)
 
       yield* db
@@ -876,7 +863,7 @@ describe("LocationActivity tool leases", () => {
       yield* TestClock.adjust("8 seconds")
       expect(interrupted).toEqual([])
       expect(Array.from(yield* execution.active)).toEqual([sessionID])
-      expect(Array.from(yield* RcMap.keys(map.rcMap))).toEqual([to])
+      expect(yield* map.keys).toEqual([to])
       expect(yield* leases.count(sessionID)).toBe(1)
 
       yield* Deferred.succeed(gate.release, "done")
@@ -905,7 +892,7 @@ describe("LocationActivity lease races", () => {
       yield* TestClock.adjust("8 seconds")
       expect(interrupted).toEqual([])
       expect(yield* leases.count(sessionID)).toBe(1)
-      expect(Array.from(yield* RcMap.keys(map.rcMap))).toEqual([ref])
+      expect(yield* map.keys).toEqual([ref])
       yield* leases.release(sessionID)
       yield* execution.interrupt(sessionID, { awaitSettlement: true })
       yield* Deferred.succeed(gate.settle, undefined)
@@ -929,10 +916,10 @@ describe("LocationActivity lease races", () => {
       yield* Deferred.await(gate.started)
       yield* TestClock.adjust("8 seconds")
       expect(decisionAt - releasedAt).toBeGreaterThanOrEqual(2_000)
-      expect(Array.from(yield* RcMap.keys(map.rcMap))).toEqual([ref])
+      expect(yield* map.keys).toEqual([ref])
       yield* TestClock.adjust("4 seconds")
       expect(interrupted).toEqual([{ sessionID, reason: "inactivity" }])
-      expect(Array.from(yield* RcMap.keys(map.rcMap))).toEqual([])
+      expect(yield* map.keys).toEqual([])
       expect((yield* Fiber.join(running))._tag).toBe("Failure")
     }),
   )

@@ -11,6 +11,7 @@ import { Database } from "../../database/database.js"
 import { Environment } from "../../environment/index.js"
 import { Instance } from "../../instance/service.js"
 import { Job } from "../../job.js"
+import { CodeModeAgents } from "../../codemode/agents.js"
 import { CodeModeJob } from "../../codemode/job.js"
 import { Session } from "../../session.js"
 import { Shell } from "../../shell.js"
@@ -57,9 +58,8 @@ export interface Interface {
   /**
    * Resumes Sessions whose execution claim was never released — turns orphaned
    * by a process that died without teardown, or interrupted by a graceful
-   * shutdown (which preserves the claim on purpose). The claim is never
-   * cleared here: only a terminal event releases it, so a death anywhere in
-   * the resume path leaves the same orphaned claim for the next boot.
+   * shutdown (which preserves the claim on purpose). Unrecoverable executions
+   * are released; recoverable ones keep the claim until settlement.
    */
   readonly resumeSuspendedSessions: Effect.Effect<void>
 }
@@ -436,7 +436,14 @@ export const layer = (options?: Options) =>
       // Until nested prepared calls can be coordinated before their own drain, stop the
       // entire in-flight subtree rather than let settleStaleToolCalls turn a
       // possibly executed effect into a retryable model-visible tool error.
-      const stopStaleChild = Effect.fnUntraced(function* (sessionID: SessionSchema.ID): Effect.fn.Return<boolean> {
+      const stopStaleChild = Effect.fnUntraced(function* (
+        sessionID: SessionSchema.ID,
+        abandoned?: Set<SessionSchema.ID>,
+      ): Effect.fn.Return<boolean> {
+        if (abandoned) {
+          if (abandoned.has(sessionID) || (yield* execution.isActive(sessionID))) return false
+          abandoned.add(sessionID)
+        }
         const calls = (yield* store.context(sessionID).pipe(Effect.orDie)).flatMap((message) =>
           message.type === "assistant"
             ? message.content.flatMap((tool) =>
@@ -446,20 +453,25 @@ export const layer = (options?: Options) =>
               )
             : [],
         )
-        if (calls.length === 0) return false
+        if (calls.length === 0) {
+          if (abandoned) yield* store.release(sessionID)
+          return false
+        }
         for (const call of calls) {
           const operation = SubagentRecovery.prepared(call.tool)
           const child = operation && (yield* store.get(operation.childSessionID))
-          if (child?.parentID === sessionID) yield* stopStaleChild(child.id)
+          if (child?.parentID === sessionID) yield* stopStaleChild(child.id, abandoned)
           yield* bus.publish(SessionEvent.Tool.Failed, {
             sessionID,
             assistantMessageID: call.messageID,
             id: call.tool.id,
             error: {
               type: "aborted",
-              message: operation
-                ? `Nested subagent recovery stopped (sessionID: ${operation.childSessionID})`
-                : `Tool outcome is ambiguous after restart: ${call.tool.name}`,
+              message: abandoned
+                ? "Code Mode script did not survive the restart."
+                : operation
+                  ? `Nested subagent recovery stopped (sessionID: ${operation.childSessionID})`
+                  : `Tool outcome is ambiguous after restart: ${call.tool.name}`,
             },
             metadata: operation
               ? { sessionID: operation.childSessionID }
@@ -473,7 +485,12 @@ export const layer = (options?: Options) =>
           SessionEvent.Execution.Failed,
           {
             sessionID,
-            error: { type: "aborted", message: "Execution stopped: a child tool outcome is ambiguous after restart." },
+            error: {
+              type: "aborted",
+              message: abandoned
+                ? "Execution stopped: the Code Mode script did not survive the restart."
+                : "Execution stopped: a child tool outcome is ambiguous after restart.",
+            },
           },
           { commit: () => store.release(sessionID) },
         )
@@ -626,6 +643,50 @@ export const layer = (options?: Options) =>
           const suspended = new Set(
             [...(yield* store.listSuspended()), ...children].filter((sessionID) => !active.has(sessionID)),
           )
+          const recoverable = Effect.fnUntraced(function* (background: Job.Background) {
+            return (yield* jobs.get(background.id))?.status !== "running"
+          })
+          const subagentJobs = Map.groupBy(
+            pending.flatMap((background) =>
+              background.recovery.kind === "subagent" ? [{ background, recovery: background.recovery }] : [],
+            ),
+            ({ recovery }) => recovery.parentSessionID,
+          )
+          // An agent() script cannot resume, but an ordinary subagent job can own a
+          // reused session independently of the marker from its original launch.
+          const abandoned = new Set<SessionSchema.ID>()
+          const candidates = new Set([...suspended, ...subagentJobs.keys()])
+          for (const sessionID of candidates) {
+            if (active.has(sessionID) || children.has(sessionID)) continue
+            const session = yield* store.get(sessionID)
+            if (session && CodeModeAgents.sessionMarker(session.id, session.metadata))
+              yield* stopStaleChild(sessionID, abandoned)
+          }
+          const abandonedBranch = Effect.fnUntraced(function* (sessionID: SessionSchema.ID) {
+            const visited = new Set<SessionSchema.ID>()
+            let current: SessionSchema.ID | undefined = sessionID
+            while (current && !visited.has(current) && !active.has(current)) {
+              if (abandoned.has(current)) return [...visited].reverse()
+              visited.add(current)
+              current = (yield* store.get(current))?.parentID
+            }
+            return []
+          })
+          // A settled child's report may already be consumed, leaving no job row
+          // for the intermediate session. Descendant jobs still know their ancestry.
+          if (abandoned.size > 0) {
+            for (const sessionID of candidates) {
+              const branch = yield* abandonedBranch(sessionID)
+              for (const descendant of branch) yield* stopStaleChild(descendant, abandoned)
+            }
+          }
+          for (const sessionID of abandoned) {
+            suspended.delete(sessionID)
+            for (const { background } of subagentJobs.get(sessionID) ?? []) {
+              if (!(yield* recoverable(background))) continue
+              yield* jobs.completeBackground(background.notificationID)
+            }
+          }
           const state = { defer: true }
           const wakes = new Set<SessionSchema.ID>()
           yield* Effect.addFinalizer(() =>
@@ -641,7 +702,7 @@ export const layer = (options?: Options) =>
             synthetic: (input) =>
               sessions.synthetic({ ...input, resume: false }).pipe(
                 Effect.tap(() => {
-                  if (suspended.has(input.sessionID)) return Effect.void
+                  if (suspended.has(input.sessionID) || abandoned.has(input.sessionID)) return Effect.void
                   if (!state.defer) return wake(input.sessionID)
                   wakes.add(input.sessionID)
                   return Effect.void
@@ -649,9 +710,6 @@ export const layer = (options?: Options) =>
                 Effect.uninterruptible,
               ),
           }
-          const recoverable = Effect.fnUntraced(function* (background: Job.Background) {
-            return (yield* jobs.get(background.id))?.status !== "running"
-          })
           // Shell and tool outcomes first, then calls a killed server left unsettled, and only then recovered children,
           // whose first resume would otherwise fail their own unsettled shell calls.
           const reattached = new Set<string>()
@@ -676,7 +734,7 @@ export const layer = (options?: Options) =>
               ),
             { discard: true },
           )
-          const ambiguous = new Set<SessionSchema.ID>()
+          const ambiguous = new Set(abandoned)
           const preparedChildren = new Set<SessionSchema.ID>()
           for (const sessionID of suspended) {
             const calls = (yield* store.context(sessionID).pipe(Effect.orDie)).flatMap((message) =>
@@ -747,7 +805,12 @@ export const layer = (options?: Options) =>
             pending,
             Effect.fnUntraced(function* (background) {
               const recovery = background.recovery
-              if (recovery.kind !== "subagent" || !(yield* recoverable(background))) return
+              if (
+                recovery.kind !== "subagent" ||
+                abandoned.has(recovery.parentSessionID) ||
+                !(yield* recoverable(background))
+              )
+                return
               if (yield* recoverSubagent(background, recovery, notices, ambiguous))
                 resumable.push({ background, recovery })
             }),
@@ -839,7 +902,7 @@ export const layer = (options?: Options) =>
                 !recovering.has(sessionID) &&
                 !preparedInFlight.has(sessionID),
             ),
-            prepareResume,
+            (sessionID) => prepareResume(sessionID),
           )
           yield* Effect.forEach(
             direct,

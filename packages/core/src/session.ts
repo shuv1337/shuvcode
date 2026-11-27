@@ -136,7 +136,11 @@ export interface Interface {
     },
     InvalidListCursorError
   >
-  readonly create: (input: CreateInput) => Effect.Effect<SessionSchema.Info, NotFoundError>
+  readonly create: (
+    input: CreateInput,
+    /** Internal tool rules that override child-agent defaults, but not inherited or explicit session rules. */
+    prependPermissions?: Permission.Ruleset,
+  ) => Effect.Effect<SessionSchema.Info, NotFoundError>
   readonly fork: (
     input: ForkInput,
   ) => Effect.Effect<SessionSchema.Info, NotFoundError | MessageNotFoundError | ForkEmptyError>
@@ -231,10 +235,9 @@ export interface Interface {
     onAccepted?: Effect.Effect<void>,
   ) => ReturnType<Session.Handle["prompt"]>
   /** Generates text from current Session context without admitting input or mutating history. Its usage counts toward the Session's totals. */
-  readonly generate: (input: {
-    sessionID: SessionSchema.ID
-    prompt: string
-  }) => Effect.Effect<SessionGenerate.Result, NotFoundError | SessionGenerate.Error>
+  readonly generate: (
+    input: Omit<SessionGenerate.Input, "session"> & { sessionID: SessionSchema.ID },
+  ) => Effect.Effect<SessionGenerate.Result, NotFoundError | SessionGenerate.Error>
   readonly command: (input: {
     sessionID: SessionSchema.ID
     command: string
@@ -322,7 +325,7 @@ const layer = Layer.effect(
     })
 
     const result = Service.of({
-      create: Effect.fn("Session.create")(function* (input) {
+      create: Effect.fn("Session.create")(function* (input, prependPermissions) {
         const sessionID = input.id ?? SessionSchema.ID.create()
         const recorded = yield* store.get(sessionID)
         if (recorded) return recorded
@@ -332,6 +335,8 @@ const layer = Layer.effect(
         if (location === undefined)
           return yield* Effect.die(new Error("Session.create requires either location or an existing parentID"))
         const project = yield* projects.resolve(location.directory)
+        // An explicit ruleset replaces inheritance, including parent-agent denies.
+        const permissions = input.permissions ?? (parent ? yield* inheritedPermissions(parent) : undefined)
         const projected = yield* bus
           .publish(
             SessionEvent.Created,
@@ -345,11 +350,8 @@ const layer = Layer.effect(
               subpath: RelativePath.make(path.relative(project.directory, location.directory).replaceAll("\\", "/")),
               title: input.title,
               agent: input.agent,
-              // Children inherit metadata and permissions the way they inherit
-              // location, so host policies that read them treat the family uniformly.
-              // An explicit ruleset replaces that inheritance, including parent-agent denies.
               metadata: input.metadata ?? parent?.metadata,
-              permissions: input.permissions ?? (parent ? yield* inheritedPermissions(parent) : undefined),
+              permissions: prependPermissions?.length ? [...prependPermissions, ...(permissions ?? [])] : permissions,
               model: input.model,
             },
             { location },
@@ -548,7 +550,8 @@ const layer = Layer.effect(
       prompt: (input, onAccepted) => sessions.forSession(input.sessionID).prompt(input, onAccepted),
       generate: Effect.fn("Session.generate")(function* (input) {
         const session = yield* result.get(input.sessionID)
-        return yield* SessionGenerate.generate({ session, prompt: input.prompt }).pipe(
+        const { sessionID: _, ...rest } = input
+        return yield* SessionGenerate.generate({ ...rest, session }).pipe(
           Effect.provideService(Instance.Service, instances),
           Effect.provideService(Database.Service, database),
           Effect.provideService(LLMClient.Service, llm),

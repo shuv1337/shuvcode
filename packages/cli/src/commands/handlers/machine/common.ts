@@ -23,8 +23,7 @@ export const ensureMachineClient = Effect.fn("cli.machine.client")(function* () 
     return yield* Effect.fail(
       new Error("--standalone starts a server for this command only; a machine needs one that keeps running."),
     )
-  const config = yield* ServiceConfig.read()
-  if (flags.server === undefined && config.disabled === true)
+  if (flags.server === undefined && (yield* ServiceConfig.read()).disabled === true)
     return yield* Effect.fail(
       new Error("Managing machines requires the background service; run `shuvcode service unset disabled` first."),
     )

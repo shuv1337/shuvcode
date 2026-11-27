@@ -310,13 +310,13 @@ describe("OpenAIPlugin", () => {
           })
           for (const id of ["gpt-6.2-astra", "gpt-6.2-astra-fast", "gpt-6.2-sol", "gpt-6.2-sol-fast"])
             catalog.models.update(Provider.ID.openai, Model.ID.make(id), () => {})
-          // Mode form (model_speeds = false)
+          // A configured request body can set the service tier directly.
           catalog.models.update(Provider.ID.openai, Model.ID.make("gpt-6.2-astra-ultrafast"), (model) => {
             model.modelID = Model.ID.make("gpt-6.2-astra")
             model.body = { service_tier: "ultrafast" }
             model.cost = paidCost
           })
-          // Speed form (model_speeds = true)
+          // A catalog speed variant sets the service tier through model settings.
           catalog.models.update(Provider.ID.openai, Model.ID.make("gpt-6.2-sol-ultrafast"), (model) => {
             model.modelID = Model.ID.make("gpt-6.2-sol")
             model.settings = { serviceTier: "ultrafast" }

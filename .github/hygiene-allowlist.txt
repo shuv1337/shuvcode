@@ -65,6 +65,11 @@ text:/Users/a.png
 # Upstream tree-sitter query author credits (packages/cli-rs/assets/queries).
 email:maxbrunsfeld@gmail.com
 email:stuart.mashaal@gmail.com
+# Pomicons SIL OFL copyright notice (bundled OpenMono Nerd Fonts).
+email:gabriele.lana@gmail.com
+# Public Alibaba Cloud instance metadata endpoint and RFC 6598 CGNAT range documented by the browser egress policy.
+text:100.100.100.200
+text:100.64.0.0
 # Upstream packages/cli-rs scripts: a sourced completion snippet (no shebang) and a parity test stub.
 shellcheck:packages/cli-rs/crates/cli/src/completions/bash.sh
 shellcheck:packages/cli-rs/parity/scenarios/E.5/fake-editor.sh

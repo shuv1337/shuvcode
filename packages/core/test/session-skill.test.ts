@@ -1,7 +1,7 @@
 import type { FileSystem } from "@opencode/core/filesystem"
 import path from "path"
 import { describe, expect } from "bun:test"
-import { Duration, Effect, Layer, LayerMap } from "effect"
+import { Duration, Effect, Layer } from "effect"
 import { Database } from "@opencode/core/database/database"
 import { AppNodeBuilder } from "@opencode/core/effect/app-node-builder"
 import { LayerNode } from "@opencode/util/effect/layer-node"
@@ -39,18 +39,19 @@ const info = Skill.Info.make({
   path: AbsolutePath.make(path.resolve("/skills/effect.md")),
   content: "  Use Effect\n",
 })
+const reason = { _tag: "Mismatch", file: "SKILL.md", check: "digest", detail: "digest mismatch" } as const
 const broken = {
   id: Skill.ID.make("broken"),
   name: Skill.Name.make("Broken"),
   description: "Broken skill",
   path: AbsolutePath.make(Skill.uri("broken", "SKILL.md")),
-  content: Effect.fail(new Skill.LoadError({ skill: "broken", message: "digest mismatch" })),
+  content: Effect.fail(new Skill.LoadError({ skill: "broken", reason })),
 }
 const locations = makeGlobalNode({
   service: LocationServiceMap.Service,
   layer: Layer.effect(
     LocationServiceMap.Service,
-    LayerMap.make(
+    LocationServiceMap.make(
       (ref: Location.Ref) =>
         // These tests need skill activation and prompt preparation from the same location services.
         // oxlint-disable-next-line typescript-eslint/no-unsafe-type-assertion
@@ -236,7 +237,7 @@ describe("Session.skill", () => {
       const session = yield* sessions.create({ location })
       expect(
         yield* sessions.skill({ sessionID: session.id, skill: broken.id, resume: false }).pipe(Effect.flip),
-      ).toMatchObject({ _tag: "Skill.LoadError", skill: broken.id, message: "digest mismatch" })
+      ).toMatchObject({ _tag: "Skill.LoadError", skill: broken.id, reason })
       expect(
         yield* sessions
           .prompt({
@@ -246,7 +247,7 @@ describe("Session.skill", () => {
             resume: false,
           })
           .pipe(Effect.flip),
-      ).toMatchObject({ _tag: "Skill.LoadError", skill: broken.id, message: "digest mismatch" })
+      ).toMatchObject({ _tag: "Skill.LoadError", skill: broken.id, reason })
       expect(yield* sessions.messages({ sessionID: session.id })).toEqual([])
       expect(yield* sessions.inbox(session.id)).toEqual([])
     }),

@@ -75,6 +75,8 @@ export interface SnapshotOptions {
   readonly services?: Context.Context<CodeModeTool.Services>
   /** What `opencode://` fetch sends requests through; see the `opencode_api` flag. */
   readonly api?: Context.Context<CodeModeTool.Api>
+  /** With `codemode_agents`, what runs Code Mode's agent() and llm(). */
+  readonly agents?: Context.Context<CodeModeTool.Agents>
   readonly tools?: Policy
 }
 
@@ -370,6 +372,7 @@ const layer = Layer.effect(
                   permission,
                   full ? options.services : undefined,
                   options?.api,
+                  options?.agents,
                 )
                 const entry = cached ?? {
                   inventory,

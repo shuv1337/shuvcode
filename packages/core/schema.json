@@ -1,8 +1,8 @@
 {
   "version": "7",
   "dialect": "sqlite",
-  "id": "6fdb1fc8-74cd-4f15-8faa-e109d3030da9",
-  "prevIds": ["74cace2e-430e-4672-bf3b-eba14ae0c399"],
+  "id": "ea7fb45e-fef3-40b6-8e09-42b781c5bf23",
+  "prevIds": ["6fdb1fc8-74cd-4f15-8faa-e109d3030da9"],
   "ddl": [
     {
       "name": "account_state",
@@ -90,6 +90,10 @@
     },
     {
       "name": "session_v2",
+      "entityType": "tables"
+    },
+    {
+      "name": "space",
       "entityType": "tables"
     },
     {
@@ -1970,6 +1974,46 @@
       "autoincrement": false,
       "default": null,
       "generated": null,
+      "name": "space",
+      "entityType": "columns",
+      "table": "space"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "key",
+      "entityType": "columns",
+      "table": "space"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "value",
+      "entityType": "columns",
+      "table": "space"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "revision",
+      "entityType": "columns",
+      "table": "space"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
       "name": "session_id",
       "entityType": "columns",
       "table": "subagent_operation"
@@ -2338,18 +2382,18 @@
       "table": "instruction_entry"
     },
     {
-      "columns": ["session_id", "assistant_message_id", "call_id"],
-      "nameExplicit": false,
-      "name": "subagent_operation_pk",
-      "entityType": "pks",
-      "table": "subagent_operation"
-    },
-    {
       "columns": ["message_id", "ordinal"],
       "nameExplicit": false,
       "name": "session_part_pk",
       "entityType": "pks",
       "table": "session_part"
+    },
+    {
+      "columns": ["space", "key"],
+      "nameExplicit": false,
+      "name": "space_pk",
+      "entityType": "pks",
+      "table": "space"
     },
     {
       "columns": ["project_id", "directory"],
@@ -2478,11 +2522,25 @@
       "entityType": "pks"
     },
     {
+      "columns": ["session_id", "assistant_message_id", "call_id"],
+      "nameExplicit": false,
+      "name": "subagent_operation_pk",
+      "entityType": "pks",
+      "table": "subagent_operation"
+    },
+    {
       "columns": ["id"],
       "nameExplicit": false,
       "name": "workspace_pk",
       "table": "workspace",
       "entityType": "pks"
+    },
+    {
+      "columns": ["inbox_id"],
+      "nameExplicit": false,
+      "name": "subagent_operation_inbox_id_unique",
+      "entityType": "uniques",
+      "table": "subagent_operation"
     },
     {
       "columns": [
@@ -2871,11 +2929,62 @@
       "table": "session_v2"
     },
     {
-      "columns": ["inbox_id"],
-      "nameExplicit": false,
-      "name": "subagent_operation_inbox_id_unique",
-      "entityType": "uniques",
-      "table": "subagent_operation"
+      "columns": [
+        {
+          "value": "space",
+          "isExpression": false
+        },
+        {
+          "value": "revision",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "name": "space_revision_idx",
+      "entityType": "indexes",
+      "table": "space"
+    },
+    {
+      "columns": [
+        {
+          "value": "space",
+          "isExpression": false
+        },
+        {
+          "value": "revision",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": "\"space\".\"value\" is not null",
+      "origin": "manual",
+      "name": "space_live_idx",
+      "entityType": "indexes",
+      "table": "space"
+    },
+    {
+      "columns": [
+        {
+          "value": "space",
+          "isExpression": false
+        },
+        {
+          "value": "revision",
+          "isExpression": false
+        },
+        {
+          "value": "value",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": "\"space\".\"value\" is null",
+      "origin": "manual",
+      "name": "space_tombstone_idx",
+      "entityType": "indexes",
+      "table": "space"
     }
   ],
   "renames": []

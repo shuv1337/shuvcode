@@ -1,12 +1,10 @@
 import { expect, test } from "bun:test"
-import { connectPopular, omitHiddenProviderCatalog, popularProviders, withoutHiddenProviders } from "./order"
+import { omitHiddenProviderCatalog, popularProviders, withoutHiddenProviders } from "./order"
 
 test("keeps Anthropic visible and drops Claude Agent from provider menus", () => {
   expect(popularProviders).toContain("anthropic")
-  expect(connectPopular).toContain("anthropic")
-  expect(connectPopular.slice(0, 2)).toEqual(["opencode-go", "opencode"])
+  expect(popularProviders.slice(0, 2)).toEqual(["opencode-go", "opencode"])
   expect(popularProviders).not.toContain("claude-agent")
-  expect(connectPopular).not.toContain("claude-agent")
 
   expect(withoutHiddenProviders([{ id: "claude-agent" }, { id: "anthropic" }]).map((item) => item.id)).toEqual([
     "anthropic",

@@ -2,19 +2,18 @@ import { isHiddenProvider } from "@opencode/util/hidden-provider"
 
 export { isHiddenProvider }
 
+// One order for every list that ranks providers: the Popular sections in Settings and the connect dialog, and
+// the model pickers.
 export const popularProviders = [
   "opencode-go",
   "opencode",
+  "openai",
   "anthropic",
   "github-copilot",
-  "openai",
   "google",
   "openrouter",
   "vercel",
 ]
-
-// Connect dialog popular group order. Puts opencode-go ahead of opencode (matching upstream de81b817b1), while TUI keeps opencode first.
-export const connectPopular = ["opencode-go", "opencode", "openai", "github-copilot", "anthropic", "google"]
 
 // App catalogs that call these helpers omit the upstream Claude Agent id.
 // Other list surfaces call isHiddenProvider themselves.
