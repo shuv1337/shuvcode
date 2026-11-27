@@ -15,7 +15,7 @@ export const FlagGroup = HttpApiGroup.make("server.flag")
           identifier: "experimental.flag.get",
           summary: "Get feature flags",
           description:
-            "Experimental. Return the resolved feature flags the location's clients may act on, keyed by flag name. Flags not listed are off.",
+            "Return the resolved feature flags the location's clients may act on, keyed by flag name. Flags not listed are off. Experimental: may change without compatibility guarantees.",
         }),
       ),
   )
