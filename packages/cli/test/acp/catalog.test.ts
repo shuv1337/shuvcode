@@ -1,8 +1,32 @@
 import { describe, expect, test } from "bun:test"
+import { OpenCode } from "@opencode/client/effect"
+import { Provider } from "@opencode/schema/provider"
+import { Effect } from "effect"
+import { FetchHttpClient } from "effect/http"
+import { ACPCatalog } from "../../src/acp/catalog"
 import { currentValue } from "./select-options"
 import { durableEvent, rpcError, secondModel, startSession, startWire } from "./wire-fixture"
 
 describe("acp catalog and config options over the wire", () => {
+  test("omits Claude Agent from the provider names in the catalog", async () => {
+    await using acp = await startWire()
+    acp.server.catalog.providers.push({
+      id: "claude-agent",
+      name: "Claude Agent",
+      activation: "auto",
+      package: "",
+    })
+    const catalog = await Effect.runPromise(
+      Effect.gen(function* () {
+        const client = yield* OpenCode.make({ baseUrl: acp.server.url })
+        const catalog = yield* ACPCatalog.make(client)
+        return yield* catalog.get("/workspace")
+      }).pipe(Effect.provide(FetchHttpClient.layer), Effect.scoped),
+    )
+    expect(catalog.providerNames.get(Provider.ID.make("test"))).toBe("Test Provider")
+    expect(catalog.providerNames.has(Provider.ID.claudeAgent)).toBe(false)
+  })
+
   test("switches model, effort, and mode against the warm catalog", async () => {
     await using acp = await startWire()
     acp.server.catalog.models.push({ ...secondModel, providerID: "test/sub" })

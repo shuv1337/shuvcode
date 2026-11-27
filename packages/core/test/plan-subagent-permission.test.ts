@@ -3,6 +3,7 @@ import path from "path"
 import { Cause, Effect, Exit } from "effect"
 import { Agent } from "@opencode/core/agent"
 import { Bus } from "@opencode/core/bus"
+import { CodeModeAgents } from "@opencode/core/codemode/agents"
 import { Database } from "@opencode/core/database/database"
 import { AppNodeBuilder } from "@opencode/core/effect/app-node-builder"
 import { Watcher } from "@opencode/core/filesystem/watcher"
@@ -13,6 +14,7 @@ import { Project } from "@opencode/core/project"
 import { Plugin } from "@opencode/core/plugin"
 import { AbsolutePath } from "@opencode/core/schema"
 import { Session } from "@opencode/core/session"
+import { SessionContext } from "@opencode/core/session/context"
 import { SessionExecution } from "@opencode/core/session/execution"
 import { SessionMessage } from "@opencode/core/session/message"
 import { SessionProjector } from "@opencode/core/session/projector"
@@ -232,6 +234,70 @@ describe("child sessions inherit parent agent denies", () => {
       expect(
         yield* permission.allows({ sessionID: readOnly.id, agent: locked, action: "read", resources: ["README.md"] }),
       ).toBe(true)
+    }),
+  )
+
+  it.live("keeps the plan agent's edit deny on a structured Code Mode child", () =>
+    Effect.gen(function* () {
+      const tmp = yield* tmpdirScoped()
+      yield* Effect.promise(() =>
+        Bun.write(path.join(tmp.path, "opencode.json"), '{"experimental":{"codemode_agents":true}}'),
+      )
+      const sessions = yield* Session.Service
+      const parent = yield* sessions.create({ location: { directory: AbsolutePath.make(tmp.path) }, agent: plan })
+      expect(parent.permissions).toBeUndefined()
+      const locations = yield* LocationServiceMap.Service
+      const provide = locations.get(parent.location)
+      yield* Plugin.Service.use((plugins) => plugins.awaitActivation).pipe(Effect.provide(provide))
+      const permission = yield* Permission.Service.pipe(Effect.provide(provide))
+      const agents = yield* Agent.Service.pipe(Effect.provide(provide))
+      const tools = yield* Tool.Service.pipe(Effect.provide(provide))
+      const context = yield* SessionContext.Service.pipe(Effect.provide(provide))
+
+      // The fixture does not drain the child; run the real Code Mode call to exercise creation and policy.
+      const selected = yield* context.select(parent.id)
+      const result = yield* selected.tools.execute({
+        sessionID: parent.id,
+        agent: plan,
+        messageID: SessionMessage.ID.create(),
+        call: {
+          type: "tool-call",
+          id: "call-structured-child",
+          name: "execute",
+          input: {
+            code: `return await agent("Inspect the project", { agent: "general", schema: { type: "object" } })`,
+          },
+        },
+      })
+      expect(JSON.stringify(result)).toContain("The agent finished without returning a result that matches the schema")
+      const [child] = (yield* sessions.list({ parentID: parent.id })).data
+      if (!child) return yield* Effect.die("Missing structured Code Mode child")
+      const info = yield* agents.get(general)
+      if (!info) return yield* Effect.die("Missing general agent")
+      yield* expectDenied(permission, { sessionID: child.id, agent: general, action: "edit", resources: [outside] })
+      expect(
+        yield* permission.allows({
+          sessionID: child.id,
+          agent: general,
+          action: CodeModeAgents.OUTPUT_TOOL,
+          resources: ["*"],
+        }),
+      ).toBe(true)
+      const editing = ["edit", "write", "patch"]
+      const snapshot = yield* tools.snapshot(Permission.Policy.fromRules(info.permissions, child.permissions ?? []), {
+        tools: { direct: new Set(["read", ...editing]) },
+      })
+      const names = snapshot.definitions.map((tool) => tool.name)
+      expect(names).toContain("read")
+      expect(names).toContain(CodeModeAgents.OUTPUT_TOOL)
+      for (const tool of editing) expect(names).not.toContain(tool)
+      const output = yield* snapshot.execute({
+        sessionID: child.id,
+        agent: general,
+        messageID: SessionMessage.ID.create(),
+        call: { type: "tool-call", id: "call-output", name: CodeModeAgents.OUTPUT_TOOL, input: {} },
+      })
+      expect(output.content).toEqual([{ type: "text", text: "Result recorded and returned to the script." }])
     }),
   )
 

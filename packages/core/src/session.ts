@@ -136,7 +136,11 @@ export interface Interface {
     },
     InvalidListCursorError
   >
-  readonly create: (input: CreateInput) => Effect.Effect<SessionSchema.Info, NotFoundError>
+  readonly create: (
+    input: CreateInput,
+    /** Internal tool rules added after the session's effective inherited or explicit permissions. */
+    appendPermissions?: Permission.Ruleset,
+  ) => Effect.Effect<SessionSchema.Info, NotFoundError>
   readonly fork: (
     input: ForkInput,
   ) => Effect.Effect<SessionSchema.Info, NotFoundError | MessageNotFoundError | ForkEmptyError>
@@ -321,7 +325,7 @@ const layer = Layer.effect(
     })
 
     const result = Service.of({
-      create: Effect.fn("Session.create")(function* (input) {
+      create: Effect.fn("Session.create")(function* (input, appendPermissions) {
         const sessionID = input.id ?? SessionSchema.ID.create()
         const recorded = yield* store.get(sessionID)
         if (recorded) return recorded
@@ -331,6 +335,8 @@ const layer = Layer.effect(
         if (location === undefined)
           return yield* Effect.die(new Error("Session.create requires either location or an existing parentID"))
         const project = yield* projects.resolve(location.directory)
+        // An explicit ruleset replaces inheritance, including parent-agent denies.
+        const permissions = input.permissions ?? (parent ? yield* inheritedPermissions(parent) : undefined)
         const projected = yield* bus
           .publish(
             SessionEvent.Created,
@@ -344,11 +350,8 @@ const layer = Layer.effect(
               subpath: RelativePath.make(path.relative(project.directory, location.directory).replaceAll("\\", "/")),
               title: input.title,
               agent: input.agent,
-              // Children inherit metadata and permissions the way they inherit
-              // location, so host policies that read them treat the family uniformly.
-              // An explicit ruleset replaces that inheritance, including parent-agent denies.
               metadata: input.metadata ?? parent?.metadata,
-              permissions: input.permissions ?? (parent ? yield* inheritedPermissions(parent) : undefined),
+              permissions: appendPermissions ? [...(permissions ?? []), ...appendPermissions] : permissions,
               model: input.model,
             },
             { location },

@@ -18,7 +18,7 @@ export type InstanceConfiguration = SdkInstances.Configuration
 
 export type Interface = Omit<OpenCodeClient, "plugin" | "workspace"> & {
   readonly sessions: Omit<OpenCodeClient["session"], "create" | "get" | "move"> & {
-    readonly create: Session.Interface["create"]
+    readonly create: (input: Parameters<Session.Interface["create"]>[0]) => ReturnType<Session.Interface["create"]>
     readonly get: (input: { readonly sessionID: Session.ID }) => ReturnType<Session.Interface["get"]>
     readonly move: Session.Interface["move"]
   }
@@ -55,7 +55,7 @@ export const create: <R = never>(
     ...client,
     sessions: {
       ...client.session,
-      create: host.sessions.create,
+      create: (input) => host.sessions.create(input),
       get: (input: { readonly sessionID: Session.ID }) => host.sessions.get(input.sessionID),
       move: host.sessions.move,
     },

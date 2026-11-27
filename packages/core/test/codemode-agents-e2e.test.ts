@@ -15,6 +15,7 @@ import { Environment } from "@opencode/core/environment/index"
 import { FileAccess } from "@opencode/core/file-access"
 import { Flag } from "@opencode/core/flag"
 import { Job } from "@opencode/core/job"
+import { JobTable } from "@opencode/core/job/sql"
 import { KV } from "@opencode/core/kv"
 import { Location } from "@opencode/core/location"
 import { LocationServiceMap } from "@opencode/core/location-service-map"
@@ -26,11 +27,14 @@ import { PluginSupervisor } from "@opencode/core/plugin/supervisor"
 import { Provider } from "@opencode/core/provider"
 import { AbsolutePath } from "@opencode/core/schema"
 import { Session } from "@opencode/core/session"
+import { SessionEvent } from "@opencode/core/session/event"
 import { SessionExecution } from "@opencode/core/session/execution"
 import { SessionRestart } from "@opencode/core/session/execution/restart"
+import { SessionMessage } from "@opencode/core/session/message"
 import { SessionRunnerModel } from "@opencode/core/session/runner/model"
 import { SessionStore } from "@opencode/core/session/store"
 import { SubagentJob } from "@opencode/core/session/subagent-job"
+import { SubagentRecovery } from "@opencode/core/session/subagent-recovery"
 import { Skill } from "@opencode/core/skill"
 import { Tool } from "@opencode/core/tool"
 import { CodeModeAgentsPlugin } from "@opencode/core/tool/plugin/codemode-agents"
@@ -185,7 +189,17 @@ const harness = Effect.fnUntraced(function* () {
     })
   const store = Context.get(context, SessionStore.Service)
   const restart = Context.get(context, SessionRestart.Service)
-  return { sessions, parent, llm, run, store, restart }
+  return {
+    sessions,
+    parent,
+    llm,
+    run,
+    store,
+    restart,
+    bus: Context.get(context, Bus.Service),
+    jobs: Context.get(context, Job.Service),
+    db: Context.get(context, Database.Service).db,
+  }
 })
 
 const toolNames = (request: LLMRequest) => request.tools.map((tool) => tool.name)
@@ -265,6 +279,89 @@ describe("agent()", () => {
       yield* h.restart.resumeSuspendedSessions
       expect(yield* h.store.listSuspended()).not.toContain(childID)
       expect(yield* h.llm.requests()).toHaveLength(0)
+    }),
+  )
+
+  e2e.live("abandons an orphaned agent() child's prepared and background subagents on restart", () =>
+    Effect.gen(function* () {
+      const h = yield* harness()
+      const orphanID = Session.ID.create()
+      const agent = Agent.ID.make("reviewer")
+      const model = Model.Ref.make({ id: Model.ID.make("reviewer"), providerID: Provider.ID.make("test") })
+      const orphan = yield* h.sessions.create({
+        id: orphanID,
+        parentID: h.parent.id,
+        agent,
+        model,
+        metadata: { [CodeModeAgents.METADATA_KEY]: { childID: orphanID, structured: false } },
+      })
+      const child = yield* h.sessions.create({ parentID: orphan.id, agent, model })
+      const background = yield* h.sessions.create({ parentID: orphan.id, agent, model })
+      const assistantMessageID = SessionMessage.ID.create()
+      const id = "call-prepared-subagent"
+      const input = { agent, description: "Inspect state", prompt: "Inspect state" }
+      const inboxID = SessionMessage.ID.create()
+      yield* h.bus.publish(SessionEvent.Step.Started, {
+        sessionID: orphan.id,
+        assistantMessageID,
+        agent,
+        model,
+        started: 0,
+      })
+      yield* h.bus.publish(SessionEvent.Tool.Input.Started, {
+        sessionID: orphan.id,
+        assistantMessageID,
+        id,
+        name: "subagent",
+      })
+      yield* h.bus.publish(SessionEvent.Tool.Called, {
+        sessionID: orphan.id,
+        assistantMessageID,
+        id,
+        input,
+        executed: false,
+      })
+      yield* h.bus.publish(SessionEvent.Tool.SubagentPrepared, {
+        sessionID: orphan.id,
+        assistantMessageID,
+        id,
+        recovery: { childSessionID: child.id, inboxID, inputDigest: SubagentRecovery.digest(input), agent, model },
+      })
+      yield* h.db
+        .insert(JobTable)
+        .values({
+          notification_id: SessionMessage.ID.create(),
+          id: background.id,
+          session_id: orphan.id,
+          child_session_id: background.id,
+          kind: "subagent",
+          title: "Background inspection",
+          status: "running",
+          recovery: {
+            kind: "subagent",
+            parentSessionID: orphan.id,
+            childSessionID: background.id,
+            agent,
+            description: "Background inspection",
+          },
+        })
+        .run()
+      yield* h.store.claim(orphan.id)
+      yield* h.store.claim(child.id)
+      yield* h.store.claim(background.id)
+      expect(new Set(yield* h.store.listSuspended())).toEqual(new Set([orphan.id, child.id, background.id]))
+
+      yield* h.restart.resumeSuspendedSessions
+      expect(yield* h.store.listSuspended()).toEqual([])
+      expect(yield* h.llm.requests()).toEqual([])
+      expect(yield* h.sessions.inbox(child.id)).toEqual([])
+      expect(yield* h.jobs.pendingBackground).toEqual([])
+      expect(yield* h.sessions.inbox(orphan.id)).toEqual([])
+      const messages = yield* h.sessions.context(orphan.id)
+      const tool = messages
+        .flatMap((message) => (message.type === "assistant" ? message.content : []))
+        .find((part) => part.type === "tool" && part.id === id)
+      expect(tool).toMatchObject({ state: { status: "error", error: { type: "aborted" } } })
     }),
   )
 

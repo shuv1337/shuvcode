@@ -157,18 +157,18 @@ export const Plugin = {
         output === undefined
           ? { childID: id, structured: false }
           : { childID: id, structured: true, schema: output.json as Schema.Json, wrapped: output.wrapped }
-      const child = yield* sessions.create({
-        id,
-        parentID: parent.id,
-        title: input.label ?? title(input.prompt),
-        agent: info.id,
-        model,
-        metadata: { ...(parent.metadata ?? {}), [CodeModeAgents.METADATA_KEY]: marker },
+      const child = yield* sessions.create(
+        {
+          id,
+          parentID: parent.id,
+          title: input.label ?? title(input.prompt),
+          agent: info.id,
+          model,
+          metadata: { ...(parent.metadata ?? {}), [CodeModeAgents.METADATA_KEY]: marker },
+        },
         // Deny-by-default subagents such as `explore` strip tools outside their allowlist; let them return their answer.
-        ...(output === undefined
-          ? {}
-          : { permissions: [...(parent.permissions ?? []), { action: OUTPUT_TOOL, resource: "*", effect: "allow" }] }),
-      })
+        output === undefined ? undefined : [{ action: OUTPUT_TOOL, resource: "*", effect: "allow" }],
+      )
       if (output === undefined) return SubagentCompletion.text(yield* drain(child.id, frame(input.prompt, false)))
       yield* drain(child.id, frame(input.prompt, true))
       const first = yield* recordedOutput(child.id, output)
