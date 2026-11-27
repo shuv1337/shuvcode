@@ -9,15 +9,11 @@ export const popularProviders = [
   "opencode",
   "openai",
   "anthropic",
-  "claude-agent",
   "github-copilot",
   "google",
   "openrouter",
   "vercel",
 ]
-
-// Connect dialog popular group order. Puts opencode-go ahead of opencode (matching upstream de81b817b1), while TUI keeps opencode first.
-export const connectPopular = ["opencode-go", "opencode", "openai", "github-copilot", "anthropic", "google"]
 
 // App catalogs that call these helpers omit the upstream Claude Agent id.
 // Other list surfaces call isHiddenProvider themselves.

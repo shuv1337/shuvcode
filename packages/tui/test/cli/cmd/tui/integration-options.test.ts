@@ -39,16 +39,7 @@ describe("integrationOptions", () => {
           connections: [{ type: "credential", id: "go", label: "Go", method: "key" }],
         }),
       ]).map((item) => item.id),
-    ).toEqual([
-      "opencode",
-      "opencode-go",
-      "openai",
-      "anthropic",
-      "claude-agent",
-      "github-copilot",
-      "mistral",
-      "custom-z",
-    ])
+    ).toEqual(["opencode", "opencode-go", "openai", "anthropic", "github-copilot", "mistral", "custom-z"])
   })
 
   test("hides OpenCode Go until a Go key is saved", () => {

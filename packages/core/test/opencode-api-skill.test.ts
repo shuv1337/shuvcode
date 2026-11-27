@@ -2,7 +2,7 @@ import { expect, test } from "bun:test"
 import path from "node:path"
 import { directory, render } from "../script/generate-api-skill"
 
-test("the opencode skill's API reference matches openapi.json", async () => {
+test("the Shuvcode skill's API reference matches openapi.json", async () => {
   const files = await render()
   // Bun.Glob yields native separators, so Windows lists `api\session.md` where render() keys `api/session.md`.
   const current = (await Array.fromAsync(new Bun.Glob("**/*.md").scan({ cwd: directory }))).map((file) =>

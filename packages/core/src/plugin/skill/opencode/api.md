@@ -1,4 +1,4 @@
-# OpenCode HTTP API
+# Shuvcode HTTP API
 
 Call any endpoint below from Code Mode with `fetch("opencode:///api/...")`. Each group's file lists its parameters, bodies and responses.
 

@@ -1,4 +1,4 @@
-import { WebSocket as NodeWebSocket } from "@effect/platform-node/NodeWS"
+import { WebSocket } from "@effect/platform-node/NodeWS"
 import type { ServerEndpoint } from "@opencode/plugin/gui/main"
 import type { Session } from "@opencode/schema/session"
 import { BrowserTunnelHost, StreamWire } from "@opencode/plugin-browser/experimental/stream"
@@ -77,7 +77,10 @@ export function resolveBrowserTunnelUrl(input: {
     wsUrl.username !== "" ||
     wsUrl.password !== ""
   ) {
-    throw new TunnelUpgradeError("protocol", "Derived browser tunnel upgrade URL did not match configured server authority.")
+    throw new TunnelUpgradeError(
+      "protocol",
+      "Derived browser tunnel upgrade URL did not match configured server authority.",
+    )
   }
 
   wsUrl.searchParams.set("location[directory]", input.location.directory)
@@ -121,7 +124,7 @@ export async function openAuthenticatedWebSocket(input: {
   headers[TUNNEL_PROTOCOL_HEADER] = String(input.protocol)
 
   return await new Promise<BrowserTunnelHost.BinarySocket>((resolve, reject) => {
-    const ws = new NodeWebSocket(wsUrl.toString(), {
+    const ws = new WebSocket(wsUrl.toString(), {
       headers,
       perMessageDeflate: false,
       followRedirects: false,
@@ -201,7 +204,7 @@ export async function openAuthenticatedWebSocket(input: {
   })
 }
 
-function adaptNodeWebSocket(ws: NodeWebSocket): BrowserTunnelHost.BinarySocket {
+function adaptNodeWebSocket(ws: WebSocket): BrowserTunnelHost.BinarySocket {
   return {
     get readyState() {
       return ws.readyState

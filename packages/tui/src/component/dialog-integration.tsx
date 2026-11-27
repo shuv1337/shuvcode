@@ -52,9 +52,8 @@ const INTEGRATION_PRIORITY: Record<string, number> = {
   "opencode-go": 1,
   openai: 2,
   anthropic: 3,
-  "claude-agent": 4,
-  "github-copilot": 5,
-  google: 6,
+  "github-copilot": 4,
+  google: 5,
 }
 
 type ConnectMethod = Exclude<IntegrationInfo["methods"][number], { type: "env" }>

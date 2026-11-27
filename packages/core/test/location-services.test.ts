@@ -20,6 +20,7 @@ import { LocationServiceMap } from "@opencode/core/location-service-map"
 import { SessionExecution } from "@opencode/core/session/execution"
 import { SessionStore } from "@opencode/core/session/store"
 import { AbsolutePath } from "@opencode/core/schema"
+import { ToolActivity } from "@opencode/core/tool-activity"
 import { tempGlobalLayer } from "./fixture/global"
 import { offlineModels } from "./fixture/models"
 import { tmpdirScoped } from "./fixture/tmpdir"
@@ -214,7 +215,14 @@ describe("location services", () => {
           makeGlobalNode({
             service: LocationActivity.Service,
             layer: LocationActivity.layer({ sweepInterval: "1 minute", timeToLive: "5 minutes" }),
-            deps: [Bus.node, Job.node, LocationServiceMap.node, SessionExecution.node, SessionStore.node],
+            deps: [
+              Bus.node,
+              Job.node,
+              LocationServiceMap.node,
+              SessionExecution.node,
+              SessionStore.node,
+              ToolActivity.node,
+            ],
           }),
         ),
       ]
@@ -274,7 +282,14 @@ describe("location services", () => {
           makeGlobalNode({
             service: LocationActivity.Service,
             layer: LocationActivity.layer({ sweepInterval: "1 minute", timeToLive: "5 minutes" }),
-            deps: [Bus.node, Job.node, LocationServiceMap.node, SessionExecution.node, SessionStore.node],
+            deps: [
+              Bus.node,
+              Job.node,
+              LocationServiceMap.node,
+              SessionExecution.node,
+              SessionStore.node,
+              ToolActivity.node,
+            ],
           }),
         ),
       ]

@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 
-// Writes the `opencode` skill's API reference (`skill://opencode/api.md` and `api/<group>.md`) from the protocol's
+// Writes the Shuvcode skill's API reference (`skill://shuvcode/api.md` and `api/<group>.md`) from the protocol's
 // OpenAPI document. Protocol's `bun run generate` runs it after writing openapi.json; `bun run generate:api-skill` from
 // packages/core runs it alone. test/opencode-api-skill.test.ts fails when the files are stale.
 
@@ -102,7 +102,7 @@ const SHOWN = [
 ]
 
 const INDEX_HEADER = [
-  "# OpenCode HTTP API",
+  "# Shuvcode HTTP API",
   "",
   'Call any endpoint below from Code Mode with `fetch("opencode:///api/...")`. Each group\'s file lists its parameters, bodies and responses.',
   "",

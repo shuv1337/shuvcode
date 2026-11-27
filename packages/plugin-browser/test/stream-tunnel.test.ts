@@ -1,8 +1,8 @@
 import { describe, expect, test } from "bun:test"
 import { createHash } from "node:crypto"
 import { once } from "node:events"
-import { request as httpRequest } from "node:http"
-import { createServer as createNetServer, type Socket } from "node:net"
+import { request } from "node:http"
+import { createServer, type Socket } from "node:net"
 import { PassThrough } from "node:stream"
 import { Schema } from "effect"
 import { EgressPolicy } from "../src/egress-policy.js"
@@ -222,7 +222,7 @@ describe("StreamMux flow control, fairness, half-close, and RESET cancellation",
     for (let i = 0; i < payload.length; i++) payload[i] = (i * 31) & 0xff
     const expectedHash = createHash("sha256").update(payload).digest("hex")
 
-    const echo = createNetServer((socket) => socket.pipe(socket))
+    const echo = createServer((socket) => socket.pipe(socket))
     await once(echo.listen(0, "127.0.0.1"), "listening")
     const addr = echo.address()
     if (!addr || typeof addr === "string") throw new Error("No TCP address")
@@ -400,7 +400,7 @@ describe("StreamMux flow control, fairness, half-close, and RESET cancellation",
 
   test("destroying a client stream mid-transfer sends RESET and destroys the server target socket", async () => {
     const peerClosed = Promise.withResolvers<void>()
-    const server = createNetServer((socket) => {
+    const server = createServer((socket) => {
       socket.once("close", () => peerClosed.resolve())
       socket.write(Buffer.alloc(16 * 1024))
     })
@@ -435,10 +435,10 @@ describe("StreamMux flow control, fairness, half-close, and RESET cancellation",
   }, 15_000)
 
   test("a stalled slow reader on stream 1 does not block stream 2 and respects window cap", async () => {
-    const slowServer = createNetServer((socket) => {
+    const slowServer = createServer((socket) => {
       socket.write(Buffer.alloc(256 * 1024, 0x11))
     })
-    const fastServer = createNetServer((socket) => {
+    const fastServer = createServer((socket) => {
       socket.end("fast-ok")
     })
     await Promise.all([
@@ -633,7 +633,7 @@ describe("BrowserProxy attachment lifetime", () => {
     const options = { hostname: proxy.host, port: proxy.port }
     const get = (path: string, host = "127.0.0.1") =>
       new Promise<number | undefined>((resolve, reject) => {
-        const req = httpRequest({ ...options, headers, path: `http://${host}:${target.port}${path}` }, (res) => {
+        const req = request({ ...options, headers, path: `http://${host}:${target.port}${path}` }, (res) => {
           res.resume()
           res.once("end", () => resolve(res.statusCode))
           res.once("error", reject)
@@ -648,7 +648,7 @@ describe("BrowserProxy attachment lifetime", () => {
 
       // Keep the upgraded connection open alongside the idle HTTP pool until the attachment ends.
       const method = ending === "detach" ? "GET" : "CONNECT"
-      const upgraded = httpRequest({
+      const upgraded = request({
         ...options,
         method,
         path: method === "GET" ? new URL("/ws", target.url).href : target.url.host,

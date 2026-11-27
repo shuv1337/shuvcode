@@ -24,9 +24,8 @@ const integrationPriority = new Map([
   ["opencode", 1],
   ["openai", 2],
   ["anthropic", 3],
-  ["claude-agent", 4],
-  ["github-copilot", 5],
-  ["google", 6],
+  ["github-copilot", 4],
+  ["google", 5],
 ])
 
 export default Runtime.handler(
@@ -64,7 +63,9 @@ const findIntegration = Effect.fn("cli.auth.login.integration")(function* (clien
     if (protocol === "http:" || protocol === "https:") {
       const progress = spinner()
       progress.start("Discovering authentication provider...")
-      yield* request((signal) => client.experimental.integration.wellknown.add({ url: target, location }, { signal })).pipe(
+      yield* request((signal) =>
+        client.experimental.integration.wellknown.add({ url: target, location }, { signal }),
+      ).pipe(
         Effect.tap(() => Effect.sync(() => progress.stop("Authentication provider discovered"))),
         Effect.tapCause(() => Effect.sync(() => progress.stop("Discovery failed", 1))),
       )
@@ -80,33 +81,35 @@ const findIntegration = Effect.fn("cli.auth.login.integration")(function* (clien
 
 // OpenCode Go connects through OpenCode, so it's only offered to people who already saved a Go key.
 export function loginChoices(integrations: IntegrationInfo[]): IntegrationChoice[] {
-  return integrations
-    // Shuvcode does not offer the upstream Claude Agent provider.
-    .filter((integration) => !isHiddenProvider(integration.id) && connectMethods(integration).length > 0)
-    .filter(
-      (integration) =>
-        integration.id !== "opencode-go" ||
-        integration.connections.some((connection) => connection.type === "credential"),
-    )
-    .toSorted(
-      (a, b) =>
-        Number(b.metadata?.source === "mcp") - Number(a.metadata?.source === "mcp") ||
-        (integrationPriority.get(a.id) ?? integrationPriority.size) -
-          (integrationPriority.get(b.id) ?? integrationPriority.size) ||
-        a.name.localeCompare(b.name) ||
-        a.id.localeCompare(b.id),
-    )
-    .map((integration) => ({
-      value: integration.id,
-      label: integration.name,
-      category:
-        integration.metadata?.source === "mcp"
-          ? "MCP"
-          : integrationPriority.has(integration.id)
-            ? "Popular"
-            : "Services",
-      connected: integration.connections.length > 0,
-    }))
+  return (
+    integrations
+      // Shuvcode does not offer the upstream Claude Agent provider.
+      .filter((integration) => !isHiddenProvider(integration.id) && connectMethods(integration).length > 0)
+      .filter(
+        (integration) =>
+          integration.id !== "opencode-go" ||
+          integration.connections.some((connection) => connection.type === "credential"),
+      )
+      .toSorted(
+        (a, b) =>
+          Number(b.metadata?.source === "mcp") - Number(a.metadata?.source === "mcp") ||
+          (integrationPriority.get(a.id) ?? integrationPriority.size) -
+            (integrationPriority.get(b.id) ?? integrationPriority.size) ||
+          a.name.localeCompare(b.name) ||
+          a.id.localeCompare(b.id),
+      )
+      .map((integration) => ({
+        value: integration.id,
+        label: integration.name,
+        category:
+          integration.metadata?.source === "mcp"
+            ? "MCP"
+            : integrationPriority.has(integration.id)
+              ? "Popular"
+              : "Services",
+        connected: integration.connections.length > 0,
+      }))
+  )
 }
 
 const chooseMethod = Effect.fn("cli.auth.login.method")(function* (methods: ConnectMethod[], target?: string) {

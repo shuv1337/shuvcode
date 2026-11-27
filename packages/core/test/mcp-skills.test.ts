@@ -386,9 +386,9 @@ describe("MCP skills", () => {
         },
       ])
       const skills = yield* Skill.Service
-      expect(yield* skills.files(id)).toEqual(["scripts/run.sh"])
+      expect(yield* skills.files(id)).toEqual([script])
       expect(yield* skills.content(id)).toBe("# Deploy\n\nRun scripts/run.sh.\n")
-      expect(new TextDecoder().decode(yield* skills.read(id, "scripts/run.sh"))).toBe("echo run")
+      expect(new TextDecoder().decode(yield* skills.read(id, script))).toBe("echo run")
     }),
   )
 })

@@ -101,8 +101,7 @@ export function layer(
           const session = yield* sessions.get(event.sessionID)
           if (!session) return
           const id = key(session.location)
-          const cached = Array.from(yield* RcMap.keys(locations.rcMap)).some((ref) => key(ref) === id)
-          if (!cached) return
+          if (!(yield* locations.has(session.location))) return
           const holding = yield* activity.holding
           const placed = yield* Effect.forEach(holding, (sessionID) => sessions.get(sessionID))
           if (placed.some((other) => other && key(other.location) === id)) return

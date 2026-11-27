@@ -292,9 +292,8 @@ export const OpenAIPlugin = define({
           if (!chatgpt) return
           const isPro = Schema.is(Schema.Struct({ mode: Schema.Literal("pro") }))(draft.body?.reasoning)
           if (plan.current) {
-            // Shuvcode (#514): models.dev openai-codex only lists fast modes, but Codex OAuth accounts with access
-            // also use Ultrafast; handle both body.service_tier (model_speeds off) and settings.serviceTier
-            // (model_speeds on).
+            // Shuvcode (#515): models.dev openai-codex only lists fast modes, but Codex OAuth accounts with access
+            // also use Ultrafast. Accept it from the model speed setting or a configured body's service_tier.
             const isUltrafast = draft.body?.service_tier === "ultrafast" || draft.settings?.serviceTier === "ultrafast"
             const baseID = draft.modelID ?? draft.id
             if (plan.current.has(draft.id) || (isUltrafast && !isPro && plan.current.has(baseID))) {

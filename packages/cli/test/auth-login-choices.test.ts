@@ -42,7 +42,6 @@ test("groups the CLI choices like /connect while keeping stable login IDs", () =
     { value: "opencode", label: "OpenCode Console", category: "Popular", connected: false },
     { value: "openai", label: "OpenAI", category: "Popular", connected: false },
     { value: "anthropic", label: "Anthropic", category: "Popular", connected: false },
-    { value: "claude-agent", label: "Claude Agent", category: "Popular", connected: false },
     { value: "github-copilot", label: "GitHub Copilot", category: "Popular", connected: false },
     { value: "mistral", label: "Mistral", category: "Services", connected: false },
   ])

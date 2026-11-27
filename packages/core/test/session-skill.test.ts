@@ -39,12 +39,13 @@ const info = Skill.Info.make({
   path: AbsolutePath.make(path.resolve("/skills/effect.md")),
   content: "  Use Effect\n",
 })
+const reason = { _tag: "Mismatch", file: "SKILL.md", check: "digest", detail: "digest mismatch" } as const
 const broken = {
   id: Skill.ID.make("broken"),
   name: Skill.Name.make("Broken"),
   description: "Broken skill",
   path: AbsolutePath.make(Skill.uri("broken", "SKILL.md")),
-  content: Effect.fail(new Skill.LoadError({ skill: "broken", message: "digest mismatch" })),
+  content: Effect.fail(new Skill.LoadError({ skill: "broken", reason })),
 }
 const locations = makeGlobalNode({
   service: LocationServiceMap.Service,
@@ -236,7 +237,7 @@ describe("Session.skill", () => {
       const session = yield* sessions.create({ location })
       expect(
         yield* sessions.skill({ sessionID: session.id, skill: broken.id, resume: false }).pipe(Effect.flip),
-      ).toMatchObject({ _tag: "Skill.LoadError", skill: broken.id, message: "digest mismatch" })
+      ).toMatchObject({ _tag: "Skill.LoadError", skill: broken.id, reason })
       expect(
         yield* sessions
           .prompt({
@@ -246,7 +247,7 @@ describe("Session.skill", () => {
             resume: false,
           })
           .pipe(Effect.flip),
-      ).toMatchObject({ _tag: "Skill.LoadError", skill: broken.id, message: "digest mismatch" })
+      ).toMatchObject({ _tag: "Skill.LoadError", skill: broken.id, reason })
       expect(yield* sessions.messages({ sessionID: session.id })).toEqual([])
       expect(yield* sessions.inbox(session.id)).toEqual([])
     }),

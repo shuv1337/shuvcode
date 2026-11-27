@@ -165,8 +165,7 @@ const read = Effect.fnUntraced(function* (client: OpenCodeClient, cwd: string) {
   const preferred = defaultResult.data
   // The parallel default read can name a model missing from this list.
   // A hidden Claude Agent default falls through to the first visible model.
-  const defaultModel =
-    preferred && !isHiddenProvider(preferred.providerID) ? findModel(models, preferred) : models[0]
+  const defaultModel = preferred && !isHiddenProvider(preferred.providerID) ? findModel(models, preferred) : models[0]
   if (!defaultModel) return yield* new ACPError.CatalogNotReadyError({ reason: "models" })
   const agents = agentResult.data.filter((agent) => agent.mode !== "subagent" && !agent.hidden)
   // Core lists its resolved default agent first, the same one a new session runs.
@@ -185,7 +184,9 @@ const read = Effect.fnUntraced(function* (client: OpenCodeClient, cwd: string) {
     defaultModeID: defaultAgent.id,
     commands,
     skills: skillResult.data.filter((skill) => !builtinCommands.has(skill.id) && !commandNames.has(skill.id)),
-    providerNames: new Map(providerResult.data.map((provider) => [provider.id, provider.name])),
+    providerNames: new Map(
+      providerResult.data.flatMap((provider) => (isHiddenProvider(provider.id) ? [] : [[provider.id, provider.name]])),
+    ),
   } satisfies Catalog
 })
 
