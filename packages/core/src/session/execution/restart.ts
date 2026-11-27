@@ -11,6 +11,7 @@ import { Database } from "../../database/database.js"
 import { Environment } from "../../environment/index.js"
 import { Instance } from "../../instance/service.js"
 import { Job } from "../../job.js"
+import { CodeModeAgents } from "../../codemode/agents.js"
 import { CodeModeJob } from "../../codemode/job.js"
 import { Session } from "../../session.js"
 import { Shell } from "../../shell.js"
@@ -839,7 +840,17 @@ export const layer = (options?: Options) =>
                 !recovering.has(sessionID) &&
                 !preparedInFlight.has(sessionID),
             ),
-            prepareResume,
+            Effect.fnUntraced(function* (sessionID) {
+              // Code Mode scripts do not suspend/resume yet, so an agent() child whose script died on restart has
+              // nobody awaiting it; release its claim instead of reviving an orphan run.
+              const session = yield* store.get(sessionID)
+              if (session && CodeModeAgents.sessionMarker(session.id, session.metadata) !== undefined) {
+                suspended.delete(sessionID)
+                yield* store.release(sessionID)
+                return false
+              }
+              return yield* prepareResume(sessionID)
+            }),
           )
           yield* Effect.forEach(
             direct,
